@@ -186,21 +186,28 @@ public class AsyncJobPoller {
         timeout step = interval ?? DefaultPollInterval;
         # timeout converts to ms when assigned from a relative date or int
         int overall_ms = overall;
+        if (overall_ms <= 0 || step <= 0) {
+            throw error_class, "overall timeout and poll interval must be positive";
+        }
         date start = now_us();
         *hash<auto> last_status;
         while (True) {
-            last_status = status_fetcher(job_id);
-            if (last_status && terminal_predicate(last_status)) {
-                return last_status;
-            }
             int elapsed_ms = get_duration_milliseconds(now_us() - start);
             if (elapsed_ms >= overall_ms) {
                 throw error_class,
-                    sprintf("%s %y did not reach a terminal state within %y; "
-                        "last status: %y", label, job_id, overall, last_status),
+                    sprintf("%s did not reach a terminal state within %y", label, overall),
                     {"job_id": job_id, "last_status": last_status};
             }
-            sleeper(step);
+            last_status = status_fetcher(job_id);
+            elapsed_ms = get_duration_milliseconds(now_us() - start);
+            if (elapsed_ms >= overall_ms) {
+                throw error_class, sprintf("%s exceeded its polling deadline", label),
+                    {"job_id": job_id, "last_status": last_status};
+            }
+            if (last_status && terminal_predicate(last_status)) {
+                return last_status;
+            }
+            sleeper(min(int(step), overall_ms - elapsed_ms));
         }
     }
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -7,17 +8,167 @@
 %requires Util
 %requires QUnit
 %requires AwsTextractRestClient
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
+%requires json
 
 %exec-class AwsTextractRestClientTest
 
+class TextractWireHandler inherits AbstractHttpRequestHandler {
+    public {
+        hash<auto> headers;
+        hash<auto> request;
+        string raw;
+        string path;
+        bool malformed = False;
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        path = cx.raw_path;
+        headers = hdr;
+        headers."content-type" = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        raw = string(body);
+        request = parse_json(raw);
+        if (hdr.authorization !~ /Credential=fixture-key\//) {
+            return makeResponse({"Content-Type": "application/x-amz-json-1.1"}, 400,
+                make_json({"__type": "UnrecognizedClientException", "message": "Invalid fixture credential"}));
+        }
+        return makeResponse({"Content-Type": "application/x-amz-json-1.1"}, 200,
+            make_json(malformed ? {} : {"Adapters": ()}));
+    }
+}
+
+class WireTextractConnection inherits AwsTextractRestConnection {
+    private { string endpoint; }
+    constructor(string endpoint, string key = "fixture-key")
+            : AwsTextractRestConnection("wire", "Fixture", "", {}, {
+                "aws_region": "us-east-1", "aws_keyid": key, "aws_secret": "fixture-secret",
+                "aws_token": "fixture-token",
+            }) {
+        self.endpoint = endpoint;
+    }
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return AwsTextractRestConnection::getConnectionOptions(rtopts) + {"url": endpoint};
+    }
+}
+
 public class AwsTextractRestClientTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        TextractWireHandler handler;
+        string endpoint;
+    }
     constructor() : Test("AwsTextractRestClient Test", "1.0") {
         addTestCase("connection scheme registered",      \connectionSchemeTest());
         addTestCase("aws_region builds the Textract URL",
             \urlConstructionTest());
         addTestCase("aws_service defaults to textract",  \awsServiceDefaultTest());
         addTestCase("explicit URL is honoured",          \explicitUrlTest());
+        addTestCase("both connection constructors retain typed clients", \connectionTest());
+        addTestCase("sync async and copies sign exact JSON bytes", \wireTest());
+        addTestCase("ping rejects invalid credentials and malformed success", \pingTest());
+        addTestCase("environment region and partition defaults", \environmentTest());
+        if (getenv("AWS_TEXTRACT_LIVE")) {
+            addTestCase("live authenticated and invalid-credential ping", \livePingTest());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("textract-fixture", LoggerLevel::getLevelInfo())});
+        handler = new TextractWireHandler();
+        server.setDefaultHandler("textract", handler);
+        endpoint = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         set_return_value(main());
+    }
+
+    globalTearDown() { delete server; }
+
+    private connectionTest() {
+        hash<auto> opts = {"aws_region": "eu-west-1", "aws_keyid": "fixture-key", "aws_secret": "fixture-secret"};
+        foreach AwsTextractRestConnection conn in (
+                new AwsTextractRestConnection("named", "Fixture", "", {}, opts),
+                new AwsTextractRestConnection({"name": "hash", "opts": opts})) {
+            assertEq("AwsTextract", conn.getAppName());
+            assertEq("aws-textract://textract.eu-west-1.amazonaws.com", conn.getInfo().url);
+            assertTrue(conn.get(False) instanceof AwsTextractRestClient);
+            assertTrue(conn.getAsync(False) instanceof AwsTextractRestClientIo);
+            assertEq("textract", conn.getAsync(False).getAwsService());
+        }
+    }
+
+    private wireTest() {
+        WireTextractConnection conn(endpoint);
+        foreach AbstractRestClient client in (conn.get(False), conn.getAsync(False)) {
+            foreach AbstractRestClient copy in (client, client.copyWithUrl(endpoint)) {
+                copy.restPost("/", {"Document": {"Bytes": binary("fixture bytes")}},
+                    {"X-Amz-Target": "Textract.DetectDocumentText"});
+                assertEq("/", handler.path);
+                assertEq("application/x-amz-json-1.1", handler.headers."content-type");
+                assertEq("Textract.DetectDocumentText", handler.headers."x-amz-target");
+                assertEq("fixture-token", handler.headers."x-amz-security-token");
+                assertEq("Zml4dHVyZSBieXRlcw==", handler.request.Document.Bytes);
+                assertSignature();
+            }
+        }
+        RestClientIo::RestFuture pending = cast<AwsTextractRestClientIo>(conn.getAsync(False)).restPostAsync(
+            "/", {"Document": {"Bytes": binary("fixture bytes")}},
+            {"X-Amz-Target": "Textract.DetectDocumentText"});
+        assertEq((), pending.get().body.Adapters);
+        assertEq("Zml4dHVyZSBieXRlcw==", handler.request.Document.Bytes);
+        assertSignature();
+        hash<auto> generic = conn.getDataProvider().getChildProvider("__call__").doRequest({
+            "method": "POST", "path": "/", "body_type": "auto", "body": {"MaxResults": 1},
+            "hdr": {"X-Amz-Target": "Textract.ListAdapters"},
+        });
+        assertEq(200, generic.status);
+        assertEq((), generic.body.Adapters);
+        assertEq("application/x-amz-json-1.1", handler.headers."content-type");
+        assertSignature();
+    }
+
+    private assertSignature() {
+        list<string> parts = handler.headers.authorization.split("SignedHeaders=")[1].split(", Signature=");
+        string canonical_headers = "";
+        foreach string name in (parts[0].split(";")) {
+            canonical_headers += name + ":" + regex_subst(trim(handler.headers{name}), " +", " ", RE_Global) + "\n";
+        }
+        string canonical = "POST\n/\n\n" + canonical_headers + "\n" + parts[0] + "\n"
+            + digest(CRYPTO_DIGEST_SHA256, handler.raw).toHex();
+        string timestamp = handler.headers."x-amz-date";
+        string day = timestamp.substr(0, 8);
+        string scope = day + "/us-east-1/textract/aws4_request";
+        binary key = hmac(CRYPTO_DIGEST_SHA256, day, "AWS4fixture-secret");
+        foreach string component in ("us-east-1", "textract", "aws4_request") {
+            key = hmac(CRYPTO_DIGEST_SHA256, component, key);
+        }
+        assertEq(hmac(CRYPTO_DIGEST_SHA256, "AWS4-HMAC-SHA256\n" + timestamp + "\n" + scope + "\n"
+            + digest(CRYPTO_DIGEST_SHA256, canonical).toHex(), key).toHex(), parts[1]);
+    }
+
+    private pingTest() {
+        assertTrue(new WireTextractConnection(endpoint).ping(True).ok);
+        assertEq("Textract.ListAdapters", handler.headers."x-amz-target");
+        assertEq({"MaxResults": 1}, handler.request);
+        assertFalse(new WireTextractConnection(endpoint, "invalid").ping(False).ok);
+        handler.malformed = True;
+        on_exit handler.malformed = False;
+        assertFalse(new WireTextractConnection(endpoint).ping(False).ok);
+    }
+
+    private environmentTest() {
+        *string region = getenv("AWS_REGION");
+        on_exit region == NOTHING ? unsetenv("AWS_REGION") : setenv("AWS_REGION", region);
+        setenv("AWS_REGION", "eu-central-1");
+        assertEq("https://textract.eu-central-1.amazonaws.com", applyTextractDefaults({}).url);
+        assertEq("https://textract.cn-north-1.amazonaws.com.cn", applyTextractDefaults({"aws_region": "cn-north-1"}).url);
+        assertEq("eu-west-1", applyTextractDefaults({"url": "https://textract.eu-west-1.amazonaws.com"}).aws_region);
+    }
+
+    private livePingTest() {
+        AwsTextractRestConnection good("live", "Synthetic verification");
+        assertTrue(good.ping(True).ok, "real credentials pass Textract ListAdapters ping");
+        AwsTextractRestConnection bad("invalid", "Negative authentication", "", {}, {
+            "aws_keyid": "invalid-fixture-key", "aws_secret": "invalid-fixture-secret",
+        });
+        assertFalse(bad.ping(False).ok, "deliberately invalid credentials fail the real ping");
     }
 
     private connectionSchemeTest() {

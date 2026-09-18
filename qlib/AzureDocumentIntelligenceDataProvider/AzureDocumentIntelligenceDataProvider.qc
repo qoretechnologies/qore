@@ -52,13 +52,19 @@ public class AzureDocumentIntelligenceDataProvider
 
     string getName() { return ProviderInfo.name; }
 
-    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+    private *list<string> getChildProviderNamesImpl() {
+        list<string> names = keys childMap;
+        foreach RestSchemaActionSet actions in (AzureDocumentIntelligenceSchema::getActionSets()) {
+            names += actions.getActionNames();
+        }
+        return names;
     }
-    private *list<string> getChildProviderNamesImpl() { return keys childMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = childMap{name};
-        return cls ? cls.newObject(rest) : NOTHING;
+        if (cls) { return cls.newObject(rest); }
+        *RestSchemaActionSet actions = AzureDocumentIntelligenceSchema::findActionSet(name);
+        return actions ? new AzureDocumentIntelligenceActionDataProvider(actions, actions.getOperationEx(name), rest)
+            : NOTHING;
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

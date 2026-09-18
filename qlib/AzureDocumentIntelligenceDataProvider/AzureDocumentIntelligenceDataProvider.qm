@@ -28,6 +28,9 @@
 %requires(reexport) DataProvider
 %requires(reexport) AzureDocumentIntelligenceRestClient
 %requires RestClientIo
+%requires(reexport) RestSchemaActions
+%requires OpenApi3
+%requires json
 
 module AzureDocumentIntelligenceDataProvider {
     version = "1.0";
@@ -36,6 +39,10 @@ module AzureDocumentIntelligenceDataProvider {
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("AzureDocumentIntelligenceDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                return AzureDocumentIntelligenceManifest::inventory();
+            });
         DataProvider::registerFactory(new AzureDocumentIntelligenceDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
@@ -46,20 +53,15 @@ module AzureDocumentIntelligenceDataProvider {
             "desc": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) "
                 "(formerly Form Recognizer) — Microsoft's managed document "
                 "extraction service.\n\n"
-                "**Prebuilt models**:\n"
-                "- `prebuilt-document` — general key/value extraction\n"
-                "- `prebuilt-layout` — layout, tables, paragraphs\n"
-                "- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / "
-                "receipt entities\n"
-                "- `prebuilt-idDocument` — driver's licenses, passports, "
-                "national IDs\n"
-                "- `prebuilt-businessCard` — business card extraction\n"
-                "- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n"
-                "- `prebuilt-contract` — contract clauses + parties\n\n"
-                "**Custom models** trained in the Azure portal are referenced "
-                "by their GUID identifier.",
+                "**Capabilities**:\n"
+                "- Extract searchable text, tables, fields, and document structure\n"
+                "- Classify documents and manage custom models and classifiers\n"
+                "- Analyze document batches in Azure storage\n"
+                "- Retrieve job status, searchable PDFs, and cropped figures\n\n"
+                "Use `prebuilt-layout` with `features=keyValuePairs` for general extraction. "
+                "Custom model identifiers can be selected from this resource or entered directly.",
             "scheme": "azure-documentintelligence",
-            "logo": AzureDocumentIntelligenceLogo,
+            "logo": Priv::AzureDocumentIntelligenceLogo,
             "logo_file_name": "azure-document-intelligence-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (
@@ -68,6 +70,11 @@ module AzureDocumentIntelligenceDataProvider {
             ),
         });
 
+        foreach RestSchemaActionSet actions in (AzureDocumentIntelligenceSchema::getActionSets()) {
+            actions.registerActions(AzureDocumentIntelligenceDataProvider::AppName);
+        }
+        AzureDocumentIntelligenceAnalyzeDocumentDataProvider::initializeTypes();
+
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": AzureDocumentIntelligenceDataProvider::AppName,
             "path": "/analyze-document",
@@ -75,11 +82,9 @@ module AzureDocumentIntelligenceDataProvider {
             "display_name": "Analyze Document",
             "short_desc": "Run a Document Intelligence model over a document (async)",
             "desc": "Submits a document to a Document Intelligence model and "
-                "waits for the analysis to complete.  The lifecycle is "
-                "internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" "
-                "via `AsyncJobPoller`: POST submit → poll the "
-                "`Operation-Location` URL → return the parsed `analyzeResult`.\n\n"
-                "Pass the document via one of:\n"
+                "waits for the analysis to complete. Returns extracted text, fields, tables, "
+                "and structure for use in subsequent workflow steps.\n\n"
+                "**Document source** — supply exactly one:\n"
                 "- `document_url` — public URL (Azure fetches the document)\n"
                 "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
                 "- `document_path` — local file path (read and base64-encoded)",
@@ -98,9 +103,8 @@ module AzureDocumentIntelligenceDataProvider {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AzureDocumentIntelligenceAnalyzeRequestDataType::Fields{
-                    "api_version", "poll_interval", "analysis_timeout",
-                }
+                AzureDocumentIntelligenceAnalyzeDocumentDataProvider::RequestType.getFields()
+                    - ("model_id", "document_url", "document_bytes", "document_path")
             ),
             "output_type": AzureDocumentIntelligenceAnalyzeDocumentDataProvider::ResponseType,
         });
@@ -115,12 +119,35 @@ module AzureDocumentIntelligenceDataProvider {
 
     The %AzureDocumentIntelligenceDataProvider module provides a data
     provider API for [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence).
-    A single DPAT_API action is registered:
+    The application publishes 31 actions: 29 raw service contracts, the existing
+    `analyze-document` wait helper, and the shared `make-api-call` action.
 
-    - `analyze-document` — submit a document to a prebuilt or custom
-      Document Intelligence model, drive the async poll-until-complete
-      loop, and return the parsed `analyzeResult` with text, layout,
-      tables, key/value pairs, and typed entities
+    - Submit URLs, bytes, or batches for extraction and classification; fetch or delete results.
+    - List, inspect, build, compose, copy, and delete models and classifiers.
+    - Inspect resource usage and management-operation status, including all five typed operation results.
+    - Download searchable PDF and PNG figure bytes with their HTTP media headers.
+
+    The complete API version 2024-11-30 contract comes from Microsoft's pinned Swagger 2 source.
+    A checked versioned adapter converts it to OpenAPI 3 and uses the shared RestSchemaPruner,
+    OpenApi3, and RestSchemaActions mechanisms. Source, checksum, license, and operation inventory
+    are installed beside the module. Synthetic overload selectors never appear in HTTP requests.
+
+    @par Choosing an analysis model
+    Use `prebuilt-layout` with the `keyValuePairs` feature for general extraction, or `prebuilt-read`
+    with `output: ("pdf",)` for searchable PDF generation. Figure output requires `prebuilt-layout`.
+    The `queryFields` option requires the corresponding feature. Custom identifiers can be entered
+    directly or selected from paginated resource references. Legacy `prebuilt-document` and
+    `prebuilt-businessCard` presentation identities remain for saved forms, but v4 rejects these
+    retired models before uploading. Choose a supported model when migrating a saved workflow.
+
+    @par Example
+    Extract invoice text for an accounts-payable workflow:
+    @code{.py}
+AzureDocumentIntelligenceDataProvider provider({"url": ENV.AZURE_DI_ENDPOINT, "apikey": ENV.AZURE_DI_KEY});
+hash<auto> invoice = provider.getChildProvider("analyze-document").doRequest({
+    "model_id": "prebuilt-invoice", "document_path": "/work/invoice.pdf", "pages": "1",
+});
+    @endcode
 
     @par Async lifecycle
 
@@ -128,11 +155,19 @@ module AzureDocumentIntelligenceDataProvider {
     an `Operation-Location` header pointing to a polling URL.  This
     module's high-level action drives the loop internally via
     @ref qoreasyncjobutilsintro "QoreAsyncJobUtils".
+    Raw submissions return a typed envelope containing `status_code`, `headers`, and `body`;
+    save the `operation-location` header before leaving the submitting workflow step. Download actions
+    use the same envelope with a binary body. The helper's timeout includes submission and polling;
+    exceptions retain the polling URL and last status in their argument without logging document content.
+    Lists return one page with `nextLink`; reference dropdowns follow safe same-resource links with a
+    100-page limit and repeated-link detection. Custom training, copies, and batch actions can incur
+    service charges and use the resource's permissions.
 
     @section AzureDocumentIntelligenceDataProviderRelnotes Release Notes
 
     @subsection AzureDocumentIntelligenceDataProviderv1_0 AzureDocumentIntelligenceDataProvider v1.0
     - the initial version of the %AzureDocumentIntelligenceDataProvider module
+    - complete stable API coverage, nested types and choices, resource references, and twelve complete locales
 */
 
 #! contains all public definitions in the AzureDocumentIntelligenceDataProvider module
@@ -142,5 +177,9 @@ public const AppName = "AzureDocumentIntelligence";
 }
 
 #! App logo loaded from file
-public const AzureDocumentIntelligenceLogo =
-    File::readTextFile(get_script_dir() + "/azure-document-intelligence-logo.svg");
+public const AzureDocumentIntelligenceLogo = Priv::AzureDocumentIntelligenceLogo;
+
+namespace Priv {
+    const AzureDocumentIntelligenceLogo = File::readTextFile(get_script_dir()
+        + "/azure-document-intelligence-logo.svg");
+}

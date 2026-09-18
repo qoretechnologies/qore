@@ -2725,7 +2725,7 @@ public namespace RestSchemaValidator {
                 *hash<auto> dh = ct ? DataDeserializationSupport{ct} : NOTHING;
                 # Media responses have no structured deserializer: preserve their bytes as for
                 # application/octet-stream. This includes generated audio returned by inference APIs.
-                if (!dh && ct =~ /^(audio|image|video)\// && !is_mime_text(ct)) {
+                if (!dh && (ct =~ /^(audio|image|video)\// || ct == "application/pdf") && !is_mime_text(ct)) {
                     dh = DataDeserializationSupport{MimeTypeOctetStream};
                 }
                 if (!dh) {

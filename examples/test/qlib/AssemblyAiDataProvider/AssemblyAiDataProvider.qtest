@@ -1,185 +1,285 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
-
 %modern
 %allow-injection
-
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
 %requires QUnit
-%requires Logger
-%requires ConnectionProvider
-%requires DataProvider
-%requires QoreAsyncJobUtils
-%requires AssemblyAiRestClient
 %requires AssemblyAiDataProvider
-
+%requires json
 %exec-class AssemblyAiDataProviderTest
 
-#! Same shape as the test in AssemblyAiRestClient.qtest, repeated here
-#! so the DataProvider can be exercised without re-running RestClient tests.
-class FakeAssemblyAiClient inherits AssemblyAiRestClient::AssemblyAiRestClientIo {
+#! Shared log survives service-client copies
+class AssemblyAiCallLog {
     public {
         list<hash<auto>> calls = ();
+        auto response = {};
     }
-
-    constructor() : AssemblyAiRestClient::AssemblyAiRestClientIo(
-            {"url": "https://api.assemblyai.com", "apikey": "x"}) {
+}
+#! Records final serialized requests without network I/O
+class FakeAssemblyAiClient inherits AssemblyAiRestClientIo {
+    public {
+        static AssemblyAiCallLog Log();
+    }
+    constructor(hash<auto> opts = {"apikey": "fixture-key"}, *HttpClientIo::HttpClientConnectionManager mgr)
+            : AssemblyAiRestClientIo(opts, mgr) {
         setSleeper(nothing sub (timeout to) {});
     }
-
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        push Log.calls, {"url": getUrl().toString(), "method": method, "path": path, "raw": body,
+            "headers": getDefaultHeaders() + hdr};
+        return <RestClient::RestResponseInfo>{"status_code": method == "DELETE" ? 204 : 200,
+            "body": Log.response};
+    }
     hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
-        push calls, {"method": "POST", "path": path, "body": body};
-        if (path == "/v2/transcript") {
-            return <RestClient::RestResponseInfo>{
-                "body": {"id": "t9", "status": "queued"},
-            };
-        }
-        throw "FAKE-ERROR", sprintf("unexpected POST %y", path);
+        restDoRawRequest("POST", path, make_json(body), hdr);
+        return <RestClient::RestResponseInfo>{"body": {"id": "fixture-transcript", "status": "queued"}};
     }
-
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
-        push calls, {"method": "GET", "path": path};
-        if (path == "/v2/transcript/t9") {
-            return <RestClient::RestResponseInfo>{
-                "body": {
-                    "id": "t9",
-                    "status": "completed",
-                    "text": "Sample transcript.",
-                    "audio_url": "https://example.com/a.mp3",
-                    "audio_duration": 12,
-                    "confidence": 0.95,
-                    "language_code": "en_us",
-                },
-            };
-        }
-        throw "FAKE-ERROR", sprintf("unexpected GET %y", path);
+        restDoRawRequest("GET", path, NOTHING, hdr);
+        return <RestClient::RestResponseInfo>{"body": {"id": "fixture-transcript", "status": "completed",
+            "text": "Fixture transcript.", "words": (), "confidence": 0.0}};
     }
-
-    string getSafeUrl() { return "https://api.assemblyai.com"; }
 }
 
 public class AssemblyAiDataProviderTest inherits QUnit::Test {
     public {
-        const MyOpts = Opts + {
-            "conn": "c,connection=s",
-        };
-
-        const OptionColumn = 22;
-
-        #! Public short-form sample used by the live transcribe test
-        /** AssemblyAI's own published demo file — short enough that
-            transcription completes in under a minute and stays well
-            under the free-tier monthly minute budget.
-        */
-        const LiveAudioUrl =
-            "https://storage.googleapis.com/aai-web-samples/"
-            "5_common_sports_injuries.mp3";
+        const AppName = AssemblyAiDataProvider::AppName;
+        const ExpectedActions = (
+            "upload-audio", "create-transcript", "list-transcripts", "get-transcript", "delete-transcript",
+            "get-subtitles", "get-sentences", "get-paragraphs", "search-transcript-words", "get-redacted-audio",
+            "create-chat-completion", "understand-speech", "list-models", "create-streaming-token",
+            "create-voice-agent-token", "create-agent", "list-agents", "get-agent", "update-agent", "delete-agent",
+            "list-sessions", "get-session", "delete-session", "create-webhook", "list-webhooks", "get-webhook",
+            "update-webhook", "delete-webhook", "transcribe-short-audio", "transcribe-live-upload",
+            "transcribe-dictation", "transcribe", "make-api-call",
+        );
+        const NoBodyActions = ("delete-agent", "delete-session", "delete-webhook");
+        #! Independent method, wire path, request, and service expectations
+        const WireCases = (
+            ("upload-audio", "POST", "/v2/upload", {"body": <00ff10>}, "api"),
+            ("create-transcript", "POST", "/v2/transcript", {"audio_url": "https://example.com/a.wav"}, "api"),
+            ("list-transcripts", "GET", "/v2/transcript", {}, "api"),
+            ("get-transcript", "GET", "/v2/transcript/id%2Fa", {"transcript_id": "id/a"}, "api"),
+            ("delete-transcript", "DELETE", "/v2/transcript/id", {"transcript_id": "id"}, "api"),
+            ("get-subtitles", "GET", "/v2/transcript/id/srt", {"transcript_id": "id", "subtitle_format": "srt"}, "api"),
+            ("get-sentences", "GET", "/v2/transcript/id/sentences", {"transcript_id": "id"}, "api"),
+            ("get-paragraphs", "GET", "/v2/transcript/id/paragraphs", {"transcript_id": "id"}, "api"),
+            ("search-transcript-words", "GET", "/v2/transcript/id/word-search?words=one,two",
+                {"transcript_id": "id", "words": ("one", "two")}, "api"),
+            ("get-redacted-audio", "GET", "/v2/transcript/id/redacted-audio", {"transcript_id": "id"}, "api"),
+            ("create-chat-completion", "POST", "/v1/chat/completions", {"model": "fixture", "prompt": "Hello"}, "llm-gateway"),
+            ("understand-speech", "POST", "/v1/understanding",
+                {"transcript_id": "id", "speech_understanding": {"request": {"translation": {"target_languages": ("de",)}}}}, "llm-gateway"),
+            ("list-models", "GET", "/v1/models", {}, "llm-gateway"),
+            ("create-streaming-token", "GET", "/v3/token?expires_in_seconds=60", {"expires_in_seconds": 60}, "streaming"),
+            ("create-voice-agent-token", "GET", "/v1/token?expires_in_seconds=60", {"expires_in_seconds": 60}, "agents"),
+            ("create-agent", "POST", "/v1/agents", {"name": "Fixture", "system_prompt": "Be concise.", "voice": {"voice_id": "alba"}}, "agents"),
+            ("list-agents", "GET", "/v1/agents", {}, "agents"),
+            ("get-agent", "GET", "/v1/agents/id", {"agent_id": "id"}, "agents"),
+            ("update-agent", "PUT", "/v1/agents/id", {"agent_id": "id", "greeting": ""}, "agents"),
+            ("delete-agent", "DELETE", "/v1/agents/id", {"agent_id": "id"}, "agents"),
+            ("list-sessions", "GET", "/v1/sessions", {}, "agents"),
+            ("get-session", "GET", "/v1/sessions/id", {"session_id": "id"}, "agents"),
+            ("delete-session", "DELETE", "/v1/sessions/id", {"session_id": "id"}, "agents"),
+            ("create-webhook", "POST", "/v1/webhook-subscriptions",
+                {"url": "https://example.com/callback", "events": ("session.completed",), "secret": "fixture-signing-key-32-characters"}, "agents"),
+            ("list-webhooks", "GET", "/v1/webhook-subscriptions", {}, "agents"),
+            ("get-webhook", "GET", "/v1/webhook-subscriptions/id", {"subscription_id": "id"}, "agents"),
+            ("update-webhook", "PATCH", "/v1/webhook-subscriptions/id", {"subscription_id": "id", "enabled": False}, "agents"),
+            ("delete-webhook", "DELETE", "/v1/webhook-subscriptions/id", {"subscription_id": "id"}, "agents"),
+            ("transcribe-short-audio", "POST", "/transcribe", {"model": "universal-3-5-pro", "audio": <00ff10>}, "sync"),
+            ("transcribe-live-upload", "POST", "/v1/transcribe/live",
+                {"model": "universal-3-5-pro", "config": {}, "audio": <00ff10>}, "sync"),
+            ("transcribe-dictation", "POST", "/v1/transcribe/live", {"config": {}, "audio": <00ff10>}, "dictation"),
+        );
     }
-
-    private {
-        *string conn_name;
-    }
-
-    constructor() : Test("AssemblyAiDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.ASSEMBLYAI_CONNECTION;
-
-        addTestCase("factory + app + transcribe action registered",
-            \registrationTest());
-        addTestCase("transcribe action runs the lifecycle and surfaces transcript",
-            \transcribeActionTest());
-        addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
-
-        # Live tests require a real AssemblyAI connection (cost: one short
-        # transcription per run — fits inside the free-tier monthly budget)
-        if (conn_name) {
-            addTestCase("live: ping + transcribe", \liveAssemblyAiTest());
+    constructor() : Test("AssemblyAI provider contracts", "1.0") {
+        addTestCase("inventory, repeat registration, metadata and paths", \inventoryTest());
+        addTestCase("deferred registration and sealed qualification", \deferredTest());
+        foreach list<auto> c in (WireCases) {
+            string action = c[0];
+            addTestCase("wire: " + action, sub () { wireTest(action); });
         }
+        addTestCase("missing, null, empty, false, zero and opaque JSON", \valueTest());
+        addTestCase("cross-service resource dropdowns", \referenceTest());
+        addTestCase("serialized contracts preserve structured choices and opaque labels", \serializationTest());
+        addTestCase("submit and wait strips polling controls", \transcribeTest());
         set_return_value(main());
     }
-
-    private usageIntern() {
-        TestReporter::usageIntern(OptionColumn);
-        printOption("-c,--connection=ARG",
-            "set the AssemblyAI connection name; without it (and without the "
-            "ASSEMBLYAI_CONNECTION env var) the live test is skipped",
-            OptionColumn);
+    private inventoryTest() {
+        for (int i = 0; i < 2; ++i) {
+            if (i) { AssemblyAiActions::registerActions(); }
+            list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(AppName);
+            assertEq(sort(ExpectedActions), sort(map $1.action, actions));
+            assertEq((), DataProviderActionCatalog::getInitializationFailures((AppName,)));
+            foreach hash<DataProviderActionInfo> action in (actions) {
+                assertTrue(action.display_name.val(), action.action);
+                assertTrue(action.short_desc.val() && action.short_desc.size() < 80, action.action);
+                assertTrue(action.desc.val(), action.action);
+                assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action.action);
+                assertTrue(exists action.output_type, action.action);
+                if (inlist(action.action, NoBodyActions)) {
+                    assertEq("nothing", action.output_type.getName());
+                }
+                if (inlist(action.action, ("list-agents", "list-models"))) {
+                    assertEq(0, action.options.size());
+                } else {
+                    assertTrue(action.options.size() > 0, action.action);
+                }
+            }
+        }
+        AssemblyAiDataProvider::AssemblyAiDataProvider root({"restclient": new FakeAssemblyAiClient()});
+        assertEq(33, root.getChildProviderNames().size());
+        foreach RestSchemaActionSet actions in (AssemblyAiSchema::getActionSets().iterator()) {
+            actions.validateActionPaths(root);
+            assertEq((), RestSchemaDrift::compare(actions, actions.getSchema()));
+        }
     }
-
-    private registrationTest() {
-        DataProvider::AbstractDataProviderFactory f =
-            DataProvider::DataProvider::getFactory("assemblyai");
-        assertEq("assemblyai", f.getInfo().name);
-
-        hash<DataProviderAppInfo> app =
-            DataProvider::DataProviderActionCatalog::getApp("AssemblyAI");
-        assertEq("AssemblyAI", app.name);
-        assertEq("assemblyai", app.scheme);
-
-        # filter out the framework-injected make-api-call action (covered by
-        # GenericApiCallAutoInjection.qtest in RestClientDataProvider); this test asserts the
-        # provider's own action surface only
-        list<hash<DataProviderActionInfo>> actions = select
-            DataProvider::DataProviderActionCatalog::getActions("AssemblyAI"),
-            $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(1, actions.size());
-        assertEq("transcribe", actions[0].action);
-    }
-
-    private transcribeActionTest() {
-        FakeAssemblyAiClient fake();
-        AssemblyAiDataProvider::AssemblyAiTranscribeDataProvider prov(fake);
-        auto resp = prov.doRequest({
-            "audio_url": "https://example.com/a.mp3",
-            "speech_model": "universal",
-            "speaker_labels": True,
-            "poll_interval": 1ms,
+    private deferredTest() {
+        string alias = "AssemblyAI-DeferredFixture";
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(AppName);
+        app.name = alias;
+        app.dynamic = True;
+        DataProviderActionCatalog::registerPendingApp(alias, sub () {
+            DataProviderActionCatalog::registerApp(app);
+            foreach hash<DataProviderActionInfo> action in (AssemblyAiActions::getActionInfoList(alias)) {
+                hash<DataProviderActionInfo> deferred = action;
+                DataProviderActionCatalog::registerPendingAppAction(alias, action.action, sub () {
+                    DataProviderActionCatalog::registerAction(deferred);
+                });
+            }
         });
-
-        # Submit was made
-        assertEq("POST", fake.calls[0].method);
-        assertEq("/v2/transcript", fake.calls[0].path);
-        # audio_url forwarded into the submit body
-        assertEq("https://example.com/a.mp3", fake.calls[0].body.audio_url);
-        # opts forwarded
-        assertEq("universal", fake.calls[0].body.speech_model);
-        assertEq(True, fake.calls[0].body.speaker_labels);
-
-        # Response surfaces through
-        assertEq("Sample transcript.", resp.text);
-        assertEq("completed", resp.status);
-        assertEq("en_us", resp.language_code);
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(alias);
+        DataProviderActionCatalog::getApp(alias);
+        assertEq(sort(ExpectedActions), sort(map $1.action, DataProviderActionCatalog::getActions(alias)));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((alias,)));
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected =
+            map <DataProviderDiscoveryExpectedIdentityInfo>{"app": alias, "action": $1}, ExpectedActions;
+        DataProviderDiscoverySession session = DataProviderActionCatalog::beginDiscovery(expected, (alias,));
+        DataProviderActionCatalog::collectDiscoveryExpectedInventory(session);
+        DataProviderQualifiedDiscovery result = DataProviderActionCatalog::sealDiscovery(session);
+        assertTrue(result.getReport().complete);
+        assertEq((), result.getReport().failures);
     }
-
-    private speechAppGroupTest() {
-        hash<DataProviderAppInfo> app =
-            DataProvider::DataProviderActionCatalog::getApp("AssemblyAI");
-        assertTrue(inlist(DataProvider::AppGroup::AiLlm,  app.groups));
-        assertTrue(inlist(DataProvider::AppGroup::Speech, app.groups));
+    private wireTest(string action) {
+        FakeAssemblyAiClient client({"apikey": "fixture-key", "region": "eu"});
+        AssemblyAiDataProvider::AssemblyAiDataProvider root(client);
+        foreach list<auto> c in (WireCases) {
+            if (c[0] != action) {
+                continue;
+            }
+            FakeAssemblyAiClient::Log.calls = ();
+            FakeAssemblyAiClient::Log.response = inlist(c[0], NoBodyActions) ? NOTHING : {};
+            root.getChildProvider(c[0]).doRequest(c[3]);
+            hash<auto> call = FakeAssemblyAiClient::Log.calls[-1];
+            assertEq(c[1], call.method, c[0]);
+            assertEq(c[2], call.path, c[0]);
+            string host = c[4] == "agents" ? "agents.assemblyai.com" : c[4] + ".eu.assemblyai.com";
+            assertEq("https://" + host, call.url, c[0]);
+            assertEq("fixture-key", call.headers.Authorization, c[0]);
+            if (c[0] == "upload-audio") { assertEq(<00ff10>, call.raw); }
+            if (inlist(c[0], ("transcribe-live-upload", "transcribe-dictation"))) {
+                string raw = call.raw.toString();
+                assertTrue(index(raw, 'name="config"') < index(raw, 'name="audio"'), c[0]);
+                hash<MessageInfo> parts = MultiPartMessage::parseBody(
+                    (call.headers."Content-Type" =~ x/boundary="([^"]+)"/)[0], call.raw);
+                assertEq({}, parse_json(parts.part[0].body.toString()), c[0] + ": empty configuration");
+                assertEq(<00ff10>, parts.part[1].body);
+                assertTrue(parts.part[1].hdr."content-type" =~ /^audio\//);
+            }
+        }
     }
-
-    #! Exercises AssemblyAI's live `/v2/transcript` submit-then-poll lifecycle
-    /** Verifies the actual wire format against AssemblyAI's production
-        servers.  Cost: one short transcription per run.
-    */
-    private liveAssemblyAiTest() {
-        AbstractConnection conn = get_connection(conn_name);
-        hash<auto> ping = conn.ping(True);
-        assertTrue(ping.ok, sprintf("AssemblyAI connection ping failed: %s",
-            ping.info ?? "no info"));
-
-        AbstractDataProvider prov = conn.getDataProvider();
-        AbstractDataProvider tr = prov.getChildProvider("transcribe");
-        auto result = tr.doRequest({
-            "audio_url":      LiveAudioUrl,
-            "speech_model":   "nano",  # cheapest tier
-            "punctuate":      True,
+    private valueTest() {
+        AbstractDataProviderType chat = AssemblyAiSchema::getOperationEx("create-chat-completion").getRequestType();
+        foreach AbstractDataProviderType type in (chat, Serializable::deserialize(chat.serialize())) {
+            hash<auto> req = {"model": "fixture", "prompt": "", "temperature": 0n, "stream": False,
+                "response_format": {"type": "json_schema", "json_schema": {"name": "result", "schema": {}}}};
+            assertEq(req, type.acceptsValue(req));
+            req.response_format.json_schema.schema = {"properties": {"value": {"enum": (False, 0, "", {}, ()), "type": "object"}}};
+            assertEq(req, type.acceptsValue(req));
+            assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({"prompt": "hello"}); });
+        }
+        FakeAssemblyAiClient client();
+        AssemblyAiDataProvider::AssemblyAiDataProvider root(client);
+        root.getChildProvider("update-webhook").doRequest({"subscription_id": "id", "enabled": False});
+        assertEq({"enabled": False}, parse_json(FakeAssemblyAiClient::Log.calls[-1].raw.toString()));
+        root.getChildProvider("update-agent").doRequest({"agent_id": "id", "greeting": "", "tools": ()});
+        assertEq({"greeting": "", "tools": ()}, parse_json(FakeAssemblyAiClient::Log.calls[-1].raw.toString()));
+        foreach auto bad in (NOTHING, NULL, "", (), {}, False, 0) {
+            int before = FakeAssemblyAiClient::Log.calls.size();
+            bool rejected = False;
+            try {
+                root.getChildProvider("create-transcript").doRequest({"audio_url": bad});
+            } catch (hash<ExceptionInfo> ex) {
+                rejected = True;
+            }
+            assertTrue(rejected, sprintf("invalid audio_url: %y", bad));
+            assertEq(before, FakeAssemblyAiClient::Log.calls.size());
+        }
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
+            root.getChildProvider("create-chat-completion").doRequest({"model": "fixture", "stream": True});
         });
-        assertEq("completed", result.status,
-            "AssemblyAI transcript reached completed status");
-        assertTrue(result.text.val(),
-            "AssemblyAI returned a non-empty transcript");
-        assertTrue(result.audio_duration > 0,
-            "AssemblyAI reported audio_duration");
+    }
+    private referenceTest() {
+        FakeAssemblyAiClient client({"apikey": "fixture-key", "region": "eu"});
+        AssemblyAiDataProvider::AssemblyAiDataProvider root(client);
+        FakeAssemblyAiClient::Log.response = {"transcripts": ({"id": "id/a"},)};
+        auto values = root.getChildProvider("create-chat-completion").getReferenceData("transcripts");
+        assertEq("id/a", values[0].value);
+        assertEq("https://api.eu.assemblyai.com", FakeAssemblyAiClient::Log.calls[-1].url);
+        FakeAssemblyAiClient::Log.response = ({"id": "agent", "name": "Support"},);
+        values = root.getChildProvider("create-webhook").getReferenceData("agents");
+        assertEq("Support", values[0].display_name);
+        assertEq("https://agents.assemblyai.com", FakeAssemblyAiClient::Log.calls[-1].url);
+    }
+    private serializationTest() {
+        foreach RestSchemaActionSet set in (AssemblyAiSchema::getActionSets().iterator()) {
+            foreach string name in (set.getActionNames()) {
+                RestSchemaActionOperation op = set.getOperationEx(name);
+                foreach *AbstractDataProviderType type in (op.getRequestType(), op.getResponseType()) {
+                    if (!type) {
+                        continue;
+                    }
+                    AbstractDataProviderType restored = Serializable::deserialize(type.serialize());
+                    assertEq(type.getBaseTypeName(), restored.getBaseTypeName(), name);
+                    assertEq(sort(keys type.getFields()), sort(keys restored.getFields()), name);
+                }
+            }
+        }
+        AbstractDataProviderType restored = Serializable::deserialize(
+            AssemblyAiSchema::getOperationEx("create-transcript").getRequestType().serialize());
+        AbstractDataField models = restored.getFields().speech_models;
+        assertEq(("universal-3-5-pro", "universal-2"), map $1.value, models.getElementAllowedValues());
+        models.setElementAllowedValues((<AllowedValueInfo>{
+            "value": "universal-2", "display_name": "Opaque label: {\"value\": \"not-a-model\"}",
+        },));
+        assertEq(("universal-2",), models.acceptsValue(("universal-2",)));
+        bool rejected = False;
+        try {
+            models.acceptsValue(("Opaque label: {\"value\": \"not-a-model\"}",));
+        } catch () {
+            rejected = True;
+        }
+        assertTrue(rejected);
+        restored = Serializable::deserialize(restored.serialize());
+        assertEq("Opaque label: {\"value\": \"not-a-model\"}",
+            restored.getFields().speech_models.getElementAllowedValues()[0].display_name);
+        assertEq("en", restored.getFields().language_code.acceptsValue("en"));
+        assertEq("new-language", restored.getFields().language_code.acceptsValue("new-language"));
+    }
+    private transcribeTest() {
+        FakeAssemblyAiClient client();
+        AssemblyAiTranscribeDataProvider provider(client);
+        FakeAssemblyAiClient::Log.calls = ();
+        auto response = provider.doRequest({"audio_url": "https://example.com/a.wav",
+            "speech_models": ("universal-3-5-pro",), "speaker_labels": False,
+            "audio_start_from": 0, "poll_interval": 1ms});
+        assertEq("completed", response.status);
+        hash<auto> body = parse_json(FakeAssemblyAiClient::Log.calls[0].raw.toString());
+        assertEq(("universal-3-5-pro",), body.speech_models);
+        assertEq(False, body.speaker_labels);
+        assertEq(0, body.audio_start_from);
+        assertFalse(exists body.poll_interval);
+        assertFalse(exists body.transcription_timeout);
     }
 }

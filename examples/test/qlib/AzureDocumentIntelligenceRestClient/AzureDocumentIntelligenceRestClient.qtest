@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -17,6 +18,10 @@ class FakeAzureDocIntelClient
         list<hash<auto>> calls = ();
         list<string> poll_sequence = ("running", "running", "succeeded");
         int poll_index = 0;
+        int post_delay;
+        int get_delay;
+        *string retry_after;
+        list<int> deadlines = ();
     }
 
     constructor() : AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo(
@@ -26,16 +31,19 @@ class FakeAzureDocIntelClient
     }
 
     hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        if (post_delay) { usleep(post_delay * 1000); }
         push calls, {"method": "POST", "path": path, "body": body};
         return <RestClient::RestResponseInfo>{
             "headers": {
                 "operation-location": "/documentintelligence/documentModels/prebuilt-document/analyzeResults/result-xyz?api-version=2024-11-30",
+                "retry-after": retry_after,
             },
             "body": "",
         };
     }
 
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        if (get_delay) { usleep(get_delay * 1000); }
         push calls, {"method": "GET", "path": path};
         string status = poll_sequence[poll_index];
         if (poll_index < poll_sequence.size() - 1) {
@@ -51,10 +59,17 @@ class FakeAzureDocIntelClient
                 "pages":      ({"pageNumber": 1},),
             };
         }
-        return <RestClient::RestResponseInfo>{"body": body};
+        body.error = {"code": "Fixture", "message": "private-document-fixture"};
+        return <RestClient::RestResponseInfo>{"body": body, "headers": {"retry-after": retry_after}};
     }
 
     string getSafeUrl() { return "https://my-docint.cognitiveservices.azure.com"; }
+
+    hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(string method, string path,
+            auto body, *hash<auto> hdr, int timeout_ms) {
+        deadlines += timeout_ms;
+        return method == "POST" ? restPost(path, body, hdr) : restGet(path, hdr);
+    }
 }
 
 #! Fake that returns NO operation-location header — used to test the missing-header guard
@@ -66,6 +81,10 @@ class FakeNoOpLocationClient
         return <RestClient::RestResponseInfo>{"headers": {}, "body": ""};
     }
     string getSafeUrl() { return "https://x.cognitiveservices.azure.com"; }
+    hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(string method, string path,
+            auto body, *hash<auto> hdr, int timeout_ms) {
+        return restPost(path, body, hdr);
+    }
 }
 
 public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
@@ -77,6 +96,9 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
             \lifecycleTest());
         addTestCase("missing Operation-Location header raises",
             \missingOperationLocationTest());
+        addTestCase("terminal failures and unknown status retain safe job context", \failureTest());
+        addTestCase("submission and fetch share a bounded deadline", \deadlineTest());
+        addTestCase("retry guidance remains bounded by the total deadline", \retryTest());
         set_return_value(main());
     }
 
@@ -85,7 +107,7 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
             ConnectionProvider::ConnectionSchemeCache::getScheme("azure-documentintelligence");
         assertEq("Azure Document Intelligence Connection", info.display_name);
         assertTrue(info.schemes."azure-documentintelligence");
-        assertEq("apikey", info.required_options);
+        assertEq("apikey|entra_token|headers", info.required_options);
     }
 
     private apikeyMappingTest() {
@@ -120,7 +142,54 @@ public class AzureDocumentIntelligenceRestClientTest inherits QUnit::Test {
     private missingOperationLocationTest() {
         FakeNoOpLocationClient stub();
         assertThrows("AZURE-DOCUMENT-INTELLIGENCE-ERROR", sub () {
-            stub.analyzeDocument("prebuilt-document", {});
+            stub.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/document.pdf"});
         });
+    }
+
+    private failureTest() {
+        foreach string status in ("failed", "canceled", "skipped", "unrecognized") {
+            FakeAzureDocIntelClient fake();
+            fake.poll_sequence = (status,);
+            try {
+                fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"});
+                fail("terminal failure was accepted");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("AZURE-DOCUMENT-INTELLIGENCE-ERROR", ex.err);
+                assertTrue(ex.arg.poll_url.val());
+                assertTrue(ex.desc.find("private-document-fixture") == -1);
+                if (status != "unrecognized") {
+                    assertEq(status, ex.arg.last_status.status);
+                    assertEq("private-document-fixture", ex.arg.last_status.error.message);
+                }
+            }
+        }
+    }
+
+    private deadlineTest() {
+        foreach string phase in ("post", "get") {
+            FakeAzureDocIntelClient fake();
+            fake.poll_sequence = ("succeeded",);
+            if (phase == "post") { fake.post_delay = 40; } else { fake.get_delay = 40; }
+            try {
+                fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"}, {"analysis_timeout": 20ms});
+                fail("late success exceeded the deadline");
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(ex.arg.poll_url.val());
+                if (phase == "get") { assertEq("succeeded", ex.arg.last_status.status); }
+            }
+            foreach int deadline in (fake.deadlines) { assertTrue(deadline > 0 && deadline <= 20); }
+        }
+    }
+
+    private retryTest() {
+        FakeAzureDocIntelClient fake();
+        fake.retry_after = "7";
+        list<int> waits = ();
+        fake.setSleeper(nothing sub (timeout delay) { waits += int(delay); });
+        fake.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"}, {"analysis_timeout": 1s});
+        assertEq(3, waits.size());
+        foreach int delay in (waits) { assertTrue(delay > 0 && delay <= 1000); }
+        assertEq(0, AzureDocumentIntelligenceRestClientBase::retryAfter("invalid"));
+        assertEq(2000, AzureDocumentIntelligenceRestClientBase::retryAfter("2"));
     }
 }

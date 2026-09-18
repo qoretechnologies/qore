@@ -462,6 +462,8 @@ public namespace Mime {
     */
     public const hash<string, bool> MimeTypesJson = {
         MimeTypeJson: True,                              # application/json
+        "application/x-amz-json-1.0": True,               # AWS JSON protocol 1.0
+        "application/x-amz-json-1.1": True,               # AWS JSON protocol 1.1
         "application/vnd.oracle.resource+json": True,   # Oracle REST Data Services
         "application/vnd.api+json": True,               # JSON:API
         "application/swagger+json": True,               # Swagger/OpenAPI

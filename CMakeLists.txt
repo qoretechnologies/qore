@@ -3626,14 +3626,32 @@ qore_user_module("qlib/DeepSeekDataProvider" "deepseek-logo.svg")
 qore_user_module("qlib/DeepgramRestClient.qm")
 qore_user_module("qlib/DeepgramDataProvider" "deepgram-logo.svg")
 qore_user_module("qlib/AssemblyAiRestClient.qm")
-qore_user_module("qlib/AssemblyAiDataProvider" "assemblyai-logo.svg")
+qore_user_module("qlib/AssemblyAiDataProvider" "assemblyai-logo.svg;assemblyai-transcripts-openapi.json;assemblyai-llm-gateway-openapi.json;assemblyai-streaming-token-openapi.json;assemblyai-voice-agent-token-openapi.json;assemblyai-agents-openapi.json;assemblyai-webhooks-openapi.json;assemblyai-sync-api-openapi.json;assemblyai-dictation-openapi.json;assemblyai-import.json")
 qore_user_module("qlib/AwsTextractRestClient.qm")
-qore_user_module("qlib/AwsTextractDataProvider" "aws-textract-logo.svg")
+qore_user_module("qlib/AwsTextractDataProvider" "aws-textract-logo.svg;textract-types.json;textract-service-2.json;botocore-LICENSE.txt;textract-model-NOTICE.txt")
+# Legal notices are not among the shared module-resource glob extensions.
+install(FILES qlib/AwsTextractDataProvider/botocore-LICENSE.txt
+    qlib/AwsTextractDataProvider/textract-model-NOTICE.txt
+    DESTINATION ${QORE_USER_MODULES_DIR}/AwsTextractDataProvider COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if(QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/AwsTextractDataProvider/botocore-LICENSE.txt
+        qlib/AwsTextractDataProvider/textract-model-NOTICE.txt
+        DESTINATION ${QORE_AOT_MODULES_DIR}/AwsTextractDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/GoogleDocumentAiRestClient.qm")
 qore_user_module("qlib/GoogleCloudStorageRestClient.qm")
 qore_user_module("qlib/GoogleDocumentAiDataProvider" "google-document-ai-logo.svg")
 qore_user_module("qlib/AzureDocumentIntelligenceRestClient.qm")
-qore_user_module("qlib/AzureDocumentIntelligenceDataProvider" "azure-document-intelligence-logo.svg")
+qore_user_module("qlib/AzureDocumentIntelligenceDataProvider"
+    "azure-document-intelligence-logo.svg;azure-document-intelligence-openapi.json;azure-document-intelligence-streams.json;azure-document-intelligence-inventory.json;azure-document-intelligence-swagger.json;microsoft-LICENSE.txt;microsoft-NOTICE.txt")
+install(FILES qlib/AzureDocumentIntelligenceDataProvider/microsoft-LICENSE.txt
+    qlib/AzureDocumentIntelligenceDataProvider/microsoft-NOTICE.txt
+    DESTINATION ${QORE_USER_MODULES_DIR}/AzureDocumentIntelligenceDataProvider COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if(QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/AzureDocumentIntelligenceDataProvider/microsoft-LICENSE.txt
+        qlib/AzureDocumentIntelligenceDataProvider/microsoft-NOTICE.txt
+        DESTINATION ${QORE_AOT_MODULES_DIR}/AzureDocumentIntelligenceDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/StabilityAiRestClient.qm")
 qore_user_module("qlib/StabilityAiDataProvider" "stability-ai-logo.svg")
 qore_user_module("qlib/BflRestClient.qm")

@@ -29,15 +29,15 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
             "aws_region": <DataProviderOptionInfo>{
                 "display_name": "AWS Region",
                 "short_desc": "AWS region for Textract endpoint",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."*string",
                 "desc": "AWS region (e.g., `us-east-1`, `eu-west-1`).  Determines "
                     "the Textract endpoint hostname.",
-                "required": True,
                 "example_value": "us-east-1",
             },
             "aws_keyid": <DataProviderOptionInfo>{
                 "display_name": "AWS Access Key ID",
                 "short_desc": "AWS access key ID for static credentials",
+                "sensitive": True,
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "AWS access key ID.  Optional — when omitted, the AWS "
                     "credential chain (env, ECS task role, IMDSv2) is used.",
@@ -82,11 +82,8 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
             rest = copts.restclient;
         }
         if (!rest) {
-            if (!copts.aws_region.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "missing required 'aws_region' argument for AWS Textract communication";
-            }
-            hash<auto> opts = {"aws_region": copts.aws_region};
+            hash<auto> opts = {};
+            if (copts.aws_region.val()) { opts.aws_region = copts.aws_region; }
             if (copts.aws_keyid.val()) {
                 opts.aws_keyid = copts.aws_keyid;
             }
@@ -98,6 +95,35 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
             }
             rest = new AwsTextractRestClient::AwsTextractRestClientIo(opts);
         }
+    }
+
+    #! Adapter dropdowns are scoped by this client's AWS credentials and region
+    /** @return supported reference names; jobs have no listing API */
+    *hash<string, bool> getSupportedReferenceData() {
+        return {"adapters": True, "adapter-versions": True};
+    }
+
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        bool versions = type == "adapter-versions";
+        if (versions && !action_opts.AdapterId.val()) { return; }
+        hash<auto> request = hash({"MaxResults": 100});
+        if (versions) { request.AdapterId = action_opts.AdapterId; }
+        list<hash<AllowedValueInfo>> result = ();
+        hash<string, bool> seen;
+        for (int page = 0; page < 100; ++page) {
+            hash<auto> response = doTextractAction(versions ? "ListAdapterVersions" : "ListAdapters", request);
+            foreach hash<auto> item in (versions ? response.AdapterVersions : response.Adapters) {
+                result += <AllowedValueInfo>{"value": versions ? item.AdapterVersion : item.AdapterId,
+                    "display_name": versions ? item.AdapterVersion : item.AdapterName};
+            }
+            if (!response.NextToken.val()) { return result; }
+            if (seen{response.NextToken}) {
+                throw "AWS-TEXTRACT-PAGINATION-ERROR", "adapter listing returned a repeated continuation token";
+            }
+            seen{response.NextToken} = True;
+            request.NextToken = response.NextToken;
+        }
+        throw "AWS-TEXTRACT-PAGINATION-ERROR", "adapter reference listing exceeded 100 pages; use the raw list action";
     }
 
     #! Posts a Textract action: sets X-Amz-Target header and serializes JSON body
@@ -112,25 +138,48 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
     /** Accepts either inline bytes via \c document_bytes (binary), an
         S3 reference via \c s3_bucket + \c s3_name, or a file path via
         \c document_path (read locally and uploaded as bytes).
+        @param req compatible document-source options
+        @param extra_fields additional input keys accepted by the calling action
+        @param read_file read local file content; false validates only the source options
+        @return validated native Document envelope
+        @throw AWS-TEXTRACT-CONFIG-ERROR missing or conflicting document sources
+        @throw AWS-TEXTRACT-INPUT-ERROR malformed source fields
     */
-    static hash<auto> buildDocument(*hash<auto> req) {
-        if (exists req.document_bytes) {
-            return {"Document": {"Bytes": req.document_bytes}};
-        }
-        if (req.document_path.val()) {
-            return {"Document": {"Bytes": File::readBinaryFile(req.document_path)}};
-        }
-        if (req.s3_bucket.val() && req.s3_name.val()) {
-            hash<auto!> s3;
-            s3.Bucket = req.s3_bucket;
-            s3.Name   = req.s3_name;
-            if (req.s3_version.val()) {
-                s3.Version = req.s3_version;
+    static hash<auto> buildDocument(*hash<auto> req, *list<string> extra_fields, bool read_file = True) {
+        foreach string field in (keys req) {
+            if (!inlist(field, ("document_bytes", "document_path", "s3_bucket", "s3_name", "s3_version")
+                    + (extra_fields ?? ()))) {
+                throw "AWS-TEXTRACT-INPUT-ERROR", "unsupported document field " + field;
             }
-            return {"Document": {"S3Object": s3}};
         }
-        throw "AWS-TEXTRACT-CONFIG-ERROR",
-            "one of document_bytes / document_path / (s3_bucket + s3_name) is required";
+        bool inline_bytes = req.hasKey("document_bytes");
+        bool local_file = req.hasKey("document_path");
+        bool s3 = req.hasKey("s3_bucket") || req.hasKey("s3_name") || req.hasKey("s3_version");
+        if (int(inline_bytes) + int(local_file) + int(s3) != 1) {
+            throw "AWS-TEXTRACT-CONFIG-ERROR", "supply exactly one document source: bytes, local file, or S3";
+        }
+        hash<auto> document;
+        if (inline_bytes) {
+            if (req.document_bytes.typeCode() != NT_BINARY) {
+                throw "AWS-TEXTRACT-INPUT-ERROR", "document_bytes must contain binary document data";
+            }
+            document = {"Bytes": req.document_bytes};
+        } else if (local_file) {
+            if (req.document_path.typeCode() != NT_STRING || !req.document_path.val()) {
+                throw "AWS-TEXTRACT-INPUT-ERROR", "document_path must be a nonempty local file path";
+            }
+            document = {"Bytes": read_file ? File::readBinaryFile(req.document_path) : binary("validation")};
+        } else {
+            foreach string field in ("s3_bucket", "s3_name") {
+                if (req{field}.typeCode() != NT_STRING || !req{field}.val()) {
+                    throw "AWS-TEXTRACT-INPUT-ERROR", field + " must be a nonempty string for an S3 document";
+                }
+            }
+            document = {"S3Object": {"Bucket": req.s3_bucket, "Name": req.s3_name}};
+            if (req.hasKey("s3_version")) { document.S3Object.Version = req.s3_version; }
+        }
+        AwsTextractSchema::validate("Document", document);
+        return {"Document": document};
     }
 }
 }

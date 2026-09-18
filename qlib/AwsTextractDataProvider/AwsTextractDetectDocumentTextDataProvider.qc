@@ -47,12 +47,20 @@ public class AwsTextractDetectDocumentTextDataProvider inherits AwsTextractDataP
 
     string getName() { return ProviderInfo.name; }
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return AwsTextractSchema::getType("DetectDocumentTextResponse");
+    }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
+        # Validate original values before the common provider applies soft-type conversion.
+        buildDocument(req, NOTHING, False);
+        return getRequestTypeImpl();
+    }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = AwsTextractDataProviderCommon::buildDocument(req);
-        return doTextractAction("DetectDocumentText", body);
+        return doTextractAction("DetectDocumentText", AwsTextractSchema::convert("DetectDocumentTextRequest", body));
     }
 }
 }

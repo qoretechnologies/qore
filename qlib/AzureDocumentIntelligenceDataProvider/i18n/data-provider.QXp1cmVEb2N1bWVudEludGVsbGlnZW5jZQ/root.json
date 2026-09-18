@@ -12,8 +12,8 @@
           "message": "Azure Document Intelligence (formerly Form Recognizer)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
-          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
-          "message": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier."
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Capabilities**:\n- Extract searchable text, tables, fields, and document structure\n- Classify documents and manage custom models and classifiers\n- Analyze document batches in Azure storage\n- Retrieve job status, searchable PDFs, and cropped figures\n\nUse `prebuilt-layout` with `features=keyValuePairs` for general extraction. Custom model identifiers can be selected from this resource or entered directly.",
+          "message": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Capabilities**:\n- Extract searchable text, tables, fields, and document structure\n- Classify documents and manage custom models and classifiers\n- Analyze document batches in Azure storage\n- Retrieve job status, searchable PDFs, and cropped figures\n\nUse `prebuilt-layout` with `features=keyValuePairs` for general extraction. Custom model identifiers can be selected from this resource or entered directly."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,6 +339,2482 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean."
         },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
+          "source": "List Classifiers",
+          "message": "List Classifiers"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
+          "source": "List classifiers available in this Azure resource",
+          "message": "List classifiers available in this Azure resource"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.desc": {
+          "source": "List classifiers available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "List classifiers available in this Azure resource. Returns one page; `nextLink` identifies the next page when present."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
+          "source": "Get Classifier",
+          "message": "Get Classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
+          "source": "Read a classifier and its document categories",
+          "message": "Read a classifier and its document categories"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.desc": {
+          "source": "Read a classifier and its document categories.",
+          "message": "Read a classifier and its document categories."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
+          "source": "Delete Classifier",
+          "message": "Delete Classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
+          "source": "Delete a custom document classifier",
+          "message": "Delete a custom document classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.desc": {
+          "source": "Delete a custom document classifier. **This permanently removes the selected resource or result.**",
+          "message": "Delete a custom document classifier. **This permanently removes the selected resource or result.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
+          "source": "Start Classification",
+          "message": "Start Classification"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
+          "source": "Submit a document URL or base64 content for classification",
+          "message": "Submit a document URL or base64 content for classification"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.desc": {
+          "source": "Submit a document URL or base64 content for classification.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Submit a document URL or base64 content for classification.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "Document URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to classify",
+          "message": "Document URL to classify"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to classify.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "Document URL to classify.  Either `urlSource` or `base64Source` must be specified."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Base64 Document"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to classify",
+          "message": "Base64 encoding of the document to classify"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to classify.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "Base64 encoding of the document to classify.  Either `urlSource` or `base64Source`\nmust be specified."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "String Index Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Method used to compute string offset and length"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Method used to compute string offset and length."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Text Elements"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode Code Points"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 Code Units"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "Document Splitting"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "Document splitting mode"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "Document splitting mode."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatic"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "None"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Per Page"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1-based page numbers to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
+          "source": "Copy Classifier",
+          "message": "Copy Classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
+          "source": "Start copying a classifier to an authorized resource",
+          "message": "Start copying a classifier to an authorized resource"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.desc": {
+          "source": "Start copying a classifier to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Start copying a classifier to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "Target Resource ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied…",
+          "message": "ID of the target Azure resource where the document classifier should be copied…"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied to.",
+          "message": "ID of the target Azure resource where the document classifier should be copied to."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "Target Resource Region"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document classifier should be…",
+          "message": "Location of the target Azure resource where the document classifier should be…"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document classifier should be copied\nto.",
+          "message": "Location of the target Azure resource where the document classifier should be copied\nto."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.display_name": {
+          "source": "Target Classifier ID",
+          "message": "Target Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.short_desc": {
+          "source": "Identifier of the target document classifier",
+          "message": "Identifier of the target document classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.desc": {
+          "source": "Identifier of the target document classifier.",
+          "message": "Identifier of the target document classifier."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.display_name": {
+          "source": "Target Classifier Location",
+          "message": "Target Classifier Location"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.short_desc": {
+          "source": "URL of the copied document classifier in the target account",
+          "message": "URL of the copied document classifier in the target account"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.desc": {
+          "source": "URL of the copied document classifier in the target account.",
+          "message": "URL of the copied document classifier in the target account."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Access Token"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "Token used to authorize the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "Token used to authorize the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "Expiration Date Time"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "Date/time when the access token expires"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "Date/time when the access token expires."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
+          "source": "Get Classification Result",
+          "message": "Get Classification Result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
+          "source": "Read classification status and document results",
+          "message": "Read classification status and document results"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.desc": {
+          "source": "Read classification status and document results.",
+          "message": "Read classification status and document results."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "Analyze operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
+          "source": "Authorize Classifier Copy",
+          "message": "Authorize Classifier Copy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
+          "source": "Authorize an incoming classifier copy in this resource",
+          "message": "Authorize an incoming classifier copy in this resource"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.desc": {
+          "source": "Authorize an incoming classifier copy in this resource.",
+          "message": "Authorize an incoming classifier copy in this resource."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "Document classifier description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "Document classifier description."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document classifier",
+          "message": "List of key-value tag attributes associated with the document classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document classifier.",
+          "message": "List of key-value tag attributes associated with the document classifier."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
+          "source": "Build Classifier",
+          "message": "Build Classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
+          "source": "Train a classifier from labeled documents in Azure storage",
+          "message": "Train a classifier from labeled documents in Azure storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.desc": {
+          "source": "Train a classifier from labeled documents in Azure storage.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Train a classifier from labeled documents in Azure storage.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "Document classifier description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "Document classifier description."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.display_name": {
+          "source": "Base Classifier ID",
+          "message": "Base Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.short_desc": {
+          "source": "Base 'classifierId' on top of which to train the classifier",
+          "message": "Base 'classifierId' on top of which to train the classifier"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.desc": {
+          "source": "Base `classifierId` on top of which to train the classifier.",
+          "message": "Base `classifierId` on top of which to train the classifier."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "Doc Types"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.short_desc": {
+          "source": "List of document types to classify against",
+          "message": "List of document types to classify against"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.desc": {
+          "source": "List of document types to classify against.",
+          "message": "List of document types to classify against."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "Allow Overwrite"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing classifier with the same name",
+          "message": "Allow overwriting an existing classifier with the same name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing classifier with the same name.",
+          "message": "Allow overwriting an existing classifier with the same name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "List Models"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List extraction models available in this Azure resource",
+          "message": "List extraction models available in this Azure resource"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List extraction models available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "List extraction models available in this Azure resource. Returns one page; `nextLink` identifies the next page when present."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Analysis",
+          "message": "Start Analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
+          "source": "Submit a document URL or base64 content for extraction",
+          "message": "Submit a document URL or base64 content for extraction"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.desc": {
+          "source": "Submit a document URL or base64 content for extraction.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Submit a document URL or base64 content for extraction.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "Document URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to analyze",
+          "message": "Document URL to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to analyze.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "Document URL to analyze.  Either `urlSource` or `base64Source` must be specified."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Base64 Document"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to analyze",
+          "message": "Base64 encoding of the document to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to analyze.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "Base64 encoding of the document to analyze.  Either `urlSource` or `base64Source`\nmust be specified."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1-based page numbers to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Locale"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Locale hint for text recognition and document analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "String Index Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Method used to compute string offset and length"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Method used to compute string offset and length."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Text Elements"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode Code Points"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 Code Units"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Analysis Features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "List of optional analysis features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "List of optional analysis features."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "High Resolution OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Languages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Barcodes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Formulas"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Key/Value Pairs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Font Styles"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "List of additional fields to extract"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Content Format"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Format of the analyze result top-level content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Format of the analyze result top-level content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Additional Outputs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Additional outputs to generate during analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Additional outputs to generate during analysis."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Searchable PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Figures"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
+          "source": "Start Batch Analysis",
+          "message": "Start Batch Analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
+          "source": "Analyze documents from an Azure storage container",
+          "message": "Analyze documents from an Azure storage container"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.desc": {
+          "source": "Analyze documents from an Azure storage container.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Analyze documents from an Azure storage container.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob Source"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Azure Blob Storage content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Azure Blob Storage content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "Container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage container URL."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefix"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "Blob name prefix"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "Blob name prefix."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Azure Blob File List Source"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "File list in Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "File list in Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "Container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage container URL."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "File List"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "Path to a JSONL file within the container specifying a subset of documents"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "Path to a JSONL file within the container specifying a subset of documents."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.display_name": {
+          "source": "Result Container URL",
+          "message": "Result Container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored",
+          "message": "Azure Blob Storage container URL where analyze result files will be stored"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored.",
+          "message": "Azure Blob Storage container URL where analyze result files will be stored."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.display_name": {
+          "source": "Result Prefix",
+          "message": "Result Prefix"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.short_desc": {
+          "source": "Blob name prefix of result files",
+          "message": "Blob name prefix of result files"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.desc": {
+          "source": "Blob name prefix of result files.",
+          "message": "Blob name prefix of result files."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.display_name": {
+          "source": "Overwrite Existing",
+          "message": "Overwrite Existing"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.short_desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "Overwrite existing analyze result files?"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "Overwrite existing analyze result files?"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1-based page numbers to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Locale"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Locale hint for text recognition and document analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "String Index Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Method used to compute string offset and length"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Method used to compute string offset and length."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Text Elements"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode Code Points"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 Code Units"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Analysis Features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "List of optional analysis features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "List of optional analysis features."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "High Resolution OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Languages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Barcodes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Formulas"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Key/Value Pairs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Font Styles"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "List of additional fields to extract"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Content Format"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Format of the analyze result top-level content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Format of the analyze result top-level content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Additional Outputs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Additional outputs to generate during analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Additional outputs to generate during analysis."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Searchable PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Figures"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "Get Model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Read an extraction model and its supported document fields",
+          "message": "Read an extraction model and its supported document fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.desc": {
+          "source": "Read an extraction model and its supported document fields.",
+          "message": "Read an extraction model and its supported document fields."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
+          "source": "Delete Model",
+          "message": "Delete Model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
+          "source": "Delete a custom extraction model",
+          "message": "Delete a custom extraction model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.desc": {
+          "source": "Delete a custom extraction model. **This permanently removes the selected resource or result.**",
+          "message": "Delete a custom extraction model. **This permanently removes the selected resource or result.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
+          "source": "Copy Model",
+          "message": "Copy Model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
+          "source": "Start copying a model to an authorized resource",
+          "message": "Start copying a model to an authorized resource"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.desc": {
+          "source": "Start copying a model to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Start copying a model to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "Target Resource ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to",
+          "message": "ID of the target Azure resource where the document model should be copied to"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to.",
+          "message": "ID of the target Azure resource where the document model should be copied to."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "Target Resource Region"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document model should be copied",
+          "message": "Location of the target Azure resource where the document model should be copied"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document model should be copied\nto.",
+          "message": "Location of the target Azure resource where the document model should be copied\nto."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.display_name": {
+          "source": "Target Model ID",
+          "message": "Target Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.short_desc": {
+          "source": "Identifier of the target document model",
+          "message": "Identifier of the target document model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.desc": {
+          "source": "Identifier of the target document model.",
+          "message": "Identifier of the target document model."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.display_name": {
+          "source": "Target Model Location",
+          "message": "Target Model Location"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.short_desc": {
+          "source": "URL of the copied document model in the target account",
+          "message": "URL of the copied document model in the target account"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.desc": {
+          "source": "URL of the copied document model in the target account.",
+          "message": "URL of the copied document model in the target account."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Access Token"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "Token used to authorize the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "Token used to authorize the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "Expiration Date Time"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "Date/time when the access token expires"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "Date/time when the access token expires."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
+          "source": "List Batch Results",
+          "message": "List Batch Results"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
+          "source": "List batch extraction jobs for a model",
+          "message": "List batch extraction jobs for a model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.desc": {
+          "source": "List batch extraction jobs for a model. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "List batch extraction jobs for a model. Returns one page; `nextLink` identifies the next page when present."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Get Batch Result",
+          "message": "Get Batch Result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Read batch progress and individual document outcomes",
+          "message": "Read batch progress and individual document outcomes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Read batch progress and individual document outcomes.",
+          "message": "Read batch progress and individual document outcomes."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "Analyze batch operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Delete Batch Result",
+          "message": "Delete Batch Result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored batch extraction result",
+          "message": "Delete a stored batch extraction result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Delete a stored batch extraction result. **This permanently removes the selected resource or result.**",
+          "message": "Delete a stored batch extraction result. **This permanently removes the selected resource or result.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "Analyze batch operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Get Analysis Result",
+          "message": "Get Analysis Result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Read analysis status and extracted document content",
+          "message": "Read analysis status and extracted document content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Read analysis status and extracted document content.",
+          "message": "Read analysis status and extracted document content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "Analyze operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Delete Analysis Result",
+          "message": "Delete Analysis Result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored extraction result",
+          "message": "Delete a stored extraction result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Delete a stored extraction result. **This permanently removes the selected resource or result.**",
+          "message": "Delete a stored extraction result. **This permanently removes the selected resource or result.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "Analyze operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
+          "source": "Download Figure",
+          "message": "Download Figure"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
+          "source": "Download the original PNG bytes of an extracted figure",
+          "message": "Download the original PNG bytes of an extracted figure"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.desc": {
+          "source": "Download the original PNG bytes of an extracted figure. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "Download the original PNG bytes of an extracted figure. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "Analyze operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.display_name": {
+          "source": "Figure ID",
+          "message": "Figure ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.short_desc": {
+          "source": "Figure ID",
+          "message": "Figure ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.desc": {
+          "source": "Figure ID.",
+          "message": "Figure ID."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
+          "source": "Download Searchable PDF",
+          "message": "Download Searchable PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
+          "source": "Download the searchable PDF bytes generated during analysis",
+          "message": "Download the searchable PDF bytes generated during analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.desc": {
+          "source": "Download the searchable PDF bytes generated during analysis. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "Download the searchable PDF bytes generated during analysis. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "Result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "Analyze operation result ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Result identifier from the job location returned when submitting the document."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
+          "source": "Authorize Model Copy",
+          "message": "Authorize Model Copy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
+          "source": "Authorize an incoming model copy in this resource",
+          "message": "Authorize an incoming model copy in this resource"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.desc": {
+          "source": "Authorize an incoming model copy in this resource.",
+          "message": "Authorize an incoming model copy in this resource."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "Document model description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "Document model description."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "List of key-value tag attributes associated with the document model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "List of key-value tag attributes associated with the document model."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
+          "source": "Build Model",
+          "message": "Build Model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
+          "source": "Train a custom extraction model from labeled documents",
+          "message": "Train a custom extraction model from labeled documents"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.desc": {
+          "source": "Train a custom extraction model from labeled documents.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Train a custom extraction model from labeled documents.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "Document model description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "Document model description."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.display_name": {
+          "source": "Build Mode",
+          "message": "Build Mode"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.short_desc": {
+          "source": "Custom document model build mode",
+          "message": "Custom document model build mode"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.desc": {
+          "source": "Custom document model build mode.",
+          "message": "Custom document model build mode."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOnRlbXBsYXRl.display_name": {
+          "source": "Template",
+          "message": "Template"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOm5ldXJhbA.display_name": {
+          "source": "Neural",
+          "message": "Neural"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob Source"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Azure Blob Storage content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Azure Blob Storage content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "Container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage container URL."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Prefix"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "Blob name prefix"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "Blob name prefix."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Azure Blob File List Source"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "File list in Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "File list in Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "Container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage container URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage container URL."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "File List"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "Path to a JSONL file within the container specifying a subset of documents"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "Path to a JSONL file within the container specifying a subset of documents."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "List of key-value tag attributes associated with the document model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "List of key-value tag attributes associated with the document model."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.display_name": {
+          "source": "Max Training Hours",
+          "message": "Max Training Hours"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.short_desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training",
+          "message": "Max number of V100-equivalent GPU hours to use for model training"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training.  Default=0.5.",
+          "message": "Max number of V100-equivalent GPU hours to use for model training.  Default=0.5."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "Allow Overwrite"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing model with the same name",
+          "message": "Allow overwriting an existing model with the same name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing model with the same name.",
+          "message": "Allow overwriting an existing model with the same name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
+          "source": "Compose Model",
+          "message": "Compose Model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
+          "source": "Combine trained models into one extraction workflow",
+          "message": "Combine trained models into one extraction workflow"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.desc": {
+          "source": "Combine trained models into one extraction workflow.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Combine trained models into one extraction workflow.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "Document model description"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "Document model description."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Custom classifier to split and classify the input file",
+          "message": "Custom classifier to split and classify the input file"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Custom classifier to split and classify the input file.",
+          "message": "Custom classifier to split and classify the input file."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "Document Splitting"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.short_desc": {
+          "source": "File splitting behavior",
+          "message": "File splitting behavior"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.desc": {
+          "source": "File splitting behavior.",
+          "message": "File splitting behavior."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatic"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "None"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Per Page"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "Doc Types"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.short_desc": {
+          "source": "Dictionary mapping supported 'docTypes' to the corresponding document models",
+          "message": "Dictionary mapping supported 'docTypes' to the corresponding document models"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.desc": {
+          "source": "Dictionary mapping supported `docTypes` to the corresponding document models.",
+          "message": "Dictionary mapping supported `docTypes` to the corresponding document models."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "List of key-value tag attributes associated with the document model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "List of key-value tag attributes associated with the document model."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
+          "source": "Get Resource Information",
+          "message": "Get Resource Information"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
+          "source": "Read resource quotas and custom model usage",
+          "message": "Read resource quotas and custom model usage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.desc": {
+          "source": "Read resource quotas and custom model usage.",
+          "message": "Read resource quotas and custom model usage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
+          "source": "List Operations",
+          "message": "List Operations"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
+          "source": "List recent model and classifier management operations",
+          "message": "List recent model and classifier management operations"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.desc": {
+          "source": "List recent model and classifier management operations. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "List recent model and classifier management operations. Returns one page; `nextLink` identifies the next page when present."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
+          "source": "Get Operation",
+          "message": "Get Operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
+          "source": "Read build or copy progress and its typed result",
+          "message": "Read build or copy progress and its typed result"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.desc": {
+          "source": "Read build or copy progress and its typed result.",
+          "message": "Read build or copy progress and its typed result."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.display_name": {
+          "source": "Operation ID",
+          "message": "Operation ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.short_desc": {
+          "source": "Operation ID",
+          "message": "Operation ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.desc": {
+          "source": "Operation ID",
+          "message": "Operation ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms Client Request ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "An opaque, globally-unique, client-generated string identifier for the request."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
+          "source": "Start Analysis from Bytes",
+          "message": "Start Analysis from Bytes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the analysis job location",
+          "message": "Submit document bytes and return the analysis job location"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the analysis job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Submit document bytes and return the analysis job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "Model ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Unique document model name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Unique document model name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "Document Bytes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "REST request body argument"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "Original document bytes, uploaded without base64 encoding."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1-based page numbers to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Locale"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Locale hint for text recognition and document analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "String Index Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Method used to compute string offset and length"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Method used to compute string offset and length."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Text Elements"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode Code Points"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 Code Units"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Analysis Features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "List of optional analysis features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "List of optional analysis features."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "High Resolution OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Languages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Barcodes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Formulas"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Key/Value Pairs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Font Styles"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "List of additional fields to extract"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Content Format"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Format of the analyze result top-level content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Format of the analyze result top-level content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Additional Outputs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Additional outputs to generate during analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Additional outputs to generate during analysis."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Searchable PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Figures"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
+          "source": "Start Classification from Bytes",
+          "message": "Start Classification from Bytes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the classification job location",
+          "message": "Submit document bytes and return the classification job location"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the classification job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Submit document bytes and return the classification job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "Classifier ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Unique document classifier name"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unique document classifier name."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "Document Bytes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "REST request body argument"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "Original document bytes, uploaded without base64 encoding."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API Version"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "The API version to use for this operation"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "The API version to use for this operation."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "String Index Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Method used to compute string offset and length"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Method used to compute string offset and length."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Text Elements"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode Code Points"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 Code Units"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "Document Splitting"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "Document splitting mode"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "Document splitting mode."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatic"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "None"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Per Page"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1-based page numbers to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
+        },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
           "source": "Analyze Document",
           "message": "Analyze Document"
@@ -348,8 +2824,8 @@
           "message": "Run a Document Intelligence model over a document (async)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
-          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
-          "message": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)"
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete. Returns extracted text, fields, tables, and structure for use in subsequent workflow steps.\n\n**Document source** — supply exactly one:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "Submits a document to a Document Intelligence model and waits for the analysis to complete. Returns extracted text, fields, tables, and structure for use in subsequent workflow steps.\n\n**Document source** — supply exactly one:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
           "source": "Model ID",
@@ -360,12 +2836,12 @@
           "message": "Document Intelligence model identifier"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
-          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
-          "message": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`)."
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text. Legacy model choices remain identifiable for saved workflows; `prebuilt-document` and `prebuilt-businessCard` are retired in API v4. Use `prebuilt-layout` with `keyValuePairs` for general document extraction.",
+          "message": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text. Legacy model choices remain identifiable for saved workflows; `prebuilt-document` and `prebuilt-businessCard` are retired in API v4. Use `prebuilt-layout` with `keyValuePairs` for general document extraction."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
-          "source": "Document (general layout)",
-          "message": "Document (general layout)"
+          "source": "General Document (Retired in v4)",
+          "message": "General Document (Retired in v4)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
           "source": "Layout (tables + lines)",
@@ -384,8 +2860,8 @@
           "message": "ID Document"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
-          "source": "Business Card",
-          "message": "Business Card"
+          "source": "Business Card (Retired in v4)",
+          "message": "Business Card (Retired in v4)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
           "source": "US W-2 Tax Form",
@@ -402,6 +2878,10 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
           "source": "US Health Insurance Card",
           "message": "US Health Insurance Card"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlYWQ.display_name": {
+          "source": "Read (Text and Searchable PDF)",
+          "message": "Read (Text and Searchable PDF)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
           "source": "Document URL",
@@ -474,6 +2954,146 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
           "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
           "message": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1-based page numbers to analyze"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Locale"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Locale hint for text recognition and document analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "String Index Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Method used to compute string offset and length"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Method used to compute string offset and length."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Text Elements"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode Code Points"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 Code Units"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Analysis Features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "List of optional analysis features"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "List of optional analysis features."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "High Resolution OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Languages"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Barcodes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Formulas"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Key/Value Pairs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Font Styles"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Query Fields"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "List of additional fields to extract"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Content Format"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Format of the analyze result top-level content"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Format of the analyze result top-level content."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Plain Text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Additional Outputs"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Additional outputs to generate during analysis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Additional outputs to generate during analysis."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Searchable PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Figures"
         }
       }
     }

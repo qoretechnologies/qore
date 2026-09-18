@@ -94,6 +94,7 @@ public class GenericApiCallProvider inherits DataProvider::AbstractDataProvider 
             extend it if your deployments use additional custom-named secrets in headers.
         */
         const RedactedRequestHeaders = {
+            "ocp-apim-subscription-key": True,
             "authorization":            True,
             "proxy-authorization":      True,
             "cookie":                   True,

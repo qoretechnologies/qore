@@ -21,6 +21,7 @@ class FakeAssemblyAiClient inherits AssemblyAiRestClient::AssemblyAiRestClientIo
         int poll_index = 0;
         int sleep_calls = 0;
         *string final_error;
+        bool omit_id = False;
     }
 
     constructor() : AssemblyAiRestClient::AssemblyAiRestClientIo(
@@ -32,7 +33,7 @@ class FakeAssemblyAiClient inherits AssemblyAiRestClient::AssemblyAiRestClientIo
         push calls, {"method": "POST", "path": path, "body": body};
         if (path == "/v2/transcript") {
             return <RestClient::RestResponseInfo>{
-                "body": {"id": "t1", "status": "queued"},
+                "body": omit_id ? {"status": "queued"} : {"id": "t1", "status": "queued"},
             };
         }
         throw "FAKE-ERROR", sprintf("unexpected POST %y", path);
@@ -79,6 +80,10 @@ public class AssemblyAiRestClientTest inherits QUnit::Test {
             \errorStatusTest());
         addTestCase("transcribe honours overall timeout",
             \timeoutTest());
+        addTestCase("credentials fail early without disclosing values", \invalidAuthTest());
+        addTestCase("regions and companion copies retain transport and credentials", \copyTest());
+        addTestCase("connection constructor forms select the same endpoint", \connectionTest());
+        addTestCase("malformed jobs and invalid polling controls fail", \invalidJobTest());
         set_return_value(main());
     }
 
@@ -106,6 +111,81 @@ public class AssemblyAiRestClientTest inherits QUnit::Test {
         });
         assertEq("k", opts.headers.Authorization);
         assertEq("abc", opts.headers."X-Trace-Id");
+        opts = AssemblyAiRestClientBase::getOptions({"apikey": "new-key",
+            "headers": {"authorization": "old-key", "AUTHORIZATION": "also-old", "X-Trace-Id": "abc"}});
+        assertEq(("Authorization", "X-Trace-Id"), sort(keys opts.headers));
+        assertEq("new-key", opts.headers.Authorization);
+    }
+
+    private invalidAuthTest() {
+        foreach auto key in (NOTHING, NULL, "", " ", False, 0, (), {}, "secret\r\nInjected: value") {
+            assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () {
+                AssemblyAiRestClientBase::getOptions({"apikey": key});
+            });
+        }
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () { AssemblyAiRestClientBase::getOptions({}); });
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () {
+            AssemblyAiRestClientBase::getOptions({"apikey": "fixture", "token": "conflicting-token"});
+        });
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () {
+            AssemblyAiRestClientBase::getOptions({"apikey": "fixture", "region": "invalid"});
+        });
+    }
+
+    private copyTest() {
+        AssemblyAiRestClientIo client({"apikey": "fixture", "region": "eu", "timeout": 12s,
+            "headers": {"X-Trace-Id": "fixture-trace"}});
+        assertEq("https://api.eu.assemblyai.com", client.getUrl().toString());
+        foreach string service in ("llm-gateway", "streaming", "agents", "sync", "dictation") {
+            AssemblyAiRestClientIo copy = client.getServiceClient(service);
+            string expected = service == "agents" ? "https://agents.assemblyai.com"
+                : "https://" + service + ".eu.assemblyai.com";
+            assertEq(expected, copy.getUrl().toString());
+            assertEq("fixture", copy.getDefaultHeaders().Authorization);
+            assertEq("fixture-trace", copy.getDefaultHeaders()."X-Trace-Id");
+            assertEq(12s, copy.getConstructorOptions().timeout);
+            assertEq(client.getConnectionManager(), copy.getConnectionManager());
+        }
+        AssemblyAiRestClientIo copied = cast<AssemblyAiRestClientIo>(client.copyWithUrl(
+            "https://api.eu.assemblyai.com"));
+        assertEq("https://sync.eu.assemblyai.com", copied.getServiceClient("sync").getUrl().toString());
+        assertEq("https://sync.eu.assemblyai.com",
+            client.getServiceClient("agents").getServiceClient("sync").getUrl().toString());
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () { client.getServiceClient("unknown"); });
+        AssemblyAiRestClient sync({"apikey": "fixture", "region": "eu"}, True);
+        assertEq("fixture", sync.getDefaultHeaders().Authorization);
+    }
+
+    private connectionTest() {
+        AssemblyAiRestConnection connection("fixture", "Fixture connection",
+            "assemblyai://localhost", {"monitor": False}, {"apikey": "fixture", "region": "eu"});
+        AssemblyAiRestConnection from_hash({"name": "fixture", "desc": "Fixture connection",
+            "url": "assemblyai://api.eu.assemblyai.com", "opts": {"apikey": "fixture"}});
+        assertEq("AssemblyAI", connection.getAppName());
+        assertEq("https://api.eu.assemblyai.com", connection.getAsync().getUrl().toString());
+        assertEq("https://api.eu.assemblyai.com", from_hash.getAsync().getUrl().toString());
+        hash<ConnectionSchemeInfo> info = AssemblyAiRestConnection::ConnectionScheme;
+        assertTrue(info.options.apikey.sensitive);
+        assertEq("apikey", info.required_options);
+        assertTrue(info.options.token.disabled);
+        assertTrue(info.options.oauth2_client_secret.disabled);
+        assertTrue(info.options.oauth2_client_secret.sensitive);
+        assertEq(("us", "eu"), map $1.value, info.options.region.allowed_values);
+    }
+
+    private invalidJobTest() {
+        FakeAssemblyAiClient fake();
+        fake.omit_id = True;
+        assertThrows("ASSEMBLYAI-ERROR", sub () { fake.transcribe("https://example.com/a.wav"); });
+        fake.omit_id = False;
+        fake.poll_sequence = ("unknown",);
+        assertThrows("ASSEMBLYAI-ERROR", sub () { fake.transcribe("https://example.com/a.wav"); });
+        foreach hash<auto> opts in ({"poll_interval": 0ms}, {"poll_interval": -1ms},
+                {"transcription_timeout": 0ms}, {"transcription_timeout": -1ms}) {
+            int before = fake.calls.size();
+            assertThrows("ASSEMBLYAI-ERROR", sub () { fake.transcribe("https://example.com/a.wav", opts); });
+            assertEq(before, fake.calls.size());
+        }
     }
 
     private transcribeLifecycleTest() {

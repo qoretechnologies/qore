@@ -52,13 +52,15 @@ module AzureDocumentIntelligenceRestClient {
     The %AzureDocumentIntelligenceRestClient module provides a REST client
     for [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence)
     (formerly Form Recognizer) — Microsoft's managed document extraction
-    service with prebuilt models for invoices, receipts, IDs, business
-    cards, US tax forms, contracts, and a custom-model workflow.
+    service with prebuilt models for invoices, receipts, IDs, US tax forms,
+    contracts, and custom model workflows using API version 2024-11-30.
 
     Authentication uses the `Ocp-Apim-Subscription-Key` header with the
     Azure resource's subscription key.  Entra (Azure AD) bearer-token
-    auth via @ref azureauthintro "AzureAuth" can be added by the caller
-    via the \c headers connection option.
+    auth can be supplied through \c entra_token
+    or a Bearer Authorization header. Exactly one authentication mode is required.
+    Tokens are supplied and renewed by the caller; automatic refresh is not implemented.
+    Both connection constructors verify authentication with a structurally validated resource-info ping.
 
     The main classes are:
     - @ref AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClient — sync client
@@ -71,7 +73,7 @@ module AzureDocumentIntelligenceRestClient {
     `Operation-Location` header pointing to a polling URL; subsequent GETs
     return `{status: \"running\" / \"succeeded\" / \"failed\"}` and the
     parsed `analyzeResult` once succeeded.  The high-level
-    @ref AzureDocumentIntelligenceRestClientIo::analyzeDocument() helper
+    @ref AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo::analyzeDocument() helper
     drives this loop via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"'s
     `AsyncJobPoller`.
 
@@ -79,6 +81,8 @@ module AzureDocumentIntelligenceRestClient {
 
     @subsection AzureDocumentIntelligenceRestClientv1_0 AzureDocumentIntelligenceRestClient v1.0
     - the initial version of the %AzureDocumentIntelligenceRestClient module
+    - authenticated ping, explicit key/token alternatives, endpoint normalization, and sync/async constructor parity
+    - independent per-call polling with safe service links, total deadlines, Retry-After, and retained job context
 */
 
 %requires json
@@ -95,7 +99,7 @@ public const StatusSucceeded = "succeeded";
 public const StatusFailed = "failed";
 
 #! All terminal statuses
-public const TerminalStatuses = (StatusSucceeded, StatusFailed);
+public const TerminalStatuses = (StatusSucceeded, StatusFailed, "canceled", "skipped");
 
 #! Default poll interval between status checks (ms)
 public const DefaultPollInterval = 2000ms;
@@ -108,23 +112,142 @@ public class AzureDocumentIntelligenceRestClientBase {
     public {
         const DefaultOptions = {
             "data": "json",
+            "max_redirects": 0,
         };
     }
 
     #! Maps the \c apikey option to the Ocp-Apim-Subscription-Key header
+    /** @param opts resource and transport options
+        @return validated options with exactly one authentication header
+        @throw AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR invalid endpoint or authentication
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto!> rv;
         rv += DefaultOptions + opts;
-        if (rv.apikey) {
-            hash<auto!> dh;
-            if (rv.headers) {
-                dh += rv.headers;
+        rv.url = normalizeEndpoint(rv.url);
+        rv.data = "json";
+        rv.max_redirects = 0;
+        rv.redirect_passthru = False;
+        rv.error_passthru = False;
+        rv.allow_any_response = False;
+        hash<auto!> headers = rv.headers ?? {};
+        hash<auto!> lower = {};
+        foreach hash<auto> header in (headers.pairIterator()) {
+            string name = header.key.lwr();
+            if (exists lower{name}) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "duplicate HTTP header names are not allowed";
             }
-            dh."Ocp-Apim-Subscription-Key" = rv.apikey;
-            rv.headers = dh;
-            delete rv.apikey;
+            lower{name} = header.value;
         }
+        if (exists rv.apikey) {
+            if (rv.apikey.typeCode() != NT_STRING || !trim(rv.apikey).val()) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "apikey must be a nonempty string";
+            }
+            if (exists lower."ocp-apim-subscription-key") {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "supply the subscription key only once";
+            }
+            headers."Ocp-Apim-Subscription-Key" = remove rv.apikey;
+            lower."ocp-apim-subscription-key" = headers."Ocp-Apim-Subscription-Key";
+        }
+        if (exists rv.entra_token) {
+            if (rv.entra_token.typeCode() != NT_STRING || !trim(rv.entra_token).val()
+                    || exists lower.authorization) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "supply one nonempty Entra bearer token";
+            }
+            headers.Authorization = "Bearer " + remove rv.entra_token;
+            lower.authorization = headers.Authorization;
+        }
+        if (lower."ocp-apim-subscription-key".val().toBool() == lower.authorization.val().toBool()) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR",
+                "supply exactly one subscription key or Entra bearer token";
+        }
+        if (lower.authorization.val() && (lower.authorization.typeCode() != NT_STRING
+                || lower.authorization !~ /^Bearer [^\r\n]+$/i)) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "Authorization must contain a Bearer token";
+        }
+        if (exists lower."ocp-apim-subscription-key" && (lower."ocp-apim-subscription-key".typeCode() != NT_STRING
+                || !trim(lower."ocp-apim-subscription-key").val() || lower."ocp-apim-subscription-key" =~ /[\r\n]/)) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "the subscription key header is invalid";
+        }
+        if (rv.token.val() || rv.oauth2_grant_type.val() || rv.username.val() || rv.password.val()) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR",
+                "use apikey, entra_token, or an authentication header; token refresh is managed by the caller";
+        }
+        foreach string name in (keys rv) {
+            if (name =~ /^(oauth2_|custom_token_|negotiate_)/ && rv{name}.val()) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "unrelated authentication modes are not supported";
+            }
+        }
+        rv.headers = headers;
         return rv;
+    }
+
+    #! Returns the supported transport and explicit authentication options
+    /** @return connection options without unrelated authentication or schema modes */
+    static hash<string, hash<ConnectionOptionInfo>> connectionOptions() {
+        return map {$1.key: $1.value}, RestConnection::ConnectionScheme.options.pairIterator(),
+            $1.key !~ /^(oauth2_|custom_token_|negotiate_|swagger|openapi3$|token|validator$|data$|username$|password$|rest_body_auth_)/;
+    }
+
+    #! Interprets numeric and HTTP-date retry guidance without exposing header contents
+    /** @param value Retry-After header
+        @return nonnegative delay in milliseconds; zero for absent or malformed guidance
+    */
+    static int retryAfter(auto value) {
+        if (value.typeCode() != NT_STRING) { return 0; }
+        if (value =~ /^[0-9]+$/) { return min(value.toInt(), 86400) * 1000; }
+        try { return max(0, get_duration_milliseconds(date(value) - now_us())); }
+        catch () { return 0; }
+    }
+
+    #! Normalizes a resource endpoint without allowing embedded credentials
+    /** @param endpoint the resource URL, optionally ending in documentintelligence
+        @return the resource origin; loopback HTTP is accepted for local service fixtures
+        @throw AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR the URL is invalid or insecure
+    */
+    static string normalizeEndpoint(string endpoint) {
+        hash<auto> parsed;
+        try { parsed = parse_url(endpoint); }
+        catch () { throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "the resource endpoint is malformed"; }
+        if (!parsed.host.val() || parsed.username.val() || parsed.password.val() || endpoint =~ /[?#@\r\n\\]/
+                || (parsed.protocol != "https"
+                    && !(parsed.protocol == "http" && inlist(parsed.host, ("localhost", "127.0.0.1", "::1"))))) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "use an HTTPS resource endpoint without credentials";
+        }
+        if (parsed.path.val() && !inlist(parsed.path, ("/", "/documentintelligence", "/documentintelligence/"))) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "the endpoint must name the Azure resource origin";
+        }
+        endpoint =~ s/\/documentintelligence\/?$//;
+        endpoint =~ s/\/$//;
+        return endpoint;
+    }
+
+    #! Checks a service-supplied polling or pagination URL before any authenticated request
+    /** @param endpoint the configured resource URL
+        @param link an absolute same-origin URL or an absolute service path
+        @return a relative-to-origin path with its original query
+        @throw AZURE-DOCUMENT-INTELLIGENCE-URL-ERROR the link is unsafe
+    */
+    static string servicePath(string endpoint, string link) {
+        hash<auto> target;
+        hash<auto> origin;
+        try { target = parse_url(link); origin = parse_url(endpoint); }
+        catch () { throw "AZURE-DOCUMENT-INTELLIGENCE-URL-ERROR", "the service returned a malformed resource link"; }
+        bool absolute = target.protocol.val();
+        string path = split("?", target.path)[0];
+        if (target.username.val() || target.password.val() || link =~ /[#\r\n\\]/
+                || link =~ /^[a-zA-Z][-a-zA-Z0-9+.]*:\/\/[^\/]*@/ || link =~ /^\/\//
+                || (absolute && (target.protocol.lwr() != origin.protocol.lwr()
+                    || target.host.lwr() != origin.host.lwr()
+                    || (target.port ?: (target.protocol == "https" ? 443 : 80))
+                        != (origin.port ?: (origin.protocol == "https" ? 443 : 80))))
+                || (!absolute && target.host.val())
+                || path !~ /^\/documentintelligence\//
+                || path =~ /(^|\/)(\.|\.\.)(\/|$)/
+                || path =~ /%2e|%2f|%5c/i) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-URL-ERROR", "the service returned an unsafe resource link";
+        }
+        return target.path;
     }
 }
 
@@ -133,46 +256,51 @@ public class AzureDocumentIntelligenceRestClient
         inherits RestClient::RestClient,
         AzureDocumentIntelligenceRestClientBase {
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(AzureDocumentIntelligenceRestClientBase::getOptions(opts), True) {
+            : RestClient(AzureDocumentIntelligenceRestClientBase::getOptions(opts), do_not_connect) {
     }
 }
 
 #! Async REST client for Azure Document Intelligence
-/** Owns an @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" for the
+/** Creates a separate @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller" for each
     analyze-then-poll lifecycle exposed via @ref analyzeDocument().
 */
 public class AzureDocumentIntelligenceRestClientIo
         inherits RestClientIo::RestClientIo,
         AzureDocumentIntelligenceRestClientBase {
     private {
-        QoreAsyncJobUtils::AsyncJobPoller poller;
+        # Configure the test sleeper before sharing a client between threads.
+        *code<nothing(timeout)> sleeper;
     }
 
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(AzureDocumentIntelligenceRestClientBase::getOptions(opts), shared_mgr) {
-        poller = new QoreAsyncJobUtils::AsyncJobPoller(
-            hash<auto> sub (string poll_url) {
-                return restGet(poll_url).body;
-            },
-            bool sub (hash<auto> status) {
-                return status.status && inlist(status.status, TerminalStatuses);
-            },
-            "Azure Document Intelligence analysis",
-            "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
-        );
     }
 
+    #! Sets a deterministic sleeper for tests before the client is shared
+    /** @param s callback receiving the bounded sleep duration */
     setSleeper(code<nothing(timeout)> s) {
-        poller.setSleeper(s);
+        sleeper = s;
+    }
+
+    #! Copies transport ownership and test configuration without retaining bound job callbacks
+    /** @param new_url the new resource endpoint
+        @return an independently usable client with the same credentials
+        @throw AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR invalid endpoint
+    */
+    RestClient::AbstractRestClient copyWithUrl(string new_url) {
+        AzureDocumentIntelligenceRestClientIo rv = cast<AzureDocumentIntelligenceRestClientIo>(
+            RestClientIo::copyWithUrl(normalizeEndpoint(new_url)));
+        rv.sleeper = sleeper;
+        return rv;
     }
 
     #! Submits an analyze request and waits for the result
     /** @param model_id Document Intelligence model ID
-            (e.g. \c "prebuilt-document", \c "prebuilt-invoice",
+            (e.g. \c "prebuilt-layout", \c "prebuilt-invoice",
             \c "prebuilt-receipt", or a custom model GUID)
         @param body analyze request body — typically
             \c {urlSource: "..."} or \c {base64Source: "<b64>"}
-        @param options optional polling-control fields: \c poll_interval
+        @param options analysis query options and polling-control fields: \c poll_interval
             (defaults to 2s), \c analysis_timeout (defaults to 10m),
             \c api_version (defaults to "2024-11-30")
 
@@ -190,10 +318,33 @@ public class AzureDocumentIntelligenceRestClientIo
         timeout overall_to = options.analysis_timeout ?? DefaultAnalysisTimeout;
         timeout poll_interval = options.poll_interval ?? DefaultPollInterval;
 
+        if (!model_id.val() || !api_version.val() || overall_to <= 0 || poll_interval <= 0) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "model, API version, and positive polling limits are required";
+        }
+        int sources = int(exists body.urlSource) + int(exists body.base64Source);
+        if (sources != 1 || (exists body.urlSource && (body.urlSource.typeCode() != NT_STRING
+                || body.urlSource !~ /^https?:\/\/[^\s]+$/))
+                || (exists body.base64Source && (body.base64Source.typeCode() != NT_STRING
+                    || !body.base64Source.val()))) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "supply exactly one nonempty document source";
+        }
+        date deadline = now_us() + milliseconds(int(overall_to));
+
         string submit_path = sprintf(
             "/documentintelligence/documentModels/%s:analyze?api-version=%s",
-            model_id, api_version);
-        hash<auto> submit_resp = restPost(submit_path, body);
+            encode_url(model_id, True), encode_url(api_version, True));
+        foreach string field in (("pages", "locale", "stringIndexType", "features", "queryFields",
+                "outputContentFormat", "output")) {
+            if (!exists options{field}) {
+                continue;
+            }
+            auto value = options{field};
+            string encoded = value.typeCode() == NT_LIST
+                ? join(",", map encode_url($1.toString(), True), value)
+                : encode_url(value.toString(), True);
+            submit_path += "&" + field + "=" + encoded;
+        }
+        hash<auto> submit_resp = restDoRequestWithTimeout("POST", submit_path, body, NOTHING, int(overall_to));
         # The poll URL is in the Operation-Location response header
         *string op_location = submit_resp.headers."operation-location"
             ?? submit_resp.headers."Operation-Location";
@@ -201,34 +352,81 @@ public class AzureDocumentIntelligenceRestClientIo
             throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
                 "Azure Document Intelligence did not return an "
                 "Operation-Location header on submit",
-                {"headers": submit_resp.headers, "body": submit_resp.body};
+                {"status_code": submit_resp.status_code};
         }
 
-        # Drive the poll loop; the AsyncJobPoller passes the URL as "job_id"
-        hash<auto> final_status = poller.poll(op_location, overall_to, poll_interval);
-        if (final_status.status == StatusFailed) {
-            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
-                sprintf("Azure Document Intelligence analysis ended in failure: %s",
-                    final_status.error.message ?? "unknown"),
-                {"poll_url": op_location, "last_status": final_status};
+        string poll_path = servicePath(getUrl(), op_location);
+        int retry_delay = retryAfter(submit_resp.headers."retry-after");
+        code<nothing(timeout)> wait = sleeper ?? (nothing sub (timeout delay) { Qore::usleep(delay); });
+        # Every call owns its poller and callbacks. Copies and concurrent jobs never share job state.
+        QoreAsyncJobUtils::AsyncJobPoller poller(
+            hash<auto> sub (string job_id) {
+                int remaining = get_duration_milliseconds(deadline - now_us());
+                if (remaining <= 0) {
+                    throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "analysis deadline exceeded";
+                }
+                hash<auto> response = restDoRequestWithTimeout("GET", job_id, NOTHING, NOTHING, remaining);
+                retry_delay = retryAfter(response.headers."retry-after");
+                if (response.body.typeCode() != NT_HASH
+                        || !inlist(response.body.status, ("notStarted", "running", "succeeded", "failed", "canceled", "skipped"))) {
+                    throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "the analysis response has an invalid status",
+                        {"last_status": response.body};
+                }
+                return response.body;
+            },
+            bool sub (hash<auto> status) { return inlist(status.status, TerminalStatuses); },
+            "Azure Document Intelligence analysis", "AZURE-DOCUMENT-INTELLIGENCE-ERROR");
+        poller.setSleeper(nothing sub (timeout delay) {
+            int remaining = get_duration_milliseconds(deadline - now_us());
+            if (remaining > 0) { wait(min(max(int(delay), retry_delay), remaining)); }
+        });
+        hash<auto> final_status;
+        try {
+            if (retry_delay > 0) {
+                int remaining = get_duration_milliseconds(deadline - now_us());
+                if (remaining > 0) { wait(min(retry_delay, remaining)); }
+            }
+            int remaining = get_duration_milliseconds(deadline - now_us());
+            if (remaining <= 0) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "analysis deadline exceeded after submission";
+            }
+            final_status = poller.poll(poll_path, remaining, poll_interval);
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow ex.err, "Azure Document Intelligence analysis did not complete",
+                {"poll_url": op_location, "job_id": poll_path, "last_status": ex.arg.last_status};
         }
-        return final_status.analyzeResult ?? final_status;
+        if (final_status.status != StatusSucceeded) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR",
+                "Azure Document Intelligence analysis failed or was canceled",
+                {"poll_url": op_location, "job_id": poll_path, "last_status": final_status};
+        }
+        if (final_status.analyzeResult.typeCode() != NT_HASH) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-ERROR", "the completed job has no analysis result",
+                {"poll_url": op_location, "job_id": poll_path, "last_status": final_status};
+        }
+        return final_status.analyzeResult;
     }
 }
 
 #! Connection class for Azure Document Intelligence
 public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestConnection {
     public {
+        #! Authenticated read-only resource information endpoint
+        const DefaultPingPath = "/documentintelligence/info?api-version=" + DefaultApiVersion;
+
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Azure Document Intelligence Connection",
             "short_desc": "A connection to Azure Document Intelligence",
             "desc": "A connection to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) "
                 "(formerly Form Recognizer) — Microsoft's managed document "
                 "extraction service.\n\n"
-                "Requires the Azure resource URL (`https://<resource-name>.cognitiveservices.azure.com`) "
-                "and a subscription key sent via the `Ocp-Apim-Subscription-Key` "
-                "header.  Get the resource URL and key from the Azure portal "
-                "under your Document Intelligence resource > Keys and Endpoint.",
+                "**Connection setup**:\n"
+                "- Use the resource URL (`https://<resource-name>.cognitiveservices.azure.com`)\n"
+                "- Supply either a subscription key or an Entra bearer token\n"
+                "- Find the endpoint and key under **Keys and Endpoint** in the Azure portal\n\n"
+                "**Entra authentication**: tokens require the `https://cognitiveservices.azure.com/.default` audience "
+                "and resource permissions. **The caller renews expiring tokens.** Ping reads resource "
+                "information and verifies authentication; other operations may require additional permissions.",
             "cls": Class::forName("AzureDocumentIntelligenceRestConnection"),
             "schemes": {
                 "azure-documentintelligence": True,
@@ -236,7 +434,7 @@ public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestCo
             "base_scheme_map": {
                 "https": "azure-documentintelligence",
             },
-            "options": RestConnection::ConnectionScheme.options + {
+            "options": AzureDocumentIntelligenceRestClientBase::connectionOptions() + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "Subscription Key",
                     "short_desc": "Azure Document Intelligence subscription key",
@@ -246,18 +444,65 @@ public class AzureDocumentIntelligenceRestConnection inherits RestClient::RestCo
                     "sensitive": True,
                     "preselected": True,
                 },
+                "entra_token": <ConnectionOptionInfo>{
+                    "display_name": "Entra Bearer Token",
+                    "short_desc": "A caller-managed Microsoft Entra access token",
+                    "type": "string",
+                    "desc": "Access token for `https://cognitiveservices.azure.com/.default`. "
+                        "Use instead of a subscription key and replace it before expiration.",
+                    "sensitive": True,
+                },
+                "headers": RestConnection::ConnectionScheme.options.headers
+                    + <ConnectionOptionInfo>{"sensitive": True},
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method
+                    + <ConnectionOptionInfo>{"default_value": "GET"},
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path
+                    + <ConnectionOptionInfo>{"default_value": DefaultPingPath},
             },
-            "required_options": "apikey",
+            "required_options": "apikey|entra_token|headers",
         };
     }
 
     constructor(string name, string description, string url,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(AzureDocumentIntelligenceRestConnection::getConfig({
+                "name": name, "desc": description, "url": url, "opts": options,
+            }), attributes) {
     }
 
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config, attr) {
+            : RestConnection(AzureDocumentIntelligenceRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns the application associated with this connection
+    /** @return the stable application identity */
+    *string getAppName() { return "AzureDocumentIntelligence"; }
+
+    #! Requires a real resource information response on both blocking and polling ping paths
+    /** @param body decoded or raw response data
+        @throw REST-PING-ERROR the response does not match resource information
+    */
+    validatePingResponse(auto body) {
+        if (body.typeCode() == NT_STRING || body.typeCode() == NT_BINARY) {
+            try { body = parse_json(body.toString()); }
+            catch () { throw "REST-PING-ERROR", "resource information is not JSON"; }
+        }
+        if (body.typeCode() != NT_HASH || body.customDocumentModels.typeCode() != NT_HASH
+                || body.customDocumentModels.count.typeCode() != NT_INT
+                || body.customDocumentModels.limit.typeCode() != NT_INT) {
+            throw "REST-PING-ERROR", "the service did not return valid authenticated resource information";
+        }
+    }
+
+    private static hash<auto> getConfig(hash<auto> config) {
+        string endpoint = regex_subst(config.url, "^azure-documentintelligence:", "https:");
+        endpoint = AzureDocumentIntelligenceRestClientBase::normalizeEndpoint(endpoint);
+        # Validate actual authentication, not merely presence of an arbitrary headers object.
+        AzureDocumentIntelligenceRestClientBase::getOptions((config.opts ?? {}) + {"url": endpoint});
+        config.url = regex_subst(endpoint, "^https:", "azure-documentintelligence:");
+        config.opts = (config.opts ?? {}) + {"ping_method": "GET", "ping_path": DefaultPingPath,
+            "ping_headers": {"Accept": MimeTypeJson}};
+        return config;
     }
 
     string getType() {

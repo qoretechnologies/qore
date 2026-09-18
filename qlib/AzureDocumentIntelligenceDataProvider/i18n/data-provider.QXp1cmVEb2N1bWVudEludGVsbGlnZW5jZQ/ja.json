@@ -12,8 +12,8 @@
           "message": "Azure Document Intelligence (旧 Form Recognizer)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
-          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
-          "message": "[Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (旧 Form Recognizer) — Microsoft のマネージドドキュメント抽出サービスへのアクセスを提供します。\n\n**事前構築済みモデル**:\n- `prebuilt-document` — 一般的なキー/値抽出\n- `prebuilt-layout` — レイアウト、テーブル、段落\n- `prebuilt-invoice` / `prebuilt-receipt` — 型指定された請求書 / 領収書エンティティ\n- `prebuilt-idDocument` — 運転免許証、パスポート、身分証明書\n- `prebuilt-businessCard` — 名刺抽出\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — 米国納税申告書\n- `prebuilt-contract` — 契約条項 + 当事者\n\nAzure portal でトレーニングされた**カスタムモデル**は、その GUID 識別子によって参照されます。"
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Capabilities**:\n- Extract searchable text, tables, fields, and document structure\n- Classify documents and manage custom models and classifiers\n- Analyze document batches in Azure storage\n- Retrieve job status, searchable PDFs, and cropped figures\n\nUse `prebuilt-layout` with `features=keyValuePairs` for general extraction. Custom model identifiers can be selected from this resource or entered directly.",
+          "message": "[Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence)(旧Form Recognizer)— Microsoftのマネージドドキュメント抽出サービスへのアクセスを提供します。\n\n**能力**:\n- 検索可能なテキスト、表、フィールド、文書構造の抽出\n- 文書の分類およびカスタムモデルおよび分類器の管理\n- Azureストレージ内のドキュメントバッチの分析\n- 求人状況、検索可能なPDF、トリミングされた図の取得\n\n一般的な抽出には `prebuilt-layout` with `features=keyValuePairs` を使用します。カスタムモデル識別子はこのリソースから選択するか、直接入力可能です。"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,6 +339,2482 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
         },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
+          "source": "List Classifiers",
+          "message": "分類器を一覧表示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
+          "source": "List classifiers available in this Azure resource",
+          "message": "このAzureリソースで利用可能な分類器一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.desc": {
+          "source": "List classifiers available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "このAzureリソースで利用可能な分類器を一覧にします。1ページを返します。 `nextLink` は存在した場合に次のページを示します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
+          "source": "Get Classifier",
+          "message": "分類器を取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
+          "source": "Read a classifier and its document categories",
+          "message": "分類器とその文書カテゴリを読みます"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.desc": {
+          "source": "Read a classifier and its document categories.",
+          "message": "分類器とその文書カテゴリを読みましょう。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
+          "source": "Delete Classifier",
+          "message": "分類器を削除"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
+          "source": "Delete a custom document classifier",
+          "message": "カスタム文書分類器を削除してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.desc": {
+          "source": "Delete a custom document classifier. **This permanently removes the selected resource or result.**",
+          "message": "カスタムドキュメント分類器を削除してください。**これにより選択したリソースまたは結果が永久に削除されます。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
+          "source": "Start Classification",
+          "message": "分類を開始"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
+          "source": "Submit a document URL or base64 content for classification",
+          "message": "分類のために文書のURLまたはbase64の内容を提出してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.desc": {
+          "source": "Submit a document URL or base64 content for classification.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "分類のために文書のURLまたはbase64内容を提出してください。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "ドキュメント URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to classify",
+          "message": "分類するための文書URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to classify.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "分類するための文書URLを指定してください。 `urlSource` または `base64Source` のいずれかを指定する必要があります。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Base64ドキュメント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to classify",
+          "message": "分類用文書のBase64エンコーディング"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to classify.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "文書のBase64エンコーディングで分類します。`urlSource`か`base64Source`のいずれかです。\n明確にしなければなりません。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "文字列インデックスタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "文字列のオフセットと長さを計算するための方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "文字列のオフセットと長さを計算するために使われる方法です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "テキスト要素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicodeコードポイント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16コード単位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "文書分割"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "文書分割モード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "ドキュメント分割モード。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "ページ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1ベースのページ番号を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "分析用の1ベースのページ番号。例: \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
+          "source": "Copy Classifier",
+          "message": "分類器をコピー"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
+          "source": "Start copying a classifier to an authorized resource",
+          "message": "分類器を認可されたリソースにコピーし始めます"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.desc": {
+          "source": "Start copying a classifier to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "分類器を認可されたリソースにコピーし始めてください。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "ターゲットリソースID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied…",
+          "message": "文書分類器をコピーすべきターゲットのAzureリソースのID..."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied to.",
+          "message": "文書分類器をコピーすべきターゲットとなるAzureリソースのID。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "ターゲット資源地域"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document classifier should be…",
+          "message": "ドキュメント分類器があるべきターゲットAzureリソースの位置..."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document classifier should be copied\nto.",
+          "message": "文書分類器をコピーすべきターゲットAzureリソースの位置\nへ。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.display_name": {
+          "source": "Target Classifier ID",
+          "message": "ターゲット分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.short_desc": {
+          "source": "Identifier of the target document classifier",
+          "message": "ターゲット文書分類器の識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.desc": {
+          "source": "Identifier of the target document classifier.",
+          "message": "対象文書分類器の識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.display_name": {
+          "source": "Target Classifier Location",
+          "message": "ターゲット分類器の位置"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.short_desc": {
+          "source": "URL of the copied document classifier in the target account",
+          "message": "ターゲットアカウント内のコピーされた文書分類ツールのURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.desc": {
+          "source": "URL of the copied document classifier in the target account.",
+          "message": "ターゲットアカウント内のコピーされた文書分類ツールのURLです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "アクセストークン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "リクエストを承認するために使われるトークン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "リクエストを承認するために使われたトークン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "有効期限"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "アクセストークンの期限が切れる日時"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "アクセストークンの期限が切れる日時。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
+          "source": "Get Classification Result",
+          "message": "分類結果を入手"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
+          "source": "Read classification status and document results",
+          "message": "分類の状態と文書の結果を取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.desc": {
+          "source": "Read classification status and document results.",
+          "message": "分類の状態と文書の結果を取得。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "操作結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
+          "source": "Authorize Classifier Copy",
+          "message": "分類器コピーの承認"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
+          "source": "Authorize an incoming classifier copy in this resource",
+          "message": "このリソースで入ってくる分類器のコピーを承認してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.desc": {
+          "source": "Authorize an incoming classifier copy in this resource.",
+          "message": "このリソースで分類器のコピーを承認してください。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "文書分類器の記述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "文書分類器の説明。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document classifier",
+          "message": "文書分類器に関連するキー・バリュータグ属性の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document classifier.",
+          "message": "文書分類器に関連付けられたキー・バリュータグ属性の一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
+          "source": "Build Classifier",
+          "message": "分類器を学習"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
+          "source": "Train a classifier from labeled documents in Azure storage",
+          "message": "Azureストレージ内のラベル付きドキュメントから分類器を訓練する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.desc": {
+          "source": "Train a classifier from labeled documents in Azure storage.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Azureストレージ内のラベル付きドキュメントから分類器を訓練します。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "文書分類器の記述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "文書分類器の説明。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.display_name": {
+          "source": "Base Classifier ID",
+          "message": "基本分類器のID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.short_desc": {
+          "source": "Base 'classifierId' on top of which to train the classifier",
+          "message": "その上に分類器を訓練するためのベース「classifierId」"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.desc": {
+          "source": "Base `classifierId` on top of which to train the classifier.",
+          "message": "その上に分類器を訓練するためのベース `classifierId` 。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "ドキュメンタリーの種類"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.short_desc": {
+          "source": "List of document types to classify against",
+          "message": "分類すべき文書の種類一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.desc": {
+          "source": "List of document types to classify against.",
+          "message": "分類すべき文書の種類一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "上書きを許可する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing classifier with the same name",
+          "message": "同じ名前の既存の分類器を上書きすることを許可します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing classifier with the same name.",
+          "message": "同じ名前の既存の分類器を上書きすることを許可します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "モデルのリスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List extraction models available in this Azure resource",
+          "message": "このAzureリソースで利用可能なリスト抽出モデル"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List extraction models available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "このAzureリソースで利用可能なリスト抽出モデル。1ページを返します。 `nextLink` は存在時に次のページを識別します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Analysis",
+          "message": "分析を開始"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
+          "source": "Submit a document URL or base64 content for extraction",
+          "message": "文書のURLまたはbase64のコンテンツを提出して抽出してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.desc": {
+          "source": "Submit a document URL or base64 content for extraction.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "文書のURLまたはbase64コンテンツを提出して抽出してください。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "ドキュメント URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to analyze",
+          "message": "分析する文書URLを"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to analyze.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "分析する文書URLを指定してください。 `urlSource` または `base64Source` のいずれかを指定する必要があります。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Base64ドキュメント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to analyze",
+          "message": "解析用文書のBase64エンコーディング"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to analyze.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "解析用の文書のBase64エンコーディング。 `urlSource` か `base64Source`\n明確にしなければなりません。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "ページ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1ベースのページ番号を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "分析用の1ベースのページ番号。例: \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "テキスト認識と文書分析のためのロケートヒント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "テキスト認識と文書分析のための場所のヒント。価値は含まれることがあります\n言語コード(例: \"en\"、 \"fr\")またはBCP 47言語タグ(例: \"en-US\")です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "文字列インデックスタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "文字列のオフセットと長さを計算するための方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "文字列のオフセットと長さを計算するために使われる方法です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "テキスト要素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicodeコードポイント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16コード単位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "解析特徴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "オプション解析機能の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "オプションの解析機能一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解像度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "言語"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "バーコード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "キー/バリューペア"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "フォントスタイル"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "抽出すべき追加フィールドの一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "抽出すべき追加フィールドの一覧。例: \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "コンテンツ形式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果のフォーマット トップレベルコンテンツ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果のフォーマットはトップレベルのコンテンツです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "解析時に生成される追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析中に生成される追加出力。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "検索可能なPDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "図"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
+          "source": "Start Batch Analysis",
+          "message": "バッチ分析開始"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
+          "source": "Analyze documents from an Azure storage container",
+          "message": "Azureストレージコンテナから文書を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.desc": {
+          "source": "Analyze documents from an Azure storage container.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Azureストレージコンテナから文書を分析します。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob ソース"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Azure Blob Storage の内容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Azure Blob Storage の内容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "コンテナURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage コンテナーのURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage コンテナーのURL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "接頭辞"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "ブロブ名プレフィックス"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "ブロブ名のプレフィックス。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Azure Blob Storage のファイル一覧ソース"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "Azure Blob Storage のファイル一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "Azure Blob Storage のファイル一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "コンテナURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage コンテナーのURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage コンテナーのURL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "ファイルリスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "コンテナ内のJSONLファイルへのパスで、文書のサブセットを指定します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "コンテナ内のJSONLファイルへのパスで、ドキュメントのサブセットを指定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.display_name": {
+          "source": "Result Container URL",
+          "message": "結果コンテナURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored",
+          "message": "分析結果ファイルが保存されるAzure Blob StorageコンテナURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored.",
+          "message": "分析結果ファイルが保存されるAzure Blob StorageコンテナのURLです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.display_name": {
+          "source": "Result Prefix",
+          "message": "結果接頭辞"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.short_desc": {
+          "source": "Blob name prefix of result files",
+          "message": "結果ファイルのブロブ名プレフィックス"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.desc": {
+          "source": "Blob name prefix of result files.",
+          "message": "結果ファイルのBlob名前プレフィックス。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.display_name": {
+          "source": "Overwrite Existing",
+          "message": "既存の上書き"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.short_desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "既存の解析結果ファイルを上書きできますか?"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "既存の解析結果ファイルを上書きできますか?"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "ページ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1ベースのページ番号を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "分析用の1ベースのページ番号。例: \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "テキスト認識と文書分析のためのロケートヒント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "テキスト認識と文書分析のための場所のヒント。価値は含まれることがあります\n言語コード(例: \"en\"、 \"fr\")またはBCP 47言語タグ(例: \"en-US\")です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "文字列インデックスタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "文字列のオフセットと長さを計算するための方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "文字列のオフセットと長さを計算するために使われる方法です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "テキスト要素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicodeコードポイント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16コード単位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "解析特徴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "オプション解析機能の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "オプションの解析機能一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解像度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "言語"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "バーコード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "キー/バリューペア"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "フォントスタイル"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "抽出すべき追加フィールドの一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "抽出すべき追加フィールドの一覧。例: \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "コンテンツ形式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果のフォーマット トップレベルコンテンツ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果のフォーマットはトップレベルのコンテンツです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "解析時に生成される追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析中に生成される追加出力。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "検索可能なPDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "図"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "モデルの取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Read an extraction model and its supported document fields",
+          "message": "抽出モデルとその対応する文書フィールドを読みます"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.desc": {
+          "source": "Read an extraction model and its supported document fields.",
+          "message": "抽出モデルとその対応する文書フィールドを読みましょう。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
+          "source": "Delete Model",
+          "message": "モデルを削除"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
+          "source": "Delete a custom extraction model",
+          "message": "カスタム抽出モデルを削除してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.desc": {
+          "source": "Delete a custom extraction model. **This permanently removes the selected resource or result.**",
+          "message": "カスタム抽出モデルを削除してください。**これにより選択したリソースまたは結果が永久に削除されます。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
+          "source": "Copy Model",
+          "message": "モデルをコピー"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
+          "source": "Start copying a model to an authorized resource",
+          "message": "モデルを認可されたリソースにコピーし始めます"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.desc": {
+          "source": "Start copying a model to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "モデルを認可されたリソースにコピーし始めてください。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "ターゲットリソースID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to",
+          "message": "ドキュメントモデルをコピーすべきターゲットAzureリソースのID(ID)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to.",
+          "message": "ドキュメントモデルをコピーすべきターゲットとなるAzureリソースのID。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "ターゲット資源地域"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document model should be copied",
+          "message": "文書モデルをコピーすべきターゲットのAzureリソースの位置"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document model should be copied\nto.",
+          "message": "文書モデルをコピーすべきターゲットのAzureリソースの位置\nへ。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.display_name": {
+          "source": "Target Model ID",
+          "message": "ターゲットモデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.short_desc": {
+          "source": "Identifier of the target document model",
+          "message": "ターゲット文書モデルの識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.desc": {
+          "source": "Identifier of the target document model.",
+          "message": "ターゲットドキュメントモデルの識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.display_name": {
+          "source": "Target Model Location",
+          "message": "ターゲットモデルの位置"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.short_desc": {
+          "source": "URL of the copied document model in the target account",
+          "message": "ターゲットアカウント内のコピーされたドキュメントモデルのURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.desc": {
+          "source": "URL of the copied document model in the target account.",
+          "message": "ターゲットアカウント内のコピーされた文書モデルのURLです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "アクセストークン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "リクエストを承認するために使われるトークン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "リクエストを承認するために使われたトークン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "有効期限"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "アクセストークンの期限が切れる日時"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "アクセストークンの期限が切れる日時。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
+          "source": "List Batch Results",
+          "message": "バッチ結果を一覧表示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
+          "source": "List batch extraction jobs for a model",
+          "message": "モデルのバッチ抽出ジョブ一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.desc": {
+          "source": "List batch extraction jobs for a model. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "モデルのバッチ抽出ジョブを一覧表示します。1ページを返します。 `nextLink` は存在した場合に次のページを識別します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Get Batch Result",
+          "message": "バッチ結果を取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Read batch progress and individual document outcomes",
+          "message": "バッチの進捗や個々の文書の成果を読みましょう"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Read batch progress and individual document outcomes.",
+          "message": "バッチの進捗や個々の文書の成果を読みましょう。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "バッチ操作の結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Delete Batch Result",
+          "message": "バッチ結果を削除"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored batch extraction result",
+          "message": "保存されたバッチ抽出結果を削除してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Delete a stored batch extraction result. **This permanently removes the selected resource or result.**",
+          "message": "保存されたバッチ抽出結果を削除してください。**これにより選択されたリソースまたは結果が永久に削除されます。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "バッチ操作の結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Get Analysis Result",
+          "message": "分析結果を取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Read analysis status and extracted document content",
+          "message": "解析状況と抽出された文書内容を読む"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Read analysis status and extracted document content.",
+          "message": "分析状況と抽出された文書内容を読みましょう。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "操作結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Delete Analysis Result",
+          "message": "分析結果を削除"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored extraction result",
+          "message": "保存された抽出結果を削除してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Delete a stored extraction result. **This permanently removes the selected resource or result.**",
+          "message": "保存された抽出結果を削除します。**これにより選択したリソースまたは結果が永久に削除されます。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "操作結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
+          "source": "Download Figure",
+          "message": "図をダウンロード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
+          "source": "Download the original PNG bytes of an extracted figure",
+          "message": "抽出された図の元のPNGバイトをダウンロードしてください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.desc": {
+          "source": "Download the original PNG bytes of an extracted figure. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "抽出した図の元のPNGバイトをダウンロードしてください。解析を開始する際にマッチング `output` を要求してください。応答にはバイナリ `body`、HTTPステータス、メディアヘッダーが含まれます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "操作結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.display_name": {
+          "source": "Figure ID",
+          "message": "図のID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.short_desc": {
+          "source": "Figure ID",
+          "message": "図のID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.desc": {
+          "source": "Figure ID.",
+          "message": "図のID。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
+          "source": "Download Searchable PDF",
+          "message": "検索可能なPDFをダウンロード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
+          "source": "Download the searchable PDF bytes generated during analysis",
+          "message": "解析中に生成された検索可能なPDFバイトをダウンロードしてください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.desc": {
+          "source": "Download the searchable PDF bytes generated during analysis. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "解析中に生成された検索可能なPDFバイトをダウンロードしてください。解析開始時にマッチング `output` を要求してください。応答にはバイナリ `body`、HTTPステータス、メディアヘッダーが含まれます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "操作結果IDを解析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "書類提出時に返されるジョブロケーションの結果識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
+          "source": "Authorize Model Copy",
+          "message": "モデルコピーの承認"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
+          "source": "Authorize an incoming model copy in this resource",
+          "message": "このリソースでモデルの入荷を承認してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.desc": {
+          "source": "Authorize an incoming model copy in this resource.",
+          "message": "このリソースでモデルの入件を承認してください。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "ドキュメントモデルの記述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "モデルの説明を文書化してください。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "ドキュメントモデルに関連するキー・バリュータグ属性の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "ドキュメントモデルに関連するキー・バリュータグ属性の一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
+          "source": "Build Model",
+          "message": "モデルを学習"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
+          "source": "Train a custom extraction model from labeled documents",
+          "message": "ラベル付きドキュメントからカスタム抽出モデルを訓練します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.desc": {
+          "source": "Train a custom extraction model from labeled documents.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "ラベル付きドキュメントからカスタム抽出モデルを訓練します。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "ドキュメントモデルの記述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "モデルの説明を文書化してください。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.display_name": {
+          "source": "Build Mode",
+          "message": "ビルドモード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.short_desc": {
+          "source": "Custom document model build mode",
+          "message": "カスタムドキュメントモデルビルドモード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.desc": {
+          "source": "Custom document model build mode.",
+          "message": "カスタムドキュメントモデル作成モード。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOnRlbXBsYXRl.display_name": {
+          "source": "Template",
+          "message": "テンプレート"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOm5ldXJhbA.display_name": {
+          "source": "Neural",
+          "message": "ニューラル"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob ソース"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Azure Blob Storage の内容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Azure Blob Storage の内容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "コンテナURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage コンテナーのURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage コンテナーのURL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "接頭辞"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "ブロブ名プレフィックス"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "ブロブ名のプレフィックス。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Azure Blob Storage のファイル一覧ソース"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "Azure Blob Storage のファイル一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "Azure Blob Storage のファイル一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "コンテナURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage コンテナーのURL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage コンテナーのURL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "ファイルリスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "コンテナ内のJSONLファイルへのパスで、文書のサブセットを指定します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "コンテナ内のJSONLファイルへのパスで、ドキュメントのサブセットを指定します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "ドキュメントモデルに関連するキー・バリュータグ属性の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "ドキュメントモデルに関連するキー・バリュータグ属性の一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.display_name": {
+          "source": "Max Training Hours",
+          "message": "最大トレーニング時間"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.short_desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training",
+          "message": "モデルトレーニングに使用できるV100相当GPU時間の最大数"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training.  Default=0.5.",
+          "message": "モデルトレーニングに使用できるV100相当のGPU最大時間数。デフォルト=0.5。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "上書きを許可する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing model with the same name",
+          "message": "同じ名前の既存モデルを上書きすることを許可します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing model with the same name.",
+          "message": "同じ名前の既存モデルを上書きすることを許可します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
+          "source": "Compose Model",
+          "message": "モデルを組み合わせる"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
+          "source": "Combine trained models into one extraction workflow",
+          "message": "訓練済みのモデルを一つの抽出ワークフローにまとめる"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.desc": {
+          "source": "Combine trained models into one extraction workflow.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "訓練済みのモデルを一つの抽出ワークフローにまとめます。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "ドキュメントモデルの記述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "モデルの説明を文書化してください。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Custom classifier to split and classify the input file",
+          "message": "入力ファイルを分割・分類するカスタム分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Custom classifier to split and classify the input file.",
+          "message": "入力ファイルを分割・分類するためのカスタム分類器。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "文書分割"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.short_desc": {
+          "source": "File splitting behavior",
+          "message": "ファイル分割の挙動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.desc": {
+          "source": "File splitting behavior.",
+          "message": "ファイル分割の挙動。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "ドキュメンタリーの種類"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.short_desc": {
+          "source": "Dictionary mapping supported 'docTypes' to the corresponding document models",
+          "message": "辞書マッピングは対応する文書モデルへの「docTypes」をサポートしていました"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.desc": {
+          "source": "Dictionary mapping supported `docTypes` to the corresponding document models.",
+          "message": "辞書マッピングは対応する文書モデルへの `docTypes` をサポートしていました。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "タグ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "ドキュメントモデルに関連するキー・バリュータグ属性の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "ドキュメントモデルに関連するキー・バリュータグ属性の一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
+          "source": "Get Resource Information",
+          "message": "リソース情報を取得する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
+          "source": "Read resource quotas and custom model usage",
+          "message": "リソースノルマとカスタムモデルの使用例を読み取る"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.desc": {
+          "source": "Read resource quotas and custom model usage.",
+          "message": "リソースノルマやカスタムモデルの使用状況を読みましょう。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
+          "source": "List Operations",
+          "message": "操作を一覧表示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
+          "source": "List recent model and classifier management operations",
+          "message": "最近のモデルおよび分類器管理操作一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.desc": {
+          "source": "List recent model and classifier management operations. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "最近のモデルおよび分類器管理操作を一覧表示します。1ページを返します。 `nextLink` は存在した場合に次のページを識別します。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
+          "source": "Get Operation",
+          "message": "操作を取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
+          "source": "Read build or copy progress and its typed result",
+          "message": "学習またはコピーの進行状況と型付きの結果を取得"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.desc": {
+          "source": "Read build or copy progress and its typed result.",
+          "message": "学習またはコピーの進行状況と型付きの結果を取得。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.display_name": {
+          "source": "Operation ID",
+          "message": "オペレーションID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.short_desc": {
+          "source": "Operation ID",
+          "message": "オペレーションID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.desc": {
+          "source": "Operation ID",
+          "message": "オペレーションID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms クライアントリクエストID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "リクエストのための不透明でグローバルに一意なクライアント生成文字列識別子。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
+          "source": "Start Analysis from Bytes",
+          "message": "バイトからの解析開始"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the analysis job location",
+          "message": "ドキュメントバイトを送信し、分析のジョブロケーションを返します"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the analysis job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "ドキュメントのバイトを送信し、分析の求人場所を返送してください。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "一意の文書モデル名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "一意のドキュメントモデル名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "ドキュメントバイト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "REST リクエスト本文の引数"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "base64エンコーディングなしでアップロードされた元のドキュメントバイト。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "ページ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1ベースのページ番号を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "分析用の1ベースのページ番号。例: \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "テキスト認識と文書分析のためのロケートヒント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "テキスト認識と文書分析のための場所のヒント。価値は含まれることがあります\n言語コード(例: \"en\"、 \"fr\")またはBCP 47言語タグ(例: \"en-US\")です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "文字列インデックスタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "文字列のオフセットと長さを計算するための方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "文字列のオフセットと長さを計算するために使われる方法です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "テキスト要素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicodeコードポイント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16コード単位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "解析特徴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "オプション解析機能の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "オプションの解析機能一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解像度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "言語"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "バーコード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "キー/バリューペア"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "フォントスタイル"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "抽出すべき追加フィールドの一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "抽出すべき追加フィールドの一覧。例: \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "コンテンツ形式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果のフォーマット トップレベルコンテンツ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果のフォーマットはトップレベルのコンテンツです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "解析時に生成される追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析中に生成される追加出力。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "検索可能なPDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "図"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
+          "source": "Start Classification from Bytes",
+          "message": "バイトからの分類開始"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the classification job location",
+          "message": "文書のバイトを送信し、分類の職種の所在地を返してください"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the classification job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "文書のバイトを送信し、分類の職種の所在地を返してください。\n\nHTTPステータスとレスポンスヘッダーを返します。 `Operation-Location` 保存し、対応する結果や操作アクションを使って完了を確認します。**送信は完了を待たない。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "一意文書分類器名"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "一意の文書分類器名。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "ドキュメントバイト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "REST リクエスト本文の引数"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "base64エンコーディングなしでアップロードされた元のドキュメントバイト。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API バージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "この操作に使うAPIバージョン"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "この操作に使うAPIバージョン。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "文字列インデックスタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "文字列のオフセットと長さを計算するための方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "文字列のオフセットと長さを計算するために使われる方法です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "テキスト要素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicodeコードポイント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16コード単位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "文書分割"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "文書分割モード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "ドキュメント分割モード。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "ページ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1ベースのページ番号を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "分析用の1ベースのページ番号。例: \"1-3,5,7-9\""
+        },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
           "source": "Analyze Document",
           "message": "ドキュメントの分析"
@@ -348,8 +2824,8 @@
           "message": "ドキュメントに対して Document Intelligence モデルを実行 (非同期)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
-          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
-          "message": "ドキュメントを Document Intelligence モデルに送信し、解析が完了するのを待機します。ライフサイクルは内部的に @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" を介して `AsyncJobPoller` によって駆動されます: POST 送信 → `Operation-Location` URL のポーリング → 解析された `analyzeResult` の返却。\n\n次のいずれかでドキュメントを渡します:\n- `document_url` — パブリック URL (Azure がドキュメントを取得)\n- `document_bytes` — 生バイト (自動的に base64 エンコード)\n- `document_path` — ローカルファイルパス (読み込まれて base64 エンコード)"
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete. Returns extracted text, fields, tables, and structure for use in subsequent workflow steps.\n\n**Document source** — supply exactly one:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "ドキュメントをドキュメントインテリジェンスモデルに提出し、解析完了を待ちます。抽出されたテキスト、フィールド、表、構造を返し、次のワークフローステップで使用するためです。\n\n**文書出典** — 1つだけ提供してください:\n- `document_url` — 公開URL(Azureが文書を取得する)\n- `document_bytes` — 生のバイト(自動的にbase64エンコード)\n- `document_path` — ローカルファイルパス(読み込みおよびbase64エンコード)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
           "source": "Model ID",
@@ -360,12 +2836,12 @@
           "message": "Document Intelligence モデル識別子"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
-          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
-          "message": "Document Intelligence モデル識別子 — 事前構築済みまたはカスタム。ドロップダウンにはドキュメントに記載されている事前構築済みモデルが一覧表示されます。[Azure portal](https://portal.azure.com) でトレーニングされたカスタムモデルの GUID はフリーフォームテキスト (`allowed_values_creatable: True`) として入力できます。"
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text. Legacy model choices remain identifiable for saved workflows; `prebuilt-document` and `prebuilt-businessCard` are retired in API v4. Use `prebuilt-layout` with `keyValuePairs` for general document extraction.",
+          "message": "ドキュメントインテリジェンスモデル識別子 — 既製品またはカスタム。ドロップダウンにはドキュメント化された既製品モデルが一覧表示されます。[Azure portal](https://portal.azure.com)で訓練されたカスタムモデルのGUIDは、フリーフォームテキストとして入力可能です。レガシーモデルの選択は保存されたワークフローで識別可能です。 `prebuilt-document` と `prebuilt-businessCard` はAPI v4で廃止されます。一般的な文書抽出には `prebuilt-layout` with `keyValuePairs` をご利用ください。"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
-          "source": "Document (general layout)",
-          "message": "ドキュメント (一般的なレイアウト)"
+          "source": "General Document (Retired in v4)",
+          "message": "一般文書(v4で廃止)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
           "source": "Layout (tables + lines)",
@@ -384,8 +2860,8 @@
           "message": "身分証明書"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
-          "source": "Business Card",
-          "message": "名刺"
+          "source": "Business Card (Retired in v4)",
+          "message": "名刺(v4で引退)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
           "source": "US W-2 Tax Form",
@@ -402,6 +2878,10 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
           "source": "US Health Insurance Card",
           "message": "米国健康保険証"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlYWQ.display_name": {
+          "source": "Read (Text and Searchable PDF)",
+          "message": "読む(テキストおよび検索可能なPDF)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
           "source": "Document URL",
@@ -474,6 +2954,146 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
           "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
           "message": "最大合計待機時間。デフォルトは `10m` です。超過した場合、アクションは `AZURE-DOCUMENT-INTELLIGENCE-ERROR` を発生させます。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "ページ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "1ベースのページ番号を分析する"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "分析用の1ベースのページ番号。例: \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "テキスト認識と文書分析のためのロケートヒント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "テキスト認識と文書分析のための場所のヒント。価値は含まれることがあります\n言語コード(例: \"en\"、 \"fr\")またはBCP 47言語タグ(例: \"en-US\")です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "文字列インデックスタイプ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "文字列のオフセットと長さを計算するための方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "文字列のオフセットと長さを計算するために使われる方法です。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "テキスト要素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicodeコードポイント"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16コード単位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "解析特徴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "オプション解析機能の一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "オプションの解析機能一覧。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解像度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "言語"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "バーコード"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "キー/バリューペア"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "フォントスタイル"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "クエリフィールド"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "抽出すべき追加フィールドの一覧"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "抽出すべき追加フィールドの一覧。例: \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "コンテンツ形式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果のフォーマット トップレベルコンテンツ"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果のフォーマットはトップレベルのコンテンツです。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "解析時に生成される追加出力"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析中に生成される追加出力。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "検索可能なPDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "図"
         }
       }
     }

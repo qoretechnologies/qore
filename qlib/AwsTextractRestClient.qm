@@ -33,7 +33,7 @@
 %requires QoreAsyncJobUtils
 
 module AwsTextractRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "user module for calling AWS Textract document-AI REST services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -60,7 +60,15 @@ module AwsTextractRestClient {
     SigV4 signing is inherited from
     @ref awsrestclientintro "AwsRestClient", so the full AWS credential
     chain (static keys, env, ECS task role, IMDSv2, STS AssumeRole) works
-    transparently.
+    transparently. Credential resolution and AssumeRole occur when a client is constructed;
+    recreate the client before temporary credentials expire. Copies retain the current credentials
+    and session token. AWS CLI profiles and SSO are not read directly: resolve those credentials
+    with the CLI and provide them through the environment without logging their values.
+
+    Connection ping performs `ListAdapters` and requires `textract:ListAdapters`. Authentication
+    errors, permission denials, and malformed success responses fail the ping. Success does not
+    prove permission for other Textract operations. Explicit endpoints are preserved; private
+    endpoints require the signing region. Otherwise the regional endpoint defaults to `us-east-1`.
 
     The main classes are:
     - @ref AwsTextractRestClient::AwsTextractRestClient — sync REST client
@@ -75,11 +83,10 @@ module AwsTextractRestClient {
 
 AwsTextractRestClient::AwsTextractRestClient rest({
     "aws_region": "us-east-1",
-    "aws_access_key_id":     "AKIA...",
-    "aws_secret_access_key": "...",
+    # Credentials come from the inherited AWS credential chain.
 });
 binary png = File::readBinaryFile("/tmp/page.png");
-hash<auto> resp = rest.post("/", {"Document": {"Bytes": png}}, NOTHING, {
+hash<auto> resp = rest.restPost("/", {"Document": {"Bytes": make_base64_string(png)}}, {
     "X-Amz-Target": "Textract.DetectDocumentText",
 });
 foreach hash<auto> block in (resp.body.Blocks) {
@@ -90,6 +97,11 @@ foreach hash<auto> block in (resp.body.Blocks) {
     @endcode
 
     @section AwsTextractRestClientRelnotes Release Notes
+
+    @subsection AwsTextractRestClientv1_1 AwsTextractRestClient v1.1
+    - authenticated ListAdapters ping with permission and malformed-response failures
+    - consistent regional endpoints and typed clients from both connection constructors
+    - exact AWS JSON 1.1 media type and temporary-credential propagation
 
     @subsection AwsTextractRestClientv1_0 AwsTextractRestClient v1.0
     - the initial version of the %AwsTextractRestClient module
@@ -106,6 +118,9 @@ public const TextractHostPattern = "textract.%s.amazonaws.com";
 #! Textract REST connection (registered under the \c "aws-textract" scheme)
 public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection {
     public {
+        #! Default persistent endpoint; explicit private endpoints remain supported
+        const DefaultUrl = "aws-textract://textract.us-east-1.amazonaws.com";
+
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "AWS Textract Connection",
             "short_desc": "A connection to AWS Textract document-extraction services",
@@ -113,24 +128,57 @@ public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection
                 "for document text and structure extraction via SigV4-signed REST "
                 "calls.  Inherits all AWS credential modes from "
                 "AwsRestConnection (static keys, env vars, ECS task-role, IMDSv2, "
-                "STS AssumeRole).",
+                "STS AssumeRole). The ping authenticates with `ListAdapters` and requires "
+                "`textract:ListAdapters`; an authorization denial is reported as a failure.",
             "cls": Class::forName("AwsTextractRestConnection"),
+            "auto_url": False,
             "schemes": {"aws-textract": True},
-            "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options,
+            "base_scheme_map": {"https": "aws-textract"},
+            "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options
+                - ("data", "aws_service", "aws_s3", "ping_body", "ping_headers", "ping_method", "ping_path") + {
+                "aws_keyid": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_keyid
+                    + <ConnectionOptionInfo>{"sensitive": True},
+                "aws_role_arn": <ConnectionOptionInfo>{
+                    "display_name": "STS Role ARN", "type": "string",
+                    "short_desc": "Optional AWS role to assume",
+                    "desc": "Role ARN to assume after resolving the base credentials.",
+                },
+                "aws_role_session_name": <ConnectionOptionInfo>{
+                    "display_name": "STS Role Session Name", "type": "string",
+                    "short_desc": "Name of the assumed-role session",
+                    "desc": "Session name sent with `aws_role_arn` to AWS STS.",
+                },
+                "aws_external_id": <ConnectionOptionInfo>{
+                    "display_name": "STS External ID", "type": "string", "sensitive": True,
+                    "short_desc": "Optional external ID required by the role",
+                    "desc": "External ID for an STS role requiring cross-account verification.",
+                },
+                "aws_imds_disabled": <ConnectionOptionInfo>{
+                    "display_name": "Disable Instance Credentials", "type": "bool",
+                    "short_desc": "Disable ECS and instance metadata credential lookup",
+                    "desc": "Set to `True` when credentials must come from explicit options or the environment.",
+                },
+            },
+            # Static keys are optional: environment, instance roles, and STS remain available.
+            "required_options": "",
         };
     }
 
-    constructor(string name, string description, string url,
+    constructor(string name, string description, string url = "",
             hash<auto> attributes = {}, hash<auto> options = {})
             : AwsRestClient::AwsRestConnection(name, description,
-                AwsTextractRestClient::ensureTextractUrl(url, options),
+                regex_subst(AwsTextractRestClient::ensureTextractUrl(url, options), "^https:", "aws-textract:"),
                 attributes,
-                AwsTextractRestClient::ensureTextractService(options)) {
+                options) {
     }
 
     constructor(hash<auto> config, *hash<auto> attr)
-            : AwsRestClient::AwsRestConnection(config, attr) {
+            : AwsRestClient::AwsRestConnection(AwsTextractRestConnection::normalizeConfig(config), attr) {
     }
+
+    #! Returns the associated application
+    /** @return `AwsTextract` */
+    *string getAppName() { return "AwsTextract"; }
 
     string getType() {
         return "aws-textract";
@@ -147,25 +195,72 @@ public class AwsTextractRestConnection inherits AwsRestClient::AwsRestConnection
         children_can_support_apis = True;
     }
 
+    #! Returns service-specific options while retaining inherited credential modes
+    /** @param rtopts runtime connection options
+        @return JSON/SigV4 client options for Textract
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return AwsTextractRestClient::applyTextractDefaults(
+            AwsRestClient::AwsRestConnection::getConnectionOptions(rtopts));
+    }
+
+    private AwsTextractRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AwsTextractRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AwsTextractRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Only a successful authenticated service response qualifies as a ping
+    private pingImpl() {
+        try {
+            AwsTextractRestClientIo client = cast<AwsTextractRestClientIo>(getAsync());
+            hash<RestResponseInfo> response = client.restPost("/", {"MaxResults": 1},
+                {"X-Amz-Target": "Textract.ListAdapters"});
+            if (response.status_code != 200 || response.body.Adapters.typeCode() != NT_LIST) {
+                throw "REST-PING-ERROR", "Textract ListAdapters returned an invalid authentication response";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            authFailure();
+            rethrow;
+        }
+        authSuccess();
+    }
+
+    private static hash<auto> normalizeConfig(hash<auto> config) {
+        config.url = regex_subst(AwsTextractRestClient::ensureTextractUrl(config.url ?? "", config.opts),
+            "^https:", "aws-textract:");
+        return config;
+    }
+
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
     }
 }
 
 #! Helper: returns a default Textract URL when none was supplied
+/** @param url explicit endpoint, or an empty string for regional defaults
+    @param options AWS region override
+    @return the supplied endpoint or a regional HTTPS endpoint
+    @throw AWS-TEXTRACT-CONFIG-ERROR invalid default region
+*/
 public string sub ensureTextractUrl(string url, *hash<auto> options) {
     if (url.val()) {
         return url;
     }
-    *string region = options.aws_region;
-    if (!region.val()) {
-        throw "AWS-TEXTRACT-CONFIG-ERROR",
-            "AwsTextractRestConnection requires either a url or aws_region";
+    *string region = options.aws_region ?? getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION") ?? "us-east-1";
+    if (!region.val() || region !~ /^[a-z]{2}(-[a-z]+)+-[0-9]+$/) {
+        throw "AWS-TEXTRACT-CONFIG-ERROR", "aws_region must be a nonempty AWS region identifier";
     }
-    return "https://" + sprintf(TextractHostPattern, region);
+    return "https://" + sprintf(TextractHostPattern, region)
+        + (region =~ /^cn-/ ? ".cn" : "");
 }
 
 #! Helper: forces \c aws_service to "textract" in the options hash
+/** @param options original client options
+    @return options with the Textract signing service
+*/
 public hash<auto> sub ensureTextractService(*hash<auto> options) {
     return (options ?? {}) + {"aws_service": TextractService};
 }
@@ -189,14 +284,18 @@ public class AwsTextractRestClientIo inherits AwsRestClient::AwsRestClientIo {
 }
 
 #! Helper: applies Textract URL and service defaults to the raw options hash
+/** @param opts raw connection or client options
+    @return regional endpoint, AWS JSON 1.1 headers, and signing options
+    @throw AWS-TEXTRACT-CONFIG-ERROR invalid default region
+*/
 public hash<auto> sub applyTextractDefaults(hash<auto> opts) {
-    hash<auto> rv = opts + {"aws_service": TextractService};
-    if (!rv.url.val()) {
-        *string region = rv.aws_region;
-        if (region.val()) {
-            rv.url = "https://" + sprintf(TextractHostPattern, region);
-        }
+    hash<auto> rv = opts + {"aws_service": TextractService, "aws_s3": False, "data": "json", "no_charset": True};
+    rv.url = ensureTextractUrl(rv.url ?? "", rv);
+    if (!rv.aws_region.val()) {
+        *list<string> match = rv.url =~ x/textract\.([a-z0-9-]+)\.amazonaws\.com/;
+        rv.aws_region = match[0] ?? getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION");
     }
+    rv.headers = (rv.headers ?? {}) + {"Content-Type": "application/x-amz-json-1.1", "Accept": "application/x-amz-json-1.1"};
     return rv;
 }
 }

@@ -46,23 +46,36 @@ public class AwsTextractAnalyzeDocumentDataProvider inherits AwsTextractDataProv
     constructor(*hash<auto> options) : AwsTextractDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
+        return AwsTextractSchema::getLegacyRequestType("analyze-document");
+    }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
+        return AwsTextractSchema::getType("AnalyzeDocumentResponse");
+    }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
+    private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
+        # Validate original values before the common provider applies soft-type conversion.
+        buildRequest(req, False);
+        return getRequestTypeImpl();
+    }
+
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return doTextractAction("AnalyzeDocument", AwsTextractSchema::convert("AnalyzeDocumentRequest", buildRequest(req)));
+    }
+
+    private static hash<auto> buildRequest(hash<auto> req, bool read_file = True) {
         hash<auto!> body;
-        body += AwsTextractDataProviderCommon::buildDocument(req);
-        # FeatureTypes are required; normalize to a list of strings
-        list<string> feats = ();
-        foreach auto v in (req.feature_types) {
-            push feats, string(v);
-        }
-        body.FeatureTypes = feats;
-        if (req.queries) {
+        body += AwsTextractDataProviderCommon::buildDocument(req,
+            ("feature_types", "queries", "adapters_config", "human_loop_config"), read_file);
+        body.FeatureTypes = req.feature_types;
+        if (req.hasKey("queries")) {
             body.QueriesConfig = {"Queries": req.queries};
         }
-        return doTextractAction("AnalyzeDocument", body);
+        if (req.hasKey("adapters_config")) { body.AdaptersConfig = req.adapters_config; }
+        if (req.hasKey("human_loop_config")) { body.HumanLoopConfig = req.human_loop_config; }
+        AwsTextractSchema::validate("AnalyzeDocumentRequest", body);
+        return body;
     }
 }
 }

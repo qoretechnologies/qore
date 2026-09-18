@@ -1,0 +1,1809 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AAI Chat Completions API",
+    "description": "API for generating text with various language models.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://llm-gateway.assemblyai.com/v1",
+      "description": "Production Server",
+      "x-fern-server-name": "Production"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/chat/completions": {
+      "post": {
+        "x-fern-sdk-group-name": "LLM Gateway",
+        "x-fern-display-name": "Chat completions",
+        "summary": "Create a chat completion",
+        "description": "\n\n<Note>To use our EU server for LLM Gateway, replace `llm-gateway.assemblyai.com` with `llm-gateway.eu.assemblyai.com`.</Note>\n\nGenerates a response from a model given a prompt or a series of messages.",
+        "operationId": "createChatCompletion",
+        "requestBody": {
+          "description": "Request body for creating a chat completion.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMGatewayRequest"
+              },
+              "examples": {
+                "messages_example": {
+                  "summary": "Chat with messages",
+                  "value": {
+                    "model": "qwen3.5-4b-32k-fast",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": "Hello, how are you?"
+                      }
+                    ],
+                    "max_tokens": 100,
+                    "temperature": 0.7
+                  }
+                },
+                "prompt_example": {
+                  "summary": "Simple prompt",
+                  "value": {
+                    "model": "qwen3.5-4b-32k-fast",
+                    "prompt": "Write a haiku about coding",
+                    "max_tokens": 50,
+                    "temperature": 0.5
+                  }
+                },
+                "transcript_id_example": {
+                  "summary": "Inject a transcript by ID",
+                  "value": {
+                    "model": "gemini-2.5-flash-lite",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": "hi there"
+                      },
+                      {
+                        "role": "assistant",
+                        "content": "Hi! How can I help?"
+                      },
+                      {
+                        "role": "user",
+                        "content": "Here is a transcript: {{ transcript }}. Return the text verbatim."
+                      }
+                    ],
+                    "transcript_id": "065a71ac-dc3e-4e38-9374-e54c0bea564f"
+                  }
+                },
+                "structured_output_example": {
+                  "summary": "Structured output with JSON schema",
+                  "value": {
+                    "model": "gemini-2.5-flash-lite",
+                    "messages": [
+                      {
+                        "role": "system",
+                        "content": "You are a helpful math tutor. Guide the user through the solution step by step."
+                      },
+                      {
+                        "role": "user",
+                        "content": "how can I solve 8x + 7 = -23"
+                      }
+                    ],
+                    "response_format": {
+                      "type": "json_schema",
+                      "json_schema": {
+                        "name": "math_reasoning",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "steps": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "explanation": {
+                                    "type": "string"
+                                  },
+                                  "output": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "explanation",
+                                  "output"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "final_answer": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "steps",
+                            "final_answer"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "strict": true
+                      }
+                    }
+                  }
+                },
+                "post_processing_example": {
+                  "summary": "JSON repair post-processing",
+                  "value": {
+                    "model": "gemini-2.5-flash-lite",
+                    "messages": [
+                      {
+                        "role": "user",
+                        "content": "Extract the user name and return as JSON"
+                      }
+                    ],
+                    "post_processing_steps": [
+                      {
+                        "type": "json-repair"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response containing the model's choices.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Response"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/understanding": {
+      "post": {
+        "x-fern-sdk-group-name": "LLM Gateway",
+        "x-fern-display-name": "Speech Understanding",
+        "summary": "Process speech understanding",
+        "description": "\n\n<Note>To use our EU server for LLM Gateway, replace `llm-gateway.assemblyai.com` with `llm-gateway.eu.assemblyai.com`.</Note>\n\nPerform various speech understanding tasks like [Translation](https://www.assemblyai.com/docs/speech-understanding/translation), [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification), and [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting).",
+        "operationId": "createSpeechUnderstanding",
+        "requestBody": {
+          "description": "Request body for speech understanding tasks.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnderstandingRequest"
+              },
+              "examples": {
+                "translation_example": {
+                  "summary": "Translation request",
+                  "value": {
+                    "transcript_id": "12345",
+                    "speech_understanding": {
+                      "request": {
+                        "translation": {
+                          "target_languages": [
+                            "es",
+                            "de"
+                          ],
+                          "formal": true,
+                          "match_original_utterance": true
+                        }
+                      }
+                    }
+                  }
+                },
+                "speaker_identification_example": {
+                  "summary": "Speaker identification request with known_values",
+                  "value": {
+                    "transcript_id": "12345",
+                    "speech_understanding": {
+                      "request": {
+                        "speaker_identification": {
+                          "speaker_type": "role",
+                          "known_values": [
+                            "interviewer",
+                            "candidate"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "speaker_identification_with_speakers_example": {
+                  "summary": "Speaker identification request with speakers metadata",
+                  "value": {
+                    "transcript_id": "12345",
+                    "speech_understanding": {
+                      "request": {
+                        "speaker_identification": {
+                          "speaker_type": "name",
+                          "speakers": [
+                            {
+                              "name": "Michel Martin",
+                              "description": "Hosts the program and interviews the guests",
+                              "company": "NPR",
+                              "title": "Host Morning Edition"
+                            },
+                            {
+                              "name": "Peter DeCarlo",
+                              "description": "Answers questions from the interview",
+                              "company": "Johns Hopkins University",
+                              "title": "Professor and Vice Chair of Environmental Health and Engineering"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "custom_formatting_example": {
+                  "summary": "Custom formatting request",
+                  "value": {
+                    "transcript_id": "12345",
+                    "speech_understanding": {
+                      "request": {
+                        "custom_formatting": {
+                          "date": "mm/dd/yyyy",
+                          "phone_number": "(xxx)xxx-xxxx",
+                          "email": "username@domain.com"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response containing the speech understanding results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LLMGatewayTranslationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LLMGatewaySpeakerIdentificationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LLMGatewayCustomFormattingResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LLMGatewaySummarizationResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "complete_response": {
+                    "summary": "Complete response example",
+                    "value": {
+                      "speech_understanding": {
+                        "request": {
+                          "translation": {
+                            "target_languages": [
+                              "es",
+                              "de"
+                            ],
+                            "formal": true,
+                            "match_original_utterance": true
+                          },
+                          "speaker_identification": {
+                            "speaker_type": "name",
+                            "speakers": [
+                              {
+                                "name": "Michel Martin",
+                                "description": "Hosts the program and interviews the guests",
+                                "company": "NPR",
+                                "title": "Host Morning Edition"
+                              },
+                              {
+                                "name": "Peter DeCarlo",
+                                "description": "Answers questions from the interview",
+                                "company": "Johns Hopkins University",
+                                "title": "Professor and Vice Chair of Environmental Health and Engineering"
+                              }
+                            ]
+                          },
+                          "custom_formatting": {
+                            "date": "mm/dd/yyyy",
+                            "phone_number": "(xxx)xxx-xxxx",
+                            "email": "username@domain.com"
+                          },
+                          "summarization": {
+                            "summary_type": "bullets"
+                          }
+                        },
+                        "response": {
+                          "summarization": {
+                            "status": "success",
+                            "effort": "low",
+                            "summary": [
+                              {
+                                "start": 0,
+                                "end": 1000,
+                                "bullets": [
+                                  "Host introduces Dr Peter DeCarlo",
+                                  "Asks for a quick intro"
+                                ]
+                              },
+                              {
+                                "start": 1050,
+                                "end": 3500,
+                                "bullets": [
+                                  "Identifies key issues with the climate"
+                                ]
+                              }
+                            ]
+                          },
+                          "translation": {
+                            "status": "success"
+                          },
+                          "speaker_identification": {
+                            "mapping": {
+                              "A": "Michel Martin",
+                              "B": "Peter DeCarlo"
+                            },
+                            "status": "success"
+                          },
+                          "custom_formatting": {
+                            "status": "success",
+                            "mapping": {
+                              "2024-12-25": "12/25/2024",
+                              "555-1234-5678": "(555)123-45678"
+                            },
+                            "formatted_text": "Call me at (555)123-45678 on 12/25/2024",
+                            "formatted_utterances": [
+                              {
+                                "confidence": 0.92,
+                                "start": 0,
+                                "end": 2500,
+                                "text": "Hi, I'm the interviewer. Call me at (555)123-45678 on 12/25/2024",
+                                "speaker": "interviewer"
+                              },
+                              {
+                                "confidence": 0.95,
+                                "start": 2500,
+                                "end": 5000,
+                                "text": "Thanks! I'll reach out then.",
+                                "speaker": "candidate"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "translated_texts": {
+                        "es": "Hola, soy el entrevistador. Llámame al cinco cinco cinco uno dos tres cuatro cinco seis siete ocho el veinticinco de diciembre de dos mil veinticuatro. ¡Gracias! Me pondré en contacto entonces.",
+                        "de": "Hallo, ich bin der Interviewer. Rufen Sie mich an unter fünf fünf fünf eins zwei drei vier fünf sechs sieben acht am fünfundzwanzigsten Dezember zweitausendvierundzwanzig. Danke! Ich werde mich dann melden."
+                      },
+                      "utterances": [
+                        {
+                          "confidence": 0.92,
+                          "start": 0,
+                          "end": 2500,
+                          "text": "Hi, I'm the interviewer. Call me at five five five one two three four five six seven eight on December twenty fifth twenty twenty four",
+                          "speaker": "interviewer",
+                          "translated_texts": {
+                            "es": "Hola, soy el entrevistador. Llámame al cinco cinco cinco uno dos tres cuatro cinco seis siete ocho el veinticinco de diciembre de dos mil veinticuatro",
+                            "de": "Hallo, ich bin der Interviewer. Rufen Sie mich an unter fünf fünf fünf eins zwei drei vier fünf sechs sieben acht am fünfundzwanzigsten Dezember zweitausendvierundzwanzig"
+                          }
+                        },
+                        {
+                          "confidence": 0.95,
+                          "start": 2500,
+                          "end": 5000,
+                          "text": "Thanks! I'll reach out then.",
+                          "speaker": "candidate",
+                          "translated_texts": {
+                            "es": "¡Gracias! Me pondré en contacto entonces.",
+                            "de": "Danke! Ich werde mich dann melden."
+                          }
+                        }
+                      ],
+                      "words": []
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "x-fern-sdk-group-name": "LLM Gateway",
+        "x-fern-display-name": "List available models",
+        "summary": "List available models",
+        "description": "\n\n<Note>To use our EU server for LLM Gateway, replace `llm-gateway.assemblyai.com` with `llm-gateway.eu.assemblyai.com`.</Note>\n\nReturns the list of models available through LLM Gateway, including the supported parameters, context length, pricing, and regional availability of each model. This endpoint doesn't require authentication.",
+        "operationId": "listAvailableModels",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Successful response containing the list of available models.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAvailableModelsResponse"
+                },
+                "examples": {
+                  "models_example": {
+                    "summary": "List of available models",
+                    "value": {
+                      "data": [
+                        {
+                          "id": "qwen3.5-4b-32k-fast",
+                          "name": "Qwen3.5 4B Fast",
+                          "description": "",
+                          "creator": "Qwen",
+                          "context_length": 32768,
+                          "supported_parameters": [
+                            "max_tokens",
+                            "temperature",
+                            "stream"
+                          ],
+                          "default_parameters": {
+                            "temperature": null,
+                            "top_p": null,
+                            "frequency_penalty": null
+                          },
+                          "top_provider": {
+                            "is_moderated": false,
+                            "context_length": 32768,
+                            "max_completion_tokens": 8192
+                          },
+                          "pricing": {
+                            "global": {
+                              "prompt": 0.1,
+                              "completions": 0.5
+                            }
+                          },
+                          "retirement_date": 0,
+                          "available_regions": [
+                            "us",
+                            "eu"
+                          ]
+                        },
+                        {
+                          "id": "claude-sonnet-4-6",
+                          "name": "Sonnet 4.6",
+                          "description": "",
+                          "creator": "Claude",
+                          "context_length": 200000,
+                          "supported_parameters": [
+                            "max_tokens",
+                            "temperature",
+                            "tools",
+                            "tool_choice",
+                            "response_format",
+                            "stream"
+                          ],
+                          "default_parameters": {
+                            "temperature": null,
+                            "top_p": null,
+                            "frequency_penalty": null
+                          },
+                          "top_provider": {
+                            "is_moderated": false,
+                            "context_length": 200000,
+                            "max_completion_tokens": 128000
+                          },
+                          "pricing": {
+                            "global": {
+                              "prompt": 3,
+                              "completions": 15,
+                              "input_cache_read": 0.3,
+                              "input_cache_write": 3.75,
+                              "input_cache_write_1h": 6
+                            },
+                            "regional_increase_percent": 0.1
+                          },
+                          "retirement_date": 0,
+                          "available_regions": [
+                            "us",
+                            "eu",
+                            "global"
+                          ]
+                        },
+                        {
+                          "id": "gemini-2.5-flash-lite",
+                          "name": "Gemini 2.5 Flash Lite",
+                          "description": "",
+                          "creator": "Google",
+                          "context_length": 1048576,
+                          "supported_parameters": [
+                            "max_tokens",
+                            "response_format",
+                            "temperature",
+                            "tools",
+                            "tool_choice",
+                            "stream"
+                          ],
+                          "default_parameters": {
+                            "temperature": null,
+                            "top_p": null,
+                            "frequency_penalty": null
+                          },
+                          "top_provider": {
+                            "is_moderated": false,
+                            "context_length": 1048576,
+                            "max_completion_tokens": 65535
+                          },
+                          "pricing": {
+                            "global": {
+                              "prompt": 0.1,
+                              "completions": 0.4,
+                              "input_cache_read": 0.01
+                            },
+                            "regional_increase_percent": 0.1
+                          },
+                          "retirement_date": 0,
+                          "available_regions": [
+                            "us",
+                            "eu",
+                            "global"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LLMGatewayRequest": {
+        "type": "object",
+        "description": "The main request body for the chat completions endpoint.",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "A list of messages comprising the conversation so far."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "A simple string prompt. The API will automatically convert this into a user message."
+          },
+          "transcript_id": {
+            "type": "string",
+            "description": "Optional. The ID of an AssemblyAI transcript whose text replaces the first `{{ transcript }}` tag in the prompt. See [Inject a transcript by ID](https://www.assemblyai.com/docs/llm-gateway/chat-completions#inject-a-transcript-by-id) for substitution rules and edge cases.\n",
+            "examples": [
+              "065a71ac-dc3e-4e38-9374-e54c0bea564f"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "description": "The ID of the model to use for this request. See [LLM Gateway Overview](https://www.assemblyai.com/docs/llm-gateway/quickstart#available-models) for available models.",
+            "examples": [
+              "claude-sonnet-4-5-20250929"
+            ]
+          },
+          "model_region": {
+            "type": "string",
+            "enum": [
+              "global"
+            ],
+            "description": "Optional. Routes the request to the provider's global (non-region) endpoints for lower-cost processing. The only accepted value is `global`; omit this field for default in-region processing. Currently live for Anthropic Claude models, with Google Gemini 3 series coming soon.\n",
+            "examples": [
+              "global"
+            ]
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "The maximum number of tokens to generate in the completion. Default is 1000."
+          },
+          "temperature": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 2,
+            "description": "Controls randomness. Lower values produce more deterministic results."
+          },
+          "stream": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, responses are streamed as server-sent events (SSE). Supported on OpenAI models only."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            },
+            "description": "A list of tools the model may call."
+          },
+          "tool_choice": {
+            "$ref": "#/components/schemas/ToolChoice"
+          },
+          "response_format": {
+            "$ref": "#/components/schemas/ResponseFormat",
+            "description": "Specifies the format of the model's response. Use this to constrain the model to output valid JSON matching a schema. Supported by OpenAI (GPT-4.1, GPT-5.x), Gemini, and Claude models. Not supported by gpt-oss models."
+          },
+          "fallbacks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FallbackObject"
+            },
+            "description": "An array of fallback objects. Each object must include a `model` and can optionally override any field from the original request. If the primary model fails, the LLM Gateway tries each fallback in order until one succeeds. See [Specify fallback models](https://www.assemblyai.com/docs/llm-gateway/fallback) for more details."
+          },
+          "fallback_config": {
+            "$ref": "#/components/schemas/FallbackConfig",
+            "description": "Configuration for fallback behavior, including retry and depth settings. See [Specify fallback models](https://www.assemblyai.com/docs/llm-gateway/fallback) for more details."
+          },
+          "post_processing_steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostProcessingStep"
+            },
+            "description": "An ordered list of post-processing steps to apply to the model's response after generation. Currently supports `json-repair`, which automatically fixes malformed JSON in LLM Gateway content responses. See [Post-processing](https://www.assemblyai.com/docs/llm-gateway/structured-outputs#post-processing) for details.\n"
+          }
+        },
+        "required": [
+          "model"
+        ]
+      },
+      "Message": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UserAssistantSystemMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ToolMessage"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "role",
+          "mapping": {
+            "user": "#/components/schemas/UserAssistantSystemMessage",
+            "assistant": "#/components/schemas/UserAssistantSystemMessage",
+            "system": "#/components/schemas/UserAssistantSystemMessage",
+            "tool": "#/components/schemas/ToolMessage"
+          }
+        }
+      },
+      "UserAssistantSystemMessage": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ]
+          },
+          "content": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ContentPart"
+                }
+              }
+            ],
+            "description": "The content of the message. Can be a string or an array of content parts (for user messages)."
+          },
+          "name": {
+            "type": "string",
+            "description": "An optional name for the participant."
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ]
+      },
+      "ToolMessage": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "tool"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "The result of the tool call."
+          },
+          "tool_call_id": {
+            "type": "string",
+            "description": "The ID of the tool call that this message is responding to."
+          }
+        },
+        "required": [
+          "role",
+          "content",
+          "tool_call_id"
+        ]
+      },
+      "ContentPart": {
+        "description": "Currently only supports text content parts.",
+        "$ref": "#/components/schemas/TextContent"
+      },
+      "TextContent": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "text"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ]
+      },
+      "Tool": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "function"
+            ]
+          },
+          "function": {
+            "$ref": "#/components/schemas/FunctionDescription"
+          }
+        },
+        "required": [
+          "type",
+          "function"
+        ]
+      },
+      "FunctionDescription": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The name of the function to be called."
+          },
+          "description": {
+            "type": "string",
+            "description": "A description of what the function does."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "A JSON Schema object describing the parameters the function accepts.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "name",
+          "parameters"
+        ]
+      },
+      "ToolChoice": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "none",
+              "auto"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "function"
+                ]
+              },
+              "function": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "function"
+            ]
+          }
+        ],
+        "description": "Controls which (if any) function is called by the model."
+      },
+      "ResponseFormat": {
+        "type": "object",
+        "description": "Specifies the format of the model's response. Use `json_schema` type to constrain the model to output valid JSON matching a schema.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "json_schema"
+            ],
+            "description": "The type of response format. Use `json_schema` for structured outputs."
+          },
+          "json_schema": {
+            "$ref": "#/components/schemas/JsonSchemaConfig",
+            "description": "The JSON schema configuration object."
+          }
+        },
+        "required": [
+          "type",
+          "json_schema"
+        ]
+      },
+      "JsonSchemaConfig": {
+        "type": "object",
+        "description": "Configuration for JSON schema-based structured outputs.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A name for the schema. Used for identification purposes."
+          },
+          "schema": {
+            "type": "object",
+            "description": "A valid JSON Schema object that defines the structure of the expected response.",
+            "additionalProperties": true
+          },
+          "strict": {
+            "type": "boolean",
+            "description": "When `true`, the model will strictly adhere to the schema. Recommended for reliable parsing.",
+            "default": false
+          }
+        },
+        "required": [
+          "name",
+          "schema"
+        ]
+      },
+      "FallbackObject": {
+        "type": "object",
+        "description": "A fallback model configuration. Each object must include a `model` and can optionally override any field from the original request. Fields not specified in the fallback inherit the values from the original request. See [Specify fallback models](https://www.assemblyai.com/docs/llm-gateway/fallback) for more details.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The fallback model to use. See [LLM Gateway Overview](https://www.assemblyai.com/docs/llm-gateway/quickstart#available-models) for available models.",
+            "examples": [
+              "claude-sonnet-4-6"
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "Override the messages for the fallback request."
+          },
+          "max_tokens": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Override the maximum number of tokens to generate in the fallback completion."
+          },
+          "temperature": {
+            "type": "number",
+            "format": "float",
+            "minimum": 0,
+            "maximum": 2,
+            "description": "Override the temperature for the fallback request."
+          }
+        },
+        "additionalProperties": true,
+        "required": [
+          "model"
+        ]
+      },
+      "FallbackConfig": {
+        "type": "object",
+        "description": "Configuration for fallback behavior. See [Specify fallback models](https://www.assemblyai.com/docs/llm-gateway/fallback) for more details.",
+        "properties": {
+          "retry": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to automatically retry the request once after 500ms on failure. Defaults to `true`."
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2,
+            "default": 1,
+            "description": "The maximum number of fallbacks to traverse. Defaults to `1`, with a maximum of `2`."
+          }
+        }
+      },
+      "PostProcessingStep": {
+        "type": "object",
+        "description": "A single post-processing operation to apply to the model's response.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "json-repair"
+            ],
+            "description": "The type of post-processing to apply. Currently `json-repair` is supported."
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "Response": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Choice"
+            }
+          },
+          "request": {
+            "type": "object",
+            "description": "A copy of the original request, excluding `prompt` and `messages`.",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "max_tokens": {
+                "type": "integer"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Tool"
+                }
+              },
+              "tool_choice": {
+                "$ref": "#/components/schemas/ToolChoice"
+              }
+            }
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          },
+          "http_status_code": {
+            "type": "integer",
+            "description": "The HTTP status code of the response",
+            "example": 200
+          },
+          "response_time": {
+            "type": "integer",
+            "description": "The response time in nanoseconds",
+            "example": 275510459
+          },
+          "llm_status_code": {
+            "type": "integer",
+            "description": "The status code from the LLM provider",
+            "example": 200
+          }
+        }
+      },
+      "Choice": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "$ref": "#/components/schemas/ResponseMessage"
+          },
+          "finish_reason": {
+            "type": "string",
+            "description": "The reason the model stopped generating tokens.",
+            "examples": [
+              "stop"
+            ]
+          }
+        }
+      },
+      "ResponseMessage": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "nullable": true,
+            "description": "The text content of the model's response. Null or empty when the model is only emitting tool_calls."
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FunctionToolCall"
+            }
+          }
+        }
+      },
+      "FunctionToolCall": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "function"
+            ]
+          },
+          "function": {
+            "$ref": "#/components/schemas/FunctionCall"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "function"
+        ]
+      },
+      "FunctionCall": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "string",
+            "description": "The arguments to call the function with, as a JSON-formatted string."
+          }
+        },
+        "required": [
+          "name",
+          "arguments"
+        ]
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "input_tokens": {
+            "type": "integer"
+          },
+          "output_tokens": {
+            "type": "integer"
+          },
+          "total_tokens": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "total_tokens"
+        ]
+      },
+      "UnderstandingRequest": {
+        "type": "object",
+        "properties": {
+          "transcript_id": {
+            "type": "string",
+            "description": "The ID of the transcript to process."
+          },
+          "speech_understanding": {
+            "type": "object",
+            "description": "The speech understanding task to perform. Supports [Translation](https://www.assemblyai.com/docs/speech-understanding/translation), [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification), and [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting). Click into the request object below to see the available options.",
+            "properties": {
+              "request": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/TranslationRequestBody"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpeakerIdentificationRequestBody"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CustomFormattingRequestBody"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SummarizationRequestBody"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActionItemsRequestBody"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "request"
+            ]
+          }
+        },
+        "required": [
+          "transcript_id",
+          "speech_understanding"
+        ]
+      },
+      "TranslationRequestBody": {
+        "type": "object",
+        "description": "Request body for [Translation](https://www.assemblyai.com/docs/speech-understanding/translation).",
+        "properties": {
+          "translation": {
+            "type": "object",
+            "properties": {
+              "target_languages": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of target language codes (e.g., `[\"es\", \"de\"]`). See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for supported languages."
+              },
+              "formal": {
+                "type": "boolean",
+                "description": "Use formal language style. See [Translation](https://www.assemblyai.com/docs/speech-understanding/translation) for more details.",
+                "default": true
+              },
+              "match_original_utterance": {
+                "type": "boolean",
+                "description": "When enabled with Speaker Labels, returns translated text in the utterances array. Each utterance will include a `translated_texts` key containing translations for each target language.",
+                "default": false
+              }
+            },
+            "required": [
+              "target_languages"
+            ]
+          }
+        },
+        "required": [
+          "translation"
+        ]
+      },
+      "SpeakerIdentificationRequestBody": {
+        "type": "object",
+        "description": "Request body for [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification).",
+        "properties": {
+          "speaker_identification": {
+            "type": "object",
+            "properties": {
+              "speaker_type": {
+                "type": "string",
+                "enum": [
+                  "role",
+                  "name"
+                ],
+                "description": "Type of speaker identification. See [Speaker Identification](https://www.assemblyai.com/docs/speech-understanding/speaker-identification) for details on each type."
+              },
+              "known_values": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Required if speaker_type is \"role\". Each value must be 35 characters or less."
+              },
+              "speakers": {
+                "type": "array",
+                "description": "An array of speaker objects with metadata to improve identification accuracy. Each object should include a `role` or `name` (depending on `speaker_type`) and an optional `description` to help the model identify the speaker. You can also include any additional custom properties (e.g., `company`, `title`) to provide more context. Use this as an alternative to `known_values` when you want to provide additional context about each speaker.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string",
+                      "description": "The role of the speaker. Required when `speaker_type` is \"role\"."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "The name of the speaker. Required when `speaker_type` is \"name\"."
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "A description of the speaker to help the model identify them based on conversational context."
+                    }
+                  },
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "speaker_type"
+            ]
+          }
+        },
+        "required": [
+          "speaker_identification"
+        ]
+      },
+      "CustomFormattingRequestBody": {
+        "type": "object",
+        "description": "Request body for [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting).",
+        "properties": {
+          "custom_formatting": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "description": "Date format pattern (e.g., `\"mm/dd/yyyy\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details."
+              },
+              "phone_number": {
+                "type": "string",
+                "description": "Phone number format pattern (e.g., `\"(xxx)xxx-xxxx\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details."
+              },
+              "email": {
+                "type": "string",
+                "description": "Email format pattern (e.g., `\"username@domain.com\"`). See [Custom Formatting](https://www.assemblyai.com/docs/speech-understanding/custom-formatting) for more details."
+              }
+            }
+          }
+        },
+        "required": [
+          "custom_formatting"
+        ]
+      },
+      "SummarizationRequestBody": {
+        "type": "object",
+        "description": "Request body for [Summarization](https://www.assemblyai.com/docs/speech-understanding/summarization).",
+        "properties": {
+          "summarization": {
+            "type": "object",
+            "properties": {
+              "summary_type": {
+                "type": "string",
+                "enum": [
+                  "paragraph",
+                  "bullets"
+                ],
+                "description": "Type of summary. Bullets returns short bullet point style summaries, paragraph is generally more verbose and detailed."
+              },
+              "effort": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium"
+                ]
+              }
+            },
+            "required": [
+              "summary_type"
+            ]
+          }
+        },
+        "required": [
+          "summarization"
+        ]
+      },
+      "ActionItemsRequestBody": {
+        "type": "object",
+        "description": "Request body for [Action Items](https://www.assemblyai.com/docs/speech-understanding/action-items).",
+        "properties": {
+          "action_items": {
+            "type": "object",
+            "properties": {
+              "include_decisions": {
+                "type": "boolean",
+                "description": "Option to include decision making in action items."
+              },
+              "effort": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium"
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "action_items"
+        ]
+      },
+      "LLMGatewayTranslationResponse": {
+        "type": "object",
+        "properties": {
+          "speech_understanding": {
+            "type": "object",
+            "properties": {
+              "request": {
+                "$ref": "#/components/schemas/TranslationRequestBody"
+              },
+              "response": {
+                "type": "object",
+                "properties": {
+                  "translation": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "translated_texts": {
+            "type": "object",
+            "description": "Translated text keyed by language code (e.g., `{\"es\": \"Texto traducido\"}`)",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "utterances": {
+            "type": "array",
+            "description": "Array of utterances with translations (when `match_original_utterance` is true)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "translated_texts": {
+                  "type": "object",
+                  "description": "Translations keyed by language code (e.g., `{\"es\": \"Texto traducido\", \"de\": \"Übersetzter Text\"}`). Only present when `match_original_utterance` is enabled.",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "LLMGatewaySpeakerIdentificationResponse": {
+        "type": "object",
+        "properties": {
+          "speech_understanding": {
+            "type": "object",
+            "properties": {
+              "request": {
+                "$ref": "#/components/schemas/SpeakerIdentificationRequestBody"
+              },
+              "response": {
+                "type": "object",
+                "properties": {
+                  "speaker_identification": {
+                    "type": "object",
+                    "properties": {
+                      "mapping": {
+                        "type": "object",
+                        "description": "A mapping of the original generic speaker labels (e.g., \"A\", \"B\") to the identified speaker names or roles.",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "status"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "utterances": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "words": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "LLMGatewayCustomFormattingResponse": {
+        "type": "object",
+        "properties": {
+          "speech_understanding": {
+            "type": "object",
+            "properties": {
+              "request": {
+                "$ref": "#/components/schemas/CustomFormattingRequestBody"
+              },
+              "response": {
+                "type": "object",
+                "properties": {
+                  "custom_formatting": {
+                    "type": "object",
+                    "properties": {
+                      "mapping": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      "formatted_text": {
+                        "type": "string"
+                      },
+                      "formatted_utterances": {
+                        "type": "array",
+                        "description": "Array of formatted utterances. Only included when utterances exist and formatting was applied.",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "mapping",
+                      "status"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "utterances": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "LLMGatewaySummarizationResponse": {
+        "type": "object",
+        "properties": {
+          "speech_understanding": {
+            "type": "object",
+            "properties": {
+              "request": {
+                "$ref": "#/components/schemas/SummarizationRequestBody"
+              },
+              "response": {
+                "type": "object",
+                "properties": {
+                  "summarization": {
+                    "type": "object",
+                    "properties": {
+                      "summary": {
+                        "type": "array",
+                        "description": "Array of summaries.",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary",
+                      "status"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ListAvailableModelsResponse": {
+        "type": "object",
+        "description": "The response returned by the models endpoint.",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelDetails"
+            },
+            "description": "The list of models available through LLM Gateway."
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "ModelDetails": {
+        "type": "object",
+        "description": "Details about a model available through LLM Gateway.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The model ID. Use this value in the `model` field of a chat completion request.",
+            "examples": [
+              "qwen3.5-4b-32k-fast"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The human-readable name of the model.",
+            "examples": [
+              "Qwen3.5 4B Fast"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "A description of the model."
+          },
+          "creator": {
+            "type": "string",
+            "description": "The creator of the model.",
+            "examples": [
+              "Qwen"
+            ]
+          },
+          "context_length": {
+            "type": "integer",
+            "description": "The maximum context length of the model, in tokens.",
+            "examples": [
+              32768
+            ]
+          },
+          "supported_parameters": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The request parameters and features supported by the model (e.g., `max_tokens`, `temperature`, `tools`, `tool_choice`, `response_format`, `stream`)."
+          },
+          "default_parameters": {
+            "$ref": "#/components/schemas/DefaultParameters",
+            "description": "Default parameter values applied to requests for this model. A `null` value means no default is set."
+          },
+          "top_provider": {
+            "$ref": "#/components/schemas/TopProvider",
+            "description": "Information about the best provider for this model. Not yet supported."
+          },
+          "pricing": {
+            "$ref": "#/components/schemas/ModelPricing",
+            "description": "Pricing details for the model, in USD per 1 million tokens."
+          },
+          "retirement_date": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The Unix timestamp of the model's retirement date. `0` if no retirement date is set."
+          },
+          "available_regions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The regions where the model is available (`us`, `eu`, and/or `global`). See [Cloud endpoints & data residency](https://www.assemblyai.com/docs/llm-gateway/cloud-endpoints-and-data-residency) for more details."
+          }
+        }
+      },
+      "DefaultParameters": {
+        "type": "object",
+        "description": "Default parameter values applied to requests for this model. A `null` value means no default is set.",
+        "properties": {
+          "temperature": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "The default temperature for this model, if any."
+          },
+          "top_p": {
+            "type": "number",
+            "format": "float",
+            "nullable": true,
+            "description": "The default top_p for this model, if any."
+          },
+          "frequency_penalty": {
+            "type": "integer",
+            "nullable": true,
+            "description": "The default frequency penalty for this model, if any."
+          }
+        }
+      },
+      "TopProvider": {
+        "type": "object",
+        "description": "Information about the best provider for this model. Not yet supported.",
+        "properties": {
+          "is_moderated": {
+            "type": "boolean",
+            "description": "Whether the provider moderates requests."
+          },
+          "context_length": {
+            "type": "integer",
+            "description": "The maximum context length supported by the provider, in tokens."
+          },
+          "max_completion_tokens": {
+            "type": "integer",
+            "description": "The maximum number of completion tokens supported by the provider."
+          }
+        }
+      },
+      "ModelPricing": {
+        "type": "object",
+        "description": "Pricing details for the model, in USD per 1 million tokens.",
+        "properties": {
+          "global": {
+            "$ref": "#/components/schemas/ModelPricingData",
+            "description": "Pricing for global processing. See [Global routing](https://www.assemblyai.com/docs/llm-gateway/cloud-endpoints-and-data-residency#global-routing) for more details."
+          },
+          "us": {
+            "$ref": "#/components/schemas/ModelPricingData",
+            "description": "US-specific pricing. Only present when the model has pricing distinct from global pricing in the US region."
+          },
+          "eu": {
+            "$ref": "#/components/schemas/ModelPricingData",
+            "description": "EU-specific pricing. Only present when the model has pricing distinct from global pricing in the EU region."
+          },
+          "regional_increase_percent": {
+            "type": "number",
+            "format": "float",
+            "description": "The fractional price increase applied to in-region (US or EU) processing relative to global pricing (e.g., `0.1` means 10%)."
+          }
+        },
+        "required": [
+          "global"
+        ]
+      },
+      "ModelPricingData": {
+        "type": "object",
+        "description": "Prices in USD per 1 million tokens.",
+        "properties": {
+          "prompt": {
+            "type": "number",
+            "format": "float",
+            "description": "The price per 1 million input (prompt) tokens."
+          },
+          "completions": {
+            "type": "number",
+            "format": "float",
+            "description": "The price per 1 million output (completion) tokens."
+          },
+          "input_cache_read": {
+            "type": "number",
+            "format": "float",
+            "description": "The price per 1 million cached input tokens read. Only present for models that support prompt caching."
+          },
+          "input_cache_write": {
+            "type": "number",
+            "format": "float",
+            "description": "The price per 1 million input tokens written to the cache. Only present for models that support prompt caching."
+          },
+          "input_cache_write_1h": {
+            "type": "number",
+            "format": "float",
+            "description": "The price per 1 million input tokens written to the cache with a 1-hour TTL. Only present for models that support prompt caching."
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HTTP status code for the error."
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable description of the error."
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for the request."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Optional. Present on 400 responses with per-field validation details.",
+            "properties": {
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of specific validation failure messages."
+              }
+            }
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization"
+      }
+    }
+  },
+  "x-qore-normalized": [
+    {
+      "reason": "The action-items response declares items and status, but its required list incorrectly names action_items instead of items. https://www.assemblyai.com/docs/llm-gateway/api-reference/create-speech-understanding",
+      "operations": [],
+      "add_parameters": [],
+      "replace_parameters": [],
+      "relax_oneof": [],
+      "replace_required": [
+        {
+          "pointer": "#/components/schemas/LLMGatewayActionItemsResponse/properties/speech_understanding/properties/response/properties/action_items",
+          "expected": [
+            "action_items",
+            "status"
+          ],
+          "replacement": [
+            "items",
+            "status"
+          ]
+        }
+      ],
+      "rename_paths": {}
+    },
+    {
+      "reason": "The vendor uses bool for boolean schema properties. OpenAPI requires the boolean type name; values and field contracts are unchanged.",
+      "operations": [],
+      "add_parameters": [],
+      "replace_parameters": [],
+      "relax_oneof": [],
+      "replace_required": [],
+      "rename_paths": {},
+      "replace_values": [
+        {
+          "pointer": "#/components/schemas/ActionItemsRequestBody/properties/action_items/properties/include_decisions/type",
+          "expected": "bool",
+          "replacement": "boolean"
+        }
+      ]
+    }
+  ]
+}

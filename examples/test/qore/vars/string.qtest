@@ -9,6 +9,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires QUnit
+%requires json
 
 %exec-class StringTest
 
@@ -38,6 +39,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("getLine test", \testGetLine());
         addTestCase("ASCII x UTF-8 string equality tests", \testASCIIUTF8Equality());
         addTestCase("Base64 and hex test", \testBase64Hex());
+        addTestCase("empty binary Base64 serialization", \testEmptyBinaryBase64());
         addTestCase("Splice test", \testSplice());
         addTestCase("Extract test", \testExtract());
         addTestCase("Join test", \testJoin());
@@ -1369,6 +1371,16 @@ class StringTest inherits QUnit::Test {
         string hex = make_hex_string(x);
         assertEq(x, parse_hex_string(hex), "first hex");
         assertEq("", parse_base64_string_to_string(""));
+    }
+
+    testEmptyBinaryBase64() {
+        binary empty = binary();
+        foreach string value in (make_base64_string(empty), make_base64_string(empty, 4),
+                empty.toBase64(), empty.toBase64(4)) {
+            assertEq(0, value.size());
+            # JSON serialization must see the empty string, not uninitialized buffer capacity.
+            assertEq('""', make_json(value));
+        }
     }
 
     testSplice() {

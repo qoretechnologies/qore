@@ -35,7 +35,6 @@ public class AzureDocumentIntelligenceDataProviderCommon
                     "`https://<resource-name>.cognitiveservices.azure.com`.  "
                     "Find this in the Azure portal under your Document "
                     "Intelligence resource > Keys and Endpoint.",
-                "required": True,
                 "example_value": "https://my-docint.cognitiveservices.azure.com",
             },
             "apikey": <DataProviderOptionInfo>{
@@ -44,8 +43,13 @@ public class AzureDocumentIntelligenceDataProviderCommon
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Azure Document Intelligence subscription key — sent as "
                     "the `Ocp-Apim-Subscription-Key` header.",
-                "required": True,
                 "sensitive": True,
+            },
+            "entra_token": <DataProviderOptionInfo>{
+                "display_name": "Entra Bearer Token", "short_desc": "A caller-managed Entra token",
+                "type": AbstractDataProviderTypeMap."*string", "sensitive": True,
+                "desc": "Access token for `https://cognitiveservices.azure.com/.default`. "
+                    "Use instead of `apikey`; the caller replaces expiring tokens.",
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
@@ -76,15 +80,20 @@ public class AzureDocumentIntelligenceDataProviderCommon
                 throw "CONSTRUCTOR-ERROR",
                     "missing required 'url' argument for Azure Document Intelligence";
             }
-            if (!copts.apikey.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "missing required 'apikey' argument for Azure Document Intelligence";
-            }
             rest = new AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo({
                 "url":    copts.url,
-                "apikey": copts.apikey,
-            });
+            } + copts{"apikey", "entra_token"});
         }
+    }
+
+    #! Returns the resource-scoped references offered by this provider
+    /** @return supported reference names */
+    *hash<string, bool> getSupportedReferenceData() {
+        return {"models": True, "classifiers": True, "operations": True};
+    }
+
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        return AzureDocumentIntelligenceReferences::get(rest, type, action_opts);
     }
 }
 }

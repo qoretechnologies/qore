@@ -34,15 +34,21 @@ public class AssemblyAiDataProviderCommon inherits DataProvider::AbstractDataPro
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The AssemblyAI API key — sent as the bare `Authorization` "
                     "header value with no `Bearer` / `Token` prefix.",
-                "required": True,
                 "sensitive": True,
+                "required_groups": ("client",),
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "Server URL",
                 "short_desc": "The URL of the AssemblyAI REST API",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The URL of the AssemblyAI REST API.",
-                "default_value": DefaultAssemblyAiUrl,
+            },
+            "region": <DataProviderOptionInfo>{
+                "display_name": "Region",
+                "short_desc": "US or EU endpoints for regional services",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Regional services use the US or EU endpoint. Voice Agents uses its global endpoint.",
+                "allowed_values": AssemblyAiRestConnection::ConnectionScheme.options.region.allowed_values,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
@@ -52,6 +58,7 @@ public class AssemblyAiDataProviderCommon inherits DataProvider::AbstractDataPro
                         DTT_ClientOnly: True,
                     }),
                 "desc": "The AssemblyAI REST client object to use",
+                "required_groups": ("client",),
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
@@ -82,10 +89,13 @@ public class AssemblyAiDataProviderCommon inherits DataProvider::AbstractDataPro
                 throw "CONSTRUCTOR-ERROR",
                     "missing required 'apikey' argument for AssemblyAI API communication";
             }
-            hash<auto> opts = (copts.restclient_options ?? {}) + {
-                "url": copts.url,
-                "apikey": copts.apikey,
-            };
+            hash<auto> opts = (copts.restclient_options ?? {}) + {"apikey": copts.apikey};
+            if (exists copts.url) {
+                opts.url = copts.url;
+            }
+            if (exists copts.region) {
+                opts.region = copts.region;
+            }
             rest = new AssemblyAiRestClient::AssemblyAiRestClientIo(opts);
         }
     }

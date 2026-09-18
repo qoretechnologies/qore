@@ -35,10 +35,22 @@ public class AssemblyAiTranscribeDataProvider inherits AssemblyAiDataProviderCom
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static AssemblyAiTranscribeRequestDataType RequestType =
-            new AssemblyAiTranscribeRequestDataType();
-        static AssemblyAiTranscribeResponseDataType ResponseType =
-            new AssemblyAiTranscribeResponseDataType();
+        static AssemblyAiTranscribeRequestDataType RequestType;
+        static AssemblyAiTranscribeResponseDataType ResponseType;
+    }
+    private {
+        static Mutex type_lock();
+    }
+
+    #! Initializes the shared helper contracts after lightweight inventory registration
+    static initializeTypes() {
+        AutoLock al(type_lock);
+        if (!RequestType) {
+            AssemblyAiTranscribeRequestDataType request();
+            AssemblyAiTranscribeResponseDataType response();
+            RequestType = request;
+            ResponseType = response;
+        }
     }
 
     constructor(AssemblyAiRestClient::AssemblyAiRestClientIo rest)

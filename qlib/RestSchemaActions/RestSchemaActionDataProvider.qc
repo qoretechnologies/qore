@@ -186,7 +186,12 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         # path variables travel as a request option, not as part of the request body
         *hash<auto> resp = req_dp.doRequest(wire.req, request_options + {
             "path_vars": wire.path_vars,
+            "include_response_headers": op.getInfo().response_envelope,
         } + getHostClientOption(req));
+        if (op.getInfo().response_envelope) {
+            return {"status_code": resp.status_code, "headers": resp.headers ?? {},
+                "body": op.processResponse(resp.body)};
+        }
         return op.processResponse(resp.body);
     }
 

@@ -566,8 +566,7 @@ public class AwsRestClientBase {
         }
         if (!creds_hash.AccessKeyId.val() || !creds_hash.SecretAccessKey.val()) {
             throw "AWSRESTCLIENT-STS-ERROR",
-                sprintf("AssumeRole response missing required fields: %y",
-                    creds_hash);
+                "AssumeRole response is missing AccessKeyId or SecretAccessKey";
         }
         date expires = creds_hash.Expiration.val()
             ? date(creds_hash.Expiration)
@@ -791,8 +790,7 @@ public class AwsRestClientBase {
         *string token = data.Token;
         if (!key.val() || !secret.val()) {
             throw "AWSRESTCLIENT-IMDS-ERROR",
-                sprintf("IMDS credentials response missing required fields: %y",
-                    data);
+                "IMDS credentials response is missing AccessKeyId or SecretAccessKey";
         }
         date expires = data.Expiration.val()
             ? date(data.Expiration)
@@ -1071,8 +1069,8 @@ AwsRestClient rest({
                 throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
             }
             if (v.typeCode() != NT_STRING) {
-                throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s (%y); expecting "
-                    "\"string\"", key, v.type(), v);
+                throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting "
+                    "\"string\"", key, v.type());
             }
 
             self{key} = v;
@@ -1135,6 +1133,11 @@ AwsRestClient rest({
 
     hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr, *reference<hash<auto>> info,
             *softbool decode_errors, *string assume_content_type, *string shdr, *code signer) {
+        # The REST layer has already serialized the body and finalized its media type. Send those
+        # exact bytes so HTTPClient cannot append a charset after Content-Type has been signed.
+        if (body.typeCode() == NT_STRING) {
+            body = binary(body);
+        }
         # get request time
         date gmtime = Qore::gmtime();
         # get credential scope
@@ -1558,8 +1561,8 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
                 throw "AWSRESTCLIENT-ERROR", sprintf("missing required option %y in option argument", key);
             }
             if (v.typeCode() != NT_STRING) {
-                throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s (%y); expecting "
-                    "\"string\"", key, v.type(), v);
+                throw "AWSRESTCLIENT-ERROR", sprintf("required option %y was passed as a %s; expecting "
+                    "\"string\"", key, v.type());
             }
             self{key} = v;
         }

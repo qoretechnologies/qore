@@ -36,10 +36,23 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static AzureDocumentIntelligenceAnalyzeRequestDataType RequestType =
-            new AzureDocumentIntelligenceAnalyzeRequestDataType();
-        static AzureDocumentIntelligenceAnalyzeResponseDataType ResponseType =
-            new AzureDocumentIntelligenceAnalyzeResponseDataType();
+        static AzureDocumentIntelligenceAnalyzeRequestDataType RequestType;
+        static AzureDocumentIntelligenceAnalyzeResponseDataType ResponseType;
+    }
+    private {
+        static Mutex type_lock();
+    }
+
+    #! Initializes complete helper types after the lightweight inventory is registered
+    /** @throw AZURE-DOCUMENT-INTELLIGENCE-SCHEMA-ERROR an unreviewed schema resource is installed */
+    static initializeTypes() {
+        AutoLock al(type_lock);
+        if (!RequestType) {
+            AzureDocumentIntelligenceAnalyzeRequestDataType request();
+            AzureDocumentIntelligenceAnalyzeResponseDataType response();
+            RequestType = request;
+            ResponseType = response;
+        }
     }
 
     constructor(AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo rest)
@@ -53,23 +66,40 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        AzureDocumentIntelligenceReferences::validateAnalysisOptions(req);
+        if (int(exists req.document_url) + int(exists req.document_bytes) + int(exists req.document_path) != 1) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "supply exactly one document source";
+        }
         hash<auto!> body;
-        if (req.document_url.val()) {
+        if (exists req.document_url) {
+            hash<auto> url;
+            try { url = parse_url(req.document_url); }
+            # Convert parser failures below without echoing document URLs or SAS credentials.
+            catch () { url = {}; }
+            if (req.document_url !~ /^https?:\/\/[^\s]+$/ || !url.host.val()) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR",
+                    "document_url must be a nonempty HTTP or HTTPS URL with a host";
+            }
             body.urlSource = req.document_url;
         } else if (exists req.document_bytes) {
             body.base64Source = make_base64_string(req.document_bytes);
-        } else if (req.document_path.val()) {
+        } else {
+            if (!req.document_path.val()) {
+                throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "document_path must be a nonempty local file path";
+            }
             body.base64Source =
                 make_base64_string(File::readBinaryFile(req.document_path));
-        } else {
-            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR",
-                "one of document_url / document_bytes / document_path is required";
+        }
+
+        if (exists body.base64Source && !body.base64Source.val()) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "document content cannot be empty";
         }
 
         hash<auto> opts;
         if (req.api_version.val())      { opts.api_version = req.api_version; }
         if (exists req.poll_interval)   { opts.poll_interval = req.poll_interval; }
         if (exists req.analysis_timeout) { opts.analysis_timeout = req.analysis_timeout; }
+        opts += req{"pages", "locale", "stringIndexType", "features", "queryFields", "outputContentFormat", "output"};
 
         return rest.analyzeDocument(req.model_id, body, opts);
     }

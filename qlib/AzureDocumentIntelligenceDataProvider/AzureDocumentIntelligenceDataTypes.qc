@@ -148,22 +148,27 @@ public class AzureDocumentIntelligenceAnalyzeRequestDataType inherits HashDataTy
                     "custom.  The dropdown lists the documented prebuilt "
                     "models; custom-model GUIDs trained in the "
                     "[Azure portal](https://portal.azure.com) can be entered "
-                    "as free-form text (`allowed_values_creatable: True`).",
+                    "as free-form text. Legacy model choices remain identifiable for saved workflows; "
+                    "`prebuilt-document` and `prebuilt-businessCard` are retired in API v4. "
+                    "Use `prebuilt-layout` with `keyValuePairs` for general document extraction.",
                 "required": True,
-                "default_value": "prebuilt-document",
+                "default_value": "prebuilt-layout",
+                "ref_data": "models",
+                "supports_custom_values": True,
                 "example_value": "prebuilt-invoice",
                 "allowed_values_creatable": True,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "prebuilt-document",            "display_name": "Document (general layout)"},
+                    <AllowedValueInfo>{"value": "prebuilt-document",            "display_name": "General Document (Retired in v4)"},
                     <AllowedValueInfo>{"value": "prebuilt-layout",              "display_name": "Layout (tables + lines)"},
                     <AllowedValueInfo>{"value": "prebuilt-invoice",             "display_name": "Invoice"},
                     <AllowedValueInfo>{"value": "prebuilt-receipt",             "display_name": "Receipt"},
                     <AllowedValueInfo>{"value": "prebuilt-idDocument",          "display_name": "ID Document"},
-                    <AllowedValueInfo>{"value": "prebuilt-businessCard",        "display_name": "Business Card"},
+                    <AllowedValueInfo>{"value": "prebuilt-businessCard",        "display_name": "Business Card (Retired in v4)"},
                     <AllowedValueInfo>{"value": "prebuilt-tax.us.w2",           "display_name": "US W-2 Tax Form"},
                     <AllowedValueInfo>{"value": "prebuilt-tax.us.1098",         "display_name": "US 1098 Tax Form"},
                     <AllowedValueInfo>{"value": "prebuilt-contract",            "display_name": "Contract"},
                     <AllowedValueInfo>{"value": "prebuilt-healthInsuranceCard.us", "display_name": "US Health Insurance Card"},
+                    <AllowedValueInfo>{"value": "prebuilt-read", "display_name": "Read (Text and Searchable PDF)"},
                 ),
             },
             "document_url": {
@@ -174,12 +179,14 @@ public class AzureDocumentIntelligenceAnalyzeRequestDataType inherits HashDataTy
                     "the document from this URL.  Mutually exclusive with "
                     "`document_bytes` and `document_path`.",
                 "example_value": "https://example.com/invoice.pdf",
+                "sensitive": True,
             },
             "document_bytes": {
                 "display_name": "Document Bytes",
                 "short_desc": "Raw document bytes (base64-encoded automatically)",
                 "type": AbstractDataProviderTypeMap."*binary",
                 "desc": "Raw document bytes — sent as base64-encoded `base64Source`.",
+                "sensitive": True,
             },
             "document_path": {
                 "display_name": "Document Path",
@@ -210,9 +217,19 @@ public class AzureDocumentIntelligenceAnalyzeRequestDataType inherits HashDataTy
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor() {
+        addQoreFields(Fields);
+        # Preserve all historic option names and add the official optional analysis controls.
+        map addField($1), (AzureDocumentIntelligenceSchema::getActionSets()[0].getOperationEx("start-analysis")
+            .getRequestFields(){"pages", "locale", "stringIndexType", "features", "queryFields",
+                "outputContentFormat", "output"}).iterator();
+    }
 }
 
+#! Complete official analysis output with compatible legacy field constants
+/** @note The public Fields constant is retained for source compatibility. Use getFields() on
+    an instance for the complete official response, including nested document fields and geometry.
+*/
 public class AzureDocumentIntelligenceAnalyzeResponseDataType inherits HashDataType {
     public {
         const Fields = {
@@ -272,6 +289,9 @@ public class AzureDocumentIntelligenceAnalyzeResponseDataType inherits HashDataT
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor() {
+        map addField($1), OpenApi3::OpenApi3HashDataType::forResponse(
+            AzureDocumentIntelligenceSchema::getSchema().getTypeForReference("AnalyzeResult")).getFields().iterator();
+    }
 }
 }

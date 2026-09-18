@@ -422,6 +422,9 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             remove req.query;
         }
         auto req_body = req.body ?? req.formData;
+        # Validation serializes byte/date fields in place. Keep the original typed body for
+        # getRequestBody(), which validates and serializes it itself, exactly once.
+        auto original_body = req_body;
 
         # validate the request using abstract types
         op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
@@ -432,7 +435,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         # above; the response is still validated via buildResponse's parseResponse
         hash<RestClient::RestResponseInfo> info;
         try {
-            *data body = op.getRequestBody(pio, req_body, \hdr, disable_request_type_check);
+            *data body = op.getRequestBody(pio, original_body, \hdr, disable_request_type_check);
             *hash<string, bool> produces = op.produces;
 
             # ensure we specify JSON for the response if possible
@@ -455,6 +458,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             }
             if (options.include_response_headers) {
                 rv += {
+                    "status_code": info.status_code,
                     "headers": info.headers,
                     "headers-raw": info.headers,
                 };
@@ -463,7 +467,8 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
-            LoggerWrapper::error("%s info: %y", get_exception_string(ex), info);
+            # Response bodies can contain documents, SAS URLs, and copy authorization tokens.
+            LoggerWrapper::error("REST schema request failed: %s", ex.err);
             # when the REST request itself fails, "info" was never assigned and holds
             # only default values (status_code 0); the original exception argument
             # carries the real HTTP response context (status code, body, headers), so

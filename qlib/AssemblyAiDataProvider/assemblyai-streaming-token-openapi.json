@@ -1,0 +1,191 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AssemblyAI Streaming Token API",
+    "description": "API for generating temporary authentication tokens for streaming services",
+    "version": "1.0.0",
+    "termsOfService": "https://www.assemblyai.com/legal/terms-of-service",
+    "contact": {
+      "name": "API Support",
+      "email": "support@assemblyai.com",
+      "url": "https://www.assemblyai.com/docs/"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://streaming.assemblyai.com",
+      "description": "Production server",
+      "x-fern-server-name": "Default"
+    }
+  ],
+  "paths": {
+    "/v3/token": {
+      "get": {
+        "summary": "Generate temporary streaming token",
+        "description": "Generates a temporary authentication token for use with streaming services. See [Authenticate with a temporary token](https://www.assemblyai.com/docs/streaming/authenticate-with-a-temporary-token) for more details.\n",
+        "operationId": "generateStreamingToken",
+        "x-fern-sdk-group-name": "Streaming API",
+        "x-fern-sdk-method-name": "generateStreamingToken",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "expires_in_seconds",
+            "in": "query",
+            "description": "Token redemption window, in seconds. The token must be used to open a WebSocket connection within this window. If the window has elapsed when the WebSocket is opened, the server rejects the session on the first frame. This does NOT cap the duration of the resulting streaming session — once the WebSocket is open the session runs for up to `max_session_duration_seconds`.\n",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600,
+              "example": 60
+            }
+          },
+          {
+            "name": "max_session_duration_seconds",
+            "in": "query",
+            "description": "Maximum duration of the streaming session started with this token, in seconds. If you need to finalize work before the session ends, run a client-side timer using the value you passed here.\n",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 10800,
+              "example": 600,
+              "default": 10800
+            }
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "python",
+            "label": "Python SDK",
+            "source": "import os\n\nfrom assemblyai.streaming.v3 import RealTimeTranscriber\n\nclient = RealTimeTranscriber(api_key=os.environ[\"ASSEMBLYAI_API_KEY\"])\n\ntoken = client.create_temporary_token(expires_in_seconds=60)\nprint(token)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript SDK",
+            "source": "import { AssemblyAI } from \"assemblyai\";\n\nconst client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });\n\nconst token = await client.streaming.createTemporaryToken({\n  expires_in_seconds: 60,\n});\nconsole.log(token);\n"
+          },
+          {
+            "lang": "bash",
+            "label": "cURL",
+            "source": "curl -s -G https://streaming.assemblyai.com/v3/token \\\n  -H \"authorization: $ASSEMBLYAI_API_KEY\" \\\n  -d expires_in_seconds=60 | jq -r .token\n"
+          },
+          {
+            "lang": "python",
+            "label": "Python",
+            "source": "import os\n\nimport requests\n\nheaders = {\"authorization\": os.environ[\"ASSEMBLYAI_API_KEY\"]}\n\nresponse = requests.get(\n    \"https://streaming.assemblyai.com/v3/token\",\n    headers=headers,\n    params={\"expires_in_seconds\": 60},\n)\n\nresponse.raise_for_status()\nprint(response.json()[\"token\"])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript",
+            "source": "const url = new URL(\"https://streaming.assemblyai.com/v3/token\");\nurl.searchParams.set(\"expires_in_seconds\", \"60\");\n\nconst response = await fetch(url, {\n  headers: { authorization: process.env.ASSEMBLYAI_API_KEY },\n});\n\nconst { token } = await response.json();\nconsole.log(token);\n"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully generated temporary token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token",
+                    "expires_in_seconds"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "The temporary authentication token",
+                      "example": "your-temporary-token"
+                    },
+                    "expires_in_seconds": {
+                      "type": "integer",
+                      "description": "The token redemption window in seconds — the time the client has to use this token to open a WebSocket before it expires unused. This is not the session duration; see `max_session_duration_seconds` for that.\n",
+                      "example": 60
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Your AssemblyAI API key"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message describing what went wrong"
+          },
+          "code": {
+            "type": "string",
+            "description": "Error code for programmatic handling"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional error details if available"
+          }
+        }
+      }
+    }
+  }
+}

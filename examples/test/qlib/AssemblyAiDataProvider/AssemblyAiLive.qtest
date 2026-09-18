@@ -1,0 +1,173 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AssemblyAiDataProvider
+%requires json
+%exec-class AssemblyAiLiveTest
+
+#! Opt-in live checks; audio must be a short public or synthetic WAV file
+class AssemblyAiLiveTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {"connection": "c,connection=s", "audio": "f,audio=s", "native": "native"};
+    }
+    private {
+        *string connection_name;
+        *string audio_file;
+        AssemblyAiRestClientIo client;
+        AssemblyAiDataProvider::AssemblyAiDataProvider root;
+    }
+    constructor() : Test("AssemblyAI live API", "1.0", \ARGV, MyOpts) {
+        connection_name = m_options.connection ?? ENV.ASSEMBLYAI_CONNECTION;
+        audio_file = m_options.audio ?? ENV.ASSEMBLYAI_TEST_AUDIO;
+        if (ENV.ASSEMBLYAI_APIKEY) {
+            client = new AssemblyAiRestClientIo({"apikey": ENV.ASSEMBLYAI_APIKEY, "timeout": 3m});
+            root = new AssemblyAiDataProvider::AssemblyAiDataProvider(client);
+            addTestCase("environment key: authenticated and invalid-key pings", \authTest());
+            addTestCase("environment key: read and token actions", \readTest());
+            if (m_options.native) {
+                addTestCase("native WebSocket and SSE sessions", \nativeTest());
+            }
+            if (audio_file) {
+                addTestCase("synthetic audio: upload, transcribe, retrieve, captions, delete", \transcribeTest());
+                addTestCase("synthetic audio: Sync STT, dictation and incremental upload", \shortAudioTest());
+            }
+        }
+        if (connection_name) {
+            addTestCase("named connection: authenticated ping and typed listing", \connectionTest());
+        }
+        if (!ENV.ASSEMBLYAI_APIKEY && !connection_name) {
+            addTestCase("live API credentials", nothing sub () {
+                testSkip("set ASSEMBLYAI_APIKEY or --connection for live API checks");
+            });
+        }
+        set_return_value(main());
+    }
+    private auto action(string name, hash<auto> request = {}) {
+        try {
+            return root.getChildProvider(name).doRequest(request);
+        } catch (hash<ExceptionInfo> ex) {
+            # Avoid recording signed URLs, request headers, or token response bodies on failure.
+            throw "ASSEMBLYAI-LIVE-ERROR", sprintf("action %s failed: %s", name, ex.err);
+        }
+    }
+    private authTest() {
+        AssemblyAiRestConnection valid("live", "Live fixture", AssemblyAiRestConnection::DefaultUrl,
+            {}, {"apikey": ENV.ASSEMBLYAI_APIKEY});
+        assertTrue(valid.ping(True).ok);
+        AssemblyAiRestConnection invalid("invalid", "Invalid credential fixture",
+            AssemblyAiRestConnection::DefaultUrl, {}, {"apikey": "qore-5419-invalid-key"});
+        assertFalse(invalid.ping(False).ok);
+    }
+    private readTest() {
+        assertEq(NT_LIST, action("list-transcripts", {"limit": 1}).transcripts.typeCode());
+        assertTrue(action("list-models").data.size() > 0);
+        assertTrue(action("create-streaming-token", {"expires_in_seconds": 60}).token.val());
+        foreach string name in ("list-agents", "list-sessions", "list-webhooks", "create-voice-agent-token") {
+            try {
+                auto result = action(name, name == "create-voice-agent-token" ? {"expires_in_seconds": 60} : {});
+                assertTrue(exists result);
+                printf("LIVE verified %s\n", name);
+            } catch (hash<ExceptionInfo> ex) {
+                printf("LIVE unavailable %s (%s); entitlement-dependent surface remains fixture-tested\n", name, ex.err);
+            }
+        }
+        try {
+            auto result = action("create-chat-completion", {"model": "qwen3.5-4b-32k-fast",
+                "prompt": "Reply with the word ready.", "max_tokens": 16, "temperature": 0});
+            assertTrue(result.choices.size() > 0);
+            printf("LIVE verified create-chat-completion\n");
+        } catch (hash<ExceptionInfo> ex) {
+            printf("LIVE unavailable create-chat-completion (%s)\n", ex.err);
+        }
+    }
+    private connectionTest() {
+        AbstractConnection connection = get_connection(connection_name);
+        assertEq("assemblyai", connection.getType());
+        assertTrue(connection.ping(True).ok);
+        AbstractDataProvider provider = connection.getDataProvider();
+        assertEq(33, provider.getChildProviderNames().size());
+        auto response = provider.getChildProvider("list-transcripts").doRequest({"limit": 1});
+        assertEq(NT_LIST, response.transcripts.typeCode());
+    }
+    private nativeTest() {
+        Queue messages();
+        object ws = client.openWebSocket("streaming", sub (*data message) {
+            if (message) { messages.push(message); }
+        }, {"sample_rate": "16000", "speech_model": "universal-streaming-english"});
+        on_exit ws.disconnect();
+        auto first = messages.get(10s);
+        assertTrue(exists first, "WebSocket session began");
+        assertEq("Begin", parse_json(first).type);
+        ws.send(make_json({"type": "Terminate"}));
+        bool terminated = False;
+        for (int i = 0; i < 20; ++i) {
+            auto last = messages.get(10s);
+            assertTrue(exists last, "WebSocket session terminated");
+            string type = parse_json(last).type;
+            if (type == "Termination") {
+                terminated = True;
+                break;
+            }
+            assertEq("Turn", type, "a final turn may precede the termination event");
+        }
+        assertTrue(terminated);
+        printf("LIVE verified native speech WebSocket (no audio)\n");
+        object reader = client.openChatStream({"model": "qwen3.5-4b-32k-fast",
+            "prompt": "Reply with the word ready.", "max_tokens": 16, "temperature": 0});
+        on_exit reader.cancel();
+        assertTrue(exists reader.readEvent(30s));
+        printf("LIVE verified native chat SSE\n");
+    }
+    private transcribeTest() {
+        binary audio = File::readBinaryFile(audio_file);
+        assertTrue(audio.size() < 1024 * 1024, "keep the live fixture small");
+        string url = action("upload-audio", {"body": audio}).upload_url;
+        *string transcript_id;
+        on_exit {
+            if (transcript_id) {
+                action("delete-transcript", {"transcript_id": transcript_id});
+                printf("LIVE deleted created transcript\n");
+            }
+        }
+        hash<auto> response;
+        try {
+            response = root.getChildProvider("transcribe").doRequest({"audio_url": url,
+                "speech_models": ("universal-3-5-pro",), "poll_interval": 1s,
+                "transcription_timeout": 2m});
+            transcript_id = response.id;
+        } catch (hash<ExceptionInfo> ex) {
+            transcript_id = ex.arg.job_id;
+            throw "ASSEMBLYAI-LIVE-ERROR", sprintf("transcription failed: %s", ex.err);
+        }
+        assertEq("completed", response.status);
+        assertTrue(response.text.val());
+        assertEq("completed", action("get-transcript", {"transcript_id": transcript_id}).status);
+        assertTrue(action("get-sentences", {"transcript_id": transcript_id}).sentences.size() > 0);
+        assertTrue(action("get-paragraphs", {"transcript_id": transcript_id}).paragraphs.size() > 0);
+        assertTrue(action("get-subtitles", {"transcript_id": transcript_id, "subtitle_format": "srt"}).val());
+        assertEq(NT_LIST, action("search-transcript-words",
+            {"transcript_id": transcript_id, "words": ("test",)}).matches.typeCode());
+    }
+    private shortAudioTest() {
+        binary audio = File::readBinaryFile(audio_file);
+        hash<auto> file = {"name": "synthetic.wav", "mime_type": "audio/wav", "content": audio};
+        foreach string name in ("transcribe-short-audio", "transcribe-live-upload", "transcribe-dictation") {
+            hash<auto!> request = {"audio": file, "config": {}};
+            if (name != "transcribe-dictation") {
+                request.model = "universal-3-5-pro";
+            }
+            auto result = action(name, request);
+            assertTrue(result.text.val(), name);
+            printf("LIVE verified %s\n", name);
+        }
+        AssemblyAiAudioUpload upload = client.openAudioUpload("sync");
+        on_exit upload.close();
+        for (int offset = 0; offset < audio.size(); offset += 4096) {
+            upload.sendAudio(audio[offset..min(offset + 4095, audio.size() - 1)]);
+        }
+        assertTrue(upload.finish().text.val());
+        printf("LIVE verified incremental audio upload\n");
+    }
+}

@@ -44,12 +44,13 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
 
         const OptionColumn = 22;
 
-        #! Tiny inline PNG (1x1 transparent pixel) — sufficient to elicit a
-        #! valid Textract response with a PAGE block but no detected words.
-        #! Keeps cost minimal (1 page = $0.0015 on the regular tier).
-        const TinyPng = parse_base64_string(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAj"
-            "CB0C8AAAAASUVORK5CYII=");
+        const Actions = ("analyze-document", "analyze-expense", "analyze-id", "create-adapter",
+            "create-adapter-version", "delete-adapter", "delete-adapter-version", "detect-document-text",
+            "get-adapter", "get-adapter-version", "get-document-analysis", "get-document-text-detection",
+            "get-expense-analysis", "get-lending-analysis", "get-lending-analysis-summary", "list-adapter-versions",
+            "list-adapters", "list-tags-for-resource", "start-document-analysis", "start-document-text-detection",
+            "start-expense-analysis", "start-lending-analysis", "tag-resource", "untag-resource", "update-adapter",
+            "make-api-call");
     }
 
     private {
@@ -59,7 +60,7 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
     constructor() : Test("AwsTextractDataProvider Test", "1.0", \ARGV, MyOpts) {
         conn_name = m_options.conn ?? ENV.AWS_TEXTRACT_CONNECTION;
 
-        addTestCase("factory + app + 2 actions registered", \registrationTest());
+        addTestCase("factory + app + exact complete inventory", \registrationTest());
         addTestCase("detect-document-text builds Document.Bytes from document_bytes",
             \detectBytesTest());
         addTestCase("detect-document-text builds Document.S3Object from s3_bucket + s3_name",
@@ -74,11 +75,9 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
             \noSourceTest());
         addTestCase("app declares Documents AppGroup",   \documentsAppGroupTest());
 
-        # Live tests require a real AWS connection with Textract permissions
-        # (cost: 1 page on regular tier ≈ $0.0015 per run — fits inside the
-        # 3-month / 1k-page free tier indefinitely while testing)
-        if (conn_name) {
-            addTestCase("live: ping + detect-document-text",
+        # Opt-in: three synthetic single-page calls incur the account's normal AWS charges.
+        if (conn_name || ENV.AWS_TEXTRACT_LIVE) {
+            addTestCase("live: readable OCR, queries, and expense analysis",
                 \liveTextractTest());
         }
         set_return_value(main());
@@ -102,15 +101,23 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         assertEq("AwsTextract", app.name);
         assertEq("aws-textract", app.scheme);
 
-        # filter out the framework-injected make-api-call action (covered by
-        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
-        list<hash<DataProviderActionInfo>> actions = select
-            DataProvider::DataProviderActionCatalog::getActions("AwsTextract"),
-            $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(2, actions.size());
-
-        list<string> action_codes = sort(map $1.action, actions);
-        assertEq(("analyze-document", "detect-document-text"), action_codes);
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionsEx("AwsTextract");
+        assertEq(sort(Actions), sort(map $1.action, actions));
+        AwsTextractActions::registerNativeActions();
+        assertEq(sort(Actions), sort(map $1.action, DataProviderActionCatalog::getActionsEx("AwsTextract")));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures(("AwsTextract",)));
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected =
+            (<DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract"},)
+            + (map <DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract", "action": $1}, Actions);
+        DataProviderDiscoverySession session = DataProviderActionCatalog::beginDiscovery(expected, ("AwsTextract",));
+        DataProviderActionCatalog::collectDiscoveryExpectedInventory(session);
+        DataProviderQualifiedDiscovery qualified = DataProviderActionCatalog::sealDiscovery(session);
+        assertTrue(qualified.getReport().complete);
+        assertEq((), qualified.getReport().failures);
+        DataProviderActionCatalog::discardQualifiedDiscovery(qualified);
+        expected += <DataProviderDiscoveryExpectedIdentityInfo>{"app": "AwsTextract", "action": "missing-fixture"};
+        session = DataProviderActionCatalog::beginDiscovery(expected, ("AwsTextract",));
+        assertThrows("DATA-PROVIDER-DISCOVERY-ERROR", sub () { DataProviderActionCatalog::sealDiscovery(session); });
     }
 
     private detectBytesTest() {
@@ -121,7 +128,7 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
         AwsTextractDataProvider::AwsTextractDetectDocumentTextDataProvider prov(fake);
         prov.doRequest({"document_bytes": binary("FAKE-PNG")});
         assertEq("/", fake.last_path);
-        assertEq(binary("FAKE-PNG"), fake.last_body.Document.Bytes);
+        assertEq(make_base64_string(binary("FAKE-PNG")), fake.last_body.Document.Bytes);
         # No S3Object set when bytes were supplied
         assertEq(NOTHING, fake.last_body.Document.S3Object);
     }
@@ -205,26 +212,33 @@ public class AwsTextractDataProviderTest inherits QUnit::Test {
     }
 
     #! Exercises Textract's live `DetectDocumentText` action via SigV4
-    /** Verifies the actual wire format against AWS Textract's production
-        endpoint.  Cost: ~$0.0015 per page (free-tier eligible).
-    */
+    /** Verifies the wire format and actual text in an original synthetic invoice. */
     private liveTextractTest() {
-        AbstractConnection conn = get_connection(conn_name);
-        hash<auto> ping = conn.ping(True);
-        assertTrue(ping.ok, sprintf("AWS Textract connection ping failed: %s",
-            ping.info ?? "no info"));
-
-        AbstractDataProvider prov = conn.getDataProvider();
-        AbstractDataProvider dt = prov.getChildProvider("detect-document-text");
-        auto result = dt.doRequest({"document_bytes": TinyPng});
-
-        # Even on a blank pixel, Textract returns at least a PAGE block
-        assertTrue(result.Blocks.size() >= 1,
-            "Textract returned at least one Block");
-        # First block is conventionally a PAGE
-        assertEq("PAGE", result.Blocks[0].BlockType,
-            "first Block is PAGE");
-        assertTrue(result.DocumentMetadata.Pages >= 1,
-            "Textract reported >= 1 page");
+        AbstractDataProvider prov;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            assertTrue(conn.ping(True).ok);
+            prov = conn.getDataProvider();
+        } else {
+            prov = new AwsTextractDataProvider::AwsTextractDataProvider({});
+        }
+        binary document = File::readBinaryFile(get_script_dir() + "/synthetic-invoice.pdf");
+        hash<auto> result = prov.getChildProvider("detect-document-text").doRequest({"document_bytes": document});
+        string text = (map $1.Text ?? "", result.Blocks).join(" ");
+        assertTrue(index(text, "QORE TEXTRACT TEST INVOICE") >= 0);
+        assertTrue(index(text, "12.34") >= 0);
+        assertEq(1, result.DocumentMetadata.Pages);
+        result = prov.getChildProvider("analyze-document").doRequest({
+            "document_bytes": document, "feature_types": ("QUERIES",),
+            "queries": ({"Text": "What is the total?", "Alias": "total"},),
+        });
+        list<hash<auto>> answers = select result.Blocks, $1.BlockType == "QUERY_RESULT";
+        assertTrue(answers.size() > 0);
+        assertTrue(index((map $1.Text ?? "", answers).join(" "), "12.34") >= 0);
+        result = prov.getChildProvider("analyze-expense").doRequest({"Document": {"Bytes": document}});
+        assertEq(1, result.ExpenseDocuments.size());
+        list<hash<auto>> totals = select result.ExpenseDocuments[0].SummaryFields, $1.Type.Text == "TOTAL";
+        assertTrue(totals.size() > 0);
+        assertTrue(index(totals[0].ValueDetection.Text, "12.34") >= 0);
     }
 }

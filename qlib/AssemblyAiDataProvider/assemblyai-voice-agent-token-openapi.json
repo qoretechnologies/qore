@@ -1,0 +1,164 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AssemblyAI Voice Agent Token API",
+    "description": "API for generating temporary authentication tokens for the Voice Agent API.",
+    "version": "1.0.0",
+    "termsOfService": "https://www.assemblyai.com/legal/terms-of-service",
+    "contact": {
+      "name": "API Support",
+      "email": "support@assemblyai.com",
+      "url": "https://www.assemblyai.com/docs/"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://agents.assemblyai.com",
+      "description": "Production server",
+      "x-fern-server-name": "Default"
+    }
+  ],
+  "paths": {
+    "/v1/token": {
+      "get": {
+        "summary": "Generate temporary Voice Agent token",
+        "description": "Generate a temporary authentication token for the Voice Agent API. Use this to\nconnect browser or other client-side applications to the Voice Agent API without\nexposing your permanent API key. See\n[Browser integration](/voice-agents/voice-agent-api/browser-integration)\nfor the full flow.\n\nEach token is one-time use and can only be used for a single session. All usage\nis attributed to the API key that generated the token.\n",
+        "operationId": "generateVoiceAgentToken",
+        "x-fern-sdk-group-name": "Voice Agent API",
+        "x-fern-sdk-method-name": "generateVoiceAgentToken",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "expires_in_seconds",
+            "in": "query",
+            "description": "Token redemption window, in seconds. The token must be used to open a WebSocket connection within this window. If the window has elapsed when the WebSocket is opened, the server returns a `session.error` with code `unauthorized` on the first frame instead of `session.ready`. This does NOT cap the duration of the resulting voice agent session — once the WebSocket is open the session runs for up to `max_session_duration_seconds`.\n",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 600,
+              "example": 300
+            }
+          },
+          {
+            "name": "max_session_duration_seconds",
+            "in": "query",
+            "description": "Maximum duration of the Voice Agent session started with this token, in seconds. There is no \"closing soon\" warning event before the session ends, so if you need to finalize gracefully (e.g. play a wrap-up message, save state), run a client-side timer using the value you passed here.\n",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 60,
+              "maximum": 10800,
+              "example": 8640,
+              "default": 10800
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully generated a temporary token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token",
+                    "expires_in_seconds"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "The temporary authentication token. Pass as the `token` query parameter when opening the WebSocket.",
+                      "example": "your-temporary-token"
+                    },
+                    "expires_in_seconds": {
+                      "type": "integer",
+                      "description": "The token redemption window in seconds — the time the client has to use this token to open a WebSocket before it expires unused. This is not the session duration; see `max_session_duration_seconds` for that.",
+                      "example": 300
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — invalid parameters.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — invalid or missing API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests — rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Your AssemblyAI API key passed as a Bearer token (e.g. `Authorization: Bearer YOUR_API_KEY`)."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message describing what went wrong."
+          },
+          "code": {
+            "type": "string",
+            "description": "Error code for programmatic handling."
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional error details if available."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,386 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AzureDocumentIntelligenceDataProvider
+%requires HttpServer
+%requires HttpServerUtil
+%requires Logger
+%requires json
+%exec-class AzureDocumentIntelligenceWireTest
+
+class AzureWireHandler inherits AbstractHttpRequestHandler {
+    private {
+        hash<auto!> reply = {"status": 200, "body": {"customDocumentModels": {"count": 0, "limit": 500}}};
+        hash<auto> last;
+        int calls;
+        string mode = "fixed";
+        hash<string, hash<auto>> jobs;
+    }
+    synchronized configure(hash<auto> value, string mode = "fixed") { reply = value; self.mode = mode; }
+    synchronized hash<auto> getLast() { return last; }
+    synchronized int count() { return calls; }
+    synchronized hash handleRequest(hash cx, hash hdr, *data body) {
+        ++calls;
+        last = {"method": hdr.method, "path": cx.raw_path, "headers": hdr, "body": body,
+            "media": hdr."_qore_orig_content_type" ?? hdr."content-type"};
+        if (hdr."ocp-apim-subscription-key" != "fixture-key" && hdr.authorization != "Bearer fixture-token") {
+            return makeResponse({"Content-Type": "application/json"}, 401, "{}");
+        }
+        hash<auto> value = reply;
+        if (mode == "jobs") {
+            if (cx.raw_path.find(":analyze?") != -1) {
+                string id = string(calls);
+                jobs{id} = {"content": parse_json(body.toString()).urlSource, "polls": 0};
+                return makeResponse({"Operation-Location": "/documentintelligence/documentModels/prebuilt-layout/analyzeResults/"
+                    + id + "?api-version=2024-11-30"}, 202, "");
+            }
+            string id = split("?", split("/analyzeResults/", cx.raw_path)[1])[0];
+            ++jobs{id}.polls;
+            value = {"body": {"status": jobs{id}.polls == 1 ? "running" : "succeeded",
+                "analyzeResult": {"apiVersion": "2024-11-30", "modelId": "prebuilt-layout",
+                    "stringIndexType": "unicodeCodePoint", "content": jobs{id}.content, "pages": ()}}};
+        } else if (mode == "pages") {
+            bool second = cx.raw_path.find("page=2") != -1;
+            value = {"body": {"value": ({"modelId": second ? "custom-2" : "custom-1"},)}};
+            if (!second || reply.repeat) {
+                value.body.nextLink = reply.next ?? "/documentintelligence/documentModels?api-version=2024-11-30&page=2";
+            }
+        }
+        return makeResponse(value.status ?? 200, value.raw ?? (exists value.body ? make_json(value.body) : ""),
+            ({"Content-Type": value.media ?? "application/json"}) + (value.headers ?? {}));
+    }
+}
+
+class AzureDocumentIntelligenceWireTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        AzureWireHandler handler;
+        string endpoint;
+        AzureDocumentIntelligenceRestClientIo client;
+        AzureDocumentIntelligenceDataProvider provider;
+    }
+    constructor() : Test("Azure Document Intelligence wire contracts", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger("azure-fixture", LoggerLevel::getLevelInfo())});
+        handler = new AzureWireHandler();
+        server.setDefaultHandler("azure", handler);
+        endpoint = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        client = new AzureDocumentIntelligenceRestClientIo({"url": endpoint, "apikey": "fixture-key"});
+        client.setSleeper(nothing sub (timeout delay) {});
+        provider = new AzureDocumentIntelligenceDataProvider(client);
+        addTestCase("sync async copies and explicit bearer authentication", \authenticationTest());
+        addTestCase("both connection constructors require authenticated ping", \pingTest());
+        addTestCase("accepted jobs and binary downloads retain HTTP metadata", \responseTest());
+        addTestCase("JSON base64 raw bytes and query encoding reach the wire", \requestTest());
+        addTestCase("helper rejects invalid document sources before making requests", \sourceTest());
+        addTestCase("safe service links reject credential forwarding", \linkTest());
+        addTestCase("resource references paginate and reject unsafe or repeated links", \referenceTest());
+        addTestCase("concurrent copied clients own independent polling jobs", \jobsTest());
+        addTestCase("generic debugging redacts subscription credentials", \genericTest());
+        addTestCase("every Microsoft example retains its wire and result contract", \officialContracts());
+        addTestCase("value boundaries and structured choices survive serialization", \valueTest());
+        set_return_value(main());
+    }
+    globalTearDown() { delete server; }
+    private reset() { handler.configure({"body": {"customDocumentModels": {"count": 0, "limit": 500}}}); }
+
+    private officialContracts() {
+        hash<auto> source = parse_json(File::readTextFile(get_script_dir()
+            + "/../../../../qlib/AzureDocumentIntelligenceDataProvider/azure-document-intelligence-swagger.json"));
+        hash<string, hash<auto>> operations;
+        foreach hash<auto> paths in (source.paths, source."x-ms-paths") {
+            foreach hash<auto> path in (paths.pairIterator()) {
+                foreach hash<auto> method in (path.value.pairIterator()) {
+                    operations{method.value.operationId} = method.value + {"path": split("?", path.key)[0],
+                        "method": method.key.upr()};
+                }
+            }
+        }
+        hash<string, string> actions = {};
+        foreach RestSchemaActionSet set in (AzureDocumentIntelligenceSchema::getActionSets()) {
+            foreach string name in (set.getActionNames()) {
+                actions{set.getOperation(name).getInfo().operation_id} = name;
+            }
+        }
+        foreach string id in (keys operations) {
+            if (id =~ /^MiscellaneousOperations_Get.*Operation$/) { actions{id} = "get-operation"; }
+        }
+        hash<string, bool> covered;
+        foreach hash<auto> fixture in (parse_json(File::readTextFile(get_script_dir() + "/official-examples.json"))) {
+            hash<auto> sample = fixture.example;
+            hash<auto> operation = operations{sample.operationId};
+            string name = actions{sample.operationId};
+            hash<auto> request = {};
+            auto expected_body;
+            string path = "/documentintelligence" + operation.path;
+            hash<auto> query = {};
+            foreach hash<auto> parameter in (operation.parameters) {
+                if (parameter."$ref") { parameter = source.parameters{split("/", parameter."$ref")[-1]}; }
+                if (!exists sample.parameters{parameter.name}) { continue; }
+                auto value = sample.parameters{parameter.name};
+                if (parameter.in == "body") {
+                    expected_body = value;
+                    if (parameter.schema.type == "file" || parameter.schema.format == "binary") {
+                        expected_body = <00ff5044460a>;
+                        request.body = expected_body;
+                    } else {
+                        request += value;
+                        if (exists request.base64Source) { request.base64Source = parse_base64_string(request.base64Source); }
+                    }
+                } else {
+                    string option = ({"api-version": "api_version", "modelId": "model_id", "classifierId": "classifier_id",
+                        "operationId": "operation_id", "resultId": "result_id"}){parameter.name} ?? parameter.name;
+                    request{option} = value;
+                    if (parameter.in == "path") {
+                        path = replace(path, "{" + parameter.name + "}", encode_url(value.toString(), True));
+                    } else if (parameter.in == "query") { query{parameter.name} = value; }
+                }
+            }
+            string status = (keys sample.responses)[0];
+            hash<auto> reply = sample.responses{status} + {"status": status.toInt()};
+            bool download = inlist(name, ("get-result-pdf", "get-result-figure"));
+            if (download) {
+                reply.raw = <00ff5044460a>;
+                reply.media = name == "get-result-pdf" ? "application/pdf" : "image/png";
+            }
+            handler.configure(reply);
+            auto result = provider.getChildProvider(name).doRequest(request);
+            provider.getChildProvider(name).getResponseType().acceptsValue(result);
+            hash<auto> actual = handler.getLast();
+            hash<UriQueryInfo> uri = parse_uri_query(actual.path);
+            assertEq(path, uri.method, fixture.file + " path");
+            assertEq(query, uri.params, fixture.file + " query");
+            assertEq(operation.method, actual.method, fixture.file + " method");
+            if (exists expected_body) {
+                auto body = expected_body.typeCode() == NT_BINARY ? actual.body : parse_json(actual.body.toString());
+                if (exists expected_body.expirationDateTime) {
+                    assertEq(date(expected_body.expirationDateTime), date(body.expirationDateTime));
+                    expected_body.expirationDateTime = body.expirationDateTime;
+                }
+                assertEq(expected_body, body, fixture.file + " body");
+            }
+            if (status == "202" || status == "204" || download) {
+                assertEq(status.toInt(), result.status_code, fixture.file + " status");
+                foreach hash<auto> header in (reply.headers.pairIterator()) {
+                    assertEq(header.value, result.headers{header.key.lwr()}, fixture.file + " header");
+                }
+                if (download) { assertEq(reply.raw, result.body); }
+            } else { assertEq(reply.body, result, fixture.file + " result"); }
+            covered{sample.operationId} = True;
+        }
+        assertEq(34, covered.size());
+        assertEq(sort(keys operations), sort(keys covered));
+    }
+
+    private authenticationTest() {
+        reset();
+        foreach AbstractRestClient original in (new AzureDocumentIntelligenceRestClient({"url": endpoint,
+                "apikey": "fixture-key"}, True), client,
+                new AzureDocumentIntelligenceRestClientIo({"url": endpoint, "entra_token": "fixture-token"})) {
+            foreach AbstractRestClient copy in (original, original.copyWithUrl(endpoint)) {
+                assertEq(0, copy.restGet("/documentintelligence/info?api-version=2024-11-30").body.customDocumentModels.count);
+            }
+        }
+        foreach hash<auto> opts in ({}, {"apikey": ""}, {"headers": {"Accept": "application/json"}},
+                {"apikey": "fixture-key", "entra_token": "fixture-token"}) {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", sub () {
+                new AzureDocumentIntelligenceRestClientIo(opts + {"url": endpoint});
+            });
+        }
+    }
+
+    private pingTest() {
+        reset();
+        foreach AzureDocumentIntelligenceRestConnection conn in (
+                new AzureDocumentIntelligenceRestConnection("positional", "Fixture", endpoint, {}, {"apikey": "fixture-key"}),
+                new AzureDocumentIntelligenceRestConnection({"name": "hash", "url": endpoint,
+                    "opts": {"apikey": "fixture-key", "ping_path": "/wrong", "ping_method": "HEAD"}})) {
+            assertEq("AzureDocumentIntelligence", conn.getAppName());
+            assertTrue(conn.ping(True).ok);
+            assertEq("/documentintelligence/info?api-version=2024-11-30", handler.getLast().path);
+            assertTrue(conn.get(False) instanceof AzureDocumentIntelligenceRestClient);
+            assertTrue(conn.getAsync(False) instanceof AzureDocumentIntelligenceRestClientIo);
+        }
+        AzureDocumentIntelligenceRestConnection bad("bad", "Fixture", endpoint, {}, {"apikey": "invalid-fixture-key"});
+        assertFalse(bad.ping(False).ok);
+        foreach int status in (200, 401, 403, 404) {
+            handler.configure({"status": status, "body": {}});
+            assertFalse(new AzureDocumentIntelligenceRestConnection("malformed", "Fixture", endpoint, {},
+                {"apikey": "fixture-key"}).ping(False).ok);
+        }
+    }
+
+    private responseTest() {
+        string location = "/documentintelligence/documentModels/prebuilt-layout/analyzeResults/job?api-version=2024-11-30";
+        handler.configure({"status": 202, "headers": {"Operation-Location": location, "Retry-After": "2"}});
+        hash<auto> result = provider.getChildProvider("start-analysis").doRequest({"model_id": "prebuilt-layout",
+            "urlSource": "https://example.com/invoice.pdf"});
+        assertEq(202, result.status_code);
+        assertEq(location, result.headers."operation-location");
+        assertEq("2", result.headers."retry-after");
+        assertEq(NOTHING, result.body);
+        foreach string action in ("get-result-pdf", "get-result-figure") {
+            string media = action == "get-result-pdf" ? "application/pdf" : "image/png";
+            binary bytes = <2550444600ff800a>;
+            handler.configure({"raw": bytes, "media": media});
+            hash<auto> options = {"model_id": "prebuilt-layout", "result_id": "3b31320d-8bab-4f88-b19c-2322a7f11034"};
+            if (action == "get-result-figure") { options.figureId = "1.1"; }
+            result = provider.getChildProvider(action).doRequest(options);
+            assertEq(NT_BINARY, result.body.typeCode());
+            assertEq(bytes, result.body);
+            assertEq(media, result.headers."content-type");
+        }
+    }
+
+    private requestTest() {
+        handler.configure({"status": 202, "headers": {"Operation-Location": "/documentintelligence/job"}});
+        binary bytes = <00ff20410a>;
+        provider.getChildProvider("start-analysis-stream").doRequest({"model_id": "custom-model", "body": bytes,
+            "features": ("queryFields",), "queryFields": ("A,B", "Space & Plus+"), "pages": "1-2,4"});
+        assertEq(bytes, handler.getLast().body);
+        assertTrue(handler.getLast().media =~ /^application\/octet-stream/);
+        assertTrue(handler.getLast().path.find("queryFields=A%2CB,Space%20%26%20Plus%2B") != -1);
+        assertTrue(handler.getLast().path.find("_overload") == -1);
+        provider.getChildProvider("start-analysis").doRequest({"model_id": "prebuilt-layout", "base64Source": bytes});
+        assertEq(make_base64_string(bytes), parse_json(handler.getLast().body.toString()).base64Source);
+        int before = handler.count();
+        foreach hash<auto> req in ({}, {"urlSource": ""}, {"urlSource": "https://example.com/a", "base64Source": bytes}) {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", sub () {
+                provider.getChildProvider("start-analysis").doRequest(req + {"model_id": "prebuilt-layout"});
+            });
+        }
+        assertEq(before, handler.count());
+    }
+
+    private sourceTest() {
+        AbstractDataProvider action = provider.getChildProvider("analyze-document");
+        int before = handler.count();
+        foreach string url in ("", "invoice.pdf", "file:///tmp/invoice.pdf", "https://", "https:///invoice.pdf",
+                "https://?sig=synthetic-secret", "https://example.com/a b.pdf") {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR",
+                "document_url must be a nonempty HTTP or HTTPS URL with a host", sub () {
+                    action.doRequest({"model_id": "prebuilt-layout", "document_url": url});
+                });
+        }
+        assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "document_path must be a nonempty local file path",
+            sub () { action.doRequest({"model_id": "prebuilt-layout", "document_path": ""}); });
+        assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "supply exactly one document source", sub () {
+            action.doRequest({"model_id": "prebuilt-layout", "document_url": "", "document_path": ""});
+        });
+        assertEq(before, handler.count());
+        handler.configure({}, "jobs");
+        foreach string url in ("https://example.com/invoice%20one.pdf?sig=synthetic%2Bsignature&sp=r",
+                "http://example.com/invoice.pdf") {
+            hash<auto> result = action.doRequest({"model_id": "prebuilt-layout", "document_url": url});
+            assertEq(url, result.content);
+        }
+    }
+
+    private linkTest() {
+        string origin = "https://resource.cognitiveservices.azure.com";
+        assertEq("/documentintelligence/info?api-version=2024-11-30",
+            AzureDocumentIntelligenceRestClientBase::servicePath(origin, origin + "/documentintelligence/info?api-version=2024-11-30"));
+        foreach string url in ("https://evil.example/documentintelligence/info", "http://resource.cognitiveservices.azure.com/documentintelligence/info",
+                "https://user:password@resource.cognitiveservices.azure.com/documentintelligence/info",
+                "//evil.example/documentintelligence/info", "/documentintelligence/../private",
+                "/documentintelligence/%2e%2e/private", "/documentintelligence/info#fragment") {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-URL-ERROR", sub () {
+                AzureDocumentIntelligenceRestClientBase::servicePath(origin, url);
+            });
+        }
+    }
+
+    private referenceTest() {
+        handler.configure({}, "pages");
+        list<hash<AllowedValueInfo>> values = provider.getChildProvider("get-model").getReferenceData("models");
+        assertEq(("custom-1", "custom-2"), map $1.value, values);
+        handler.configure({"repeat": True}, "pages");
+        assertThrows("REFERENCE-DATA-ERROR", sub () {
+            provider.getChildProvider("get-model").getReferenceData("models");
+        });
+        handler.configure({"next": "https://evil.example/documentintelligence/models"}, "pages");
+        assertThrows("REFERENCE-DATA-ERROR", sub () {
+            provider.getChildProvider("get-model").getReferenceData("models");
+        });
+    }
+
+    private jobsTest() {
+        handler.configure({}, "jobs");
+        AzureDocumentIntelligenceRestClientIo copy = cast<AzureDocumentIntelligenceRestClientIo>(client.copyWithUrl(endpoint));
+        Queue results();
+        background sub () { try { results.push(client.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/a"})); }
+            catch (hash<ExceptionInfo> ex) { results.push(ex); } }();
+        background sub () { try { results.push(copy.analyzeDocument("prebuilt-layout", {"urlSource": "https://example.com/b"})); }
+            catch (hash<ExceptionInfo> ex) { results.push(ex); } }();
+        hash<auto> first = results.get(5000);
+        hash<auto> second = results.get(5000);
+        assertEq(("https://example.com/a", "https://example.com/b"), sort((first.content, second.content)));
+    }
+
+    private genericTest() {
+        reset();
+        hash<auto> result = provider.getChildProvider("__call__").doRequest({"method": "GET",
+            "path": "/documentintelligence/info?api-version=2024-11-30", "include_debug": True});
+        assertEq(200, result.status);
+        assertTrue(make_json(result.debug).find("fixture-key") == -1);
+    }
+
+    private valueTest() {
+        RestSchemaActionOperation op = AzureDocumentIntelligenceSchema::getActionSets()[0].getOperationEx("start-analysis");
+        HashDataType type = cast<HashDataType>(Serializable::deserialize(op.getRequestType().serialize()));
+        type = cast<HashDataType>(Serializable::deserialize(type.serialize()));
+        type.getFields().features.setElementAllowedValues((<AllowedValueInfo>{"value": "queryFields",
+            "display_name": "An opaque label containing a different wire value: barcodes"},), False);
+        hash<auto> req = {"model_id": "prebuilt-layout", "urlSource": "https://example.com/document",
+            "features": ("queryFields",)};
+        assertEq(("queryFields",), type.acceptsValue(req).features);
+        assertEq(("queryFields",), op.unflatten(type.acceptsValue(req)).req.query.features);
+
+        handler.configure({"body": {}});
+        provider.getChildProvider("authorize-model-copy").doRequest({"modelId": "fixture", "description": "",
+            "tags": {"value": ""}});
+        hash<auto> body = parse_json(handler.getLast().body.toString());
+        assertEq("", body.description);
+        assertEq({"value": ""}, body.tags);
+        provider.getChildProvider("authorize-model-copy").doRequest({"modelId": "fixture", "tags": {}});
+        body = parse_json(handler.getLast().body.toString());
+        assertEq({}, body.tags);
+        assertFalse(exists body.description);
+        handler.configure({"status": 202});
+        provider.getChildProvider("build-classifier").doRequest({"classifierId": "fixture", "allowOverwrite": False,
+            "docTypes": {"value": {"azureBlobSource": {"containerUrl": "https://example.com/container", "prefix": ""}}}});
+        body = parse_json(handler.getLast().body.toString());
+        assertEq(False, body.allowOverwrite);
+        assertEq("", body.docTypes.value.azureBlobSource.prefix);
+        int before = handler.count();
+        foreach hash<auto> document_type in ({}, {
+                "azureBlobSource": {"containerUrl": "https://example.com/container"},
+                "azureBlobFileListSource": {"containerUrl": "https://example.com/container", "fileList": "files.jsonl"}}) {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", sub () {
+                provider.getChildProvider("build-classifier").doRequest({"classifierId": "fixture",
+                    "docTypes": {"value": document_type}});
+            });
+        }
+        foreach auto value in (NOTHING, NULL, "", {}, (), False, 0, binary()) {
+            bool rejected = False;
+            try { provider.getChildProvider("start-analysis-stream").doRequest({"model_id": "prebuilt-read", "body": value}); }
+            catch () { rejected = True; }
+            assertTrue(rejected, "invalid empty document rejected");
+        }
+        foreach hash<auto> options in ({"model_id": "prebuilt-layout", "output": ("pdf",)},
+                {"model_id": "prebuilt-read", "output": ("figures",)},
+                {"model_id": "prebuilt-invoice", "queryFields": ("Total",)},
+                {"model_id": "prebuilt-document"}) {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", sub () {
+                provider.getChildProvider("start-analysis").doRequest(options + {"urlSource": "https://example.com/a"});
+            });
+        }
+        assertEq(before, handler.count());
+        handler.configure({"status": 302, "headers": {"Location": "https://unrelated.invalid/documentintelligence/info"}});
+        bool rejected = False;
+        try { client.restGet("/documentintelligence/info"); } catch () { rejected = True; }
+        assertTrue(rejected);
+        assertEq(before + 1, handler.count());
+    }
+}

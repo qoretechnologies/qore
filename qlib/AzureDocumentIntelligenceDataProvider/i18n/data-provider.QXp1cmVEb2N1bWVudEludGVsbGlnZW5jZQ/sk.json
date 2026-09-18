@@ -12,8 +12,8 @@
           "message": "Azure Document Intelligence (predtým Form Recognizer)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
-          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
-          "message": "Poskytuje prístup k službe [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (predtým Form Recognizer) — spravovanej službe spoločnosti Microsoft na extrakciu dát z dokumentov.\n\n**Predpripravené modely**:\n- `prebuilt-document` — všeobecná extrakcia kľúč/hodnota\n- `prebuilt-layout` — rozloženie, tabuľky, odseky\n- `prebuilt-invoice` / `prebuilt-receipt` — typované entity faktúr / účteniek\n- `prebuilt-idDocument` — vodičské preukazy, pasy, občianske preukazy\n- `prebuilt-businessCard` — extrakcia vizitiek\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — daňové formuláre USA\n- `prebuilt-contract` — zmluvné klauzuly a zmluvné strany\n\n**Vlastné modely** trénované na portáli Azure sa odkazujú pomocou svojho identifikátora GUID."
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Capabilities**:\n- Extract searchable text, tables, fields, and document structure\n- Classify documents and manage custom models and classifiers\n- Analyze document batches in Azure storage\n- Retrieve job status, searchable PDFs, and cropped figures\n\nUse `prebuilt-layout` with `features=keyValuePairs` for general extraction. Custom model identifiers can be selected from this resource or entered directly.",
+          "message": "Poskytuje prístup k [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (predtým Form Recognizer) — spravovanej službe extrakcie dokumentov od Microsoftu.\n\n**Schopnosti**:\n- Extrahovať vyhľadávateľný text, tabuľky, polia a štruktúru dokumentu\n- Klasifikovať dokumenty a spravovať vlastné modely a klasifikátory\n- Analýza dokumentových dávok v Azure storage\n- Získať stav pracovných pozícií, vyhľadávateľné PDF a orezané obrázky\n\nPoužite `prebuilt-layout` s `features=keyValuePairs` na všeobecnú extrakciu. Vlastné identifikátory modelov je možné vybrať z tohto zdroja alebo zadať priamo."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,6 +339,2482 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
         },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
+          "source": "List Classifiers",
+          "message": "Zoznam klasifikátorov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
+          "source": "List classifiers available in this Azure resource",
+          "message": "Zoznam klasifikátorov dostupných v tomto Azure zdroji"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.desc": {
+          "source": "List classifiers available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "Zoznam klasifikátorov dostupných v tomto Azure zdroji. Vráti jednu stránku; `nextLink` identifikuje ďalšiu stránku, keď je prítomná."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
+          "source": "Get Classifier",
+          "message": "Získať klasifikátor"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
+          "source": "Read a classifier and its document categories",
+          "message": "Prečítajte klasifikátor a jeho kategórie dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.desc": {
+          "source": "Read a classifier and its document categories.",
+          "message": "Prečítajte klasifikátor a jeho kategórie dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
+          "source": "Delete Classifier",
+          "message": "Odstrániť klasifikátor"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
+          "source": "Delete a custom document classifier",
+          "message": "Vymazanie vlastného klasifikátora dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.desc": {
+          "source": "Delete a custom document classifier. **This permanently removes the selected resource or result.**",
+          "message": "Vymažte vlastný klasifikátor dokumentov. **Týmto sa natrvalo odstráni vybraný zdroj alebo výsledok.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
+          "source": "Start Classification",
+          "message": "Spustiť klasifikáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
+          "source": "Submit a document URL or base64 content for classification",
+          "message": "Odošlite URL dokumentu alebo obsah base64 na klasifikáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.desc": {
+          "source": "Submit a document URL or base64 content for classification.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Odošlite URL dokumentu alebo obsah base64 na klasifikáciu.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "URL adresa dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to classify",
+          "message": "URL dokumentu na klasifikáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to classify.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "URL dokumentu na klasifikáciu. Musí byť špecifikovaný buď `urlSource` alebo `base64Source` ."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Dokument Base64"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to classify",
+          "message": "Base64 kódovanie dokumentu na klasifikáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to classify.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "Base64 kódovanie dokumentu na klasifikáciu. Buď `urlSource` alebo `base64Source`\nmusí byť špecifikovaný."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "Typ indexu reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Textové prvky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode kódové body"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "Kódové jednotky UTF-16"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "Rozdelenie dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "Režim rozdelenia dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "Režim delenia dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatické"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Na stránku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "Čísla strán na analýzu, číslované od 1"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "Čísla strán na analýzu, číslované od 1. Napr. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
+          "source": "Copy Classifier",
+          "message": "Kopírovať klasifikátor"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
+          "source": "Start copying a classifier to an authorized resource",
+          "message": "Začnite kopírovať klasifikátor do autorizovaného zdroja"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.desc": {
+          "source": "Start copying a classifier to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Začnite kopírovať klasifikátor do autorizovaného zdroja.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "ID cieľového zdroja"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied…",
+          "message": "ID cieľového Azure zdroja, kde by sa mal skopírovať klasifikátor dokumentov..."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied to.",
+          "message": "ID cieľového Azure zdroja, na ktorý by sa mal klasifikátor dokumentu skopírovať."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "Cieľová oblasť zdrojov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document classifier should be…",
+          "message": "Umiestnenie cieľového Azure zdroja, kde by mal byť klasifikátor dokumentov..."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document classifier should be copied\nto.",
+          "message": "Umiestnenie cieľového Azure zdroja, kde by sa mal dokumentový klasifikátor skopírovať\nto."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.display_name": {
+          "source": "Target Classifier ID",
+          "message": "ID klasifikátora cieľa"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.short_desc": {
+          "source": "Identifier of the target document classifier",
+          "message": "Identifikátor klasifikátora cieľového dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.desc": {
+          "source": "Identifier of the target document classifier.",
+          "message": "Identifikátor klasifikátora cieľových dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.display_name": {
+          "source": "Target Classifier Location",
+          "message": "Umiestnenie klasifikátora cieľa"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.short_desc": {
+          "source": "URL of the copied document classifier in the target account",
+          "message": "URL klasifikátora skopírovaného dokumentu v cieľovom účte"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.desc": {
+          "source": "URL of the copied document classifier in the target account.",
+          "message": "URL klasifikátora skopírovaného dokumentu v cieľovom účte."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Prístupový token"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "Token použitý na autorizáciu požiadavky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "Token použitý na autorizáciu požiadavky."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "Dátum vypršania"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "Dátum/čas vypršania prístupového tokenu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "Dátum/čas, kedy expiruje prístupový token."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
+          "source": "Get Classification Result",
+          "message": "Získajte výsledok klasifikácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
+          "source": "Read classification status and document results",
+          "message": "Získať stav klasifikácie a výsledky dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.desc": {
+          "source": "Read classification status and document results.",
+          "message": "Získať stav klasifikácie a výsledky dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "ID výsledku analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
+          "source": "Authorize Classifier Copy",
+          "message": "Autorizovať kopírovanie klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
+          "source": "Authorize an incoming classifier copy in this resource",
+          "message": "Autorizujte prichádzajúcu kópiu klasifikátora v tomto zdroji"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.desc": {
+          "source": "Authorize an incoming classifier copy in this resource.",
+          "message": "Autorizujte prichádzajúcu kópiu klasifikátora v tomto zdroji."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "Popis klasifikátora dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "Popis klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document classifier",
+          "message": "Zoznam atribútov kľúčovo-hodnotových značiek priradených k klasifikátoru dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document classifier.",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov priradených k klasifikátoru dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
+          "source": "Build Classifier",
+          "message": "Natrénovať klasifikátor"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
+          "source": "Train a classifier from labeled documents in Azure storage",
+          "message": "Natrénovať klasifikátor z označených dokumentov v úložisku Azure"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.desc": {
+          "source": "Train a classifier from labeled documents in Azure storage.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Natrénovať klasifikátor z označených dokumentov v úložisku Azure.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "Popis klasifikátora dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "Popis klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.display_name": {
+          "source": "Base Classifier ID",
+          "message": "ID základného klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.short_desc": {
+          "source": "Base 'classifierId' on top of which to train the classifier",
+          "message": "Základný 'classifierId' na ďalšie trénovanie klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.desc": {
+          "source": "Base `classifierId` on top of which to train the classifier.",
+          "message": "Základný `classifierId` na ďalšie trénovanie klasifikátora."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "Typy dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.short_desc": {
+          "source": "List of document types to classify against",
+          "message": "Zoznam typov dokumentov na klasifikáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.desc": {
+          "source": "List of document types to classify against.",
+          "message": "Zoznam typov dokumentov na porovnanie."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "Povoliť prepísanie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing classifier with the same name",
+          "message": "Povoliť prepísanie existujúceho klasifikátora s rovnakým názvom"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing classifier with the same name.",
+          "message": "Povoľte prepísanie existujúceho klasifikátora s rovnakým názvom."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "Zoznam modelov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List extraction models available in this Azure resource",
+          "message": "Zoznam modelov extrakcie dostupných v tomto Azure zdroji"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List extraction models available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "Zoznam modelov extrakcie dostupných v tomto Azure zdroji. Vráti jednu stránku; `nextLink` identifikuje ďalšiu stránku, keď je prítomná."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Analysis",
+          "message": "Spustiť analýzu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
+          "source": "Submit a document URL or base64 content for extraction",
+          "message": "Odošlite URL dokumentu alebo obsah base64 na extrakciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.desc": {
+          "source": "Submit a document URL or base64 content for extraction.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Odošlite URL dokumentu alebo obsah base64 na extrakciu.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "URL adresa dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to analyze",
+          "message": "URL dokumentu na analýzu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to analyze.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "URL dokumentu na analýzu. Je potrebné uviesť buď `urlSource` alebo `base64Source` ."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Dokument Base64"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to analyze",
+          "message": "Base64 kódovanie dokumentu na analýzu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to analyze.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "Base64 kódovanie dokumentu na analýzu. Buď `urlSource` alebo `base64Source`\nmusí byť špecifikovaný."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "Čísla strán na analýzu, číslované od 1"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "Čísla strán na analýzu, číslované od 1. Napr. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Jazykové nastavenie na rozpoznávanie textu a analýzu dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Nápoveda miesta pre rozpoznávanie textu a analýzu dokumentov. Hodnota môže obsahovať iba\njazykový kód (napr. \"en\", \"fr\") alebo jazykový tag BCP 47 (napr. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "Typ indexu reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Textové prvky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode kódové body"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "Kódové jednotky UTF-16"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Funkcie analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "Zoznam voliteľných analytických funkcií"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "Zoznam voliteľných analytických funkcií."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "OCR s vysokým rozlíšením"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Jazyky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Čiarové kódy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Vzorce"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Páry kľúč/hodnota"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Štýly písma"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "Zoznam ďalších polí na extrakciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "Zoznam ďalších polí na extrahovanie. Napr. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Formát obsahu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Formát analýzy výsledku obsahu na najvyššej úrovni"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Formát výsledku analýzy je obsah na najvyššej úrovni."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Ďalšie výstupy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Ďalšie výstupy na generovanie počas analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Dodatočné výstupy na generovanie počas analýzy."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Vyhľadávateľné PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Obrázky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
+          "source": "Start Batch Analysis",
+          "message": "Začnite dávkovú analýzu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
+          "source": "Analyze documents from an Azure storage container",
+          "message": "Analyzovať dokumenty z kontajnera úložiska Azure"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.desc": {
+          "source": "Analyze documents from an Azure storage container.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Analyzovať dokumenty z kontajnera úložiska Azure.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob zdroj"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Obsah v Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Obsah v Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "URL kontajnera"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "URL kontajnera Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "URL kontajnera Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Titul pred menom"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "Predpona názvu blob"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "Predpona mena blob."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Zdroj zo zoznamu súborov v Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "Zoznam súborov v Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "Zoznam súborov v Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "URL kontajnera"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "URL kontajnera Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "URL kontajnera Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "Zoznam súborov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "Cesta k súboru JSONL v rámci kontajnera, ktorý špecifikuje podmnožinu dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "Cesta k súboru JSONL v rámci kontajnera, ktorý špecifikuje podmnožinu dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.display_name": {
+          "source": "Result Container URL",
+          "message": "URL kontajnera výsledkov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored",
+          "message": "URL kontajnera Azure Blob Storage, kde budú uložené analytické výsledkové súbory"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored.",
+          "message": "URL kontajnera Azure Blob Storage, kde budú uložené analytické výsledné súbory."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.display_name": {
+          "source": "Result Prefix",
+          "message": "Predpona výsledkov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.short_desc": {
+          "source": "Blob name prefix of result files",
+          "message": "Predpona mena blobov v súboroch výsledkov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.desc": {
+          "source": "Blob name prefix of result files.",
+          "message": "Predpona názvu blobu v súboroch výsledkov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.display_name": {
+          "source": "Overwrite Existing",
+          "message": "Prepísať existujúce"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.short_desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "Prepísať existujúce analytické výsledkové súbory?"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "Prepísať existujúce analytické výsledkové súbory?"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "Čísla strán na analýzu, číslované od 1"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "Čísla strán na analýzu, číslované od 1. Napr. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Jazykové nastavenie na rozpoznávanie textu a analýzu dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Nápoveda miesta pre rozpoznávanie textu a analýzu dokumentov. Hodnota môže obsahovať iba\njazykový kód (napr. \"en\", \"fr\") alebo jazykový tag BCP 47 (napr. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "Typ indexu reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Textové prvky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode kódové body"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "Kódové jednotky UTF-16"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Funkcie analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "Zoznam voliteľných analytických funkcií"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "Zoznam voliteľných analytických funkcií."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "OCR s vysokým rozlíšením"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Jazyky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Čiarové kódy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Vzorce"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Páry kľúč/hodnota"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Štýly písma"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "Zoznam ďalších polí na extrakciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "Zoznam ďalších polí na extrahovanie. Napr. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Formát obsahu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Formát analýzy výsledku obsahu na najvyššej úrovni"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Formát výsledku analýzy je obsah na najvyššej úrovni."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Ďalšie výstupy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Ďalšie výstupy na generovanie počas analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Dodatočné výstupy na generovanie počas analýzy."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Vyhľadávateľné PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Obrázky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "Získať model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Read an extraction model and its supported document fields",
+          "message": "Prečítajte si extrakčný model a jeho podporované polia dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.desc": {
+          "source": "Read an extraction model and its supported document fields.",
+          "message": "Prečítajte si extrakčný model a jeho podporované polia dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
+          "source": "Delete Model",
+          "message": "Odstrániť model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
+          "source": "Delete a custom extraction model",
+          "message": "Vymažte vlastný model extrakcie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.desc": {
+          "source": "Delete a custom extraction model. **This permanently removes the selected resource or result.**",
+          "message": "Vymažte vlastný model extrakcie. **Týmto sa natrvalo odstráni vybraný zdroj alebo výsledok.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
+          "source": "Copy Model",
+          "message": "Kopírovať model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
+          "source": "Start copying a model to an authorized resource",
+          "message": "Začnite kopírovať model do autorizovaného zdroja"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.desc": {
+          "source": "Start copying a model to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Začnite kopírovať model do autorizovaného zdroja.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "ID cieľového zdroja"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to",
+          "message": "ID cieľového Azure zdroja, do ktorého by sa mal kopírovať model dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to.",
+          "message": "ID cieľového Azure zdroja, na ktorý by sa mal kopírovať model dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "Cieľová oblasť zdrojov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document model should be copied",
+          "message": "Umiestnenie cieľového Azure zdroja, kde by sa mal kopírovať model dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document model should be copied\nto.",
+          "message": "Umiestnenie cieľového Azure zdroja, kde by sa mal kopírovať model dokumentu\nto."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.display_name": {
+          "source": "Target Model ID",
+          "message": "ID cieľového modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.short_desc": {
+          "source": "Identifier of the target document model",
+          "message": "Identifikátor cieľového modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.desc": {
+          "source": "Identifier of the target document model.",
+          "message": "Identifikátor cieľového modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.display_name": {
+          "source": "Target Model Location",
+          "message": "Umiestnenie cieľového modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.short_desc": {
+          "source": "URL of the copied document model in the target account",
+          "message": "URL modelu skopírovaného dokumentu v cieľovom účte"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.desc": {
+          "source": "URL of the copied document model in the target account.",
+          "message": "URL modelu skopírovaného dokumentu v cieľovom účte."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "Prístupový token"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "Token použitý na autorizáciu požiadavky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "Token použitý na autorizáciu požiadavky."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "Dátum vypršania"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "Dátum/čas vypršania prístupového tokenu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "Dátum/čas, kedy expiruje prístupový token."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
+          "source": "List Batch Results",
+          "message": "Vypísať výsledky dávok"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
+          "source": "List batch extraction jobs for a model",
+          "message": "Vypísať úlohy dávkovej extrakcie pre model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.desc": {
+          "source": "List batch extraction jobs for a model. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "Vypíšte dávkové extrahovacie úlohy pre model. Vráti jednu stránku; `nextLink` identifikuje ďalšiu stránku, keď je prítomná."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Get Batch Result",
+          "message": "Získať výsledok dávky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Read batch progress and individual document outcomes",
+          "message": "Prečítajte si priebeh dávok a výsledky jednotlivých dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Read batch progress and individual document outcomes.",
+          "message": "Čítajte postup v dávkach a výsledky jednotlivých dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "ID výsledku dávkovej analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Delete Batch Result",
+          "message": "Vymazať dávkový výsledok"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored batch extraction result",
+          "message": "Vymažte uložený výsledok hromadnej extrakcie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Delete a stored batch extraction result. **This permanently removes the selected resource or result.**",
+          "message": "Vymažte uložený výsledok hromadnej extrakcie. **Týmto sa natrvalo odstráni vybraný zdroj alebo výsledok.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "ID výsledku dávkovej analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Get Analysis Result",
+          "message": "Získajte výsledok analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Read analysis status and extracted document content",
+          "message": "Prečítajte si stav analýzy a extrahovaného obsahu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Read analysis status and extracted document content.",
+          "message": "Prečítajte si stav analýzy a extrahovaný obsah dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "ID výsledku analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Delete Analysis Result",
+          "message": "Vymazať výsledok analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored extraction result",
+          "message": "Vymažte uložený výsledok extrakcie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Delete a stored extraction result. **This permanently removes the selected resource or result.**",
+          "message": "Vymažte uložený výsledok extrakcie. **Týmto sa natrvalo odstráni vybraný zdroj alebo výsledok.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "ID výsledku analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
+          "source": "Download Figure",
+          "message": "Stiahnuť obrázok"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
+          "source": "Download the original PNG bytes of an extracted figure",
+          "message": "Stiahnite si pôvodné bajty z PNG extrahovaného obrázka"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.desc": {
+          "source": "Download the original PNG bytes of an extracted figure. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "Stiahnite si pôvodné PNG bajty extrahovaného obrázka. Pri začiatku analýzy si vyžiadajte zodpovedajúci `output` . Odpoveď obsahuje binárne `body`, HTTP stav a mediálne hlavičky."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "ID výsledku analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.display_name": {
+          "source": "Figure ID",
+          "message": "ID obrázka"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.short_desc": {
+          "source": "Figure ID",
+          "message": "ID obrázka"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.desc": {
+          "source": "Figure ID.",
+          "message": "ID obrázka."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
+          "source": "Download Searchable PDF",
+          "message": "Stiahnite si vyhľadávateľný PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
+          "source": "Download the searchable PDF bytes generated during analysis",
+          "message": "Stiahnite si vyhľadávateľné PDF bajty generované počas analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.desc": {
+          "source": "Download the searchable PDF bytes generated during analysis. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "Stiahnite si vyhľadávateľné PDF bajty generované počas analýzy. Pri začiatku analýzy si vyžiadajte zodpovedajúce `output` . Odpoveď obsahuje binárne `body`, HTTP stav a hlavičky médií."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "ID výsledku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "ID výsledku analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "Identifikátor výsledku z pracovného miesta sa vrátil pri odoslaní dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
+          "source": "Authorize Model Copy",
+          "message": "Autorizovať kopírovanie modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
+          "source": "Authorize an incoming model copy in this resource",
+          "message": "Autorizujte prichádzajúcu modelovú kópiu v tomto zdroji"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.desc": {
+          "source": "Authorize an incoming model copy in this resource.",
+          "message": "Autorizujte prichádzajúcu modelovú kópiu v tomto zdroji."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "Popis modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "Dokumentujte popis modelu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov spojených s modelom dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov priradených k modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
+          "source": "Build Model",
+          "message": "Natrénovať model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
+          "source": "Train a custom extraction model from labeled documents",
+          "message": "Trénujte vlastný model extrakcie z označených dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.desc": {
+          "source": "Train a custom extraction model from labeled documents.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Natrénujte vlastný model extrakcie z označených dokumentov.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "Popis modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "Dokumentujte popis modelu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.display_name": {
+          "source": "Build Mode",
+          "message": "Režim trénovania"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.short_desc": {
+          "source": "Custom document model build mode",
+          "message": "Režim vytvárania vlastného modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.desc": {
+          "source": "Custom document model build mode.",
+          "message": "Režim zostavovania vlastného modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOnRlbXBsYXRl.display_name": {
+          "source": "Template",
+          "message": "Šablóna"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOm5ldXJhbA.display_name": {
+          "source": "Neural",
+          "message": "Neurónové"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob zdroj"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Obsah v Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Obsah v Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "URL kontajnera"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "URL kontajnera Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "URL kontajnera Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Titul pred menom"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "Predpona názvu blob"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "Predpona mena blob."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Zdroj zo zoznamu súborov v Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "Zoznam súborov v Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "Zoznam súborov v Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "URL kontajnera"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "URL kontajnera Azure Blob Storage"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "URL kontajnera Azure Blob Storage."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "Zoznam súborov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "Cesta k súboru JSONL v rámci kontajnera, ktorý špecifikuje podmnožinu dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "Cesta k súboru JSONL v rámci kontajnera, ktorý špecifikuje podmnožinu dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov spojených s modelom dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov priradených k modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.display_name": {
+          "source": "Max Training Hours",
+          "message": "Maximálny počet hodín trénovania"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.short_desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training",
+          "message": "Maximálny počet GPU hodín ekvivalentných V100 na trénovanie modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training.  Default=0.5.",
+          "message": "Maximálny počet GPU hodín ekvivalentných V100 na trénovanie modelu. Predvolené=0,5."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "Povoliť prepísanie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing model with the same name",
+          "message": "Umožňuje prepísanie existujúceho modelu s rovnakým názvom"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing model with the same name.",
+          "message": "Povoľte prepísanie existujúceho modelu s rovnakým názvom."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
+          "source": "Compose Model",
+          "message": "Zostaviť zložený model"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
+          "source": "Combine trained models into one extraction workflow",
+          "message": "Spojte trénované modely do jedného extrakčního workflow"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.desc": {
+          "source": "Combine trained models into one extraction workflow.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Spojte trénované modely do jedného workflow extrakcie.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "Popis modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "Dokumentujte popis modelu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Custom classifier to split and classify the input file",
+          "message": "Vlastný klasifikátor na rozdelenie a klasifikáciu vstupného súboru"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Custom classifier to split and classify the input file.",
+          "message": "Vlastný klasifikátor na rozdelenie a klasifikáciu vstupného súboru."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "Rozdelenie dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.short_desc": {
+          "source": "File splitting behavior",
+          "message": "Správanie pri delení súborov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.desc": {
+          "source": "File splitting behavior.",
+          "message": "Správanie pri delení súborov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatické"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Na stránku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "Typy dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.short_desc": {
+          "source": "Dictionary mapping supported 'docTypes' to the corresponding document models",
+          "message": "Mapa podporovaných 'docTypes' na zodpovedajúce modely dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.desc": {
+          "source": "Dictionary mapping supported `docTypes` to the corresponding document models.",
+          "message": "Mapa podporovaných `docTypes` na zodpovedajúce modely dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov spojených s modelom dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "Zoznam atribútov kľúčovo-hodnotových tagov priradených k modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
+          "source": "Get Resource Information",
+          "message": "Získajte informácie o zdrojoch"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
+          "source": "Read resource quotas and custom model usage",
+          "message": "Prečítajte si kvóty zdrojov a použitie vlastných modelov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.desc": {
+          "source": "Read resource quotas and custom model usage.",
+          "message": "Prečítajte si kvóty zdrojov a používanie vlastných modelov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
+          "source": "List Operations",
+          "message": "Vypísať operácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
+          "source": "List recent model and classifier management operations",
+          "message": "Zoznam nedávnych operácií správy modelov a klasifikátorov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.desc": {
+          "source": "List recent model and classifier management operations. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "Zoznam nedávnych operácií správy modelov a klasifikátorov. Vráti jednu stránku; `nextLink` identifikuje ďalšiu stránku, keď je prítomná."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
+          "source": "Get Operation",
+          "message": "Získať stav operácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
+          "source": "Read build or copy progress and its typed result",
+          "message": "Získať priebeh trénovania alebo kopírovania a výsledok s určenou štruktúrou"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.desc": {
+          "source": "Read build or copy progress and its typed result.",
+          "message": "Získať priebeh trénovania alebo kopírovania a výsledok s určenou štruktúrou."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.display_name": {
+          "source": "Operation ID",
+          "message": "ID operácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.short_desc": {
+          "source": "Operation ID",
+          "message": "ID operácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.desc": {
+          "source": "Operation ID",
+          "message": "ID operácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms ID požiadavky klienta"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "Nepriehľadný, globálne jedinečný, klientom generovaný identifikátor reťazca pre požiadavku."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
+          "source": "Start Analysis from Bytes",
+          "message": "Začnite analýzu z bajtov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the analysis job location",
+          "message": "Odoslať bajty dokumentu a vrátiť adresu úlohy analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the analysis job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Odoslať bajty dokumentu a vrátiť adresu úlohy analýzy.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "ID modelu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "Jedinečný názov modelu dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "Jedinečný názov modelu dokumentu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "Bajty dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "Argument tela požiadavky REST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "Originálne bajty dokumentu, nahrané bez kódovania v base64."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "Čísla strán na analýzu, číslované od 1"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "Čísla strán na analýzu, číslované od 1. Napr. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Jazykové nastavenie na rozpoznávanie textu a analýzu dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Nápoveda miesta pre rozpoznávanie textu a analýzu dokumentov. Hodnota môže obsahovať iba\njazykový kód (napr. \"en\", \"fr\") alebo jazykový tag BCP 47 (napr. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "Typ indexu reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Textové prvky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode kódové body"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "Kódové jednotky UTF-16"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Funkcie analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "Zoznam voliteľných analytických funkcií"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "Zoznam voliteľných analytických funkcií."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "OCR s vysokým rozlíšením"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Jazyky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Čiarové kódy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Vzorce"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Páry kľúč/hodnota"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Štýly písma"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "Zoznam ďalších polí na extrakciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "Zoznam ďalších polí na extrahovanie. Napr. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Formát obsahu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Formát analýzy výsledku obsahu na najvyššej úrovni"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Formát výsledku analýzy je obsah na najvyššej úrovni."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Ďalšie výstupy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Ďalšie výstupy na generovanie počas analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Dodatočné výstupy na generovanie počas analýzy."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Vyhľadávateľné PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Obrázky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
+          "source": "Start Classification from Bytes",
+          "message": "Začnite klasifikáciu z bajtov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the classification job location",
+          "message": "Odoslať bajty dokumentu a vrátiť adresu úlohy klasifikácie"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the classification job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "Odoslať bajty dokumentu a vrátiť adresu úlohy klasifikácie.\n\nVráti HTTP stav a hlavičky odpovede. Uložte `Operation-Location` a použite príslušný výsledok alebo akciu operácie na kontrolu dokončenia. **Odoslanie nečaká na dokončenie.**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "ID klasifikátora"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "Jedinečný názov klasifikátora dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "Unikátny názov klasifikátora dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "Bajty dokumentu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "Argument tela požiadavky REST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "Originálne bajty dokumentu, nahrané bez kódovania v base64."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "Verzia API"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "Verzia API na použitie pre túto operáciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "API verzia na použitie pre túto operáciu."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "Typ indexu reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Textové prvky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode kódové body"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "Kódové jednotky UTF-16"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "Rozdelenie dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "Režim rozdelenia dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "Režim delenia dokumentov."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "Automatické"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žiadne"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Na stránku"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "Čísla strán na analýzu, číslované od 1"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "Čísla strán na analýzu, číslované od 1. Napr. \"1-3,5,7-9\""
+        },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
           "source": "Analyze Document",
           "message": "Analyzovať dokument"
@@ -348,8 +2824,8 @@
           "message": "Spustiť model Document Intelligence na dokumente (asynchrónne)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
-          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
-          "message": "Odošle dokument do modelu Document Intelligence a počká na dokončenie analýzy. Životný cyklus je interne riadený pomocou @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" cez `AsyncJobPoller`: odoslanie cez POST → dopytovanie URL `Operation-Location` → vrátenie analyzovaného `analyzeResult`.\n\nDokument odovzdajte jedným zo spôsobov:\n- `document_url` — verejná URL adresa (Azure načíta dokument)\n- `document_bytes` — nespracované bajty (automaticky kódované do base64)\n- `document_path` — lokálna cesta k súboru (prečíta sa a zakóduje do base64)"
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete. Returns extracted text, fields, tables, and structure for use in subsequent workflow steps.\n\n**Document source** — supply exactly one:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "Odošle dokument do modelu Document Intelligence a čaká na dokončenie analýzy. Vráti extrahovaný text, polia, tabuľky a štruktúru na použitie v nasledujúcich krokoch workflow.\n\n**Zdroj dokumentu** — uveďte presne jeden:\n- `document_url` — verejná URL adresa (Azure načíta dokument)\n- `document_bytes` — surové bajty (automaticky kódované base64)\n- `document_path` — lokálna cesta k súboru (čítanie a kódovanie v base64)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
           "source": "Model ID",
@@ -360,12 +2836,12 @@
           "message": "Identifikátor modelu Document Intelligence"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
-          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
-          "message": "Identifikátor modelu Document Intelligence — predpripravený alebo vlastný. V rozbaľovacom zozname sú uvedené zdokumentované predpripravené modely; identifikátory GUID vlastných modelov trénovaných na portáli [Azure portal](https://portal.azure.com) možno zadať ako voľný text (`allowed_values_creatable: True`)."
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text. Legacy model choices remain identifiable for saved workflows; `prebuilt-document` and `prebuilt-businessCard` are retired in API v4. Use `prebuilt-layout` with `keyValuePairs` for general document extraction.",
+          "message": "Identifikátor modelu Document Intelligence — predpripravený alebo vlastný. Rozbaľovacia ponuka uvádza zdokumentované predpripravené modely; vlastné modely GUID trénované v [Azure portáli](https://portal.azure.com) je možné zadať ako voľný text. Staršie voľby modelov zostávajú identifikovateľné pre uložené pracovné postupy; `prebuilt-document` a `prebuilt-businessCard` sú v API v4 vyradené. Použite `prebuilt-layout` s `keyValuePairs` na všeobecnú extrakciu dokumentov."
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
-          "source": "Document (general layout)",
-          "message": "Dokument (všeobecné rozloženie)"
+          "source": "General Document (Retired in v4)",
+          "message": "Všeobecný dokument (vyradený vo v4)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
           "source": "Layout (tables + lines)",
@@ -384,8 +2860,8 @@
           "message": "Doklad totožnosti"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
-          "source": "Business Card",
-          "message": "Vizitka"
+          "source": "Business Card (Retired in v4)",
+          "message": "Vizitka (vyradená vo verzii 4)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
           "source": "US W-2 Tax Form",
@@ -402,6 +2878,10 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
           "source": "US Health Insurance Card",
           "message": "Karta zdravotného poistenia v USA"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlYWQ.display_name": {
+          "source": "Read (Text and Searchable PDF)",
+          "message": "Čítať (text a vyhľadávateľné PDF)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
           "source": "Document URL",
@@ -474,6 +2954,146 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
           "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
           "message": "Maximálny celkový čas čakania. Predvolená hodnota je `10m`. Pri prekročení akcia vyvolá `AZURE-DOCUMENT-INTELLIGENCE-ERROR`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Stránky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "Čísla strán na analýzu, číslované od 1"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "Čísla strán na analýzu, číslované od 1. Napr. \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "Jazykové nastavenie na rozpoznávanie textu a analýzu dokumentov"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "Nápoveda miesta pre rozpoznávanie textu a analýzu dokumentov. Hodnota môže obsahovať iba\njazykový kód (napr. \"en\", \"fr\") alebo jazykový tag BCP 47 (napr. \"en-US\")."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "Typ indexu reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "Metóda výpočtu posunu a dĺžky reťazca."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "Textové prvky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode kódové body"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "Kódové jednotky UTF-16"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "Funkcie analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "Zoznam voliteľných analytických funkcií"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "Zoznam voliteľných analytických funkcií."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "OCR s vysokým rozlíšením"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "Jazyky"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "Čiarové kódy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "Vzorce"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "Páry kľúč/hodnota"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "Štýly písma"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "Dotazovacie polia"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "Zoznam ďalších polí na extrakciu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "Zoznam ďalších polí na extrahovanie. Napr. \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "Formát obsahu"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "Formát analýzy výsledku obsahu na najvyššej úrovni"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "Formát výsledku analýzy je obsah na najvyššej úrovni."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "Ďalšie výstupy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "Ďalšie výstupy na generovanie počas analýzy"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "Dodatočné výstupy na generovanie počas analýzy."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "Vyhľadávateľné PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "Obrázky"
         }
       }
     }

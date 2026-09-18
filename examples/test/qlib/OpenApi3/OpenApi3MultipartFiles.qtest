@@ -41,6 +41,8 @@ class MultipartFilesTest inherits QUnit::Test {
         addTestCase("invalid file input is rejected before serialization", \negativeTest());
         addTestCase("file request types preserve requiredness and cached wire types", \fieldTest());
         addTestCase("file arrays retain every named part through generated requests", \arrayTest());
+        addTestCase("raw binary parts honor declared media types", \encodingTest());
+        addTestCase("raw request bodies preserve bytes and empty payloads", \rawRequestTest());
         set_return_value(main());
     }
     private fileTest() {
@@ -126,6 +128,43 @@ class MultipartFilesTest inherits QUnit::Test {
             assertEq("application/octet-stream", parts.file.hdr."content-type");
             assertEq(bytes, parts.file.body);
         }
+    }
+    private encodingTest() {
+        hash<MessageInfo> result = OpenApi3::OperationObject::serializeMultipartBody(
+            {"config": {}, "audio": <00017fff>},
+            {"config": {"contentType": "application/json"}, "audio": {"contentType": "audio/wav, audio/pcm"}},
+            {"audio": True});
+        hash<MessageInfo> parts = MultiPartMessage::parseBody(
+            (result.hdr."Content-Type" =~ x/boundary="([^"]+)"/)[0], result.body);
+        assertEq({}, parse_json(parts.part[0].body.toString()));
+        assertEq("audio/wav", parts.part[1].hdr."content-type");
+        assertEq(<00017fff>, parts.part[1].body);
+        result = OpenApi3::OperationObject::serializeMultipartBody(
+            {"audio": {"name": "raw.pcm", "mime_type": "audio/pcm", "content": <00017fff>}},
+            {"audio": {"contentType": "audio/wav, audio/pcm"}}, {"audio": True});
+        parts = MultiPartMessage::parseBody(
+            (result.hdr."Content-Type" =~ x/boundary="([^"]+)"/)[0], result.body);
+        assertEq("audio/pcm", parts.part[0].hdr."content-type");
+        assertEq(<00017fff>, parts.part[0].body);
+    }
+    private rawRequestTest() {
+        OpenApi3Schema raw_schema("raw bodies", {
+            "openapi": "3.0.3", "info": {"title": "Raw uploads", "version": "1"},
+            "paths": {"/upload": {"post": {
+                "requestBody": {"required": True, "content": {"application/octet-stream": {
+                    "schema": {"type": "string", "format": "binary"},
+                }}},
+                "responses": {"204": {"description": "Uploaded"}},
+            }}},
+        });
+        foreach binary bytes in (binary(), <00017fff>) {
+            hash<RestRequestClientInfo> result = raw_schema.processRequest("POST", "/upload", bytes);
+            assertEq(bytes, result.body);
+            assertEq("application/octet-stream", result.content);
+        }
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            raw_schema.processRequest("POST", "/upload", {"value": "not binary"});
+        });
     }
     private negativeTest() {
         foreach hash<auto> file in ({"name": "invoice.wav"}, {"content": binary("x")},

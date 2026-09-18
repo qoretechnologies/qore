@@ -12,8 +12,8 @@
           "message": "Azure Document Intelligence (前身為 Form Recognizer)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
-          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
-          "message": "提供對 [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (前身為 Form Recognizer) 的存取 — Microsoft 的受管文件擷取服務。\n\n**預建模型**：\n- `prebuilt-document` — 一般索引鍵/值擷取\n- `prebuilt-layout` — 版面配置、表格、段落\n- `prebuilt-invoice` / `prebuilt-receipt` — 具類型發票 / 收據實體\n- `prebuilt-idDocument` — 駕照、護照、國民身分證\n- `prebuilt-businessCard` — 名片擷取\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — 美國稅務表單\n- `prebuilt-contract` — 合約條款 + 當事人\n\n在 Azure 入口網站中定型的**自訂模型**可透過其 GUID 識別碼進行參照。"
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Capabilities**:\n- Extract searchable text, tables, fields, and document structure\n- Classify documents and manage custom models and classifiers\n- Analyze document batches in Azure storage\n- Retrieve job status, searchable PDFs, and cropped figures\n\nUse `prebuilt-layout` with `features=keyValuePairs` for general extraction. Custom model identifiers can be selected from this resource or entered directly.",
+          "message": "提供 [Azure 文件智慧](https://azure.microsoft.com/products/ai-services/ai-document-intelligence)（前身為表單識別器）— Microsoft 的受管式文件擷取服務。\n\n**能力**：\n- 擷取可搜尋的文字、表格、欄位及文件結構\n- 分類文件並管理自訂模型與分類器\n- 分析 Azure 儲存中的文件批次\n- 取得作業狀態、可搜尋的 PDF 及裁切後的圖表\n\n使用 `prebuilt-layout` 與 `features=keyValuePairs` 進行一般擷取。自訂模型識別碼可從此資源中選擇或直接輸入。"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
           "source": "Make an API call",
@@ -339,6 +339,2482 @@
           "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
           "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
         },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.display_name": {
+          "source": "List Classifiers",
+          "message": "列出分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.short_desc": {
+          "source": "List classifiers available in this Azure resource",
+          "message": "List 分類器可在此 Azure 資源中使用"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.desc": {
+          "source": "List classifiers available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "列出此 Azure 資源中可用的分類器。返回一個頁面; `nextLink` 在出現時識別下一頁。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1jbGFzc2lmaWVycw.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.display_name": {
+          "source": "Get Classifier",
+          "message": "取得分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.short_desc": {
+          "source": "Read a classifier and its document categories",
+          "message": "閱讀分類器及其文件類別"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.desc": {
+          "source": "Read a classifier and its document categories.",
+          "message": "閱讀分類器及其文件類別。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.display_name": {
+          "source": "Delete Classifier",
+          "message": "刪除分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.short_desc": {
+          "source": "Delete a custom document classifier",
+          "message": "刪除自訂文件分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.desc": {
+          "source": "Delete a custom document classifier. **This permanently removes the selected resource or result.**",
+          "message": "刪除自訂文件分類器。**此舉會永久移除所選資源或結果。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWNsYXNzaWZpZXI.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.display_name": {
+          "source": "Start Classification",
+          "message": "開始分類"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.short_desc": {
+          "source": "Submit a document URL or base64 content for classification",
+          "message": "提交文件網址或 base64 內容以進行分類"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.desc": {
+          "source": "Submit a document URL or base64 content for classification.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "提交文件網址或 base64 內容以進行分類。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "文件 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to classify",
+          "message": "分類文件網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to classify.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "文件網址以分類。必須指定 `urlSource` 或 `base64Source` 。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Base64 文件"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to classify",
+          "message": "文件的 Base64 編碼以進行分類"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to classify.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "文件的 Base64 編碼以進行分類。可以 `urlSource` 或 `base64Source`\n必須說明。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "字串索引類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "計算字串偏移量與長度的方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "用於計算字串偏移量與長度的方法。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "文本元素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode 代碼點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 編碼單元"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "文件分割"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "文件分割模式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "文件分割模式。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "頁面"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "分析以 1 為基礎的頁碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "以 1 為基礎的頁碼分析。例如 \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.display_name": {
+          "source": "Copy Classifier",
+          "message": "複製分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.short_desc": {
+          "source": "Start copying a classifier to an authorized resource",
+          "message": "開始將分類器複製到授權資源"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.desc": {
+          "source": "Start copying a classifier to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "開始將分類器複製到授權資源。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "目標資源識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied…",
+          "message": "文件分類器應該複製的目標 Azure 資源的 ID..."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document classifier should be copied to.",
+          "message": "文件分類器應該複製到的目標 Azure 資源的 ID。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "目標資源區域"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document classifier should be…",
+          "message": "文件分類器應該在的目標 Azure 資源位置......"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document classifier should be copied\nto.",
+          "message": "文件分類器應該複製的目標 Azure 資源位置\n去。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.display_name": {
+          "source": "Target Classifier ID",
+          "message": "目標分類器識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.short_desc": {
+          "source": "Identifier of the target document classifier",
+          "message": "目標文件分類器的識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllcklk.desc": {
+          "source": "Identifier of the target document classifier.",
+          "message": "目標文件分類器的識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.display_name": {
+          "source": "Target Classifier Location",
+          "message": "目標分類器位置"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.short_desc": {
+          "source": "URL of the copied document classifier in the target account",
+          "message": "目標帳號中複製的文件分類器的網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.dGFyZ2V0Q2xhc3NpZmllckxvY2F0aW9u.desc": {
+          "source": "URL of the copied document classifier in the target account.",
+          "message": "目標帳號中複製的文件分類器的網址。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "存取權杖"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "授權請求所用的令牌"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "用來授權請求的代幣。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "到期日時間"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "存取權杖到期的日期/時間"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "存取權憑證過期的日期和時間。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1jbGFzc2lmaWVy.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.display_name": {
+          "source": "Get Classification Result",
+          "message": "取得分類結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.short_desc": {
+          "source": "Read classification status and document results",
+          "message": "讀取分類狀態與文件結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.desc": {
+          "source": "Read classification status and document results.",
+          "message": "讀取分類狀態與文件結果。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "分析操作結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWNsYXNzaWZpY2F0aW9uLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.display_name": {
+          "source": "Authorize Classifier Copy",
+          "message": "授權分類器複製"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.short_desc": {
+          "source": "Authorize an incoming classifier copy in this resource",
+          "message": "在此資源中授權一個接收的分類器副本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.desc": {
+          "source": "Authorize an incoming classifier copy in this resource.",
+          "message": "在此資源中授權接收分類器副本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "文件分類器描述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "文件分類器描述。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document classifier",
+          "message": "與文件分類器相關的鍵值標籤屬性列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document classifier.",
+          "message": "與文件分類器相關的鍵值標籤屬性列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLWNsYXNzaWZpZXItY29weQ.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.display_name": {
+          "source": "Build Classifier",
+          "message": "訓練分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.short_desc": {
+          "source": "Train a classifier from labeled documents in Azure storage",
+          "message": "從 Azure 儲存中標記的文件訓練分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.desc": {
+          "source": "Train a classifier from labeled documents in Azure storage.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "從 Azure 儲存中標記的文件訓練分類器。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document classifier description",
+          "message": "文件分類器描述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document classifier description.",
+          "message": "文件分類器描述。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.display_name": {
+          "source": "Base Classifier ID",
+          "message": "基礎分類器 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.short_desc": {
+          "source": "Base 'classifierId' on top of which to train the classifier",
+          "message": "基礎為 'classifierId'，並以此訓練分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YmFzZUNsYXNzaWZpZXJJZA.desc": {
+          "source": "Base `classifierId` on top of which to train the classifier.",
+          "message": "基礎 `classifierId` ，然後訓練分類器。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "文件類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.short_desc": {
+          "source": "List of document types to classify against",
+          "message": "分類文件類型列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.ZG9jVHlwZXM.desc": {
+          "source": "List of document types to classify against.",
+          "message": "分類文件類型清單。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "允許覆寫"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing classifier with the same name",
+          "message": "允許覆蓋同名的現有分類器"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing classifier with the same name.",
+          "message": "允許覆蓋同名的現有分類器。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtY2xhc3NpZmllcg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "列出模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List extraction models available in this Azure resource",
+          "message": "此 Azure 資源中可用的列表擷取模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List extraction models available in this Azure resource. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "列出此 Azure 資源中可用的擷取模型。回傳一頁; `nextLink` 在出現時識別下一頁。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1tb2RlbHM.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Analysis",
+          "message": "開始分析"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.short_desc": {
+          "source": "Submit a document URL or base64 content for extraction",
+          "message": "提交文件網址或 base64 內容以供擷取"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.desc": {
+          "source": "Submit a document URL or base64 content for extraction.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "提交文件網址或 base64 內容以供擷取。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.display_name": {
+          "source": "Document URL",
+          "message": "文件 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.short_desc": {
+          "source": "Document URL to analyze",
+          "message": "分析文件網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.dXJsU291cmNl.desc": {
+          "source": "Document URL to analyze.  Either `urlSource` or `base64Source` must be specified.",
+          "message": "分析文件網址。必須指定 `urlSource` 或 `base64Source` 。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.display_name": {
+          "source": "Base64 Document",
+          "message": "Base64 文件"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.short_desc": {
+          "source": "Base64 encoding of the document to analyze",
+          "message": "用 Base64 編碼文件分析"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YmFzZTY0U291cmNl.desc": {
+          "source": "Base64 encoding of the document to analyze.  Either `urlSource` or `base64Source`\nmust be specified.",
+          "message": "用 Base64 編碼文件來分析。可以 `urlSource` 或 `base64Source`\n必須說明。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "頁面"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "分析以 1 為基礎的頁碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "以 1 為基礎的頁碼分析。例如 \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "文字辨識與文件分析的地點提示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "文字辨識與文件分析的地點提示。價值可僅包含內容\n語言代碼（例如 \"en\"、 \"fr\"）或 BCP 47 語言標籤（例如 \"en-US\"）。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "字串索引類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "計算字串偏移量與長度的方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "用於計算字串偏移量與長度的方法。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "文本元素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode 代碼點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 編碼單元"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "分析功能"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "可選分析功能列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "可選分析功能列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解析度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "語言"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "條碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "公式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "鍵值對"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "字型樣式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "需提取的額外欄位列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "需擷取的額外欄位列表。例如 \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "內容格式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果的格式 頂層內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果的格式，頂層內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "分析過程中產生的額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析過程中還要產生額外輸出。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "可搜尋的 PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "圖片"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.display_name": {
+          "source": "Start Batch Analysis",
+          "message": "啟動批次分析"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.short_desc": {
+          "source": "Analyze documents from an Azure storage container",
+          "message": "分析 Azure 儲存容器中的文件"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.desc": {
+          "source": "Analyze documents from an Azure storage container.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "分析 Azure 儲存容器中的文件。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob 來源"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Azure Blob Storage 內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Azure Blob Storage 內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "容器網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage 容器 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage 容器 URL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "前綴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "blob 名稱前綴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "blob 名稱前綴。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Azure Blob Storage 檔案清單來源"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "Azure Blob Storage 中的檔案清單"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "Azure Blob Storage 中的檔案清單。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "容器網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage 容器 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage 容器 URL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "檔案列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "容器內指定一部分文件的 JSONL 檔案路徑"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "容器內指定一部分文件的 JSONL 檔案路徑。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.display_name": {
+          "source": "Result Container URL",
+          "message": "結果容器網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored",
+          "message": "Azure Blob 儲存容器 URL 分析結果檔案將存放於此"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0Q29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL where analyze result files will be stored.",
+          "message": "Azure Blob 儲存容器 URL，分析結果檔案會儲存在其中。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.display_name": {
+          "source": "Result Prefix",
+          "message": "結果前綴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.short_desc": {
+          "source": "Blob name prefix of result files",
+          "message": "結果檔案的 blob 名稱前綴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cmVzdWx0UHJlZml4.desc": {
+          "source": "Blob name prefix of result files.",
+          "message": "結果檔案的 blob 名稱前綴。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.display_name": {
+          "source": "Overwrite Existing",
+          "message": "覆寫現有"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.short_desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "要覆寫現有的分析結果檔案嗎？"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3ZlcndyaXRlRXhpc3Rpbmc.desc": {
+          "source": "Overwrite existing analyze result files?",
+          "message": "要覆寫現有的分析結果檔案嗎？"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "頁面"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "分析以 1 為基礎的頁碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "以 1 為基礎的頁碼分析。例如 \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "文字辨識與文件分析的地點提示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "文字辨識與文件分析的地點提示。價值可僅包含內容\n語言代碼（例如 \"en\"、 \"fr\"）或 BCP 47 語言標籤（例如 \"en-US\"）。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "字串索引類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "計算字串偏移量與長度的方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "用於計算字串偏移量與長度的方法。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "文本元素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode 代碼點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 編碼單元"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "分析功能"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "可選分析功能列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "可選分析功能列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解析度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "語言"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "條碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "公式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "鍵值對"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "字型樣式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "需提取的額外欄位列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "需擷取的額外欄位列表。例如 \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "內容格式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果的格式 頂層內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果的格式，頂層內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "分析過程中產生的額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析過程中還要產生額外輸出。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "可搜尋的 PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYmF0Y2gtYW5hbHlzaXM.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "圖片"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "取得模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Read an extraction model and its supported document fields",
+          "message": "閱讀擷取模型及其支援的文件欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.desc": {
+          "source": "Read an extraction model and its supported document fields.",
+          "message": "閱讀擷取模型及其支援的文件欄位。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.display_name": {
+          "source": "Delete Model",
+          "message": "刪除模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.short_desc": {
+          "source": "Delete a custom extraction model",
+          "message": "刪除自訂的擷取模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.desc": {
+          "source": "Delete a custom extraction model. **This permanently removes the selected resource or result.**",
+          "message": "刪除自訂擷取模型。**此舉會永久移除所選資源或結果。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLW1vZGVs.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.display_name": {
+          "source": "Copy Model",
+          "message": "複製模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.short_desc": {
+          "source": "Start copying a model to an authorized resource",
+          "message": "開始將模型複製到授權資源"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.desc": {
+          "source": "Start copying a model to an authorized resource.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "開始將模型複製到授權資源。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.display_name": {
+          "source": "Target Resource ID",
+          "message": "目標資源識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.short_desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to",
+          "message": "目標 Azure 資源的 ID，文件模型應該複製到哪裡"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VJZA.desc": {
+          "source": "ID of the target Azure resource where the document model should be copied to.",
+          "message": "目標 Azure 資源的 ID，文件模型應該複製到哪裡。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.display_name": {
+          "source": "Target Resource Region",
+          "message": "目標資源區域"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.short_desc": {
+          "source": "Location of the target Azure resource where the document model should be copied",
+          "message": "文件模型應複製的目標 Azure 資源位置"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0UmVzb3VyY2VSZWdpb24.desc": {
+          "source": "Location of the target Azure resource where the document model should be copied\nto.",
+          "message": "文件模型應複製的目標 Azure 資源位置\n去。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.display_name": {
+          "source": "Target Model ID",
+          "message": "目標模型識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.short_desc": {
+          "source": "Identifier of the target document model",
+          "message": "目標文件模型的識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxJZA.desc": {
+          "source": "Identifier of the target document model.",
+          "message": "目標文件模型的識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.display_name": {
+          "source": "Target Model Location",
+          "message": "目標模型位置"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.short_desc": {
+          "source": "URL of the copied document model in the target account",
+          "message": "目標帳號中複製的文件模型網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.dGFyZ2V0TW9kZWxMb2NhdGlvbg.desc": {
+          "source": "URL of the copied document model in the target account.",
+          "message": "目標帳號中複製的文件模型網址。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.display_name": {
+          "source": "Access Token",
+          "message": "存取權杖"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.short_desc": {
+          "source": "Token used to authorize the request",
+          "message": "授權請求所用的令牌"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YWNjZXNzVG9rZW4.desc": {
+          "source": "Token used to authorize the request.",
+          "message": "用來授權請求的代幣。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.display_name": {
+          "source": "Expiration Date Time",
+          "message": "到期日時間"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.short_desc": {
+          "source": "Date/time when the access token expires",
+          "message": "存取權杖到期的日期/時間"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.ZXhwaXJhdGlvbkRhdGVUaW1l.desc": {
+          "source": "Date/time when the access token expires.",
+          "message": "存取權憑證過期的日期和時間。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29weS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.display_name": {
+          "source": "List Batch Results",
+          "message": "列出批次結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.short_desc": {
+          "source": "List batch extraction jobs for a model",
+          "message": "列出模型的批次擷取工作"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.desc": {
+          "source": "List batch extraction jobs for a model. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "列出模型的批次擷取工作。回傳一頁; `nextLink` 在出現時識別下一頁。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1iYXRjaC1yZXN1bHRz.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Get Batch Result",
+          "message": "取得批次結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Read batch progress and individual document outcomes",
+          "message": "閱讀批次進度和個別文件結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Read batch progress and individual document outcomes.",
+          "message": "閱讀批次進度和個別文件結果。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "分析批次作業結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.display_name": {
+          "source": "Delete Batch Result",
+          "message": "刪除批次結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored batch extraction result",
+          "message": "刪除儲存的批次擷取結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.desc": {
+          "source": "Delete a stored batch extraction result. **This permanently removes the selected resource or result.**",
+          "message": "刪除儲存的批次擷取結果。**這會永久移除所選資源或結果。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze batch operation result ID",
+          "message": "分析批次作業結果ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWJhdGNoLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Get Analysis Result",
+          "message": "取得分析結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Read analysis status and extracted document content",
+          "message": "閱讀分析狀態及擷取文件內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Read analysis status and extracted document content.",
+          "message": "閱讀分析狀態及擷取文件內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "分析操作結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.display_name": {
+          "source": "Delete Analysis Result",
+          "message": "刪除分析結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.short_desc": {
+          "source": "Delete a stored extraction result",
+          "message": "刪除儲存的擷取結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.desc": {
+          "source": "Delete a stored extraction result. **This permanently removes the selected resource or result.**",
+          "message": "刪除儲存的擷取結果。**這會永久移除所選資源或結果。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "分析操作結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.ZGVsZXRlLWFuYWx5c2lzLXJlc3VsdA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.display_name": {
+          "source": "Download Figure",
+          "message": "下載圖片"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.short_desc": {
+          "source": "Download the original PNG bytes of an extracted figure",
+          "message": "下載提取後的原始 PNG 位元組"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.desc": {
+          "source": "Download the original PNG bytes of an extracted figure. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "下載擷取圖的原始 PNG 位元組。開始分析時請求匹配的 `output` 。回應包含二進位 `body`、HTTP 狀態及媒體標頭。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "分析操作結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.display_name": {
+          "source": "Figure ID",
+          "message": "圖片 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.short_desc": {
+          "source": "Figure ID",
+          "message": "圖片 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.ZmlndXJlSWQ.desc": {
+          "source": "Figure ID.",
+          "message": "圖片 ID。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1maWd1cmU.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.display_name": {
+          "source": "Download Searchable PDF",
+          "message": "下載可搜尋的PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.short_desc": {
+          "source": "Download the searchable PDF bytes generated during analysis",
+          "message": "下載分析過程中產生的可搜尋 PDF bytes"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.desc": {
+          "source": "Download the searchable PDF bytes generated during analysis. Request the matching `output` when starting analysis. The response includes binary `body`, HTTP status, and media headers.",
+          "message": "下載分析過程中產生的可搜尋 PDF 位元組。開始分析時請請求匹配 `output` 。回應包含二進位 `body`、HTTP 狀態及媒體標頭。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.display_name": {
+          "source": "Result ID",
+          "message": "結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.short_desc": {
+          "source": "Analyze operation result ID",
+          "message": "分析操作結果識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.cmVzdWx0X2lk.desc": {
+          "source": "Result identifier from the job location returned when submitting the document.",
+          "message": "提交文件時，工作地點的結果識別碼會回傳。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc3VsdC1wZGY.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.display_name": {
+          "source": "Authorize Model Copy",
+          "message": "授權模型複製"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.short_desc": {
+          "source": "Authorize an incoming model copy in this resource",
+          "message": "在此資源中授權收到的範本副本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.desc": {
+          "source": "Authorize an incoming model copy in this resource.",
+          "message": "在此資源中授權收到一份範本副本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "文件模型描述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "文件模型描述。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "與文件模型相關的鍵值標籤屬性列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "與文件模型相關的鍵值標籤屬性列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YXV0aG9yaXplLW1vZGVsLWNvcHk.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.display_name": {
+          "source": "Build Model",
+          "message": "訓練模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.short_desc": {
+          "source": "Train a custom extraction model from labeled documents",
+          "message": "從有標籤的文件訓練自訂擷取模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.desc": {
+          "source": "Train a custom extraction model from labeled documents.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "從有標籤的文件訓練自訂擷取模型。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "文件模型描述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "文件模型描述。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.display_name": {
+          "source": "Build Mode",
+          "message": "建造模式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.short_desc": {
+          "source": "Custom document model build mode",
+          "message": "自訂文件模型建置模式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.desc": {
+          "source": "Custom document model build mode.",
+          "message": "自訂文件模型建置模式。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOnRlbXBsYXRl.display_name": {
+          "source": "Template",
+          "message": "範本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YnVpbGRNb2Rl.allowed-value.c3RyaW5nOm5ldXJhbA.display_name": {
+          "source": "Neural",
+          "message": "神經"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.display_name": {
+          "source": "Azure Blob Source",
+          "message": "Azure Blob 來源"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.short_desc": {
+          "source": "Azure Blob Storage content",
+          "message": "Azure Blob Storage 內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.desc": {
+          "source": "Azure Blob Storage content.",
+          "message": "Azure Blob Storage 內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "容器網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage 容器 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage 容器 URL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "前綴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.short_desc": {
+          "source": "Blob name prefix",
+          "message": "blob 名稱前綴"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iU291cmNl.field.cHJlZml4.desc": {
+          "source": "Blob name prefix.",
+          "message": "blob 名稱前綴。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.display_name": {
+          "source": "Azure Blob File List Source",
+          "message": "Azure Blob Storage 檔案清單來源"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.short_desc": {
+          "source": "File list in Azure Blob Storage",
+          "message": "Azure Blob Storage 中的檔案清單"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.desc": {
+          "source": "File list in Azure Blob Storage.",
+          "message": "Azure Blob Storage 中的檔案清單。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.display_name": {
+          "source": "Container URL",
+          "message": "容器網址"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.short_desc": {
+          "source": "Azure Blob Storage container URL",
+          "message": "Azure Blob Storage 容器 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.Y29udGFpbmVyVXJs.desc": {
+          "source": "Azure Blob Storage container URL.",
+          "message": "Azure Blob Storage 容器 URL。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.display_name": {
+          "source": "File List",
+          "message": "檔案列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.short_desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents",
+          "message": "容器內指定一部分文件的 JSONL 檔案路徑"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXp1cmVCbG9iRmlsZUxpc3RTb3VyY2U.field.ZmlsZUxpc3Q.desc": {
+          "source": "Path to a JSONL file within the container specifying a subset of documents.",
+          "message": "容器內指定一部分文件的 JSONL 檔案路徑。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "與文件模型相關的鍵值標籤屬性列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "與文件模型相關的鍵值標籤屬性列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.display_name": {
+          "source": "Max Training Hours",
+          "message": "最大訓練時數"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.short_desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training",
+          "message": "可用於模型訓練的最大 V100 等效 GPU 小時數"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.bWF4VHJhaW5pbmdIb3Vycw.desc": {
+          "source": "Max number of V100-equivalent GPU hours to use for model training.  Default=0.5.",
+          "message": "用於模型訓練的最大 V100 等效 GPU 小時數。預設值=0.5。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.display_name": {
+          "source": "Allow Overwrite",
+          "message": "允許覆寫"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.short_desc": {
+          "source": "Allow overwriting an existing model with the same name",
+          "message": "允許覆蓋同名的現有模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YWxsb3dPdmVyd3JpdGU.desc": {
+          "source": "Allow overwriting an existing model with the same name.",
+          "message": "允許覆蓋同名的現有模型。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YnVpbGQtbW9kZWw.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.display_name": {
+          "source": "Compose Model",
+          "message": "組合模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.short_desc": {
+          "source": "Combine trained models into one extraction workflow",
+          "message": "將訓練好的模型合併成一個萃取工作流程"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.desc": {
+          "source": "Combine trained models into one extraction workflow.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "將訓練好的模型合併成一個擷取工作流程。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.bW9kZWxJZA.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Document model description",
+          "message": "文件模型描述"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Document model description.",
+          "message": "文件模型描述。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.short_desc": {
+          "source": "Custom classifier to split and classify the input file",
+          "message": "自訂分類器，用來拆分並分類輸入檔案"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.Y2xhc3NpZmllcklk.desc": {
+          "source": "Custom classifier to split and classify the input file.",
+          "message": "自訂分類器來拆分和分類輸入檔案。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "文件分割"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.short_desc": {
+          "source": "File splitting behavior",
+          "message": "檔案分割行為"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.desc": {
+          "source": "File splitting behavior.",
+          "message": "檔案分割行為。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.display_name": {
+          "source": "Doc Types",
+          "message": "文件類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.short_desc": {
+          "source": "Dictionary mapping supported 'docTypes' to the corresponding document models",
+          "message": "字典映射支援「docTypes」與對應的文件模型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.ZG9jVHlwZXM.desc": {
+          "source": "Dictionary mapping supported `docTypes` to the corresponding document models.",
+          "message": "字典映射支援 `docTypes` 對應的文件模型。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "標籤"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.short_desc": {
+          "source": "List of key-value tag attributes associated with the document model",
+          "message": "與文件模型相關的鍵值標籤屬性列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.dGFncw.desc": {
+          "source": "List of key-value tag attributes associated with the document model.",
+          "message": "與文件模型相關的鍵值標籤屬性列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Y29tcG9zZS1tb2RlbA.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.display_name": {
+          "source": "Get Resource Information",
+          "message": "獲取資源資訊"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.short_desc": {
+          "source": "Read resource quotas and custom model usage",
+          "message": "讀取資源配額與自訂模型使用情況"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.desc": {
+          "source": "Read resource quotas and custom model usage.",
+          "message": "閱讀資源配額和自訂模型使用。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LXJlc291cmNlLWluZm8.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.display_name": {
+          "source": "List Operations",
+          "message": "列出作業"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.short_desc": {
+          "source": "List recent model and classifier management operations",
+          "message": "近期模型與分類器管理作業列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.desc": {
+          "source": "List recent model and classifier management operations. Returns one page; `nextLink` identifies the next page when present.",
+          "message": "列出近期的模型與分類器管理操作。回傳一頁; `nextLink` 在出現時識別下一頁。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bGlzdC1vcGVyYXRpb25z.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.display_name": {
+          "source": "Get Operation",
+          "message": "取得作業"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.short_desc": {
+          "source": "Read build or copy progress and its typed result",
+          "message": "讀取訓練或複製進度及具型別的結果"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.desc": {
+          "source": "Read build or copy progress and its typed result.",
+          "message": "讀取訓練或複製進度及具型別的結果。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.display_name": {
+          "source": "Operation ID",
+          "message": "操作程式碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.short_desc": {
+          "source": "Operation ID",
+          "message": "操作程式碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.b3BlcmF0aW9uX2lk.desc": {
+          "source": "Operation ID",
+          "message": "操作程式碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.display_name": {
+          "source": "X Ms Client Request ID",
+          "message": "X Ms 客戶端請求 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.short_desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.Z2V0LW9wZXJhdGlvbg.option.eC1tcy1jbGllbnQtcmVxdWVzdC1pZA.desc": {
+          "source": "An opaque, globally-unique, client-generated string identifier for the request.",
+          "message": "一個不透明、全域唯一、由客戶端產生的請求字串識別碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.display_name": {
+          "source": "Start Analysis from Bytes",
+          "message": "從位元組開始分析"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the analysis job location",
+          "message": "提交文件位元組並回傳分析工作地點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the analysis job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "提交文件位元組並回傳分析工作地點。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Unique document model name",
+          "message": "唯一文件模型名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bW9kZWxfaWQ.desc": {
+          "source": "Unique document model name.",
+          "message": "唯一的文件模型名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "文件位元組"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "REST 請求主體引數"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "原始文件位元組，上傳時未使用 base64 編碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "頁面"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "分析以 1 為基礎的頁碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "以 1 為基礎的頁碼分析。例如 \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "文字辨識與文件分析的地點提示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "文字辨識與文件分析的地點提示。價值可僅包含內容\n語言代碼（例如 \"en\"、 \"fr\"）或 BCP 47 語言標籤（例如 \"en-US\"）。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "字串索引類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "計算字串偏移量與長度的方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "用於計算字串偏移量與長度的方法。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "文本元素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode 代碼點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 編碼單元"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "分析功能"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "可選分析功能列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "可選分析功能列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解析度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "語言"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "條碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "公式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "鍵值對"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "字型樣式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "需提取的額外欄位列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "需擷取的額外欄位列表。例如 \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "內容格式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果的格式 頂層內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果的格式，頂層內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "分析過程中產生的額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析過程中還要產生額外輸出。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "可搜尋的 PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtYW5hbHlzaXMtc3RyZWFt.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "圖片"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.display_name": {
+          "source": "Start Classification from Bytes",
+          "message": "從位元組開始分類"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.short_desc": {
+          "source": "Submit document bytes and return the classification job location",
+          "message": "提交文件位元組並回傳分類工作地點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.desc": {
+          "source": "Submit document bytes and return the classification job location.\n\nReturns HTTP status and response headers. Save `Operation-Location` and use the corresponding result or operation action to check completion. **Submission does not wait for completion.**",
+          "message": "提交文件位元組並回傳分類工作地點。\n\n回傳 HTTP 狀態與回應標頭。儲存 `Operation-Location` 並使用對應的結果或操作動作檢查完成。**提交不會等待完成。**"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.display_name": {
+          "source": "Classifier ID",
+          "message": "分類器ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.short_desc": {
+          "source": "Unique document classifier name",
+          "message": "唯一文件分類器名稱"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Y2xhc3NpZmllcl9pZA.desc": {
+          "source": "Unique document classifier name.",
+          "message": "唯一的文件分類器名稱。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.display_name": {
+          "source": "Document Bytes",
+          "message": "文件位元組"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.short_desc": {
+          "source": "REST request body argument",
+          "message": "REST 請求主體引數"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.Ym9keQ.desc": {
+          "source": "Original document bytes, uploaded without base64 encoding.",
+          "message": "原始文件位元組，上傳時未使用 base64 編碼。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "The API version to use for this operation",
+          "message": "用於此操作的 API 版本"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "The API version to use for this operation.",
+          "message": "用於此操作的 API 版本。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.YXBpX3ZlcnNpb24.allowed-value.c3RyaW5nOjIwMjQtMTEtMzA.display_name": {
+          "source": "2024-11-30",
+          "message": "2024-11-30"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "字串索引類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "計算字串偏移量與長度的方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "用於計算字串偏移量與長度的方法。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "文本元素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode 代碼點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 編碼單元"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.display_name": {
+          "source": "Document Splitting",
+          "message": "文件分割"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.short_desc": {
+          "source": "Document splitting mode",
+          "message": "文件分割模式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.desc": {
+          "source": "Document splitting mode.",
+          "message": "文件分割模式。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Automatic",
+          "message": "自動"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.c3BsaXQ.allowed-value.c3RyaW5nOnBlclBhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "頁面"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "分析以 1 為基礎的頁碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.c3RhcnQtY2xhc3NpZmljYXRpb24tc3RyZWFt.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "以 1 為基礎的頁碼分析。例如 \"1-3,5,7-9\""
+        },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
           "source": "Analyze Document",
           "message": "分析文件"
@@ -348,8 +2824,8 @@
           "message": "對文件執行 Document Intelligence 模型 (非同步)"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
-          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
-          "message": "將文件提交至 Document Intelligence 模型並等待分析完成。生命週期在內部由 @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" 透過 `AsyncJobPoller` 驅動：POST 提交 → 輪詢 `Operation-Location` URL → 傳回已剖析的 `analyzeResult`。\n\n透過以下方式之一傳遞文件：\n- `document_url` — 公用 URL (Azure 會擷取文件)\n- `document_bytes` — 原始位元組 (自動以 Base64 編碼)\n- `document_path` — 本機檔案路徑 (讀取並以 Base64 編碼)"
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete. Returns extracted text, fields, tables, and structure for use in subsequent workflow steps.\n\n**Document source** — supply exactly one:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "將文件提交至文件智慧模型，並等待分析完成。回傳擷取的文字、欄位、表格及結構，供後續工作流程使用。\n\n**文件來源** — 只提供一份：\n- `document_url` — 公開網址（Azure 取得文件）\n- `document_bytes` — 原始位元組（自動以base64編碼）\n- `document_path` — 本地檔案路徑（讀取並以 base64 編碼）"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
           "source": "Model ID",
@@ -360,12 +2836,12 @@
           "message": "Document Intelligence 模型識別碼"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
-          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
-          "message": "Document Intelligence 模型識別碼 — 預建或自訂。下拉式清單列出記載的預建模型；在 [Azure 入口網站](https://portal.azure.com) 中定型的自訂模型 GUID 可以自訂格式文字輸入 (`allowed_values_creatable: True`)。"
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text. Legacy model choices remain identifiable for saved workflows; `prebuilt-document` and `prebuilt-businessCard` are retired in API v4. Use `prebuilt-layout` with `keyValuePairs` for general document extraction.",
+          "message": "文件智慧模型識別碼 — 預建或自訂。下拉選單列出已文件化的預建模型;在 [Azure portal](https://portal.azure.com) 訓練的自訂模型 GUID，可以自由形式文字輸入。舊有模型選擇仍可被識別以儲存的工作流程; `prebuilt-document` 與 `prebuilt-businessCard` 在 API v4 中已退休。一般文件擷取時可使用 `prebuilt-layout` with `keyValuePairs` 。"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
-          "source": "Document (general layout)",
-          "message": "文件 (一般版面配置)"
+          "source": "General Document (Retired in v4)",
+          "message": "一般文件（在第四版中退役）"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
           "source": "Layout (tables + lines)",
@@ -384,8 +2860,8 @@
           "message": "身分證件"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
-          "source": "Business Card",
-          "message": "名片"
+          "source": "Business Card (Retired in v4)",
+          "message": "名片（在第四版退休）"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
           "source": "US W-2 Tax Form",
@@ -402,6 +2878,10 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
           "source": "US Health Insurance Card",
           "message": "美國健康保險卡"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlYWQ.display_name": {
+          "source": "Read (Text and Searchable PDF)",
+          "message": "閱讀（文字及可搜尋PDF）"
         },
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
           "source": "Document URL",
@@ -474,6 +2954,146 @@
         "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
           "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
           "message": "最長總等待時間。預設為 `10m`。超過時，此動作會引發 `AZURE-DOCUMENT-INTELLIGENCE-ERROR`。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "頁面"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.short_desc": {
+          "source": "1-based page numbers to analyze",
+          "message": "分析以 1 為基礎的頁碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cGFnZXM.desc": {
+          "source": "1-based page numbers to analyze.  Ex. \"1-3,5,7-9\"",
+          "message": "以 1 為基礎的頁碼分析。例如 \"1-3,5,7-9\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.short_desc": {
+          "source": "Locale hint for text recognition and document analysis",
+          "message": "文字辨識與文件分析的地點提示"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bG9jYWxl.desc": {
+          "source": "Locale hint for text recognition and document analysis.  Value may contain only\nthe language code (ex. \"en\", \"fr\") or BCP 47 language tag (ex. \"en-US\").",
+          "message": "文字辨識與文件分析的地點提示。價值可僅包含內容\n語言代碼（例如 \"en\"、 \"fr\"）或 BCP 47 語言標籤（例如 \"en-US\"）。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.display_name": {
+          "source": "String Index Type",
+          "message": "字串索引類型"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.short_desc": {
+          "source": "Method used to compute string offset and length",
+          "message": "計算字串偏移量與長度的方法"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.desc": {
+          "source": "Method used to compute string offset and length.",
+          "message": "用於計算字串偏移量與長度的方法。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnRleHRFbGVtZW50cw.display_name": {
+          "source": "Text Elements",
+          "message": "文本元素"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnVuaWNvZGVDb2RlUG9pbnQ.display_name": {
+          "source": "Unicode Code Points",
+          "message": "Unicode 代碼點"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.c3RyaW5nSW5kZXhUeXBl.allowed-value.c3RyaW5nOnV0ZjE2Q29kZVVuaXQ.display_name": {
+          "source": "UTF-16 Code Units",
+          "message": "UTF-16 編碼單元"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.display_name": {
+          "source": "Analysis Features",
+          "message": "分析功能"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.short_desc": {
+          "source": "List of optional analysis features",
+          "message": "可選分析功能列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.desc": {
+          "source": "List of optional analysis features.",
+          "message": "可選分析功能列表。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOm9jckhpZ2hSZXNvbHV0aW9u.display_name": {
+          "source": "High Resolution OCR",
+          "message": "高解析度OCR"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmxhbmd1YWdlcw.display_name": {
+          "source": "Languages",
+          "message": "語言"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmJhcmNvZGVz.display_name": {
+          "source": "Barcodes",
+          "message": "條碼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmZvcm11bGFz.display_name": {
+          "source": "Formulas",
+          "message": "公式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOmtleVZhbHVlUGFpcnM.display_name": {
+          "source": "Key/Value Pairs",
+          "message": "鍵值對"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnN0eWxlRm9udA.display_name": {
+          "source": "Font Styles",
+          "message": "字型樣式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZXM.allowed-value.c3RyaW5nOnF1ZXJ5RmllbGRz.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.display_name": {
+          "source": "Query Fields",
+          "message": "查詢欄位"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.short_desc": {
+          "source": "List of additional fields to extract",
+          "message": "需提取的額外欄位列表"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcnlGaWVsZHM.desc": {
+          "source": "List of additional fields to extract.  Ex. \"NumberOfGuests,StoreNumber\"",
+          "message": "需擷取的額外欄位列表。例如 \"NumberOfGuests,StoreNumber\""
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.display_name": {
+          "source": "Content Format",
+          "message": "內容格式"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.short_desc": {
+          "source": "Format of the analyze result top-level content",
+          "message": "分析結果的格式 頂層內容"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.desc": {
+          "source": "Format of the analyze result top-level content.",
+          "message": "分析結果的格式，頂層內容。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0Q29udGVudEZvcm1hdA.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.display_name": {
+          "source": "Additional Outputs",
+          "message": "額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.short_desc": {
+          "source": "Additional outputs to generate during analysis",
+          "message": "分析過程中產生的額外輸出"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.desc": {
+          "source": "Additional outputs to generate during analysis.",
+          "message": "分析過程中還要產生額外輸出。"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "Searchable PDF",
+          "message": "可搜尋的 PDF"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.b3V0cHV0.allowed-value.c3RyaW5nOmZpZ3VyZXM.display_name": {
+          "source": "Figures",
+          "message": "圖片"
         }
       }
     }

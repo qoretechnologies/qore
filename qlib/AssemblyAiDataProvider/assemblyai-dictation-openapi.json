@@ -1,0 +1,417 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AssemblyAI Dictation API",
+    "description": "Short-form dictation that returns send-ready cleaned-up text together with the verbatim transcript, in a single HTTP call.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://dictation.assemblyai.com",
+      "description": "Global (default — routes to nearest region)"
+    },
+    {
+      "url": "https://dictation.us.assemblyai.com",
+      "description": "US data residency (us-east-1, us-east-2, us-west-1, us-west-2)"
+    },
+    {
+      "url": "https://dictation.eu.assemblyai.com",
+      "description": "EU data residency (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3)"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/v1/transcribe/live": {
+      "post": {
+        "summary": "Transcribe dictated audio",
+        "description": "Send a spoken utterance and receive text ready to send, together with\nthe verbatim transcript. Audio must be at most 120 seconds.\n\nCleanup runs by default. With no configuration, filler comes out,\nself-corrections resolve to what the speaker landed on, and punctuation\nand capitalization are applied. Set `llm_instruction` to ask for a\ndifferent shape instead, such as a bulleted task list or a clinical\nnote. The verbatim transcript is always returned in `text` alongside\nthe cleaned-up text in `llm_response`.\n\nThe body is `multipart/form-data` with two parts, and the `config` part\nmust arrive **before** the `audio` part. The server begins transcribing\nthe audio as it arrives and cannot start without the config, so a body\nwhose audio comes first, or that has no config part at all, is rejected\nwith `400`. Send `{}` when you have no options to set.\n\nBecause the server reads the body as it arrives, you can open the\nrequest while the user is still speaking and upload the audio as it is\ncaptured. What the user then waits for after they stop speaking is the\nlast stretch of audio rather than the whole clip. See\n[Uploading while recording](/dictation/uploading-while-recording).\n\nThis endpoint is also served at `/v1/transcribe/stream`, the path it\nshipped under. There is no unversioned alias.\n\n<Note>Dictation is a separate service from Sync, Pre-recorded, and\nStreaming STT, with its own hostname (`dictation.assemblyai.com`) and\nits own request shape. The Python SDK wraps it as `DictationTranscriber`\nin every other language, call it over HTTP. See the\n[Dictation quickstart](/dictation) for full guidance.</Note>\n",
+        "operationId": "transcribeDictation",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "config",
+                  "audio"
+                ],
+                "properties": {
+                  "config": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Transcription and rewrite configuration. Must be the first part, ahead of `audio`. Send an empty object (`{}`) to transcribe with defaults, including the default rewrite. Only the fields below are accepted. An unknown field is rejected with a `400`.",
+                    "properties": {
+                      "sample_rate": {
+                        "type": "integer",
+                        "description": "Source sample rate in Hz, for example `16000`. Required when `audio` is `audio/pcm`. Ignored for WAV, which carries its sample rate in the file header."
+                      },
+                      "channels": {
+                        "type": "integer",
+                        "description": "Number of audio channels. Required when `audio` is `audio/pcm`. Ignored for WAV."
+                      },
+                      "language_codes": {
+                        "type": "array",
+                        "default": [
+                          "en"
+                        ],
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "en",
+                            "es",
+                            "de",
+                            "fr",
+                            "it",
+                            "pt",
+                            "tr",
+                            "nl",
+                            "sv",
+                            "no",
+                            "da",
+                            "fi",
+                            "hi",
+                            "vi",
+                            "ar",
+                            "he",
+                            "ja",
+                            "ur",
+                            "zh",
+                            "ko",
+                            "ca",
+                            "gl",
+                            "ru",
+                            "ro",
+                            "et",
+                            "fa",
+                            "yue",
+                            "af",
+                            "mr",
+                            "zu",
+                            "xh",
+                            "nn"
+                          ]
+                        },
+                        "description": "Language or languages of the audio, as ISO language codes. A code outside this set is rejected with a `400`. Defaults to `[\"en\"]`."
+                      },
+                      "stt_prompt": {
+                        "type": "string",
+                        "maxLength": 6000,
+                        "description": "Context for the transcription: a description of what the audio is about, such as \"A doctor dictating a patient visit note.\" It describes the situation rather than instructing the model, and is prepended to the base transcription prompt, which always applies. Also accepted as `prompt`; send one or the other, or the request is rejected with `400`."
+                      },
+                      "keyterms_prompt": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Terms to bias transcription toward, such as names or jargon. Maximum 100 terms and 8000 characters in total. The legacy names `keyterms` and `word_boost` are also accepted; send only one of the three, or the request is rejected with `400`."
+                      },
+                      "llm_instruction": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "nullable": true,
+                        "description": "Plain-English description of the shape you want the text in, which replaces the default cleanup task. Describe only the transformation: rules about output format, refusing to answer the text, and handling clean input are enforced automatically. Omitting the field, or setting it to `null`, keeps the default cleanup task, which removes filler, resolves self-corrections, and applies punctuation and capitalization."
+                      }
+                    }
+                  },
+                  "audio": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Audio bytes, at most 120 seconds. Set the part's Content-Type to `audio/wav` for WAV or `audio/pcm` for raw 16-bit PCM. Compressed formats (MP3, M4A, FLAC, OGG, WebM) are rejected with `415`. The part may be uploaded in chunks as the audio is captured."
+                  }
+                }
+              },
+              "encoding": {
+                "config": {
+                  "contentType": "application/json"
+                },
+                "audio": {
+                  "contentType": "audio/wav, audio/pcm"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "python",
+            "label": "Python SDK",
+            "source": "import assemblyai as aai\n\naai.settings.api_key = \"<YOUR_API_KEY>\"\n\nresult = aai.DictationTranscriber().transcribe_live(\"clip.wav\")\n\nprint(result.text)          # verbatim transcript\nprint(result.llm_response)  # default cleanup rewrite\nprint(result.final_text)    # the rewrite, falling back to the transcript\n"
+          },
+          {
+            "lang": "bash",
+            "label": "cURL",
+            "source": "curl -X POST https://dictation.assemblyai.com/v1/transcribe/live \\\n  -H 'Authorization: <YOUR_API_KEY>' \\\n  -F 'config={};type=application/json' \\\n  -F 'audio=@clip.wav;type=audio/wav'\n"
+          },
+          {
+            "lang": "python",
+            "label": "Python",
+            "source": "import requests\n\nwith open(\"clip.wav\", \"rb\") as f:\n    audio = f.read()\n\nresponse = requests.post(\n    \"https://dictation.assemblyai.com/v1/transcribe/live\",\n    headers={\"Authorization\": \"<YOUR_API_KEY>\"},\n    files={\n        # `config` first, and always present. `{}` means \"no settings\".\n        \"config\": (None, \"{}\", \"application/json\"),\n        \"audio\": (\"clip.wav\", audio, \"audio/wav\"),\n    },\n    timeout=90,\n)\nresponse.raise_for_status()\nresult = response.json()\n\nprint(result[\"text\"])          # verbatim transcript\nprint(result[\"llm_response\"])  # default cleanup rewrite\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript",
+            "source": "import { readFileSync } from \"fs\";\n\nconst audio = readFileSync(\"clip.wav\");\nconst form = new FormData();\n// `config` first, and always present. `{}` means \"no settings\".\nform.append(\"config\", new Blob([\"{}\"], { type: \"application/json\" }));\nform.append(\"audio\", new Blob([audio], { type: \"audio/wav\" }), \"clip.wav\");\n\nconst response = await fetch(\n  \"https://dictation.assemblyai.com/v1/transcribe/live\",\n  {\n    method: \"POST\",\n    headers: { Authorization: \"<YOUR_API_KEY>\" },\n    body: form,\n  }\n);\n\nif (!response.ok) {\n  const error = await response.json();\n  throw new Error(error.error || error.detail);\n}\n\nconst result = await response.json();\nconsole.log(result.text);         // verbatim transcript\nconsole.log(result.llm_response); // default cleanup rewrite\n"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transcription completed. The rewrite is best-effort: a failed rewrite still returns `200` with the transcription, `llm_response` set to `null`, and `llm_error` set. Fall back to `text` in that case, and never treat a non-`null` `llm_error` as a failed request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DictationResponse"
+                },
+                "example": {
+                  "text": "Um, patient presents with, uh, a persistent cough for about two weeks.",
+                  "words": [
+                    {
+                      "text": "Um",
+                      "confidence": 0.82
+                    },
+                    {
+                      "text": "patient",
+                      "confidence": 0.97
+                    },
+                    {
+                      "text": "presents",
+                      "confidence": 0.96
+                    }
+                  ],
+                  "confidence": 0.94,
+                  "llm_response": "Patient presents with a persistent cough for about two weeks.",
+                  "llm_error": null,
+                  "audio_duration_ms": 5120,
+                  "session_id": "eb92c4ff-4bbb-429f-9b99-7279d7fe738f",
+                  "request_time_ms": 812.4,
+                  "sync_time_ms": 430.1,
+                  "auth_time_ms": 24.6
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A malformed request body uses the `error`/`error_code` shape: a missing or empty `audio` part, a missing `config` part or one sent after `audio`, or `config` that is not valid JSON. A well-formed `config` that fails validation uses the `status`/`title`/`detail` shape instead.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DetailErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing `Authorization` header, or an invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                },
+                "example": {
+                  "status": 401,
+                  "title": "Unauthorized",
+                  "detail": "Invalid API key"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The audio exceeded the size cap. On a chunked upload this can arrive mid-request rather than at the end.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The `audio` part is not `audio/wav` or `audio/pcm`. Compressed formats cannot be decoded incrementally; the `detail` points to the buffered `/v1/transcribe` endpoint for those.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. Back off and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Transcription upstream unavailable. Retry once, then surface an error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Server at capacity. Back off and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Transcription upstream timed out. Retry once, then surface an error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DictationResponse": {
+        "type": "object",
+        "required": [
+          "text",
+          "words",
+          "confidence",
+          "audio_duration_ms",
+          "session_id"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The verbatim transcript. Never altered by the LLM."
+          },
+          "words": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Word"
+            },
+            "description": "Per-word transcript objects."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float",
+            "description": "Overall transcription confidence (0–1)."
+          },
+          "llm_response": {
+            "type": "string",
+            "nullable": true,
+            "description": "The rewritten text, or `null` when the rewrite failed. Fall back to `text` when it is `null`."
+          },
+          "llm_error": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "timeout",
+              "error"
+            ],
+            "description": "Set when the rewrite failed. `timeout` means the rewrite passed its 5-second internal deadline. `null` on success."
+          },
+          "audio_duration_ms": {
+            "type": "number",
+            "description": "Duration of the submitted audio in milliseconds."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Server-generated request identifier. Include it when reporting problems."
+          },
+          "request_time_ms": {
+            "type": "number",
+            "format": "float",
+            "description": "Total server-side processing time in milliseconds."
+          },
+          "auth_time_ms": {
+            "type": "number",
+            "format": "float",
+            "description": "Time in milliseconds spent authenticating the request, included in `request_time_ms`."
+          },
+          "sync_time_ms": {
+            "type": "number",
+            "format": "float",
+            "description": "The transcription portion of `request_time_ms`, in milliseconds."
+          }
+        }
+      },
+      "Word": {
+        "type": "object",
+        "required": [
+          "text",
+          "confidence"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error description."
+          },
+          "error_code": {
+            "type": "string",
+            "description": "Machine-readable error code. This shape is only produced by the errors Dictation raises while parsing the request, so `bad_request` is the value seen in practice."
+          }
+        }
+      },
+      "DetailErrorResponse": {
+        "type": "object",
+        "description": "The shape used by most errors, including auth failures (`401`), config validation failures (`400`), and unsupported audio formats (`415`).",
+        "properties": {
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string",
+            "description": "Human-readable error description."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Your AssemblyAI API key, sent as the raw key with no `Bearer` prefix. A missing header or an invalid key returns `401`."
+      }
+    }
+  }
+}

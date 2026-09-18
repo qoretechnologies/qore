@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires RestSchemaActions
+%requires json
+
+if (ARGV.size() != 1) {
+    stderr.printf("Usage: %s <documents.json>\n", get_script_name());
+    return 2;
+}
+
+# Called by the checked Swagger normalizer; all operation selection and reachability use shared code.
+hash<auto> documents = parse_json(File::readTextFile(ARGV[0]));
+foreach string name in (keys documents) {
+    if (!documents{name}.openapi) { continue; }
+    list<hash<SchemaOperationInfo>> operations = ();
+    foreach hash<auto> path in (documents{name}.paths.pairIterator()) {
+        foreach string method in (RestSchemaPruner::methodsOf(path.value)) {
+            operations += <SchemaOperationInfo>{"path": path.key, "method": method};
+        }
+    }
+    hash<auto> provenance = documents{name}{"x-qore-source", "x-qore-normalized"};
+    documents{name} = RestSchemaPruner::prune(documents{name}, operations).schema + provenance;
+}
+print(make_json(documents));

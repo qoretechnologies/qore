@@ -1,0 +1,761 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AssemblyAI Sync STT API",
+    "description": "Synchronous short-form audio transcription using Universal-3.5 Pro.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://sync.assemblyai.com",
+      "description": "Global (default — routes to nearest region)"
+    },
+    {
+      "url": "https://sync.us.assemblyai.com",
+      "description": "US data residency (us-east-1, us-east-2, us-west-1, us-west-2)"
+    },
+    {
+      "url": "https://sync.eu.assemblyai.com",
+      "description": "EU data residency (eu-central-1, eu-north-1, eu-south-1, eu-south-2, eu-west-1, eu-west-3)"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/transcribe": {
+      "post": {
+        "summary": "Transcribe a short audio file",
+        "description": "Submit an audio file and receive the transcript synchronously in a single\nrequest/response. No polling required. Audio must be between 80 ms and 120 s.\n\n<Note>To use a data residency endpoint, replace `sync.assemblyai.com` with\n`sync.us.assemblyai.com` (US) or `sync.eu.assemblyai.com` (EU). See\n[Cloud Endpoints and Data Residency](/sync-stt/endpoints-and-data-zones) for more information.</Note>\n",
+        "operationId": "transcribeSync",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-AAI-Model",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "universal-3-5-pro"
+              ]
+            },
+            "description": "Model identifier used for request routing. The canonical value is `universal-3-5-pro`; `u3-sync-pro` and `u3-pro` are accepted as legacy aliases."
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "API key alternative for clients that cannot set the `Authorization` header. The header wins when both are present."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "audio"
+                ],
+                "properties": {
+                  "audio": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Raw audio bytes. Set the part's Content-Type to `audio/wav` for WAV files or `audio/pcm` for raw S16LE little-endian PCM."
+                  },
+                  "config": {
+                    "type": "object",
+                    "description": "Optional transcription configuration.",
+                    "properties": {
+                      "sample_rate": {
+                        "type": "integer",
+                        "enum": [
+                          8000,
+                          16000,
+                          22050,
+                          24000,
+                          32000,
+                          44100,
+                          48000
+                        ],
+                        "description": "Source sample rate in Hz. Required when `audio` is `audio/pcm`. WAV reads the rate from its header."
+                      },
+                      "channels": {
+                        "type": "integer",
+                        "enum": [
+                          1,
+                          2
+                        ],
+                        "description": "Number of audio channels. Required when `audio` is `audio/pcm`. Stereo is down-mixed to mono internally."
+                      },
+                      "prompt": {
+                        "type": "string",
+                        "maxLength": 6000,
+                        "description": "Custom transcription instruction prepended to the model's system prompt. When omitted, a default prompt is applied."
+                      },
+                      "keyterms_prompt": {
+                        "type": "array",
+                        "maxItems": 100,
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Keyterms that bias the decoder toward specific tokens. Maximum 100 terms and 8000 characters total across all terms. Also accepted as `keyterms` or `word_boost` — provide only one of the three."
+                      },
+                      "conversation_context": {
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "maxItems": 500,
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ],
+                        "description": "Prior turns from the same conversation, in chronological order (oldest first, most recent last). Supplies the preceding dialogue as context so the model transcribes the current clip with greater continuity across a multi-turn conversation (for example, a human speaking with a voice agent). Accepts either a list of turns (for multi-turn conversations) or a single string (treated as one turn). Maximum 500 turns and 16000 characters total — context over either cap is trimmed rather than rejected, oldest turns dropped first, as they are when the prompt exceeds the model's context window."
+                      },
+                      "language_code": {
+                        "default": "en",
+                        "description": "Language of the audio as an ISO 639-1 code, or a list of codes for multilingual audio. Steers the default transcription prompt toward the named language(s). Ignored when a custom `prompt` is set. Defaults to `en`.",
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "en",
+                              "es",
+                              "de",
+                              "fr",
+                              "it",
+                              "pt",
+                              "tr",
+                              "nl",
+                              "sv",
+                              "no",
+                              "da",
+                              "fi",
+                              "hi",
+                              "vi",
+                              "ar",
+                              "he",
+                              "ja",
+                              "ur",
+                              "zh"
+                            ]
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "en",
+                                "es",
+                                "de",
+                                "fr",
+                                "it",
+                                "pt",
+                                "tr",
+                                "nl",
+                                "sv",
+                                "no",
+                                "da",
+                                "fi",
+                                "hi",
+                                "vi",
+                                "ar",
+                                "he",
+                                "ja",
+                                "ur",
+                                "zh"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "timestamps": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether to compute per-word `start`/`end` timestamps. When `false` (default), no timestamps are computed and `start`/`end` are omitted from the `words` objects. When `true`, exact timings are computed for each word, at an additional latency cost. Words that can't be aligned have `start`/`end` omitted rather than estimated. Accuracy is best for English audio."
+                      }
+                    }
+                  }
+                }
+              },
+              "encoding": {
+                "audio": {
+                  "contentType": "audio/wav, audio/pcm"
+                },
+                "config": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "python",
+            "label": "Python SDK",
+            "source": "import os\n\nfrom assemblyai.sync.v1 import SyncTranscriber\n\ntranscriber = SyncTranscriber(api_key=os.environ[\"ASSEMBLYAI_API_KEY\"])\n\ntranscriber.warm()  # open the connection ahead of the request\nresult = transcriber.transcribe(\"./sample.wav\")\nprint(result.text)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript SDK",
+            "source": "import { AssemblyAI } from \"assemblyai\";\n\nconst client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });\n\nconst result = await client.sync.transcribe(\"./sample.wav\");\nconsole.log(result.text);\n"
+          },
+          {
+            "lang": "bash",
+            "label": "cURL",
+            "source": "curl -X POST https://sync.assemblyai.com/transcribe \\\n  -H 'Authorization: <YOUR_API_KEY>' \\\n  -H 'X-AAI-Model: universal-3-5-pro' \\\n  -F 'audio=@sample.wav;type=audio/wav'\n"
+          },
+          {
+            "lang": "python",
+            "label": "Python",
+            "source": "import requests\n\nwith open(\"sample.wav\", \"rb\") as f:\n    audio = f.read()\n\nresponse = requests.post(\n    \"https://sync.assemblyai.com/transcribe\",\n    headers={\n        \"Authorization\": \"<YOUR_API_KEY>\",\n        \"X-AAI-Model\": \"universal-3-5-pro\",\n    },\n    files={\"audio\": (\"sample.wav\", audio, \"audio/wav\")},\n    timeout=60,\n)\nresponse.raise_for_status()\nprint(response.json()[\"text\"])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript",
+            "source": "import { readFileSync } from \"fs\";\n\nconst audio = readFileSync(\"sample.wav\");\nconst form = new FormData();\nform.append(\"audio\", new Blob([audio], { type: \"audio/wav\" }), \"sample.wav\");\n\nconst response = await fetch(\"https://sync.assemblyai.com/transcribe\", {\n  method: \"POST\",\n  headers: {\n    Authorization: \"<YOUR_API_KEY>\",\n    \"X-AAI-Model\": \"universal-3-5-pro\",\n  },\n  body: form,\n});\n\nconst result = await response.json();\nconsole.log(result.text);\n"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transcription completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTranscriptResponse"
+                },
+                "example": {
+                  "text": "Hi, I'm calling about my Best Buy order...",
+                  "words": [
+                    {
+                      "text": "Hi",
+                      "confidence": 0.91
+                    },
+                    {
+                      "text": "I'm",
+                      "confidence": 0.88
+                    }
+                  ],
+                  "confidence": 0.87,
+                  "audio_duration_ms": 101567,
+                  "session_id": "eb92c4ff-4bbb-429f-9b99-7279d7fe738f",
+                  "request_time_ms": 243.7
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — audio too short, malformed, or invalid config.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Audio exceeds the 120 s duration or 40 MB size limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type or audio format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. Retry after `Retry-After` seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable — model cold-starting or concurrency cap reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Request exceeded the 30 s per-request deadline.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal model error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/transcribe/live": {
+      "post": {
+        "summary": "Transcribe live audio",
+        "description": "Upload audio while it is still being recorded and receive one finished\ntranscript when the audio ends. The request starts before the audio\nexists and the body is uploaded with `Transfer-Encoding: chunked`, so\nthe upload and every speech segment but the last are transcribed while\nthe caller is still recording. Audio must be between 80 ms and 120 s.\n\nThe body is `multipart/form-data` with two differences from\n[`/transcribe`](/api-reference/sync-api/transcribe): the `config` part\nmust be sent **before** the `audio` part (the server decodes audio as it\narrives and needs `sample_rate`/`channels` first, so it rejects a body\nwhose audio no config part came before — send `{}` when you have no\noptions), and the body is streamed rather than buffered. The default\nrequest budget is 180 seconds, covering the recording as well as the\ntranscription. This endpoint is also served at `/v1/transcribe/stream`,\nthe path it shipped under.\n\nThis endpoint is for short audio only: the maximum audio length is 120\nseconds, and it returns one finished transcript when the audio ends. For\nlonger audio, or for words returned while the speaker is still talking,\nuse the [Real-time STT API](/streaming/getting-started/transcribe-streaming-audio),\nwhich opens a WebSocket connection for up to 3 hours. See\n[Transcribe live audio](/sync-stt/getting-started/transcribe-live-audio)\nfor the SDK sessions and full guidance.\n\n<Note>To use a data residency endpoint, replace `sync.assemblyai.com` with\n`sync.us.assemblyai.com` (US) or `sync.eu.assemblyai.com` (EU). See\n[Cloud Endpoints and Data Residency](/sync-stt/endpoints-and-data-zones) for more information.</Note>\n",
+        "operationId": "transcribeLiveSync",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-AAI-Model",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "universal-3-5-pro"
+              ]
+            },
+            "description": "Model identifier used for request routing. The canonical value is `universal-3-5-pro`; `u3-sync-pro` and `u3-pro` are accepted as legacy aliases."
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "API key alternative for clients that cannot set the `Authorization` header. The header wins when both are present."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "config",
+                  "audio"
+                ],
+                "properties": {
+                  "config": {
+                    "type": "object",
+                    "description": "Transcription configuration. Must be the first part, ahead of `audio`. Send an empty object (`{}`) when you have no options to set.",
+                    "properties": {
+                      "sample_rate": {
+                        "type": "integer",
+                        "enum": [
+                          8000,
+                          16000,
+                          22050,
+                          24000,
+                          32000,
+                          44100,
+                          48000
+                        ],
+                        "description": "Source sample rate in Hz. Required when `audio` is `audio/pcm` (the usual case for a live source). WAV reads the rate from its header."
+                      },
+                      "channels": {
+                        "type": "integer",
+                        "enum": [
+                          1,
+                          2
+                        ],
+                        "description": "Number of audio channels. Required when `audio` is `audio/pcm`. Stereo is down-mixed to mono internally."
+                      },
+                      "prompt": {
+                        "type": "string",
+                        "maxLength": 4096,
+                        "description": "Custom transcription instruction prepended to the model's system prompt. When omitted, a default prompt is applied."
+                      },
+                      "keyterms_prompt": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Keyterms that bias the decoder toward specific tokens. Maximum 2048 characters total across all terms. Also accepted as `keyterms` or `word_boost` — provide only one of the three."
+                      },
+                      "conversation_context": {
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ],
+                        "description": "Prior turns from the same conversation, in chronological order (oldest first, most recent last), supplied as context so the model transcribes the current clip with greater continuity. Accepts a list of turns or a single string. Oldest turns are dropped first if the context window limit is exceeded."
+                      },
+                      "language_code": {
+                        "default": "en",
+                        "description": "Language of the audio as an ISO 639-1 code, or a list of codes for multilingual audio. Ignored when a custom `prompt` is set. Defaults to `en`.",
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "en",
+                              "es",
+                              "de",
+                              "fr",
+                              "it",
+                              "pt",
+                              "tr",
+                              "nl",
+                              "sv",
+                              "no",
+                              "da",
+                              "fi",
+                              "hi",
+                              "vi",
+                              "ar",
+                              "he",
+                              "ja",
+                              "ur",
+                              "zh"
+                            ]
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "en",
+                                "es",
+                                "de",
+                                "fr",
+                                "it",
+                                "pt",
+                                "tr",
+                                "nl",
+                                "sv",
+                                "no",
+                                "da",
+                                "fi",
+                                "hi",
+                                "vi",
+                                "ar",
+                                "he",
+                                "ja",
+                                "ur",
+                                "zh"
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "timestamps": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Whether to compute per-word `start`/`end` timestamps. When `false` (default), `start`/`end` are omitted from the `words` objects. When `true`, exact timings are computed for each word at an additional latency cost."
+                      }
+                    }
+                  },
+                  "audio": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Audio bytes, uploaded in chunks as they are produced. Set the part's Content-Type to `audio/pcm` for raw S16LE little-endian PCM (the usual live source) or `audio/wav` for a WAV stream."
+                  }
+                }
+              },
+              "encoding": {
+                "config": {
+                  "contentType": "application/json"
+                },
+                "audio": {
+                  "contentType": "audio/pcm, audio/wav"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "python",
+            "label": "Python SDK",
+            "source": "from assemblyai.sync.v1 import SyncTranscriber, SyncTranscriptionConfig\n\ntranscriber = SyncTranscriber()\nconfig = SyncTranscriptionConfig(sample_rate=16000, channels=1)\n\n# Push style, for callback sources (mic, WebRTC, telephony):\nsession = transcriber.open_live(config)\nfor chunk in microphone():   # your live PCM source\n    session.write(chunk)\nsession.close()\nprint(session.result().text)\n\n# Or pull style, from an iterable or stream you already have:\n# result = transcriber.transcribe_live(microphone(), config=config)\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript SDK",
+            "source": "import { AssemblyAI } from \"assemblyai\";\n\nconst client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });\nconst config = { sample_rate: 16000, channels: 1 };\n\n// Push style, for callback sources (mic, WebRTC, telephony):\nconst session = client.sync.openLive(config);\nrecorder.stdout.on(\"data\", (chunk) => session.write(chunk));\nrecorder.stdout.on(\"end\", () => session.close());\nconsole.log((await session.result()).text);\n\n// Or pull style, from a stream you already have:\n// const result = await client.sync.transcribeLive(recorder.stdout, config);\n"
+          },
+          {
+            "lang": "bash",
+            "label": "cURL",
+            "source": "# cURL cannot overlap with a live recording, but it shows the wire\n# format: a chunked multipart body with the config part first. `rec`\n# streams raw PCM to stdout; the body is assembled and piped in.\nBOUNDARY=aai$(openssl rand -hex 8)\n{\n  printf -- \"--%s\\r\\n\" \"$BOUNDARY\"\n  printf 'Content-Disposition: form-data; name=\"config\"\\r\\n'\n  printf 'Content-Type: application/json\\r\\n\\r\\n'\n  printf '{\"sample_rate\":16000,\"channels\":1}\\r\\n'\n  printf -- \"--%s\\r\\n\" \"$BOUNDARY\"\n  printf 'Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\\r\\n'\n  printf 'Content-Type: audio/pcm\\r\\n\\r\\n'\n  rec -q -t raw -r 16000 -c 1 -b 16 -e signed -\n  printf \"\\r\\n--%s--\\r\\n\" \"$BOUNDARY\"\n} | curl -X POST https://sync.assemblyai.com/v1/transcribe/live \\\n  -H \"Authorization: <YOUR_API_KEY>\" \\\n  -H \"X-AAI-Model: universal-3-5-pro\" \\\n  -H \"Content-Type: multipart/form-data; boundary=$BOUNDARY\" \\\n  -H \"Transfer-Encoding: chunked\" \\\n  --data-binary @-\n"
+          },
+          {
+            "lang": "python",
+            "label": "Python",
+            "source": "import json\nimport secrets\n\nimport requests\n\nboundary = secrets.token_hex(16)\nconfig = {\"sample_rate\": 16000, \"channels\": 1}\n\n\ndef body(chunks):\n    yield (\n        f\"--{boundary}\\r\\n\"\n        'Content-Disposition: form-data; name=\"config\"\\r\\n'\n        \"Content-Type: application/json\\r\\n\\r\\n\"\n        f\"{json.dumps(config)}\\r\\n\"\n        f\"--{boundary}\\r\\n\"\n        'Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\\r\\n'\n        \"Content-Type: audio/pcm\\r\\n\\r\\n\"\n    ).encode()\n    for chunk in chunks:  # your live PCM source\n        yield chunk\n    yield f\"\\r\\n--{boundary}--\\r\\n\".encode()\n\n\nresponse = requests.post(\n    \"https://sync.assemblyai.com/v1/transcribe/live\",\n    headers={\n        \"Authorization\": \"<YOUR_API_KEY>\",\n        \"X-AAI-Model\": \"universal-3-5-pro\",\n        \"Content-Type\": f\"multipart/form-data; boundary={boundary}\",\n    },\n    data=body(chunks),\n    timeout=180,\n)\nresponse.raise_for_status()\nprint(response.json()[\"text\"])\n"
+          },
+          {
+            "lang": "javascript",
+            "label": "JavaScript",
+            "source": "const boundary = crypto.randomUUID().replace(/-/g, \"\");\nconst config = { sample_rate: 16000, channels: 1 };\nconst encoder = new TextEncoder();\n\nconst head = encoder.encode(\n  `--${boundary}\\r\\n` +\n    'Content-Disposition: form-data; name=\"config\"\\r\\n' +\n    \"Content-Type: application/json\\r\\n\\r\\n\" +\n    `${JSON.stringify(config)}\\r\\n` +\n    `--${boundary}\\r\\n` +\n    'Content-Disposition: form-data; name=\"audio\"; filename=\"audio.pcm\"\\r\\n' +\n    \"Content-Type: audio/pcm\\r\\n\\r\\n\"\n);\nconst closing = encoder.encode(`\\r\\n--${boundary}--\\r\\n`);\n\nconst body = new ReadableStream({\n  async start(controller) {\n    controller.enqueue(head);\n    for await (const chunk of chunks) controller.enqueue(chunk);\n    controller.enqueue(closing);\n    controller.close();\n  },\n});\n\nconst response = await fetch(\n  \"https://sync.assemblyai.com/v1/transcribe/live\",\n  {\n    method: \"POST\",\n    headers: {\n      Authorization: \"<YOUR_API_KEY>\",\n      \"X-AAI-Model\": \"universal-3-5-pro\",\n      \"Content-Type\": `multipart/form-data; boundary=${boundary}`,\n    },\n    body,\n    duplex: \"half\",\n  }\n);\n\nconst result = await response.json();\nconsole.log(result.text);\n"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transcription completed successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncTranscriptResponse"
+                },
+                "example": {
+                  "text": "Hi, I'm calling about my Best Buy order...",
+                  "words": [
+                    {
+                      "text": "Hi",
+                      "confidence": 0.91
+                    },
+                    {
+                      "text": "I'm",
+                      "confidence": 0.88
+                    }
+                  ],
+                  "confidence": 0.87,
+                  "audio_duration_ms": 101567,
+                  "session_id": "eb92c4ff-4bbb-429f-9b99-7279d7fe738f",
+                  "request_time_ms": 243.7
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — audio too short, malformed, invalid config, or a body whose `audio` part is not preceded by a `config` part.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Audio exceeds the 120 s duration or 40 MB size limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported media type or audio format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. Retry after `Retry-After` seconds.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetailErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable — model cold-starting or concurrency cap reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upload went idle too long, or the request exceeded its deadline.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal model error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SyncTranscriptResponse": {
+        "type": "object",
+        "required": [
+          "text",
+          "words",
+          "confidence",
+          "audio_duration_ms",
+          "session_id"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Full transcript of the audio."
+          },
+          "words": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Word"
+            },
+            "description": "Per-word confidence scores, plus `start`/`end` timestamps when the request sets `timestamps` to `true`."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float",
+            "description": "Overall transcript confidence (0–1)."
+          },
+          "audio_duration_ms": {
+            "type": "integer",
+            "description": "Duration of the submitted audio in milliseconds."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Server-generated request identifier. Include this in support requests."
+          },
+          "request_time_ms": {
+            "type": "number",
+            "format": "float",
+            "description": "End-to-end server-side processing time for the request in milliseconds, covering queue wait, decoding, and inference."
+          }
+        }
+      },
+      "Word": {
+        "type": "object",
+        "required": [
+          "text",
+          "confidence"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer",
+            "description": "Word start time in milliseconds. Present only when the request sets `timestamps` to `true` and the word could be aligned; omitted otherwise."
+          },
+          "end": {
+            "type": "integer",
+            "description": "Word end time in milliseconds. Present only when the request sets `timestamps` to `true` and the word could be aligned; omitted otherwise."
+          },
+          "confidence": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "type": "string",
+            "description": "Machine-readable error code.",
+            "enum": [
+              "bad_audio",
+              "audio_too_short",
+              "audio_too_large",
+              "bad_request",
+              "unsupported_media_type",
+              "capacity_exceeded",
+              "service_unavailable",
+              "inference_timeout",
+              "inference_error"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error description."
+          }
+        }
+      },
+      "DetailErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "description": "Human-readable error description (used for auth and rate-limit errors)."
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Your AssemblyAI API key. Optionally prefixed with `Bearer `. Also accepted as the `token` query parameter."
+      }
+    }
+  }
+}

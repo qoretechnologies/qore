@@ -1,0 +1,187 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AssemblyAiRestClient
+%requires json
+%exec-class AssemblyAiStreamingTest
+
+#! One-request fixture with a gate proving incremental transfer
+class AssemblyAiStreamFixture {
+    public {
+        int port;
+        Queue requests();
+        Queue chunks();
+        Queue gate();
+    }
+    private {
+        Socket listener();
+        Counter running();
+        string mode;
+        int status;
+    }
+    constructor(string mode = "upload", int status = 200) {
+        self.mode = mode;
+        self.status = status;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background serve();
+    }
+    stop() {
+        gate.push(True);
+        try {
+            Socket wake();
+            wake.connect("127.0.0.1:" + port, 100ms);
+            wake.close();
+        } catch () {}
+        running.waitForZero();
+        listener.close();
+    }
+    private serve() {
+        on_exit running.dec();
+        try {
+            Socket conn = listener.accept(3s);
+            on_exit conn.close();
+            hash<auto> hdr = conn.readHTTPHeader(3s);
+            requests.push(hdr);
+            if (mode == "ws") {
+                string accept = digest("sha1", hdr."sec-websocket-key"
+                    + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").toBase64();
+                conn.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                    + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n");
+                string msg = "{\"type\":\"Begin\"}";
+                conn.send(<81> + binary(chr(msg.size())) + binary(msg));
+                gate.get(3s);
+                return;
+            }
+            if (hdr."transfer-encoding" =~ /chunked/i) {
+                conn.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> event) {
+                    if (exists event.data) {
+                        chunks.push(event.data);
+                    }
+                }, 3s);
+            } else if (hdr."content-length") {
+                chunks.push(conn.recv(hdr."content-length".toInt(), 3s));
+            }
+            if (mode == "timeout") {
+                gate.get(3s);
+            }
+            string content_type = mode == "sse" ? "text/event-stream" : "application/json";
+            conn.send(sprintf("HTTP/1.1 %d Test\r\nContent-Type: %s\r\nConnection: close\r\n\r\n",
+                status, content_type));
+            if (mode == "sse") {
+                conn.send("data: {\"delta\":\"first\"}\n\n");
+                gate.get(3s);
+                conn.send("data: [DONE]\n\n");
+            } else {
+                conn.send("{\"text\":\"Fixture transcript.\",\"llm_response\":null}");
+            }
+        } catch () {
+            # Cancellation may close the fixture socket before its response is complete.
+        }
+    }
+}
+
+#! Keep public routing helpers while replacing only the service destination
+class AssemblyAiLocalStreamClient inherits AssemblyAiRestClientIo {
+    constructor(int port) : AssemblyAiRestClientIo({"url": "http://127.0.0.1:" + port,
+            "apikey": "fixture-key", "http_version": "1.1", "timeout": 3s}) {}
+    AssemblyAiRestClientIo getServiceClient(string service) { return self; }
+}
+
+class AssemblyAiStreamingTest inherits QUnit::Test {
+    constructor() : Test("AssemblyAI native streaming", "1.0") {
+        addTestCase("audio is delivered before upload completion", \uploadTest());
+        addTestCase("HTTP errors fail and cancellation rejects further writes", \errorTest());
+        addTestCase("response timeout cancels an upload", \timeoutTest());
+        addTestCase("SSE data arrives before response completion", \sseTest());
+        addTestCase("WebSocket endpoint and bare-key authentication", \webSocketTest());
+        addTestCase("invalid native configuration fails before transport", \configTest());
+        set_return_value(main());
+    }
+    private configTest() {
+        AssemblyAiRestClientIo client({"apikey": "fixture"});
+        foreach auto value in (NOTHING, NULL, {}, (), "", False, 0, -1, 12345) {
+            assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () {
+                client.openAudioUpload("sync", {"sample_rate": value, "channels": 1}, "audio/pcm");
+            });
+        }
+        foreach auto value in (NOTHING, NULL, {}, (), "", False, 0, 3) {
+            assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () {
+                client.openAudioUpload("sync", {"sample_rate": 16000, "channels": value}, "audio/pcm");
+            });
+        }
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () { client.openAudioUpload("unknown"); });
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () { client.openAudioUpload("sync", {}, "audio/mp3"); });
+    }
+    private uploadTest() {
+        AssemblyAiStreamFixture server();
+        on_exit server.stop();
+        AssemblyAiLocalStreamClient client(server.port);
+        AssemblyAiAudioUpload upload = client.openAudioUpload("sync", {});
+        on_exit upload.close();
+        string first = server.chunks.get(2s).toString();
+        assertTrue(first.find("name=\"config\"") < first.find("name=\"audio\""));
+        assertTrue(first.find("\r\n{}\r\n") >= 0);
+        upload.sendAudio(<00017fff>);
+        assertEq(<00017fff>, server.chunks.get(2s));
+        upload.sendAudio(binary("second"));
+        assertEq(binary("second"), server.chunks.get(2s));
+        assertEq("Fixture transcript.", upload.finish().text);
+        hash<auto> request = server.requests.get(2s);
+        assertEq("fixture-key", request.authorization);
+        assertEq("universal-3-5-pro", request."x-aai-model");
+        assertEq("/v1/transcribe/live", request.path);
+        assertThrows("ASSEMBLYAI-UPLOAD-ERROR", sub () { upload.sendAudio(binary("late")); });
+    }
+    private errorTest() {
+        AssemblyAiStreamFixture server("upload", 401);
+        on_exit server.stop();
+        AssemblyAiLocalStreamClient client(server.port);
+        AssemblyAiAudioUpload upload = client.openAudioUpload("dictation");
+        assertThrows("ASSEMBLYAI-UPLOAD-ERROR", sub () { upload.finish(); });
+        upload.close();
+        upload.close();
+        assertThrows("ASSEMBLYAI-UPLOAD-ERROR", sub () { upload.sendAudio(binary()); });
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () { client.openAudioUpload("unknown"); });
+        assertThrows("ASSEMBLYAI-CONFIG-ERROR", sub () { client.openAudioUpload("sync", {}, "audio/pcm"); });
+    }
+    private timeoutTest() {
+        AssemblyAiStreamFixture server("timeout");
+        on_exit server.stop();
+        AssemblyAiLocalStreamClient client(server.port);
+        AssemblyAiAudioUpload upload = client.openAudioUpload("dictation");
+        assertThrows("ASSEMBLYAI-UPLOAD-ERROR", sub () { upload.finish(50ms); });
+    }
+    private sseTest() {
+        AssemblyAiStreamFixture server("sse");
+        on_exit server.stop();
+        AssemblyAiLocalStreamClient client(server.port);
+        auto reader = client.openChatStream({"model": "fixture", "prompt": "Hello"});
+        on_exit reader.cancel();
+        assertEq("{\"delta\":\"first\"}", reader.readEvent(2s).data);
+        hash<auto> request = server.requests.get(2s);
+        assertEq("/v1/chat/completions", request.path);
+        assertEq("fixture-key", request.authorization);
+        assertEq(True, parse_json(server.chunks.get(2s).toString()).stream);
+        server.gate.push(True);
+    }
+    private webSocketTest() {
+        AssemblyAiStreamFixture server("ws");
+        on_exit server.stop();
+        AssemblyAiLocalStreamClient client(server.port);
+        Queue events();
+        object ws = client.openWebSocket("streaming", sub (*data msg) { events.push(msg); },
+            {"sample_rate": "16000", "keyterms_prompt": "[\"a & b\"]"});
+        on_exit ws.disconnect();
+        assertEq("{\"type\":\"Begin\"}", events.get(2s));
+        hash<auto> request = server.requests.get(2s);
+        assertEq("fixture-key", request.authorization);
+        assertTrue(request.path.find("/v3/ws?") == 0);
+        assertTrue(request.path.find("%26") >= 0);
+        server.gate.push(True);
+    }
+}

@@ -27,82 +27,50 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) AssemblyAiRestClient
-%requires RestClientIo
+%requires(reexport) RestSchemaActions
+%requires OpenApi3
 
 module AssemblyAiDataProvider {
     version = "1.0";
-    desc = "user module providing a data provider API for AssemblyAI speech-to-text";
+    desc = "typed AssemblyAI transcription, language model, and voice agent actions";
     author = "David Nichols <david@qore.org>";
-    url = "http://qore.org";
+    url = "https://qore.org";
     license = "MIT";
     init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("AssemblyAiDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                list<hash<DataProviderDiscoveryExpectedIdentityInfo>> ids = (
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AssemblyAiDataProvider::AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AssemblyAiDataProvider::AppName, "action": "transcribe"},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AssemblyAiDataProvider::AppName, "action": "make-api-call"},
+                );
+                foreach list<hash<RestSchemaActionInfo>> manifest in (AssemblyAiSchema::Manifests.iterator()) {
+                    ids += map <DataProviderDiscoveryExpectedIdentityInfo>{
+                        "app": AssemblyAiDataProvider::AppName, "action": $1.action,
+                    }, manifest;
+                }
+                return ids;
+            });
         DataProvider::registerFactory(new AssemblyAiDataProviderFactory());
-
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AssemblyAiDataProvider::AppName,
             "presentation_source_locale": "en",
             "display_name": "AssemblyAI",
-            "short_desc": "AssemblyAI speech-to-text with rich analytics",
-            "desc": "Provides access to [AssemblyAI](https://www.assemblyai.com) "
-                "— a speech AI platform offering high-accuracy transcription with "
-                "the Universal-2 and Slam-1 model families plus an extensive "
-                "analytics layer.\n\n"
-                "**Common use cases**:\n"
-                "- **Recorded transcription**: convert podcasts, meeting "
-                "recordings, voicemails, and customer-service calls into "
-                "searchable text\n"
-                "- **Conversation intelligence**: speaker diarization, "
-                "sentiment analysis, topic detection, and entity extraction "
-                "from multi-party recordings\n"
-                "- **Compliance and moderation**: content-safety classification "
-                "for flagging sensitive material in recorded audio\n"
-                "- **Automatic summarization**: generate `bullets`, `gist`, "
-                "`headline`, or `paragraph` summaries alongside the transcript",
+            "short_desc": "Transcription, speech understanding, and voice agents",
+            "desc": "Use [AssemblyAI](https://www.assemblyai.com) to turn recordings into searchable text "
+                "and automate speech workflows.\n\n**Capabilities**\n"
+                "- Transcribe recorded or short audio, produce captions, and redact personal information\n"
+                "- Analyze transcripts and generate model responses with LLM Gateway\n"
+                "- Manage voice agents, sessions, and event subscriptions\n"
+                "- Issue temporary tokens for real-time client applications\n\n"
+                "**Regions:** choose US or EU endpoints for regional services. Voice Agents uses its global endpoint.",
             "scheme": "assemblyai",
-            "logo": AssemblyAiLogo,
+            "logo": Priv::AssemblyAiLogo,
             "logo_file_name": "assemblyai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (
-                DataProvider::AppGroup::AiLlm,
-                DataProvider::AppGroup::Speech,
-            ),
+            "groups": (DataProvider::AppGroup::AiLlm, DataProvider::AppGroup::Speech),
         });
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": AssemblyAiDataProvider::AppName,
-            "path": "/transcribe",
-            "action": "transcribe",
-            "display_name": "Transcribe Audio",
-            "short_desc": "Transcribe an audio URL via AssemblyAI (async)",
-            "desc": "Submits a public audio URL to AssemblyAI's `/v2/transcript` "
-                "endpoint and waits for the transcript to complete.  Internally "
-                "drives the upload → poll → fetch lifecycle via "
-                "@ref QoreAsyncJobUtils::AsyncJobPoller \"AsyncJobPoller\".\n\n"
-                "All analytics are opt-in — `speaker_labels`, `summarization`, "
-                "`sentiment_analysis`, `entity_detection`, `iab_categories`, and "
-                "`content_safety` add corresponding fields to the response when "
-                "set to `True`.",
-            "action_code": DPAT_API,
-            "groups": ("Speech Recognition",),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AssemblyAiTranscribeRequestDataType::Fields{"audio_url",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AssemblyAiTranscribeRequestDataType::Fields{
-                    "speech_model", "language_code", "speaker_labels",
-                    "summarization",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AssemblyAiTranscribeRequestDataType::Fields - (
-                    "audio_url", "speech_model", "language_code", "speaker_labels",
-                    "summarization",
-                )
-            ),
-            "output_type": AssemblyAiTranscribeDataProvider::ResponseType,
-        });
+        AssemblyAiActions::registerActions();
     };
 }
 
@@ -110,38 +78,56 @@ module AssemblyAiDataProvider {
 
     @tableofcontents
 
-    @section assemblyaidataproviderintro AssemblyAiDataProvider Introduction
+    @section assemblyaidataproviderintro AssemblyAI Data Provider
 
-    The %AssemblyAiDataProvider module provides a data provider API for
-    [AssemblyAI](https://www.assemblyai.com) speech-to-text services.
+    The module exposes 31 REST operations, the submit-and-wait \c transcribe helper, and
+    the shared \c make-api-call action. Requests and responses derive from eight committed
+    OpenAPI descriptions. Updates use \c tools/rest-schema-import.qr with the adjacent
+    \c assemblyai-import.json specification; checked repairs and source checksums make the import reviewable.
 
-    A single DPAT_API action is registered:
-    - `transcribe` — submit an audio URL to `/v2/transcript`, wait for
-      the job to reach a terminal status via
-      @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller", and
-      return the completed transcript
+    |!Capability|!Actions
+    |Recorded speech|Upload audio, create/list/get/delete transcripts, captions, sentences, paragraphs, word search, redacted audio
+    |Language models|Completed chat responses, speech understanding, model discovery
+    |Real-time credentials|Temporary streaming and voice agent tokens
+    |Voice agents|Create/list/get/update/delete agents; list/get/delete sessions
+    |Webhooks|Create/list/get/update/delete voice agent event subscriptions
+    |Short audio|Sync STT, finite live uploads, and dictation with cleaned-up text
 
-    The full async lifecycle (submit → poll → fetch result) is hidden
-    inside the action; callers see a synchronous request/response shape.
+    @par Configuration
+    Use an AssemblyAI connection with a sensitive \c apikey option. Authentication sends the bare
+    API key in \c Authorization. The \c region option selects US or EU regional services.
+    Voice Agents currently has a global endpoint. List transcripts is the authenticated connection ping.
 
-    @par Analytics
+    @par Models and value handling
+    The recorded transcription API routes through \c speech_models, currently Universal-3.5 Pro and
+    Universal-2. The deprecated \c speech_model option remains schema-described for compatibility with
+    supported wire values; retired aliases such as \c nano are rejected. LLM models come from the
+    service's model listing. Omitted, null, empty, false, and zero values retain their distinct API meanings.
 
-    AssemblyAI's analytics features (`summarization`, `speaker_labels`,
-    `sentiment_analysis`, `entity_detection`, `iab_categories`,
-    `content_safety`) are all opt-in via boolean flags on the request.
-    Each enabled feature populates a corresponding field on the response.
+    @par Streaming
+    Completed-value actions return a final result. Use AssemblyAiRestClientIo::openWebSocket() for
+    real-time speech and voice agent sessions, openChatStream() for SSE chat, and openAudioUpload()
+    to send audio while recording. These native sessions expose transport lifetime and cancellation;
+    they are not represented as completed-value actions. The /warm Sync endpoint is a connection
+    prewarming optimization rather than a workflow action. Retired LeMUR endpoints are not exported.
 
     @section AssemblyAiDataProviderRelnotes Release Notes
-
     @subsection AssemblyAiDataProviderv1_0 AssemblyAiDataProvider v1.0
-    - the initial version of the %AssemblyAiDataProvider module
+    - complete current REST action coverage with recursively typed requests and responses
+    - regional authentication, resource dropdowns, discovery qualification, and translated presentation
+    - schema-backed transcription options and local polling controls
 */
 
-#! contains all public definitions in the AssemblyAiDataProvider module
+#! Public definitions in the AssemblyAI provider module
 public namespace AssemblyAiDataProvider {
-#! AssemblyAI application name
+#! Stable application identity
 public const AppName = "AssemblyAI";
 }
 
-#! App logo loaded from file
-public const AssemblyAiLogo = File::readTextFile(get_script_dir() + "/assemblyai-logo.svg");
+namespace Priv {
+#! Application logo, loaded during module initialization
+const AssemblyAiLogo = File::readTextFile(get_script_dir() + "/assemblyai-logo.svg");
+}
+
+#! Existing public logo alias
+public const AssemblyAiLogo = Priv::AssemblyAiLogo;

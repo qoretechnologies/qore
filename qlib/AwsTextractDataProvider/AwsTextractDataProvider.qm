@@ -28,21 +28,31 @@
 %requires(reexport) DataProvider
 %requires(reexport) AwsTextractRestClient
 %requires RestClientIo
+%requires OpenApi3
+%requires json
 
 module AwsTextractDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "user module providing a data provider API for AWS Textract document AI";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("AwsTextractDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                return (<DataProviderDiscoveryExpectedIdentityInfo>{"app": AwsTextractDataProvider::AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AwsTextractDataProvider::AppName,
+                        "action": "make-api-call"},)
+                    + (map <DataProviderDiscoveryExpectedIdentityInfo>{"app": AwsTextractDataProvider::AppName,
+                        "action": $1}, keys AwsTextractManifest::Operations);
+            });
         DataProvider::registerFactory(new AwsTextractDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": AwsTextractDataProvider::AppName,
             "presentation_source_locale": "en",
             "display_name": "AWS Textract",
-            "short_desc": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
+            "short_desc": "Extract text and structured information from documents",
             "desc": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) "
                 "— a managed document-AI service for extracting text, structure, "
                 "and answers from scanned documents and PDFs.\n\n"
@@ -58,7 +68,7 @@ module AwsTextractDataProvider {
                 "- **Layout-preserving OCR**: extract text grouped by paragraphs, "
                 "titles, headers, footers with the `LAYOUT` feature",
             "scheme": "aws-textract",
-            "logo": AwsTextractLogo,
+            "logo": Priv::AwsTextractLogo,
             "logo_file_name": "aws-textract-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (
@@ -72,15 +82,15 @@ module AwsTextractDataProvider {
             "path": "/detect-document-text",
             "action": "detect-document-text",
             "display_name": "Detect Document Text",
-            "short_desc": "Extract raw text from a document (no structure)",
+            "short_desc": "Extract lines and words from a document",
             "desc": "Calls Textract's `DetectDocumentText` API to extract the "
-                "text content of a single-page or multi-page document.  Returns "
+                "text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns "
                 "a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, "
                 "confidence, and bounding-box geometry.\n\n"
-                "Pass the document via one of:\n"
+                "**Pass the document via one of:**\n"
                 "- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n"
                 "- `document_path` — local file path (read and uploaded as bytes)\n"
-                "- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
+                "- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
             "action_code": DPAT_API,
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -92,7 +102,7 @@ module AwsTextractDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 AwsTextractDetectDocumentTextRequestDataType::Fields{"s3_version",}
             ),
-            "output_type": AwsTextractDetectDocumentTextDataProvider::ResponseType,
+            "output_type": AwsTextractSchema::getType("DetectDocumentTextResponse"),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -100,7 +110,7 @@ module AwsTextractDataProvider {
             "path": "/analyze-document",
             "action": "analyze-document",
             "display_name": "Analyze Document",
-            "short_desc": "Extract text + tables/forms/signatures/queries from a document",
+            "short_desc": "Extract tables, forms, signatures, layout, and query answers",
             "desc": "Calls Textract's `AnalyzeDocument` API to extract text plus "
                 "structural features.  `feature_types` selects which features "
                 "to extract — pass at least one of `TABLES`, `FORMS`, "
@@ -110,21 +120,10 @@ module AwsTextractDataProvider {
             "action_code": DPAT_API,
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AwsTextractAnalyzeDocumentRequestDataType::Fields{"feature_types",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AwsTextractAnalyzeDocumentRequestDataType::Fields{
-                    "document_bytes", "document_path", "s3_bucket", "s3_name",
-                    "queries",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AwsTextractAnalyzeDocumentRequestDataType::Fields{"s3_version",}
-            ),
-            "output_type": AwsTextractAnalyzeDocumentDataProvider::ResponseType,
+                AwsTextractSchema::getLegacyRequestType("analyze-document").getFields()),
+            "output_type": AwsTextractSchema::getType("AnalyzeDocumentResponse"),
         });
+        AwsTextractActions::registerNativeActions();
     };
 }
 
@@ -135,27 +134,44 @@ module AwsTextractDataProvider {
     @section awstextractdataproviderintro AwsTextractDataProvider Introduction
 
     The %AwsTextractDataProvider module provides a data provider API for
-    [AWS Textract](https://aws.amazon.com/textract/).  Two synchronous
-    DPAT_API actions are registered:
+    [AWS Textract](https://aws.amazon.com/textract/). All 25 operations in the pinned official AWS
+    service model are exposed as typed actions, together with the shared generic API-call action.
+    The original `detect-document-text` and `analyze-document` option names remain compatible.
+    Other actions use the native AWS field names, including nested document, query, adapter,
+    notification, training, tagging, and output settings.
 
-    - `detect-document-text` — raw text extraction (`Blocks` with
-      `PAGE`/`LINE`/`WORD` types)
-    - `analyze-document` — text + structural features (`TABLES`, `FORMS`,
-      `SIGNATURES`, `LAYOUT`, `QUERIES`)
-
-    Documents are submitted as inline bytes (up to 10 MB) or via S3
-    reference (no size limit).
+    Synchronous documents are limited to 10 MB, including S3 references; PDF and TIFF must have
+    one page. Async PDF/TIFF documents support up to 500 MB and 3,000 pages; JPEG/PNG remain
+    limited to 10 MB. Identity analysis supports US passports and driver's licenses.
+    See [AWS limits](https://docs.aws.amazon.com/textract/latest/dg/limits-document.html).
 
     @par Async API
 
-    AWS Textract also offers async APIs (`StartDocumentTextDetection`,
-    `StartDocumentAnalysis`) for very large documents — those are not
-    exposed by this module; use
-    @ref awstextractrestclientintro "AwsTextractRestClient" directly
-    together with @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" if
-    needed.
+    Start/get actions expose raw jobs for text, document, expense, and lending analysis.
+    Save `JobId`, check `JobStatus`, and fetch all pages using `NextToken`. A get action never
+    waits for completion or combines pages. `FAILED` and `PARTIAL_SUCCESS` are returned with
+    their status messages and warnings so callers can decide how to proceed. AWS retains job
+    results for seven days. The service provides no job-list API.
+
+    Adapter and version dropdowns use the connection's account and region, require list permissions,
+    and stop with an error on repeated tokens or more than 100 pages. S3, SNS, IAM, KMS, A2I,
+    and resource ARNs are supplied explicitly: this app does not enumerate other services.
+    Human review settings require an existing Amazon A2I customer. Training creates billable
+    adapter versions; tests use deterministic fixtures for that operation.
+
+    @par Model provenance
+    `tools/textract-model-import.py` imports the immutable botocore revision recorded in
+    `textract-types.json`. The original `textract-service-2.json` is preserved with its checksum.
+    The OpenAPI resource contains component types only, with no generated HTTP routes.
+    The versioned normalization boundary supplies presentation, document-source constraints,
+    and timestamp/blob conversions. Native requests use signed AWS JSON 1.1 at `/`.
 
     @section AwsTextractDataProviderRelnotes Release Notes
+
+    @subsection AwsTextractDataProviderv1_1 AwsTextractDataProvider v1.1
+    - all 25 native AWS operations with complete nested types and structured choices
+    - strict request validation, binary/base64 encoding, paginated adapter references
+    - authenticated connection checks and shared discovery and presentation qualification
 
     @subsection AwsTextractDataProviderv1_0 AwsTextractDataProvider v1.0
     - the initial version of the %AwsTextractDataProvider module
@@ -167,6 +183,9 @@ public namespace AwsTextractDataProvider {
 public const AppName = "AwsTextract";
 }
 
-#! App logo loaded from file
-public const AwsTextractLogo =
-    File::readTextFile(get_script_dir() + "/aws-textract-logo.svg");
+namespace Priv {
+    const AwsTextractLogo = File::readTextFile(get_script_dir() + "/aws-textract-logo.svg");
+}
+
+#! Compatible public alias for the immutable app logo
+public const AwsTextractLogo = Priv::AwsTextractLogo;
