@@ -541,14 +541,20 @@ public class LlmStreamingTest inherits QUnit::Test {
                 "api_key": "fixture-key", "timeout_ms": 1000, "max_retries": 0});
             foreach string stage in (("headers", "comments", "events")) {
                 bool delayed_headers = stage == "headers";
+                bool event_stage = stage == "events";
                 # Comments are valid SSE traffic but must not reset a call's deadline.
                 string frame = stage == "comments" ? ": keepalive\n\n"
                     : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
                         : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
+                # The event stage must see events before its deadline expires, so the deadline has to be much
+                # longer than the fixture's own sleep jitter: macOS coalesces timers and stretches a 20 ms
+                # sleep to 30 ms or more, which would leave a short deadline expiring before the first frame.
+                int call_timeout_ms = event_stage ? 400 : 50;
+                int frame_count = event_stage ? 60 : 20;
                 list<string> frames;
-                for (int i = 0; i < 20; ++i) { frames += frame; }
+                for (int i = 0; i < frame_count; ++i) { frames += frame; }
                 server.script(<FakeReply>{"header_delay_ms": delayed_headers ? 200 : 0,
-                    "chunk_delay_ms": delayed_headers ? 0 : 25,
+                    "chunk_delay_ms": delayed_headers ? 0 : (event_stage ? 20 : 25),
                     "chunks": frames,
                     "stall": True});
                 date started = now_us();
@@ -557,13 +563,15 @@ public class LlmStreamingTest inherits QUnit::Test {
                 try {
                     llm.chatStream(userMessage("test"), sub (hash<ChatStreamEvent> event) {
                         ++observed;
-                    }, NOTHING, <LlmRequestOptions>{"timeout_ms": 50});
+                    }, NOTHING, <LlmRequestOptions>{"timeout_ms": call_timeout_ms});
                 } catch (hash<ExceptionInfo> ex) { error = ex; }
                 server.release();
                 assertTrue(hasTransportTimeout(error));
-                assertLt(500, (now_us() - started).durationMilliseconds());
-                if (stage == "events") {
-                    assertTrue(observed > 0 && observed < 4);
+                # a deadline restarted for each frame would only expire after the whole script had been sent
+                assertLt(event_stage ? 1000 : 500, (now_us() - started).durationMilliseconds());
+                if (event_stage) {
+                    # the call ended on its deadline, after some events but well before the scripted stream
+                    assertTrue(observed > 0 && observed < frame_count);
                 } else { assertEq(0, observed); }
                 assertEq(1, server.requests.size());
                 usleep(200000);
