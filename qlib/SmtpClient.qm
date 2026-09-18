@@ -178,6 +178,9 @@ smtp.sendMessage(msg);@endcode
     @section smtpclient_relnotes SmtpClient Release Notes
 
     @subsection smtpclient_v2_2 SmtpClient 2.2
+    - The \c ssl_verify_cert option is now honored for synchronous and asynchronous SMTP connections.
+      Set it to \c True with \c smtptls:// or \c smtps:// to require a trusted server certificate
+      matching the connection hostname before transmitting credentials or mail.
     - Added OAuth2 bearer-token authentication with SASL \c XOAUTH2 and \c OAUTHBEARER
       (<a href="https://datatracker.ietf.org/doc/html/rfc7628">RFC 7628</a>), so accounts with password
       logins disabled can send mail
@@ -368,6 +371,8 @@ public class SmtpClient {
 
         bool nosend = False;
 
+        bool ssl_verify_cert = False;
+
         # optional info log closure
         *code<nothing(string)> log_info;
 
@@ -544,6 +549,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
 SmtpClient smtp("esmtptls://smtp.gmail.com", {
     "username": "user@gmail.com",
     "token": token,
+    "ssl_verify_cert": True,
 });
         @endcode
 
@@ -558,6 +564,8 @@ SmtpClient smtp("esmtptls://smtp.gmail.com", {
         - \c log (code): a closure or call reference for log messages
         - \c password (string): the password for authentication; conflicts with the \c token option
         - \c read_timeout (int): the read timeout in milliseconds
+        - \c ssl_verify_cert (bool): verify the TLS certificate chain and hostname against system trust;
+          defaults to \c False for compatibility. Use \c True for authenticated production connections
         - \c token (string): an OAuth2 bearer token; when set, a bearer-token SASL mechanism is used for
           authentication; conflicts with the \c password option and requires the \c username option
         - \c username (string): the username for authentication
@@ -577,6 +585,14 @@ SmtpClient smtp("esmtptls://smtp.gmail.com", {
         log_debug = opts.dbglog;
 
         setupUrl(url);
+
+        if (exists opts.ssl_verify_cert) {
+            if (opts.ssl_verify_cert.typeCode() != NT_BOOLEAN) {
+                throw "SMTPCLIENT-OPTION-ERROR", "ssl_verify_cert must be a boolean";
+            }
+            ssl_verify_cert = opts.ssl_verify_cert;
+            sock.setSslVerifyMode(ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE);
+        }
 
         *string username = opts.username;
         *string password = opts.password;
@@ -710,7 +726,19 @@ SmtpClient smtp("esmtptls://smtp.gmail.com", {
             "pass": pass,
             "token": token,
             "auth_mechanism": auth_mechanism,
+            "ssl_verify_cert": ssl_verify_cert,
         };
+    }
+
+    #! Creates an unconnected socket with this client's TLS verification policy.
+    /** Used by standalone poll operations, which do not use the client's private socket.
+        @return an unconnected socket configured to enforce this client's certificate policy
+        @since %SmtpClient 2.2
+    */
+    Socket createSocket() {
+        Socket rv();
+        rv.setSslVerifyMode(ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE);
+        return rv;
     }
 
     #! Set info log closure
@@ -1370,7 +1398,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
 
         @throw SMTP-POLL-ERROR if the SMTP server returns an error response
     */
-    constructor(SmtpClient smtp) : PollPipeline(new Socket()) {
+    constructor(SmtpClient smtp) : PollPipeline(smtp.createSocket()) {
         setup(smtp);
     }
 
@@ -1384,6 +1412,7 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         @throw SMTP-POLL-ERROR if the SMTP server returns an error response
     */
     constructor(SmtpClient smtp, Socket sock) : PollPipeline(sock) {
+        sock.setSslVerifyMode(smtp.getInfo().ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE);
         setup(smtp);
     }
 
@@ -1575,7 +1604,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         @throw SMTP-SEND-ERROR if the SMTP server returns an error response
         @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients)
     */
-    constructor(SmtpClient smtp, MailMessage::Message message) : PollPipeline(new Socket()) {
+    constructor(SmtpClient smtp, MailMessage::Message message) : PollPipeline(smtp.createSocket()) {
         hash<auto> info = smtp.getInfo();
         goal = "send";
 
@@ -2047,7 +2076,7 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
         hash<auto> copts = {
             "log": rtopts.log,
             "dbglog": rtopts.dbglog,
-        } + opts.("auth_mechanism", "token",);
+        } + opts.("auth_mechanism", "token", "ssl_verify_cert",);
         # credentials in the URL take precedence, as documented for the username / password options;
         # the token is always passed through so that combining it with URL credentials is reported as
         # the conflict it is rather than being silently dropped

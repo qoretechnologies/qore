@@ -1,16 +1,20 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Logger
-%requires Mime
-%requires MailMessage
-%requires DataProvider
-%requires ConnectionProvider
-%requires SmtpClient
-%requires QUnit
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/MailMessage.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/SmtpClient.qm
+%requires ../../../../qlib/QUnit.qm
+%try-module process
+%define NoProcess
+%endtry
 
 %exec-class SmtpClientSendTest
 
@@ -99,10 +103,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         bool auth_after_tls = False;
         #! True once the connection has been upgraded to TLS
         bool secure = False;
+        bool implicit_tls = False;
+        string certificate = CertPem;
     }
 
-    constructor(bool require_auth = True) {
+    constructor(bool require_auth = True, *string certificate) {
         self.require_auth = require_auth;
+        if (certificate.val()) {
+            self.certificate = certificate;
+        }
         listener.bind("localhost:0");
         listener.listen(1);
         port = listener.getSocketInfo().port;
@@ -129,6 +138,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     bool isSecure() {
         return secure;
+    }
+
+    setImplicitTls() {
+        implicit_tls = True;
     }
 
     int getEhloCount() {
@@ -201,6 +214,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 continue;
             }
             try {
+                if (implicit_tls) {
+                    client.setCertificate(certificate);
+                    client.setPrivateKey(KeyPem);
+                    client.upgradeServerToSSL(15s);
+                    secure = True;
+                }
                 serveClient(client);
             } catch (hash<ExceptionInfo> ex) {
                 recordServerError(ex);
@@ -269,7 +288,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 client.send("250 mock.smtp.test Hello\r\n");
             } else if (line =~ /^STARTTLS$/i) {
                 client.send("220 2.0.0 Ready to start TLS\r\n");
-                client.setCertificate(CertPem);
+                client.setCertificate(certificate);
                 client.setPrivateKey(KeyPem);
                 client.upgradeServerToSSL(15s);
                 secure = True;
@@ -325,6 +344,40 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 }
 
 public class SmtpClientSendTest inherits QUnit::Test {
+    private {
+        string verification_cert;
+    }
+
+    globalSetUp() {
+%ifdef NoProcess
+        throw "TEST-DEPENDENCY-ERROR", "the process module is required to generate a fresh TLS certificate";
+%else
+        # A trusted certificate must be fresh; the legacy static fixture expires in 2026.
+        string dir = sprintf("%s/qore-smtp-cert-%d", ENV.TMPDIR ?? "/tmp", getpid());
+        mkdir(dir, 0700);
+        on_exit {
+            foreach string name in (("key.pem", "cert.pem")) {
+                if (stat(dir + "/" + name)) {
+                    unlink(dir + "/" + name);
+                }
+            }
+            rmdir(dir);
+        }
+        File key();
+        key.open2(dir + "/key.pem", O_CREAT | O_EXCL | O_WRONLY, 0600);
+        key.write(MockSmtpServer::KeyPem);
+        key.close();
+        Process cert("openssl", ("req", "-config", "/dev/null", "-new", "-x509", "-key", dir + "/key.pem",
+            "-out", dir + "/cert.pem", "-days", "2", "-subj", "/CN=localhost",
+            "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "subjectAltName=DNS:localhost"));
+        cert.wait();
+        if (cert.exitCode()) {
+            throw "TEST-CERTIFICATE-ERROR", cert.readStderr(65536);
+        }
+        verification_cert = File::readTextFile(dir + "/cert.pem");
+%endif
+    }
+
     constructor() : Test("SmtpClientSendTest", "1.0", \ARGV) {
         addTestCase("basic send with auth", \testBasicSendWithAuth());
         addTestCase("blocking sendMessage with auth", \testBlockingSendMessageWithAuth());
@@ -340,6 +393,9 @@ public class SmtpClientSendTest inherits QUnit::Test {
         addTestCase("token refresh on an existing client", \testTokenRefresh());
         addTestCase("connection token option", \testConnectionTokenOption());
         addTestCase("re-EHLO after STARTTLS", \testReEhloAfterStartTls());
+        addTestCase("TLS verification option is typed and reaches connection clients", \testTlsOption());
+        addTestCase("untrusted TLS is rejected before credentials or mail", \testUntrustedTls());
+        addTestCase("trusted TLS succeeds and wrong hostnames fail", \testTrustedTls());
         set_return_value(main());
     }
 
@@ -561,6 +617,91 @@ public class SmtpClientSendTest inherits QUnit::Test {
         assertThrows("SMTPCLIENT-INVALID-AUTHENTICATION", "already carries a username and password",
             sub () { conn2.get(False); }, NOTHING,
             "token plus URL credentials reported through the connection");
+    }
+
+    testTlsOption() {
+        foreach auto value in (("true", 1, 0, {})) {
+            assertThrows("SMTPCLIENT-OPTION-ERROR", sub () {
+                new SmtpClient("smtptls://localhost", {"ssl_verify_cert": value});
+            });
+        }
+        SmtpConnection conn("tls-policy", "test", "smtptls://localhost", {}, {"ssl_verify_cert": True});
+        SmtpClient client = conn.get(False);
+        assertTrue(client.getInfo().ssl_verify_cert);
+        assertEq(SSL_VERIFY_PEER, client.createSocket().getSslVerifyMode());
+        assertEq(SSL_VERIFY_NONE, (new SmtpClient("smtp://localhost")).createSocket().getSslVerifyMode());
+    }
+
+    private tlsExchange(string mode, bool trusted, bool wrong_host = False, bool implicit_tls = False) {
+        MockSmtpServer server(True, verification_cert);
+        if (implicit_tls) {
+            server.setImplicitTls();
+        } else {
+            server.setStartTls(True, True);
+        }
+        server.start();
+        on_exit server.wait();
+        string host = wrong_host ? "127.0.0.1" : "localhost";
+        SmtpClient smtp(sprintf("%s://%s:%d", implicit_tls ? "smtps" : "smtptls", host, server.getPort()), {
+            "username": "tls-user", "password": "fixture-only", "ssl_verify_cert": True,
+        });
+        *hash<ExceptionInfo> failure;
+        try {
+            if (mode == "connect") {
+                smtp.connect();
+                smtp.disconnect();
+            } else if (mode == "send") {
+                smtp.sendMessage(makeMessage());
+            } else if (mode == "ping") {
+                SmtpPingPollOperation op(smtp);
+                runPollOp(op);
+            } else {
+                SmtpSendPollOperation op(smtp, makeMessage());
+                runPollOp(op);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            failure = ex;
+        }
+        if (trusted && !wrong_host) {
+            assertNothing(failure, "trusted TLS succeeds for " + mode);
+            assertTrue(server.isSecure());
+        } else {
+            assertTrue(exists failure, "TLS verification must fail for " + mode);
+            assertRegex("SSL", failure.err);
+            assertFalse((select server.getReceivedCommands(), $1 =~ /^(AUTH|MAIL FROM|RCPT TO|DATA)/i).val(),
+                "no credentials or mail before certificate verification");
+        }
+    }
+
+    testUntrustedTls() {
+        foreach string mode in (("connect", "send", "ping", "async-send")) {
+            tlsExchange(mode, False);
+            tlsExchange(mode, False, False, True);
+        }
+    }
+
+    testTrustedTls() {
+        string path = sprintf("%s/qore-smtp-test-ca-%d.pem", ENV.TMPDIR ?? "/tmp", getpid());
+        File ca();
+        ca.open2(path, O_CREAT | O_EXCL | O_WRONLY, 0600);
+        on_exit unlink(path);
+        ca.write(verification_cert);
+        ca.close();
+        *string old = getenv("SSL_CERT_FILE");
+        setenv("SSL_CERT_FILE", path);
+        on_exit {
+            if (exists old) {
+                setenv("SSL_CERT_FILE", old);
+            } else {
+                unsetenv("SSL_CERT_FILE");
+            }
+        }
+        foreach string mode in (("connect", "send", "ping", "async-send")) {
+            tlsExchange(mode, True);
+            tlsExchange(mode, True, True);
+            tlsExchange(mode, True, False, True);
+            tlsExchange(mode, True, True, True);
+        }
     }
 
     #! RFC 3207 §4.2: the pre-TLS capability list must be discarded and EHLO re-issued
