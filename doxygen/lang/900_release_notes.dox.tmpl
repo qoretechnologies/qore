@@ -1786,6 +1786,16 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
+      - strict LLM output and tool schemas transparently adapt optional fields for OpenAI and
+        restore omitted-field semantics in completed responses; explicit nullable values are preserved
+      - adapted structured streams deliver complete normalized JSON before their terminal event;
+        unsupported schema constraints fail locally before sending a request
+      - OpenAI-compatible requests preserve reasoning effort, strict tool schemas, JSON output formats,
+        parallel-tool controls, and service-tier selection through the generic LLM facade
+      - GPT-5 and GPT-6 reasoning requests use the supported output-token field and omit unsupported
+        sampling defaults; explicitly disabled reasoning is preserved
+      - streaming completions request and retain provider token usage, including usage delivered after
+        the final content or tool-call chunk
       - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is now formally the
         OpenAI-compatible base for any backend that speaks the OpenAI chat-completions
         wire shape (xAI Grok, Perplexity, Azure OpenAI, etc.)

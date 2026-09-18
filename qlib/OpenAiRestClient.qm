@@ -122,6 +122,12 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
+    - strict LLM output and tool schemas automatically adapt optional fields to
+      OpenAI's required nullable representation; returned JSON and tool arguments
+      restore the caller's original optional-field semantics
+    - adapted structured streams emit their JSON after it is complete so callers
+      never receive temporary null placeholders; ordinary text streams are unchanged
+    - unsupported strict-schema constraints report a local error before an API call
     - added SSE helper for streaming responses
     - fixed streaming chat completions to preserve function-call-only deltas
 
@@ -129,7 +135,7 @@ stream.close();
     - the initial version of the %OpenAiRestClient module
 */
 
-%requires json
+%requires json >= 1.11
 
 #! the OpenAiRestClient namespace contains all the objects in the OpenAiRestClient module
 public namespace OpenAiRestClient {
@@ -698,6 +704,411 @@ public class OpenAiResponseSseStreamIo {
     }
 }
 
+#! Request-local conversion between caller schemas and OpenAI strict schemas
+/** Only optional, originally non-nullable fields use null as an absence
+    marker. Explicitly nullable fields retain their null values. Schema
+    validators and projection state belong to one request, never the provider.
+*/
+class OpenAiStrictOutputSchema {
+    private {
+        hash<auto> original;
+        hash<auto> wire;
+        JsonSchema original_validator;
+        JsonSchema wire_validator;
+        hash<string, JsonSchema> validators;
+        hash<string, string> schema_paths;
+        bool projection = False;
+        int nodes = 0;
+        const MaxDepth = 64;
+        const MaxNodes = 10000;
+        const RootDefinition = "__qore_strict_schema_root";
+    }
+
+    constructor(hash<auto> schema) {
+        original = transform(schema, False, "#", "#", 0);
+        original = rebaseRefs(original, 0, True);
+        schema_paths = {};
+        nodes = 0;
+        wire = transform(original, True, "#", "#", 0);
+        wire = rebaseRefs(wire, 0, True);
+        schema_paths = {};
+        if (wire.type != "object" || exists wire.anyOf) {
+            schemaError("$", "the root must be an object");
+        }
+        original_validator = new JsonSchema(original);
+        wire_validator = new JsonSchema(wire);
+    }
+
+    hash<auto> getSchema() {
+        return wire;
+    }
+
+    bool needsProjection() {
+        return projection;
+    }
+
+    string restoreJson(string content) {
+        if (!projection) {
+            return content;
+        }
+        auto value = parse_json(content);
+        if (!wire_validator.validate(value)) {
+            throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                "the response does not match the strict wire schema";
+        }
+        value = restore(value, original, wire, 0);
+        if (!original_validator.validate(value)) {
+            throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                "the response does not match the caller's schema";
+        }
+        return make_json(value);
+    }
+
+    private static schemaError(string path, string reason) {
+        throw "OPENAI-STRICT-SCHEMA-ERROR",
+            sprintf("cannot convert strict output schema at %s: %s", path,
+                reason);
+    }
+
+    # Copy schema nodes only; enum/default data must never be walked as schemas.
+    private hash<auto> transform(hash<auto> schema, bool strict,
+            string path, string target_path, int depth) {
+        if (depth > MaxDepth || ++nodes > MaxNodes) {
+            schemaError(path, "schema traversal limit exceeded");
+        }
+        hash<auto!> rv = {};
+        rv += schema;
+        schema_paths{path} = target_path;
+        # Nullable annotations wrap this schema; optional properties instead
+        # wrap its use site. References must continue identifying the schema.
+        string child_target = rv.nullable == True
+            ? target_path + "/anyOf/0" : target_path;
+        bool object_schema = rv.type == "object"
+            || (rv.type.typeCode() == NT_LIST && inlist("object", rv.type));
+        if (strict && exists rv.properties && !object_schema) {
+            schemaError(path, "properties require an explicit object type");
+        }
+        hash<string, bool> was_required;
+        if (strict && object_schema) {
+            if (exists rv.required && rv.required.typeCode() != NT_LIST) {
+                schemaError(path + ".required", "expected a list of property names");
+            }
+            foreach auto key in (rv.required ?? ()) {
+                if (key.typeCode() != NT_STRING) {
+                    schemaError(path + ".required", "invalid property name");
+                }
+                was_required{key} = True;
+            }
+        }
+        if (strict) {
+            foreach string key in (("allOf", "oneOf", "not", "if", "then",
+                    "else", "dependentRequired", "dependentSchemas",
+                    "patternProperties", "unevaluatedProperties",
+                    "propertyNames", "prefixItems", "contains",
+                    "minContains", "maxContains", "uniqueItems",
+                    "minProperties", "maxProperties", "$dynamicRef",
+                    "$recursiveRef", "$id", "$anchor")) {
+                if (exists rv{key}) {
+                    schemaError(path + "." + key,
+                        "unsupported constraint; it cannot be discarded");
+                }
+            }
+        }
+        if (strict && (exists rv."$ref" || exists rv.anyOf)) {
+            foreach string key in (keys rv) {
+                if (!inlist(key, ("$ref", "anyOf", "$defs", "definitions",
+                        "$schema", "description", "title", "name", "default",
+                        "examples", "nullable", "$comment"))) {
+                    schemaError(path + "." + key,
+                        "reference/union sibling constraints require explicit schema branches");
+                }
+            }
+            if (exists rv."$ref" && exists rv.anyOf) {
+                schemaError(path, "a reference cannot also declare a union");
+            }
+        }
+        if (exists rv."$ref") {
+            if (rv."$ref".typeCode() != NT_STRING
+                    || (rv."$ref" != "#" && rv."$ref" !~ /^#\//)) {
+                schemaError(path, "only local JSON-pointer references are supported");
+            }
+        }
+        foreach string key in (("$defs", "definitions", "properties")) {
+            if (!exists rv{key}) {
+                continue;
+            }
+            if (rv{key}.typeCode() != NT_HASH) {
+                schemaError(path + "." + key, "expected an object");
+            }
+            hash<auto!> children = {};
+            foreach hash<auto> entry in (rv{key}.pairIterator()) {
+                if (entry.value.typeCode() != NT_HASH) {
+                    schemaError(path + "." + key + "." + entry.key,
+                        "expected a schema object");
+                }
+                string suffix = "/" + key + "/" + pointerToken(entry.key);
+                string child_path = child_target + suffix;
+                if (strict && key == "properties" && object_schema
+                        && !was_required{entry.key}) {
+                    child_path += "/anyOf/0";
+                }
+                children{entry.key} = transform(entry.value, strict,
+                    path + suffix, child_path, depth + 1);
+            }
+            rv{key} = children;
+        }
+        if (exists rv.items) {
+            if (rv.items.typeCode() != NT_HASH) {
+                schemaError(path + ".items", "expected a schema object");
+            }
+            rv.items = transform(rv.items, strict, path + "/items",
+                child_target + "/items", depth + 1);
+        }
+        if (exists rv.anyOf) {
+            if (rv.anyOf.typeCode() != NT_LIST || !rv.anyOf) {
+                schemaError(path + ".anyOf", "expected a nonempty schema list");
+            }
+            list<auto> branches = ();
+            int index = 0;
+            foreach auto branch in (rv.anyOf) {
+                if (branch.typeCode() != NT_HASH) {
+                    schemaError(path + ".anyOf", "expected a schema object");
+                }
+                string suffix = "/anyOf/" + index++;
+                branches += transform(branch, strict, path + suffix,
+                    child_target + suffix, depth + 1);
+            }
+            rv.anyOf = branches;
+        }
+        if (strict && object_schema) {
+            if (exists rv.additionalProperties
+                    && (rv.additionalProperties.typeCode() != NT_BOOLEAN
+                        || rv.additionalProperties)) {
+                schemaError(path + ".additionalProperties",
+                    "open-ended properties cannot be represented in strict output");
+            }
+            rv.additionalProperties = False;
+            hash<auto> properties = rv.properties ?? {};
+            rv.properties = properties;
+            list<string> required = ();
+            foreach string key in (keys was_required) {
+                if (!properties.hasKey(key)) {
+                    schemaError(path + ".required", "undeclared or invalid property name");
+                }
+            }
+            foreach hash<auto> entry in (properties.pairIterator()) {
+                required += entry.key;
+                if (!was_required{entry.key}) {
+                    # A null branch also works for enums, refs, and constrained
+                    # objects; changing type alone would leave enum rejecting null.
+                    rv.properties{entry.key} = nullableSchema(entry.value);
+                    projection = True;
+                }
+            }
+            rv.required = required;
+        }
+        # Qore-generated tool schemas can use the OpenAPI nullable convention.
+        if (rv.nullable == True) {
+            remove rv.nullable;
+            rv = nullableSchema(rv);
+        } else {
+            remove rv.nullable;
+        }
+        # These are annotations, not validation constraints or provider options.
+        foreach string key in (("$schema", "name", "default", "examples")) {
+            remove rv{key};
+        }
+        return rv;
+    }
+
+    private static hash<auto> nullableSchema(hash<auto> schema) {
+        return {"anyOf": (schema, {"type": "null"})};
+    }
+
+    private static string pointerToken(string key) {
+        key =~ s/~/~0/g;
+        key =~ s/\//~1/g;
+        return key;
+    }
+
+    private static hash<auto> resolveRef(hash<auto> schema, hash<auto> root) {
+        string ref = schema."$ref";
+        if (ref == "#") {
+            return root;
+        }
+        auto target = root;
+        string pointer = decode_url(ref.substr(1));
+        foreach string part in (pointer.substr(1).split("/")) {
+            part =~ s/~1/\//g;
+            part =~ s/~0/~/g;
+            if (target.typeCode() == NT_LIST && part =~ /^(0|[1-9][0-9]*)$/
+                    && part.length() < 16 && part.toInt() < target.size()) {
+                target = target[part.toInt()];
+            } else if (target.typeCode() == NT_HASH && target.hasKey(part)) {
+                target = target{part};
+            } else {
+                schemaError(ref, "unresolved local reference");
+            }
+        }
+        if (target.typeCode() != NT_HASH) {
+            schemaError(ref, "reference does not identify a schema object");
+        }
+        return target;
+    }
+
+    # Rebase schema references so validating a subschema retains the meaning of
+    # both root-recursive refs and refs into the original document's definitions.
+    private hash<auto> rebaseRefs(hash<auto> schema, int depth = 0,
+            bool relocate = False) {
+        if (depth > MaxDepth) {
+            schemaError("$", "schema reference traversal limit exceeded");
+        }
+        hash<auto!> rv = {};
+        rv += schema;
+        if (rv."$ref".val()) {
+            if (relocate) {
+                string pointer = decode_url(rv."$ref");
+                if (!schema_paths.hasKey(pointer)) {
+                    schemaError(rv."$ref", "reference does not identify a supported schema node");
+                }
+                rv."$ref" = "#" + encode_url(schema_paths{pointer}.substr(1));
+            } else {
+                rv."$ref" = "#/$defs/" + RootDefinition
+                    + rv."$ref".substr(1);
+            }
+        }
+        foreach string key in (("properties", "$defs", "definitions")) {
+            if (rv{key}.typeCode() == NT_HASH) {
+                hash<auto!> children = {};
+                foreach hash<auto> entry in (rv{key}.pairIterator()) {
+                    children{entry.key} = rebaseRefs(entry.value, depth + 1,
+                        relocate);
+                }
+                rv{key} = children;
+            }
+        }
+        if (rv.items.typeCode() == NT_HASH) {
+            rv.items = rebaseRefs(rv.items, depth + 1, relocate);
+        }
+        if (rv.anyOf.typeCode() == NT_LIST) {
+            rv.anyOf = map rebaseRefs($1, depth + 1, relocate), rv.anyOf;
+        }
+        return rv;
+    }
+
+    private bool matches(auto value, hash<auto> schema, bool use_wire) {
+        string key = (use_wire ? "wire:" : "original:") + make_json(schema);
+        if (!validators{key}) {
+            if (!hasRefs(schema)) {
+                validators{key} = new JsonSchema(schema);
+                return validators{key}.validate(value);
+            }
+            hash<auto!> standalone = {};
+            standalone += rebaseRefs(schema);
+            # All refs are rebased, so local definitions can be replaced by
+            # the complete schema document under a collision-free root.
+            standalone."$defs" = {
+                RootDefinition: rebaseRefs(use_wire ? wire : original),
+            };
+            validators{key} = new JsonSchema(standalone);
+        }
+        return validators{key}.validate(value);
+    }
+
+    # Avoid embedding the whole document for ordinary scalar/enum validators.
+    private static bool hasRefs(hash<auto> schema) {
+        if (exists schema."$ref") {
+            return True;
+        }
+        foreach string key in (("properties", "$defs", "definitions")) {
+            foreach hash<auto> child in ((schema{key} ?? {}).iterator()) {
+                if (hasRefs(child)) {
+                    return True;
+                }
+            }
+        }
+        if (schema.items.typeCode() == NT_HASH && hasRefs(schema.items)) {
+            return True;
+        }
+        foreach hash<auto> branch in (schema.anyOf ?? ()) {
+            if (hasRefs(branch)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private auto restore(auto value, hash<auto> schema, hash<auto> wire_schema,
+            int depth) {
+        if (depth > MaxDepth) {
+            throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                "structured response nesting limit exceeded";
+        }
+        if (exists schema."$ref") {
+            value = restore(value, resolveRef(schema, original),
+                resolveRef(wire_schema, wire), depth + 1);
+        }
+        if (schema.anyOf.typeCode() == NT_LIST) {
+            # Preserve an already-valid branch, including explicit nullable
+            # fields, before considering branches that need absence projection.
+            foreach hash<auto> branch in (schema.anyOf) {
+                if (matches(value, branch, False)) {
+                    return value;
+                }
+            }
+            int index = 0;
+            foreach hash<auto> branch in (schema.anyOf) {
+                hash<auto> wire_branch = wire_schema.anyOf[index++];
+                if (matches(value, wire_branch, True)) {
+                    auto candidate = restore(value, branch, wire_branch,
+                        depth + 1);
+                    if (matches(candidate, branch, False)) {
+                        return candidate;
+                    }
+                }
+            }
+            throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                "structured response has no matching union branch";
+        }
+        if (value.typeCode() == NT_HASH && schema.properties.typeCode() == NT_HASH) {
+            hash<auto!> object_value = {};
+            object_value += value;
+            hash<string, bool> required;
+            foreach string key in (schema.required ?? ()) {
+                required{key} = True;
+            }
+            foreach hash<auto> entry in (schema.properties.pairIterator()) {
+                if (!object_value.hasKey(entry.key)) {
+                    continue;
+                }
+                bool optional = !required{entry.key};
+                if (optional && (object_value{entry.key}.typeCode() == NT_NULL
+                        || object_value{entry.key}.typeCode() == NT_NOTHING)
+                        && !matches(NOTHING, entry.value, False)) {
+                    remove object_value{entry.key};
+                    continue;
+                }
+                hash<auto> child_wire = wire_schema.properties{entry.key};
+                if (optional) {
+                    child_wire = child_wire.anyOf[0];
+                }
+                object_value{entry.key} = restore(object_value{entry.key},
+                    entry.value, child_wire, depth + 1);
+            }
+            return object_value;
+        }
+        if (value.typeCode() == NT_LIST && schema.items.typeCode() == NT_HASH) {
+            list<auto> items = ();
+            foreach auto item in (value) {
+                items += (restore(item, schema.items, wire_schema.items,
+                    depth + 1),);
+            }
+            return items;
+        }
+        return value;
+    }
+}
+
 #! LLM provider that dispatches to OpenAI-compatible \c /v1/chat/completions endpoints
 /** Implements the @ref QoreLlmUtils::AbstractLlmProvider contract for any
     backend that speaks the OpenAI chat-completions wire format (OpenAI,
@@ -705,11 +1116,27 @@ public class OpenAiResponseSseStreamIo {
     gateway).  Owns its own @ref RestClientIo::RestClientIo and uses the
     standard \c Authorization: \c Bearer header for authentication.
 
-    The provider's default OpenAI-facade hooks (inherited from
-    @ref QoreLlmUtils::AbstractLlmProvider) are sufficient because this
-    provider already speaks OpenAI shape natively — no overrides needed
-    for \c tool_choice, \c response_format, stream raw shape, or tool-call
-    deltas.
+    Strict structured-output and function schemas are adapted at this boundary:
+    all declared properties become required, and optional properties gain a null
+    alternative. Completed responses remove null only for fields that were
+    optional and non-nullable in the caller's schema. Explicitly nullable fields
+    preserve null. Caller-owned schemas are never modified. The same behavior is
+    available through the generic LLM API and the OpenAI-compatible facade.
+
+    Nested objects, arrays, enums, unions, and local JSON-pointer references are
+    supported. Reference/union branches must carry their own constraints; schema
+    IDs and anchors that change reference scope are unsupported. Explicitly
+    open-ended properties and unsupported constraints such as \c allOf raise \c OPENAI-STRICT-SCHEMA-ERROR before HTTP dispatch instead
+    of being discarded. Omitted \c additionalProperties becomes false for strict
+    objects. Provider-specific model limits still apply.
+
+    Adapted structured streams buffer up to 16 MiB and emit one restored JSON or
+    tool-argument delta before the terminal event. Schemas without optional fields,
+    ordinary text streams, and non-strict requests retain their existing streaming
+    behavior. Refusals and truncated outputs bypass schema restoration;
+    incomplete streams fail with \c OPENAI-STRUCTURED-OUTPUT-ERROR. This adaptation
+    belongs to the LLM provider; generic REST and raw SSE APIs retain their raw wire
+    contract.
 
     Thread-safe: the REST client is lazy-initialized behind a mutex.
 
@@ -776,6 +1203,20 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return "/v1/chat/completions";
     }
 
+    #! Preserves supported OpenAI wire controls at the generic facade boundary
+    /** @param body_options provider-specific body options to update
+        @param request the incoming OpenAI-compatible request
+    */
+    applyOpenAiRequestControls(reference<hash<auto!>> body_options,
+            hash<auto> request) {
+        foreach string key in (("parallel_tool_calls", "service_tier",
+                "stream_options", "response_format")) {
+            if (exists request{key}) {
+                body_options{key} = request{key};
+            }
+        }
+    }
+
     hash<QoreLlmUtils::LlmCompletionResult> complete(string system_prompt,
             string user_prompt, *hash<auto> output_schema,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
@@ -803,7 +1244,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 },
             };
         }
-        body = mergeRequestBodyOptions(body, opts);
+        body = finalizeOpenAiRequestBody(body, opts);
+        hash<auto> strict_context = prepareStrictRequest(body);
+        body = strict_context.body;
 
         hash<auto> resp;
         try {
@@ -816,8 +1259,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
+        hash<auto> response = restoreStrictResponse(resp.body, strict_context);
         return <QoreLlmUtils::LlmCompletionResult>{
-            "content": resp.body.choices[0].message.content ?? "",
+            "content": response.choices[0].message.content ?? "",
             "usage": resp.body.usage ?? {},
         };
     }
@@ -828,7 +1272,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+        hash<auto> strict_context = prepareStrictRequest(
+            buildOpenAiChatBody(messages, tools, opts));
+        hash<auto> body = strict_context.body;
 
         hash<auto> resp;
         try {
@@ -841,7 +1287,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
-        return parseOpenAiChatResponse(resp.body);
+        return parseOpenAiChatResponse(restoreStrictResponse(resp.body,
+            strict_context));
     }
 
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
@@ -850,7 +1297,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
+        hash<auto> strict_context = prepareStrictRequest(
+            buildOpenAiChatBody(messages, tools, opts));
+        hash<auto> body = strict_context.body;
         body.stream = True;
         # a streamed response reports its usage only when it is requested; a caller that set the option in
         # QoreLlmUtils::LlmRequestOptions::body_options keeps its own value
@@ -880,6 +1329,11 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         on_exit reader.cancel();
 
         int timeout_ms = getRequestTimeoutMs(opts);
+        *hash<auto> terminal;
+        hash<auto> stream_usage;
+        *string served_service_tier;
+        hash<auto!> structured_state = {"content": ""};
+        int structured_bytes = 0;
         while (True) {
             *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
             if (!evt) {
@@ -890,11 +1344,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         "timed out: no event arrived within %d ms",
                         timeout_ms);
                 }
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
                 break;
             }
             if (evt.data == "[DONE]") {
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
                 break;
             }
 
@@ -902,6 +1354,36 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             try {
                 parsed = parse_json(evt.data);
             } catch () {
+                continue;
+            }
+
+            if (parsed.usage.typeCode() == NT_HASH) {
+                stream_usage = parsed.usage;
+            }
+            if (parsed.service_tier.typeCode() == NT_STRING) {
+                served_service_tier = parsed.service_tier;
+            }
+
+            if (strict_context.project) {
+                # JSON member deletion cannot be expressed as an append-only
+                # delta. Buffer adapted structured calls until their JSON is
+                # complete, then emit one canonical delta before the terminal.
+                structured_bytes += evt.data.length();
+                if (structured_bytes > 16 * 1024 * 1024) {
+                    throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                        "structured response exceeds the 16 MiB buffer limit";
+                }
+                updateOpenAiStreamStateFromRaw(\structured_state, parsed);
+                getOpenAiToolCallDeltas(\structured_state, parsed);
+                if (parsed.choices[0].delta.content.val()) {
+                    structured_state.content += parsed.choices[0].delta.content;
+                }
+                if (parsed.choices[0].delta.refusal.val()) {
+                    structured_state.refusal += parsed.choices[0].delta.refusal;
+                }
+                if (parsed.choices[0].finish_reason.val()) {
+                    terminal = parsed;
+                }
                 continue;
             }
 
@@ -929,6 +1411,63 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 });
             }
         }
+        if (!strict_context.project) {
+            callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+            return;
+        }
+        hash<auto> final_raw = terminal ?? {};
+        if (strict_context.project) {
+            if (!terminal) {
+                throw "OPENAI-STRUCTURED-OUTPUT-ERROR",
+                    "structured response stream ended without a terminal frame";
+            }
+            hash<auto> response = restoreStrictResponse({
+                "choices": ({
+                    "finish_reason": terminal.choices[0].finish_reason,
+                    "message": {"content": structured_state.content,
+                        "refusal": structured_state.refusal,
+                        "tool_calls": structured_state.tool_calls},
+                },),
+            }, strict_context);
+            hash<auto!> delta = {};
+            if (response.choices[0].message.content.val()) {
+                delta.content = response.choices[0].message.content;
+            }
+            if (response.choices[0].message.refusal.val()) {
+                delta.refusal = response.choices[0].message.refusal;
+            }
+            if (response.choices[0].message.tool_calls) {
+                list<auto> calls = ();
+                int index = 0;
+                foreach hash<auto> call in (response.choices[0].message.tool_calls) {
+                    call."index" = index++;
+                    calls += call;
+                }
+                delta.tool_calls = calls;
+            }
+            if (delta) {
+                callback(<QoreLlmUtils::ChatStreamEvent>{
+                    "delta": delta.content,
+                    "raw": {"id": structured_state.id,
+                        "model": structured_state.model,
+                        "choices": ({"index": 0, "delta": delta,
+                            "finish_reason": NOTHING},)},
+                });
+            }
+        }
+        if (stream_usage) {
+            final_raw.usage = stream_usage;
+        }
+        if (served_service_tier.typeCode() == NT_STRING) {
+            final_raw.service_tier = served_service_tier;
+        }
+        # Deltas from the terminal frame were already emitted above.
+        if (final_raw.choices[0].delta) {
+            final_raw.choices[0].delta = {};
+        }
+        callback(<QoreLlmUtils::ChatStreamEvent>{
+            "done": True, "raw": final_raw,
+        });
     }
 
     #! Returns True if a streaming request asks the server for the usage of the response
@@ -1085,7 +1624,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (tools) {
             list<auto> tool_defs = ();
             foreach hash<QoreLlmUtils::ToolDefinition> td in (tools) {
-                push tool_defs, {
+                hash<auto> tool = {
                     "type": "function",
                     "function": {
                         "name": td.name,
@@ -1094,10 +1633,97 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                             ?? {"type": "object", "properties": {}},
                     },
                 };
+                if (exists td.strict) {
+                    tool.function.strict = td.strict;
+                }
+                push tool_defs, tool;
             }
             body.tools = tool_defs;
         }
-        return mergeRequestBodyOptions(body, opts);
+        if (opts.output_schema) {
+            body.response_format = {
+                "type": "json_schema",
+                "json_schema": {"name": opts.output_schema.name ?? "output",
+                    "strict": True, "schema": opts.output_schema},
+            };
+        }
+        return finalizeOpenAiRequestBody(body, opts);
+    }
+
+    #! Compiles strict schemas and keeps restoration metadata off the wire
+    private static hash<auto> prepareStrictRequest(hash<auto> body) {
+        hash<auto!> rv = {"tools": {}, "project": False};
+        if (body.response_format.type == "json_schema"
+                && body.response_format.json_schema.strict == True) {
+            OpenAiStrictOutputSchema schema(body.response_format.json_schema.schema);
+            body.response_format.json_schema.schema = schema.getSchema();
+            rv.response_schema = schema;
+            rv.project = schema.needsProjection();
+        }
+        if (body.tools.typeCode() == NT_LIST) {
+            list<auto> tools = ();
+            foreach hash<auto> tool in (body.tools) {
+                if (tool.type == "function" && tool.function.strict == True) {
+                    OpenAiStrictOutputSchema schema(tool.function.parameters
+                        ?? {"type": "object", "properties": {}});
+                    tool.function.parameters = schema.getSchema();
+                    rv.tools{tool.function.name} = schema;
+                    rv.project = rv.project || schema.needsProjection();
+                }
+                tools += tool;
+            }
+            body.tools = tools;
+        }
+        rv.body = body;
+        return rv;
+    }
+
+    #! Restores optional fields only in complete structured outputs
+    private static hash<auto> restoreStrictResponse(hash<auto> response,
+            hash<auto> schema_context) {
+        if (!schema_context.project || response.choices.typeCode() != NT_LIST) {
+            return response;
+        }
+        list<auto> choices = ();
+        foreach hash<auto> choice in (response.choices) {
+            # Refusals and truncated JSON retain the provider's failure shape.
+            if ((choice.finish_reason == "stop" || choice.finish_reason == "tool_calls")
+                    && !choice.message.refusal.val()) {
+                if (schema_context.response_schema && choice.message.content.val()) {
+                    choice.message.content = schema_context.response_schema.restoreJson(
+                        choice.message.content);
+                }
+                if (choice.message.tool_calls.typeCode() == NT_LIST) {
+                    list<auto> calls = ();
+                    foreach hash<auto> call in (choice.message.tool_calls) {
+                        if (schema_context.tools{call.function.name}) {
+                            call.function.arguments = schema_context.tools{call.function.name}
+                                .restoreJson(call.function.arguments);
+                        }
+                        calls += call;
+                    }
+                    choice.message.tool_calls = calls;
+                }
+            }
+            choices += choice;
+        }
+        response.choices = choices;
+        return response;
+    }
+
+    #! Preserves reasoning controls and avoids unsupported sampling defaults
+    private hash<auto> finalizeOpenAiRequestBody(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        *string effort = getRequestReasoningEffort(opts);
+        if (effort.val()) {
+            body.reasoning_effort = effort;
+        }
+        body = mergeRequestBodyOptions(body, opts);
+        if (body.model.val() && openAiModelUsesMaxCompletionTokens(body.model)
+                && body.reasoning_effort != "none") {
+            remove body.temperature;
+        }
+        return body;
     }
 
     #! Applies the provider-neutral output budget to OpenAI-compatible wire fields
@@ -1116,7 +1742,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     #! True for OpenAI model families that require max_completion_tokens
     private static bool openAiModelUsesMaxCompletionTokens(string model_id) {
         string lower = regex_subst(model_id.lwr(), "^models/", "");
-        if (lower =~ /^gpt-5/) {
+        if (lower =~ /^gpt-[56]/) {
             return True;
         }
         if (lower =~ /^o[0-9]/) {
