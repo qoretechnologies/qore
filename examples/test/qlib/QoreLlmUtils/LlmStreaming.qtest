@@ -37,6 +37,8 @@ hashdecl FakeReply {
     *string body;
     #! When set, the response stops after its chunks until the test releases it
     bool stall = False;
+    int header_delay_ms = 0;
+    int chunk_delay_ms = 0;
 }
 
 #! Fake LLM server speaking HTTP/1.1 on a raw socket, so any response, including a stalled event stream, can be
@@ -133,6 +135,7 @@ class FakeLlmServer {
                 body = conn.recv(hdr."content-length".toInt(), 10s);
             }
             hash<FakeReply> reply = takeReply(hdr, body);
+            if (reply.header_delay_ms) { usleep(reply.header_delay_ms * 1000); }
             string head = sprintf("HTTP/1.1 %d %s\r\nContent-Type: %s\r\nConnection: close\r\n", reply.code,
                 HttpCodes{reply.code} ?? "Status", reply.content_type);
             if (exists reply.body) {
@@ -141,6 +144,7 @@ class FakeLlmServer {
             }
             conn.send(head + "\r\n");
             foreach string chunk in (reply.chunks) {
+                if (reply.chunk_delay_ms) { usleep(reply.chunk_delay_ms * 1000); }
                 conn.send(chunk);
             }
             if (reply.stall) {
@@ -203,6 +207,8 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Gemini: the streaming path is derived from the request path", \streamPathTest());
         addTestCase("OpenAI: text in the final chunk is kept", \openAiFinalChunkContentTest());
         addTestCase("OpenAI: a stalled stream times out", \openAiStallTest());
+        addTestCase("OpenAI call-local deadlines cover chat and completion", \openAiRequestDeadlineTest());
+        addTestCase("OpenAI and Gemini call-local deadlines cover stream setup and all events", \providerStreamDeadlineTest());
         addTestCase("OpenAI incomplete streams fail without replay", \openAiIncompleteStreamTest());
         addTestCase("OpenAI: split tool calls are collected", \openAiSplitToolCallTest());
         addTestCase("OpenAI: usage sent after the finish chunk is collected", \openAiUsageChunkTest());
@@ -499,6 +505,78 @@ public class LlmStreamingTest inherits QUnit::Test {
             }));
         assertEq(1, events.size());
         assertFalse(events[0].done);
+    }
+
+    openAiRequestDeadlineTest() {
+        LlmBackend llm = openAiBackend(1000);
+        hash<auto> response = {"choices": ({"message": {"content": "ok"}, "finish_reason": "stop"},)};
+        foreach bool complete in ((False, True)) {
+            server.script(<FakeReply>{"content_type": MimeTypeJson,
+                "body": make_json(response), "header_delay_ms": 200});
+            date started = now_us();
+            *hash<ExceptionInfo> error;
+            try {
+                if (complete) {
+                    llm.complete("", "test", NOTHING, <LlmRequestOptions>{"timeout_ms": 50});
+                } else {
+                    llm.chat(userMessage("test"), NOTHING, <LlmRequestOptions>{"timeout_ms": 50});
+                }
+            } catch (hash<ExceptionInfo> ex) { error = ex; }
+            assertTrue(hasTransportTimeout(error));
+            assertLt(500, (now_us() - started).durationMilliseconds());
+            assertEq(1, server.requests.size());
+            usleep(200000);
+        }
+        # The call-local deadline must not shorten later calls on the same client.
+        server.script(<FakeReply>{"content_type": MimeTypeJson,
+            "body": make_json(response), "header_delay_ms": 200});
+        assertEq("ok", llm.chat(userMessage("default timeout")).content);
+    }
+
+    providerStreamDeadlineTest() {
+        foreach string mode in (("http", "gemini")) {
+            LlmBackend llm(<LlmBackendConfig>{"mode": mode,
+                "url": "http://localhost:" + port, "protocol": "h1",
+                "model": mode == "http" ? "gpt-test" : "gemini-2.5-flash",
+                "api_key": "fixture-key", "timeout_ms": 1000, "max_retries": 0});
+            foreach string stage in (("headers", "comments", "events")) {
+                bool delayed_headers = stage == "headers";
+                # Comments are valid SSE traffic but must not reset a call's deadline.
+                string frame = stage == "comments" ? ": keepalive\n\n"
+                    : (mode == "http" ? sseData({"choices": ({"delta": {"content": "x"}},)})
+                        : sseData({"candidates": ({"content": {"parts": ({"text": "x"},)}},)}));
+                list<string> frames;
+                for (int i = 0; i < 20; ++i) { frames += frame; }
+                server.script(<FakeReply>{"header_delay_ms": delayed_headers ? 200 : 0,
+                    "chunk_delay_ms": delayed_headers ? 0 : 25,
+                    "chunks": frames,
+                    "stall": True});
+                date started = now_us();
+                *hash<ExceptionInfo> error;
+                int observed = 0;
+                try {
+                    llm.chatStream(userMessage("test"), sub (hash<ChatStreamEvent> event) {
+                        ++observed;
+                    }, NOTHING, <LlmRequestOptions>{"timeout_ms": 50});
+                } catch (hash<ExceptionInfo> ex) { error = ex; }
+                server.release();
+                assertTrue(hasTransportTimeout(error));
+                assertLt(500, (now_us() - started).durationMilliseconds());
+                if (stage == "events") {
+                    assertTrue(observed > 0 && observed < 4);
+                } else { assertEq(0, observed); }
+                assertEq(1, server.requests.size());
+                usleep(200000);
+            }
+        }
+    }
+
+    private static bool hasTransportTimeout(auto error) {
+        for (int i = 0; i < 8 && error.typeCode() == NT_HASH; ++i) {
+            if (error.err == "HTTPCLIENT-TIMEOUT") { return True; }
+            error = error.arg;
+        }
+        return False;
     }
 
     openAiIncompleteStreamTest() {

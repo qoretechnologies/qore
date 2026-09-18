@@ -1583,6 +1583,41 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
                 *hash<auto> hdr, *data body) {
+            return restSseReaderIntern(method, path, hdr, body, NOTHING);
+        }
+
+        #! Opens an SSE stream with a call-local response-start deadline
+        /** @param method HTTP method
+            @param path request path
+            @param hdr additional HTTP headers
+            @param body optional serialized request body
+            @param timeout_ms positive timeout for opening this stream, in milliseconds
+            @return an event reader; subsequent event waits are controlled by its caller
+            @throw RESTCLIENTIO-OPTION-ERROR if the timeout is not positive
+            @throw HTTPCLIENT-TIMEOUT if response setup exceeds the timeout
+            @throw any transport or response validation error from @ref restSseReader()
+            @par Example
+            Open a status feed without changing concurrent callers' timeouts:
+            @code{.py}
+            SseStreamReader reader = client.restSseReaderWithTimeout(
+                "GET", "/order-status/events", NOTHING, NOTHING, 5000);
+            @endcode
+            @note The deadline includes error-body validation and Negotiate retries.
+                It does not mutate shared client configuration.
+        */
+        HttpClientStreamingIo::SseStreamReader restSseReaderWithTimeout(
+                string method, string path, *hash<auto> hdr, *data body,
+                int timeout_ms) {
+            if (timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR", "timeout_ms must be greater than zero";
+            }
+            return restSseReaderIntern(method, path, hdr, body,
+                now_us() + milliseconds(timeout_ms));
+        }
+
+        private HttpClientStreamingIo::SseStreamReader restSseReaderIntern(
+                string method, string path, *hash<auto> hdr, *data body,
+                *date deadline) {
             ensureToken();
             hdr = hdr ?? {};
             if (!hdr.accept && !hdr.Accept) {
@@ -1602,7 +1637,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                         prepared.serialized_body);
                 try {
                     hash<auto> response_start = readSseResponseStart(stream, method,
-                        path);
+                        path, deadline);
                     *hash<auto> response = response_start.response;
                     if (!negotiate_retried && response && response.status_code == 401
                             && tryNegotiateAuthRetry(response.headers ?? {}, \hdr,
@@ -1620,7 +1655,7 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                     list<auto> initial_data = validateSseResponseStart(stream,
                         method, path, hdr, prepared.serialized_body,
                         response_start.first_data, response,
-                        response_start.response_timeout);
+                        response_start.response_timeout, deadline);
                     # the reader replays the data consumed while validating the response
                     return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING,
                         initial_data);
@@ -3005,8 +3040,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             the stream and retry before handing it to the SSE reader.
         */
         private hash<auto> readSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
-                string method, string path) {
-            timeout response_timeout = milliseconds(getTimeout());
+                string method, string path, *date deadline = NOTHING) {
+            timeout response_timeout = remainingSseTimeout(deadline,
+                milliseconds(getTimeout()));
             auto first_data = stream.readData(response_timeout);
             if (!exists first_data) {
                 throw "HTTPCLIENT-TIMEOUT",
@@ -3035,7 +3071,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         private list<auto> validateSseResponseStart(HttpClientIo::HttpClientStreamHandle stream,
                 string method, string path, hash<auto> request_headers,
                 *data request_body, auto first_data, *hash<auto> response,
-                timeout response_timeout) {
+                timeout response_timeout, *date deadline = NOTHING) {
             if (response && response.status_code) {
                 hash<auto> raw_response;
                 raw_response += response;
@@ -3049,7 +3085,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         req_allow_any_response = allow_any_response;
                     }
                     raw_response.body = drainSseErrorBody(stream, first_data,
-                        response_timeout);
+                        response_timeout, deadline);
                     buildResponse(raw_response, False, req_allow_any_response,
                         method, path, request_headers, request_body);
                 }
@@ -3058,7 +3094,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 *string content_type = RestClient::getSingleHeaderValue(
                     raw_response.headers."content-type");
                 if (content_type.val() && !RestClientIo::isSseContentType(content_type)) {
-                    *data body = drainSseErrorBody(stream, first_data, response_timeout);
+                    *data body = drainSseErrorBody(stream, first_data,
+                        response_timeout, deadline);
                     throw "REST-RESPONSE-ERROR",
                         sprintf("HTTP %d response with Content-Type %y received; expected an event stream "
                             "(Content-Type \"text/event-stream\")", raw_response.status_code, content_type),
@@ -3098,7 +3135,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
         #! Drains a non-SSE HTTP error body before throwing REST-RESPONSE-ERROR.
         private *data drainSseErrorBody(HttpClientIo::HttpClientStreamHandle stream,
-                auto first_data, timeout read_timeout) {
+                auto first_data, timeout read_timeout, *date deadline = NOTHING) {
             string error_body = "";
             bool got_body = False;
             bool done = False;
@@ -3119,7 +3156,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             while (!done && error_body.size() < MaxSseErrorBodyBytes) {
                 auto data;
                 try {
-                    data = stream.readData(read_timeout);
+                    data = stream.readData(remainingSseTimeout(deadline, read_timeout));
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
                         break;
@@ -3147,6 +3184,16 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
 
             return got_body ? error_body : NOTHING;
+        }
+
+        #! Resolves a call-local opening deadline without changing shared state
+        private static timeout remainingSseTimeout(*date deadline, timeout fallback) {
+            if (!deadline) { return fallback; }
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                throw "HTTPCLIENT-TIMEOUT", "SSE response deadline exhausted";
+            }
+            return milliseconds(remaining);
         }
 
         #! Appends one stream chunk to a bounded text error body buffer.

@@ -123,6 +123,9 @@ stream.close();
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
 
+    - Per-call LLM timeouts now govern synchronous requests and stream setup;
+      explicit streaming deadlines include all response chunks without changing
+      concurrent calls' client settings.
     - Interrupted chat streams without a completion frame now raise an error
       instead of returning a successful partial answer.
     - strict LLM output and tool schemas automatically adapt optional fields to
@@ -1254,8 +1257,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost(getChatCompletionsPath(), body,
-                    buildAuthHeader());
+                return rest_client.restPostWithTimeout(getChatCompletionsPath(), body,
+                    buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("HTTP completion request failed: %s",
@@ -1282,8 +1285,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPost(getChatCompletionsPath(), body,
-                    buildAuthHeader());
+                return rest_client.restPostWithTimeout(getChatCompletionsPath(), body,
+                    buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("chat request failed: %s",
@@ -1318,11 +1321,14 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         };
 
         string json_body = make_json(body);
+        *date request_deadline = exists opts.timeout_ms
+            ? now_us() + milliseconds(getRequestTimeoutMs(opts)) : NOTHING;
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
-                return rest_client.restSseReader("POST",
-                    getChatCompletionsPath(), hdr, json_body);
+                return rest_client.restSseReaderWithTimeout("POST",
+                    getChatCompletionsPath(), hdr, json_body,
+                    remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("streaming chat request failed: %s",
@@ -1338,14 +1344,15 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto!> structured_state = {"content": ""};
         int structured_bytes = 0;
         while (True) {
-            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
+            *hash<SseMessageInfo> evt = reader.readEvent(
+                remainingStreamTimeout(timeout_ms, request_deadline));
             if (!evt) {
                 # the reader also returns nothing when the wait times out,
                 # which must not be reported as a complete response
                 if (!reader.isDone()) {
                     throw "LLM-ERROR", sprintf("streaming chat response "
                         "timed out: no event arrived within %d ms",
-                        timeout_ms);
+                        timeout_ms), {"err": "HTTPCLIENT-TIMEOUT"};
                 }
                 break;
             }
@@ -1529,6 +1536,17 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
         }
         return msg.val() ? sprintf("%s: %s", ex.desc, msg) : ex.desc;
+    }
+
+    #! Explicit call deadlines cover the whole stream, not a fresh wait per chunk
+    private static int remainingStreamTimeout(int timeout_ms, *date deadline) {
+        if (!deadline) { return timeout_ms; }
+        int remaining = (deadline - now_us()).durationMilliseconds();
+        if (remaining <= 0) {
+            throw "LLM-ERROR", "streaming request deadline exhausted",
+                {"err": "HTTPCLIENT-TIMEOUT"};
+        }
+        return min(timeout_ms, remaining);
     }
 
     #! Returns headers with the OpenAI \c Authorization: \c Bearer credential

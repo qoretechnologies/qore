@@ -1075,8 +1075,8 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         @param messages conversation history
         @param callback receives each event as it arrives
         @param tools optional tool definitions
-        @param opts per-call overrides; the request timeout also limits the
-        time to wait for each event
+        @param opts per-call overrides; an explicit timeout bounds stream setup
+            and all events together; otherwise the configured timeout limits each wait
 
         @throw LLM-ERROR the request failed or was rejected, the response was
         not an event stream, an event could not be parsed, the stream reported
@@ -1093,10 +1093,13 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
             "Content-Type": "application/json",
         };
         string json_body = make_json(body);
+        *date request_deadline = exists opts.timeout_ms
+            ? now_us() + milliseconds(getRequestTimeoutMs(opts)) : NOTHING;
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
-                return rest_client.restSseReader("POST", path, hdr, json_body);
+                return rest_client.restSseReaderWithTimeout("POST", path, hdr, json_body,
+                    remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
@@ -1105,7 +1108,18 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         }
         # a stream left before its end must not keep the server sending
         on_exit reader.cancel();
-        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts));
+        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts), request_deadline);
+    }
+
+    #! Explicit call deadlines cover the whole stream, not a fresh wait per chunk
+    private static int remainingStreamTimeout(int timeout_ms, *date deadline) {
+        if (!deadline) { return timeout_ms; }
+        int remaining = (deadline - now_us()).durationMilliseconds();
+        if (remaining <= 0) {
+            throw "LLM-ERROR", "streaming request deadline exhausted",
+                {"err": "HTTPCLIENT-TIMEOUT"};
+        }
+        return min(timeout_ms, remaining);
     }
 
     #! Returns the \c streamGenerateContent SSE path for the given request
@@ -1135,21 +1149,23 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
     /** @param reader the SSE reader of the response stream
         @param callback receives each event
         @param timeout_ms the maximum time to wait for each event
+        @param deadline optional absolute deadline shared by all event waits
 
         @throw LLM-ERROR an event could not be parsed, the stream reported an
         error, or no event arrived within \a timeout_ms
     */
     private deliverStreamEvents(HttpClientStreamingIo::SseStreamReader reader,
-            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback, int timeout_ms) {
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback, int timeout_ms,
+            *date deadline) {
         while (True) {
-            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
+            *hash<SseMessageInfo> evt = reader.readEvent(remainingStreamTimeout(timeout_ms, deadline));
             if (!evt) {
                 # the reader also returns nothing when the wait times out, which must not be reported as a
                 # complete response
                 if (!reader.isDone()) {
                     throw "LLM-ERROR",
                         sprintf("%s streaming response timed out: no event arrived within %d ms",
-                            getProviderLabel(), timeout_ms);
+                            getProviderLabel(), timeout_ms), {"err": "HTTPCLIENT-TIMEOUT"};
                 }
                 callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
                 return;

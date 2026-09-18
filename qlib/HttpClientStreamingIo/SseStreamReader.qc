@@ -108,7 +108,8 @@ public class SseStreamReader {
         method continues waiting for a dispatchable event.  Returns
         \c NOTHING on timeout or when the stream is complete.
 
-        @param timeout_ms timeout for waiting; blocks indefinitely if not specified
+        @param timeout_ms timeout for this event wait; comments and incomplete frames
+            do not restart it; blocks indefinitely if not specified
 
         @return the parsed SSE event, or \c NOTHING on timeout or stream end
 
@@ -123,6 +124,8 @@ public class SseStreamReader {
         - \c retry: reconnection interval in ms (from \c "retry:" line)
     */
     *hash<SseMessageInfo> readEvent(*timeout timeout_ms) {
+        *date read_deadline = timeout_ms > 0
+            ? now_us() + milliseconds(timeout_ms) : NOTHING;
         while (!done) {
             # Check buffer for a complete SSE event.  Events are delimited by a
             # blank line, which is "\n\n" (LF framing) or "\r\n\r\n" (CRLF
@@ -167,7 +170,12 @@ public class SseStreamReader {
                 }
             } else {
                 try {
-                    data = stream.readData(timeout_ms);
+                    *timeout remaining = timeout_ms;
+                    if (read_deadline) {
+                        remaining = (read_deadline - now_us()).durationMilliseconds();
+                        if (remaining <= 0) { return NOTHING; }
+                    }
+                    data = stream.readData(remaining);
                 } catch (hash<ExceptionInfo> ex) {
                     if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
                         return finishStream();
