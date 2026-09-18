@@ -1466,6 +1466,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (stream_usage) {
             final_raw.usage = stream_usage;
         }
+        if (structured_state.reasoning_blocks) {
+            final_raw.reasoning_blocks = structured_state.reasoning_blocks;
+        }
         if (served_service_tier.typeCode() == NT_STRING) {
             final_raw.service_tier = served_service_tier;
         }
@@ -1698,8 +1701,27 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if ((choice.finish_reason == "stop" || choice.finish_reason == "tool_calls")
                     && !choice.message.refusal.val()) {
                 if (schema_context.response_schema && choice.message.content.val()) {
-                    choice.message.content = schema_context.response_schema.restoreJson(
-                        choice.message.content);
+                    string restored = schema_context.response_schema.restoreJson(
+                        openAiContentText(choice.message.content) ?? "");
+                    if (choice.message.content.typeCode() == NT_LIST) {
+                        # Keep native reasoning for replay while projecting the
+                        # complete visible JSON, even when text spans blocks.
+                        list<auto> parts = ();
+                        bool wrote_text = False;
+                        foreach auto part in (choice.message.content) {
+                            if (part.typeCode() == NT_HASH && part.type == "text") {
+                                if (wrote_text) {
+                                    continue;
+                                }
+                                part.text = restored;
+                                wrote_text = True;
+                            }
+                            push parts, part;
+                        }
+                        choice.message.content = parts;
+                    } else {
+                        choice.message.content = restored;
+                    }
                 }
                 if (choice.message.tool_calls.typeCode() == NT_LIST) {
                     list<auto> calls = ();

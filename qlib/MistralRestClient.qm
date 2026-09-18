@@ -308,6 +308,9 @@ public class MistralLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     #! @copydoc QoreLlmUtils::AbstractLlmProvider::updateOpenAiStreamStateFromRaw()
     updateOpenAiStreamStateFromRaw(reference<hash<auto>> state, *hash<auto> raw) {
         OpenAiRestClient::OpenAiLlmProvider::updateOpenAiStreamStateFromRaw(\state, raw);
+        if (raw.reasoning_blocks.typeCode() == NT_LIST) {
+            state.reasoning_blocks = raw.reasoning_blocks;
+        }
         if (raw.choices[0].delta.content.typeCode() == NT_LIST) {
             foreach auto block in (raw.choices[0].delta.content) {
                 if (block.typeCode() != NT_HASH || block.type != "thinking"

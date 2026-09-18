@@ -216,6 +216,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Agent: Anthropic reasoning blocks are replayed", \agentAnthropicReasoningTest());
         addTestCase("Mistral: reasoning responses and history", \mistralReasoningResponseTest());
         addTestCase("Mistral: mixed reasoning and text streams", \mistralReasoningStreamTest());
+        addTestCase("Mistral: strict JSON projection retains reasoning", \mistralReasoningStrictTest());
         set_return_value(main());
     }
 
@@ -982,6 +983,37 @@ public class LlmStreamingTest inherits QUnit::Test {
             {"messages": ({"role": "user", "content": "multiply"},)},
             sub (hash<auto> chunk) {});
         assertEq("391", response.choices[0].message.content);
+        assertEq((thinking,), response.choices[0].message.reasoning_blocks);
+        assertEq(30, response.usage.total_tokens);
+    }
+
+    mistralReasoningStrictTest() {
+        hash<auto> thinking = {"type": "thinking", "thinking": (
+            {"type": "text", "text": "private reasoning"},)};
+        hash<auto> schema = {"type": "object", "additionalProperties": False,
+            "properties": {"answer": {"type": "integer"}, "note": {"type": "string"}},
+            "required": ("answer",)};
+        hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "answer", "strict": True, "schema": schema}}};
+        list<auto> content = (thinking, {"type": "text", "text": "{\"answer\":391,"},
+            {"type": "text", "text": "\"note\":null}"});
+        server.script((
+            errorReply(200, make_json({"choices": ({"message": {"content": content},
+                "finish_reason": "stop"},), "usage": {"total_tokens": 30}})),
+            openAiReply((
+                {"choices": ({"delta": {"content": content}},)},
+                {"choices": ({"delta": {}, "finish_reason": "stop"},)},
+                {"choices": (), "usage": {"total_tokens": 30}},
+            )),
+        ));
+        LlmBackend llm = mistralBackend();
+        hash<auto> response = llm.chatCompletions(body);
+        assertEq({"answer": 391}, parse_json(response.choices[0].message.content));
+        assertEq((thinking,), response.choices[0].message.reasoning_blocks);
+        assertEq(30, response.usage.total_tokens);
+        response = llm.chatCompletionsStream(body, sub (hash<auto> chunk) {});
+        assertEq({"answer": 391}, parse_json(response.choices[0].message.content));
         assertEq((thinking,), response.choices[0].message.reasoning_blocks);
         assertEq(30, response.usage.total_tokens);
     }
