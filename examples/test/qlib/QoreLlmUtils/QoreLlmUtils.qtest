@@ -299,6 +299,11 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \callbackChatStreamToolCallDeltasTest());
         addTestCase("CallbackLlmProvider chatStream safety-net done for malformed providers",
             \callbackChatStreamSafetyNetDoneTest());
+        addTestCase("Responses strict tools and opaque reasoning round trip", \openAiResponsesRoundTripTest());
+        addTestCase("Responses streamed completion, limits and filters retain usage", \openAiResponsesStreamTest());
+        addTestCase("Responses structured output and API isolation", \openAiResponsesCompletionTest());
+        addTestCase("Responses failure and incomplete transport never replay", \openAiResponsesFailureTest());
+        addTestCase("Responses text deltas are not duplicated by terminal output", \openAiResponsesTextStreamTest());
         set_return_value(main());
     }
 
@@ -2651,6 +2656,184 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", sub () {
             llm.chatCompletionsStream(request, sub (hash<auto> chunk) {});
         });
+    }
+
+    private hash<auto> responsesFixture(string status = "completed", *string reason = NOTHING) {
+        return {"id": "resp_fixture", "model": "gpt-5.6-sol", "status": status,
+            "service_tier": "default", "incomplete_details": {"reason": reason},
+            "usage": {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120,
+                "input_tokens_details": {"cached_tokens": 50, "cache_write_tokens": 10},
+                "output_tokens_details": {"reasoning_tokens": 12}},
+            "output": ({"type": "reasoning", "id": "rs_fixture", "summary": (),
+                "encrypted_content": "opaque-fixture"},
+                {"type": "function_call", "status": "completed", "id": "fc_fixture",
+                    "call_id": "call_fixture", "name": "record",
+                    "arguments": status == "completed" ? "{\"value\":1,\"note\":null}" : "{\"value\":"},)};
+    }
+
+    private hash<auto> responsesRequest() {
+        return {"messages": ({"role": "user", "content": "fixture"},),
+            "model": "gpt-5.6-sol", "reasoning_effort": "high", "max_completion_tokens": 8192,
+            "tools": ({"type": "function", "function": {"name": "record", "strict": True,
+                "parameters": {"type": "object", "properties": {"value": {"type": "integer"},
+                    "note": {"type": "string"}}, "required": ("value",)}}},),
+            "tool_choice": {"type": "function", "function": {"name": "record"}},
+            "parallel_tool_calls": False, "max_retries": 0};
+    }
+
+    openAiResponsesRoundTripTest() {
+        installGeminiHandler({"/v1/responses": {"code": 200, "body": responsesFixture()}});
+        LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "provider_options": {"openai_api": "responses"}});
+        hash<auto> request = responsesRequest();
+        hash<auto> response = backend.chatCompletions(request);
+        assertEq("tool_calls", response.choices[0].finish_reason);
+        assertEq({"value": 1}, parse_json(response.choices[0].message.tool_calls[0].function.arguments));
+        assertEq("call_fixture", response.choices[0].message.tool_calls[0].id);
+        assertEq(100, response.usage.prompt_tokens);
+        assertEq(20, response.usage.completion_tokens);
+        assertEq(12, response.usage.completion_tokens_details.reasoning_tokens);
+        assertEq(50, response.usage.prompt_tokens_details.cached_tokens);
+        assertEq(10, response.usage.prompt_tokens_details.cache_write_tokens);
+        hash<LlmTokenUsage> normalized = LlmTelemetry::normalizeUsage(response.usage);
+        assertEq(10, normalized.cache_creation_input_tokens);
+        assertEq(50, normalized.cached_input_tokens);
+        assertEq(12, normalized.reasoning_tokens);
+        assertEq(120, normalized.total_tokens, "reasoning is already included in output tokens");
+        assertEq(10, LlmTelemetry::normalizeUsage(responsesFixture().usage).cache_creation_input_tokens);
+        assertEq("opaque-fixture", response.choices[0].message.reasoning_blocks[0].encrypted_content);
+        hash<auto> wire = gemini_handler.requests[0].body;
+        assertEq("high", wire.reasoning.effort);
+        assertEq(8192, wire.max_output_tokens);
+        assertEq(False, wire.store);
+        assertFalse(exists wire.messages);
+        assertFalse(exists wire.reasoning_effort);
+        assertFalse(exists wire.temperature);
+        assertFalse(exists wire.max_completion_tokens);
+        assertEq("record", wire.tool_choice.name);
+        assertTrue(inlist("note", wire.tools[0].parameters.required));
+        assertEq(False, wire.tools[0].parameters.additionalProperties);
+        list<auto> history = ();
+        foreach auto message in (request.messages) { history += message; }
+        history += response.choices[0].message;
+        history += {"role": "tool", "tool_call_id": "call_fixture", "content": "ok"};
+        request.messages = history;
+        backend.chatCompletions(request);
+        list<auto> input = gemini_handler.requests[1].body.input;
+        assertEq("reasoning", input[1].type);
+        assertEq("opaque-fixture", input[1].encrypted_content);
+        assertEq("function_call", input[2].type);
+        assertEq("call_fixture", input[2].call_id);
+        assertEq("function_call_output", input[3].type);
+        assertEq("call_fixture", input[3].call_id);
+        assertEq(2, gemini_handler.requests.size());
+    }
+
+    openAiResponsesStreamTest() {
+        foreach string reason in (("complete", "max_output_tokens", "content_filter")) {
+            hash<auto> fixture = responsesFixture(reason == "complete" ? "completed" : "incomplete", reason);
+            installGeminiHandler({"/v1/responses": {"code": 200, "sse": (
+                {"type": "response.created", "response": {"id": "resp_fixture", "model": "gpt-5.6-sol"}},
+                {"type": "response.function_call_arguments.delta", "delta": "{\"value\":"},
+                {"type": reason == "complete" ? "response.completed" : "response.incomplete", "response": fixture},)}});
+            LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+                "provider_options": {"openai_api": "responses"}});
+            list<hash<auto>> chunks = ();
+            hash<auto> rv = backend.chatCompletionsStream(responsesRequest(), sub (hash<auto> chunk) {
+                chunks += chunk;
+            });
+            assertEq(reason == "complete" ? "tool_calls" : reason == "max_output_tokens" ? "length" : reason,
+                rv.choices[0].finish_reason);
+            assertEq(120, rv.usage.total_tokens);
+            assertEq(12, rv.usage.completion_tokens_details.reasoning_tokens);
+            assertEq("opaque-fixture", rv.choices[0].message.reasoning_blocks[0].encrypted_content);
+            assertFalse(exists gemini_handler.requests[0].body.stream_options);
+            if (reason == "complete") {
+                assertEq({"value": 1}, parse_json(rv.choices[0].message.tool_calls[0].function.arguments));
+            } else {
+                assertTrue(!rv.choices[0].message.tool_calls);
+                foreach hash<auto> chunk in (chunks) {
+                    assertTrue(!chunk.choices[0].delta.tool_calls, "incomplete tool arguments never become executable");
+                }
+            }
+            assertEq(1, gemini_handler.requests.size(), "terminal incomplete responses are never replayed");
+        }
+    }
+
+    openAiResponsesCompletionTest() {
+        hash<auto> fixture = responsesFixture();
+        fixture.output = ({"type": "message", "content": ({"type": "output_text", "text": "{\"value\":1,\"note\":null}"},)},);
+        installGeminiHandler({"/v1/responses": {"code": 200, "body": fixture}});
+        LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "model": "gpt-5.6-sol", "reasoning_effort": "medium",
+            "provider_options": {"openai_api": "responses"}});
+        hash<LlmCompletionResult> rv = backend.complete("fixture", "fixture", {
+            "type": "object", "properties": {"value": {"type": "integer"}, "note": {"type": "string"}},
+            "required": ("value",)});
+        assertEq({"value": 1}, parse_json(rv.content));
+        assertEq(120, rv.usage.total_tokens);
+        assertEq("json_schema", gemini_handler.requests[0].body.text.format.type);
+        assertFalse(exists gemini_handler.requests[0].body.response_format);
+        installGeminiHandler({"/v1/chat/completions": {"code": 200, "body": {
+            "choices": ({"finish_reason": "stop", "message": {"content": "compatible"}},)}}});
+        LlmBackend compatible(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "model": "gpt-5.6-sol", "reasoning_effort": "medium"});
+        assertEq("compatible", compatible.complete("fixture", "fixture").content);
+        assertEq("/v1/chat/completions", gemini_handler.requests[0].path,
+            "model names alone must not switch compatible servers to Responses");
+        assertThrows("LLM-CONFIG-ERROR", sub () {
+            backend.chatCompletions({"model": "gpt-6-astra", "reasoning_effort": "none", "messages": ()});
+        });
+    }
+
+    openAiResponsesFailureTest() {
+        LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "provider_options": {"openai_api": "responses"}});
+        foreach string reason in (("max_output_tokens", "content_filter")) {
+            installGeminiHandler({"/v1/responses": {"code": 200,
+                "body": responsesFixture("incomplete", reason)}});
+            hash<auto> rv = backend.chatCompletions(responsesRequest());
+            assertEq(reason == "max_output_tokens" ? "length" : reason, rv.choices[0].finish_reason);
+            assertEq(120, rv.usage.total_tokens);
+            assertTrue(!rv.choices[0].message.tool_calls);
+            assertEq(1, gemini_handler.requests.size());
+        }
+        installGeminiHandler({"/v1/responses": {"code": 200, "body": {
+            "status": "failed", "error": {"message": "fixture response failed"}}}});
+        assertThrows("LLM-RESPONSE-ERROR", sub () { backend.chatCompletions(responsesRequest()); });
+        assertEq(1, gemini_handler.requests.size());
+        installGeminiHandler({"/v1/responses": {"code": 200, "sse": (
+            {"type": "response.created", "response": {"id": "resp_fixture"}},
+            {"type": "response.function_call_arguments.delta", "delta": "{\"value\":"},)}});
+        list<hash<auto>> chunks = ();
+        assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", sub () {
+            backend.chatCompletionsStream(responsesRequest(), sub (hash<auto> chunk) { chunks += chunk; });
+        });
+        assertEq(1, gemini_handler.requests.size());
+        assertEq((), chunks, "partial calls from an interrupted stream are not exposed");
+        LlmBackend invalid(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "provider_options": {"openai_api": "invalid"}});
+        assertThrows("LLM-CONFIG-ERROR", sub () { invalid.chatCompletions(responsesRequest()); });
+        assertEq(1, gemini_handler.requests.size(), "invalid API mode fails before HTTP");
+    }
+
+    openAiResponsesTextStreamTest() {
+        hash<auto> fixture = responsesFixture();
+        fixture.output = ({"type": "message", "content": ({"type": "output_text", "text": "Hello world"},)},);
+        installGeminiHandler({"/v1/responses": {"code": 200, "sse": (
+            {"type": "response.created", "response": {"id": "resp_fixture", "model": "gpt-5.6-sol"}},
+            {"type": "response.output_text.delta", "delta": "Hello "},
+            {"type": "response.output_text.delta", "delta": "world"},
+            {"type": "response.completed", "response": fixture},)}});
+        LlmBackend backend(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:" + port,
+            "provider_options": {"openai_api": "responses"}});
+        string text;
+        hash<auto> rv = backend.chatCompletionsStream({"model": "gpt-5.6-sol", "messages": ()},
+            sub (hash<auto> chunk) { text += chunk.choices[0].delta.content ?? ""; });
+        assertEq("Hello world", text);
+        assertEq("Hello world", rv.choices[0].message.content);
+        assertEq("stop", rv.choices[0].finish_reason);
+        assertEq(120, rv.usage.total_tokens);
     }
 
     openAiIncompleteToolResponseTest() {

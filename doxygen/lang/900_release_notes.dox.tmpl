@@ -1790,6 +1790,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
+      - native OpenAI reasoning requests now use Responses behind the existing LLM interface, including
+        strict structured output, streaming, encrypted reasoning continuation, and completion status
+      - OpenAI-compatible servers keep Chat Completions unless provider_options.openai_api selects Responses
+      - cache-write usage is retained for both OpenAI token detail formats without double-counting reasoning
       - chat clients preserve usage and output-limit status when tool arguments are incomplete;
         truncated or content-filtered responses are not promoted to executable tool calls
       - strict LLM output and tool schemas transparently adapt optional fields for OpenAI and
