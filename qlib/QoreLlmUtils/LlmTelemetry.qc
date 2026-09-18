@@ -83,6 +83,8 @@ public class LlmTelemetry {
             hash<auto> details = cast<hash>(usage.prompt_tokens_details);
             cached_input_tokens = max(cached_input_tokens,
                 firstInt(details, ("cached_tokens", "cachedTokens")));
+            cache_creation_input_tokens = max(cache_creation_input_tokens,
+                firstInt(details, ("cache_write_tokens", "cache_creation_input_tokens")));
         }
         if (usage.input_token_details.typeCode() == NT_HASH) {
             hash<auto> details =
@@ -99,6 +101,8 @@ public class LlmTelemetry {
             hash<auto> details = cast<hash>(usage.input_tokens_details);
             cached_input_tokens = max(cached_input_tokens,
                 firstInt(details, ("cached_tokens", "cachedTokens")));
+            cache_creation_input_tokens = max(cache_creation_input_tokens,
+                firstInt(details, ("cache_write_tokens", "cache_creation_input_tokens")));
         }
         foreach string key in (("completion_tokens_details", "output_tokens_details")) {
             if (usage{key}.typeCode() != NT_HASH) {

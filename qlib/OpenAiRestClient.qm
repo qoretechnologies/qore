@@ -1182,6 +1182,12 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     /** @param config the backend configuration; @ref QoreLlmUtils::LlmBackendConfig::url
             is required
 
+        @note The provider option \c openai_api accepts \c auto (default), \c responses,
+        or \c chat_completions. Auto selects Responses for reasoning-enabled
+        GPT-5/GPT-6/o-series models at native OpenAI endpoints; compatible
+        servers retain Chat Completions. Responses uses stateless encrypted
+        reasoning, which callers preserve through ChatMessage::reasoning_blocks.
+
         @throw LLM-CONFIG-ERROR \c url is missing
         @throw LLM-DEPENDENCY-ERROR the \c json module is not available
     */
@@ -1253,11 +1259,12 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         body = finalizeOpenAiRequestBody(body, opts);
         hash<auto> strict_context = prepareStrictRequest(body);
         body = strict_context.body;
+        hash<auto> wire = prepareOpenAiWireRequest(body);
 
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPostWithTimeout(getChatCompletionsPath(), body,
+                return rest_client.restPostWithTimeout(wire.path, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1265,10 +1272,11 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
-        hash<auto> response = restoreStrictResponse(resp.body, strict_context);
+        hash<auto> response = restoreStrictResponse(wire.responses
+            ? responsesToChatCompletion(resp.body) : resp.body, strict_context);
         return <QoreLlmUtils::LlmCompletionResult>{
             "content": openAiContentText(response.choices[0].message.content) ?? "",
-            "usage": resp.body.usage ?? {},
+            "usage": response.usage ?? {},
         };
     }
 
@@ -1281,11 +1289,12 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> strict_context = prepareStrictRequest(
             buildOpenAiChatBody(messages, tools, opts));
         hash<auto> body = strict_context.body;
+        hash<auto> wire = prepareOpenAiWireRequest(body);
 
         hash<auto> resp;
         try {
             resp = withRetry(hash<auto> sub () {
-                return rest_client.restPostWithTimeout(getChatCompletionsPath(), body,
+                return rest_client.restPostWithTimeout(wire.path, wire.body,
                     buildAuthHeader(), getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1293,8 +1302,8 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
-        return parseOpenAiChatResponse(restoreStrictResponse(resp.body,
-            strict_context));
+        return parseOpenAiChatResponse(restoreStrictResponse(wire.responses
+            ? responsesToChatCompletion(resp.body) : resp.body, strict_context));
     }
 
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
@@ -1320,14 +1329,16 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "Content-Type": "application/json",
         };
 
-        string json_body = make_json(body);
+        hash<auto> wire = prepareOpenAiWireRequest(body);
+        hash<auto!> responses_stream_state = {};
+        string json_body = make_json(wire.body);
         *date request_deadline = exists opts.timeout_ms
             ? now_us() + milliseconds(getRequestTimeoutMs(opts)) : NOTHING;
         HttpClientStreamingIo::SseStreamReader reader;
         try {
             reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
                 return rest_client.restSseReaderWithTimeout("POST",
-                    getChatCompletionsPath(), hdr, json_body,
+                    wire.path, hdr, json_body,
                     remainingStreamTimeout(getRequestTimeoutMs(opts), request_deadline));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
@@ -1367,6 +1378,12 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 continue;
             }
 
+            if (wire.responses) {
+                parsed = responsesStreamToChatChunk(parsed, \responses_stream_state);
+                if (!parsed) {
+                    continue;
+                }
+            }
             if (parsed.usage.typeCode() == NT_HASH) {
                 stream_usage = parsed.usage;
             }
@@ -1486,6 +1503,227 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         callback(<QoreLlmUtils::ChatStreamEvent>{
             "done": True, "raw": final_raw,
         });
+    }
+
+    #! Retains opaque Responses reasoning at the existing facade boundary
+    /** @param state mutable stream accumulator
+        @param raw normalized provider event
+        @note Reasoning is carried as opaque signed data, never visible text.
+    */
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        AbstractLlmProvider::updateOpenAiStreamStateFromRaw(\state, raw);
+        if (raw.reasoning_blocks.typeCode() == NT_LIST) {
+            state.reasoning_blocks = raw.reasoning_blocks;
+        }
+    }
+
+    #! Selects the native API without changing other OpenAI-compatible servers
+    private hash<auto> prepareOpenAiWireRequest(hash<auto> body) {
+        string api = (getConfig().provider_options.openai_api ?? "auto").toString();
+        if (!inlist(api, ("auto", "responses", "chat_completions"))) {
+            throw "LLM-CONFIG-ERROR", "openai_api must be auto, responses, or chat_completions";
+        }
+        bool native_openai = getMode() == "http"
+            && getConfig().url =~ /^https:\/\/(api|us\.api|eu\.api)\.openai\.com(:443)?(\/|$)/;
+        bool modern_model = body.model.val() && openAiModelUsesMaxCompletionTokens(body.model);
+        bool responses = api == "responses" || (api == "auto" && native_openai
+            && modern_model && body.reasoning_effort != "none");
+        if ((native_openai || api == "responses") && body.model =~ /^gpt-6/
+                && body.reasoning_effort == "none") {
+            throw "LLM-CONFIG-ERROR", "GPT-6 models require reasoning; reasoning_effort none is unsupported";
+        }
+        if (responses) {
+            return {"responses": True, "path": "/v1/responses",
+                "body": chatCompletionToResponses(body)};
+        }
+        # Provider-specific reasoning must never leak onto an incompatible wire API.
+        list<auto> messages = ();
+        foreach hash<auto> msg in (body.messages) {
+            remove msg.reasoning_blocks;
+            messages += msg;
+        }
+        body.messages = messages;
+        return {"responses": False, "path": getChatCompletionsPath(), "body": body};
+    }
+
+    #! Converts the prepared strict chat contract into stateless Responses input
+    private static hash<auto> chatCompletionToResponses(hash<auto> body) {
+        list<auto> input = ();
+        foreach hash<auto> msg in (body.messages) {
+            if (msg.role == "tool") {
+                input += {"type": "function_call_output", "call_id": msg.tool_call_id,
+                    "output": msg.content ?? ""};
+                continue;
+            }
+            if (msg.role == "assistant") {
+                foreach auto reasoning in (msg.reasoning_blocks ?? ()) {
+                    if (reasoning.typeCode() == NT_HASH && reasoning.type == "reasoning"
+                            && reasoning.encrypted_content.val()) {
+                        input += reasoning;
+                    }
+                }
+            }
+            if (msg.content.val()) {
+                auto content = msg.content;
+                if (content.typeCode() == NT_LIST) {
+                    list<auto> parts = ();
+                    foreach hash<auto> part in (content) {
+                        switch (part.type) {
+                            case "text":
+                                parts += {"type": msg.role == "assistant" ? "output_text" : "input_text",
+                                    "text": part.text};
+                                break;
+                            case "image_url": {
+                                hash<auto!> image_part = {"type": "input_image", "image_url": part.image_url.url};
+                                if (part.image_url.detail.val()) { image_part.detail = part.image_url.detail; }
+                                parts += image_part;
+                                break;
+                            }
+                            case "file":
+                                parts += {"type": "input_file", "filename": part.file.filename,
+                                    "file_data": part.file.file_data};
+                                break;
+                            default:
+                                throw "LLM-CONFIG-ERROR", "unsupported Responses input content type", part.type;
+                        }
+                    }
+                    content = parts;
+                }
+                input += {"role": msg.role, "content": content};
+            }
+            foreach hash<auto> call in (msg.tool_calls ?? ()) {
+                input += {"type": "function_call", "call_id": call.id,
+                    "name": call.function.name, "arguments": call.function.arguments};
+            }
+        }
+        remove body.messages;
+        body.input = input;
+        body.store = False;
+        body.include = ("reasoning.encrypted_content",);
+        if (exists body.max_completion_tokens || exists body.max_tokens) {
+            body.max_output_tokens = body.max_completion_tokens ?? body.max_tokens;
+            remove body.max_completion_tokens;
+            remove body.max_tokens;
+        }
+        if (exists body.reasoning_effort) {
+            body.reasoning = {"effort": remove body.reasoning_effort};
+        }
+        remove body.stream_options;
+        if (body.tools) {
+            list<auto> tools = ();
+            foreach hash<auto> tool in (body.tools) {
+                hash<auto!> translated = tool.function;
+                translated.type = "function";
+                # Responses defaults to strict; an unspecified legacy tool must
+                # retain its original optional/open-object semantics.
+                translated.strict = tool.function.strict ?? False;
+                tools += translated;
+            }
+            body.tools = tools;
+        }
+        if (body.tool_choice.typeCode() == NT_HASH && body.tool_choice.type == "function") {
+            body.tool_choice = {"type": "function", "name": body.tool_choice.function.name};
+        }
+        if (body.response_format) {
+            hash<auto> format = remove body.response_format;
+            body.text = {"format": format.type == "json_schema"
+                ? format.json_schema + {"type": "json_schema"} : format};
+        }
+        return body;
+    }
+
+    #! Converts a terminal response while retaining billed usage and incomplete status
+    private static hash<auto> responsesToChatCompletion(hash<auto> response) {
+        string finish;
+        if (response.status == "completed") {
+            finish = "stop";
+        } else if (response.status == "incomplete") {
+            switch (response.incomplete_details.reason) {
+                case "max_output_tokens": finish = "length"; break;
+                case "content_filter": finish = "content_filter"; break;
+                default:
+                    throw "LLM-RESPONSE-ERROR", "unsupported incomplete Responses result", response;
+            }
+        } else {
+            throw "LLM-RESPONSE-ERROR", response.error.message
+                ?? "Responses request did not complete", response;
+        }
+        hash<auto!> message = {"role": "assistant", "content": ""};
+        list<auto> calls = ();
+        list<auto> reasoning = ();
+        foreach hash<auto> item in (response.output ?? ()) {
+            if (item.type == "message") {
+                foreach hash<auto> part in (item.content ?? ()) {
+                    if (part.type == "output_text") { message.content += part.text; }
+                    else if (part.type == "refusal") { message.refusal = part.refusal; }
+                }
+            } else if (item.type == "function_call") {
+                if (response.status == "completed" && item.status != "completed") {
+                    throw "LLM-RESPONSE-ERROR", "completed response contains an unfinished tool call", response;
+                }
+                calls += {"id": item.call_id, "type": "function", "function": {
+                    "name": item.name, "arguments": item.arguments}};
+            } else if (item.type == "reasoning" && item.encrypted_content.val()) {
+                reasoning += item;
+            }
+        }
+        if (calls) {
+            message.tool_calls = calls;
+            if (finish == "stop") { finish = "tool_calls"; }
+        }
+        if (reasoning) { message.reasoning_blocks = reasoning; }
+        hash<auto> usage = response.usage ?? {};
+        hash<auto!> normalized_usage = {};
+        if (usage) {
+            normalized_usage = {"prompt_tokens": usage.input_tokens,
+                "completion_tokens": usage.output_tokens, "total_tokens": usage.total_tokens,
+                "prompt_tokens_details": usage.input_tokens_details ?? {},
+                "completion_tokens_details": usage.output_tokens_details ?? {}};
+        }
+        return {"id": response.id, "model": response.model,
+            "choices": ({"index": 0, "finish_reason": finish, "message": message},),
+            "usage": normalized_usage, "service_tier": response.service_tier,
+            "_openai_response": response};
+    }
+
+    #! Streams visible text; tool calls become executable only at a terminal response
+    private static *hash<auto> responsesStreamToChatChunk(hash<auto> event,
+            reference<hash<auto>> state) {
+        if (event.type == "response.created") {
+            state.id = event.response.id;
+            state.model = event.response.model;
+            return NOTHING;
+        }
+        if (event.type == "response.output_text.delta") {
+            state.text_emitted = True;
+            return {"id": state.id, "model": state.model,
+                "choices": ({"index": 0, "delta": {"content": event.delta}},)};
+        }
+        if (event.type == "error") {
+            throw "LLM-RESPONSE-ERROR", event.message ?? "Responses stream failed", event;
+        }
+        if (!inlist(event.type, ("response.completed", "response.incomplete", "response.failed"))) {
+            return NOTHING;
+        }
+        hash<auto> response = responsesToChatCompletion(event.response);
+        hash<auto> message = response.choices[0].message;
+        hash<auto!> delta = {};
+        if (!state.text_emitted && message.content.val()) { delta.content = message.content; }
+        if (message.refusal.val()) { delta.refusal = message.refusal; }
+        if (response.choices[0].finish_reason == "tool_calls") {
+            list<auto> calls = ();
+            int index = 0;
+            foreach hash<auto> call in (message.tool_calls) {
+                call."index" = index++;
+                calls += call;
+            }
+            delta.tool_calls = calls;
+        }
+        response.choices[0].delta = delta;
+        remove response.choices[0].message;
+        if (message.reasoning_blocks) { response.reasoning_blocks = message.reasoning_blocks; }
+        return response;
     }
 
     #! Returns True if a streaming request asks the server for the usage of the response
@@ -1617,6 +1855,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 api_msg.content = parts;
             } else if (msg.content.val()) {
                 api_msg.content = msg.content;
+            }
+            if (msg.reasoning_blocks) {
+                api_msg.reasoning_blocks = msg.reasoning_blocks;
             }
             if (msg.tool_calls) {
                 list<auto> tc_list = ();
@@ -1870,6 +2111,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "tool_calls": parsed_tool_calls,
             "usage": response_data.usage ?? {},
             "raw": response_data,
+            "reasoning_blocks": msg.reasoning_blocks,
         };
     }
 }
