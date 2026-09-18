@@ -29,7 +29,8 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
-%requires(reexport) AwsRestClient
+%requires(reexport) AwsRestClient >= 1.4
+%requires AwsEventStream >= 1.1
 %requires QoreLlmTypes
 %requires QoreRagTypes
 
@@ -65,6 +66,11 @@ module BedrockRestClient {
     Converse API (chat + tool use, covering the Anthropic /
     Llama / Mistral / Cohere / AI21 / Titan / DeepSeek model families) and
     Titan / Cohere embeddings are supported.
+
+    Native `ConverseStream` and `InvokeModelWithResponseStream` responses are delivered incrementally by
+    @ref BedrockRestClient::BedrockRestClientIo "BedrockRestClientIo". Full-duplex
+    `InvokeModelWithBidirectionalStream` sessions support concurrent
+    model input and output over HTTP/2, chained event signatures, and upload half-close.
 
     SigV4 signing, region detection, and the standard AWS credential
     resolution chain (static -> env vars -> ECS task-role -> IMDSv2 ->
@@ -117,6 +123,9 @@ hash<ChatResponse> r = p.chat((
     @section bedrockrestclientrelnotes Release Notes
 
     @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
+    - implements all three native runtime event-stream operations with CRC validation, timeouts, and cancellation
+    - emits incremental Converse text and tool-call fragments, with final stop reason and usage metadata
+    - signs bidirectional input events and terminal envelopes over HTTP/2 without buffering either direction
     - associates Bedrock connections with the AWS Bedrock data provider app
     - derives persistent runtime endpoints from the configured AWS region
     - verifies credentials without inference by listing foundation models
@@ -134,6 +143,188 @@ public const BedrockService = "bedrock";
 
 #! Default Bedrock runtime service hostname pattern
 public const BedrockRuntimeHostPattern = "bedrock-runtime.%s.amazonaws.com";
+
+#! Bedrock runtime client with native response and bidirectional event streams
+/** Uses the same credential chain and encoded-path signing as ordinary Bedrock requests.
+    The returned streams are incremental and must be closed when abandoned.
+
+    @par Example
+    @code{.py}
+BedrockRestClientIo client({"url": "https://bedrock-runtime.us-east-1.amazonaws.com",
+    "aws_region": "us-east-1"});
+BedrockEventStream stream = client.openConverseStream("amazon.nova-micro-v1:0", {
+    "messages": ({"role": "user", "content": ({"text": "Summarize this order."},)},),
+});
+on_exit stream.close();
+while (*hash<auto> event = stream.readEvent()) {
+    if (exists event.contentBlockDelta.delta.text) {
+        print(event.contentBlockDelta.delta.text);
+    }
+}
+    @endcode
+*/
+public class BedrockRestClientIo inherits AwsRestClient::AwsRestClientIo {
+    #! Creates a regional Bedrock runtime client
+    /** @param opts AWS and HTTP client options; `url` identifies the runtime endpoint
+        @param shared_mgr optional caller-owned connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : AwsRestClient::AwsRestClientIo(opts + {"aws_service": BedrockService}, shared_mgr) {
+    }
+
+    #! Opens the unified Converse event stream
+    /** @param model_id model ID or ARN
+        @param body native ConverseStream request, including optional streaming guardrail settings
+        @return an incremental stream of native, single-member Bedrock event hashes
+        @throw BEDROCK-STREAM-ERROR the model ID is empty
+    */
+    BedrockEventStream openConverseStream(string model_id, hash<auto> body) {
+        return new BedrockEventStream(startEncodedEventStream("POST", streamPath(model_id, "converse-stream"),
+            binary(make_json(body)), {"content-type": MimeTypeJson, "accept": "application/vnd.amazon.eventstream"}));
+    }
+
+    #! Opens a model-specific inference response stream
+    /** @param model_id model ID or ARN
+        @param body pre-serialized model-specific JSON request
+        @param headers optional Bedrock headers, including guardrail, trace, and response content type
+        @return a stream whose `chunk.bytes` values are decoded binary payloads
+        @throw BEDROCK-STREAM-ERROR the model ID is empty
+    */
+    BedrockEventStream openInvokeModelWithResponseStream(string model_id, data body, *hash<auto> headers) {
+        return new BedrockEventStream(startEncodedEventStream("POST",
+            streamPath(model_id, "invoke-with-response-stream"), binary(body), {
+                "content-type": MimeTypeJson,
+                "accept": "application/vnd.amazon.eventstream",
+                "x-amzn-bedrock-accept": MimeTypeJson,
+            } + (headers ?? {})));
+    }
+
+    #! Opens a full-duplex model session with chained SigV4 event signatures
+    /** @param model_id model ID or ARN supporting bidirectional inference
+        @return a session supporting concurrent `send()`, `readEvent()`, and upload half-close
+        @throw BEDROCK-STREAM-ERROR the model ID is empty or HTTP/2 was not negotiated
+        @note Configure `http_version` as `2.0` if the endpoint does not negotiate HTTP/2 automatically.
+    */
+    BedrockEventStream openInvokeModelWithBidirectionalStream(string model_id) {
+        AwsRestClient::AwsSignedEventStream stream = startEncodedEventStream("POST",
+            streamPath(model_id, "invoke-with-bidirectional-stream"), NOTHING,
+            {"accept": "application/vnd.amazon.eventstream"}, True);
+        if (stream.getProtocol() != "h2") {
+            stream.close();
+            throw "BEDROCK-STREAM-ERROR", "bidirectional Bedrock streaming requires HTTP/2";
+        }
+        return new BedrockEventStream(stream);
+    }
+
+    #! Encodes a model ID as exactly one URI segment
+    private static string streamPath(string model_id, string operation) {
+        if (!model_id.val()) {
+            throw "BEDROCK-STREAM-ERROR", "a nonempty Bedrock model ID is required";
+        }
+        return "/model/" + encode_url(model_id, True) + "/" + operation;
+    }
+}
+
+#! Native Bedrock event reader and optional bidirectional writer
+/** Events have the same single-member shape as the AWS SDK: `messageStart`, `contentBlockDelta`, `metadata`,
+    or `chunk`, for example. Model-specific `chunk.bytes` values are decoded to binary; application JSON is
+    deliberately left to the caller. Transport and service exceptions never appear as successful EOF.
+
+    @par Bidirectional model sessions
+    Send model-native input from one thread while another reads events. Before ending the upload, send
+    the model's own closing events (for Nova Sonic, `contentEnd`, `promptEnd`, and `sessionEnd`), then
+    call @ref writesDone(). Continue reading until EOF and always close an abandoned session.
+    The library frames and signs bytes; the caller owns the model's audio format and event ordering.
+    @note Long-lived sessions retain the credentials used to authenticate their initial request. Credential
+    renewal applies to new clients, not an in-flight signature chain.
+*/
+public class BedrockEventStream {
+    private {
+        AwsRestClient::AwsSignedEventStream stream;
+    }
+
+    #! Wraps an authenticated AWS event stream
+    /** @param stream authenticated transport session */
+    constructor(AwsRestClient::AwsSignedEventStream stream) {
+        self.stream = stream;
+    }
+
+    #! Reads the next native Bedrock event
+    /** @param timeout_ms idle timeout; omitted to use the HTTP client timeout
+        @return the event hash, or @ref nothing at clean EOF
+        @throw BEDROCK-STREAM-EXCEPTION the service emitted an exception or error event
+        @throw BEDROCK-STREAM-FORMAT-ERROR malformed event metadata or JSON
+        @note Framing, transport, and timeout exceptions from the AWS stream are propagated unchanged.
+    */
+    *hash<auto> readEvent(*timeout timeout_ms) {
+        try {
+            *hash<AwsEventStream::AwsEventStreamFrame> frame = stream.readFrame(timeout_ms);
+            if (!frame) {
+                return NOTHING;
+            }
+            string message_type = frame.headers.":message-type" ?? "";
+            string event_type = frame.headers.":event-type" ?? "";
+            if (message_type == "exception" || message_type == "error") {
+                string exception_type = frame.headers.":exception-type" ?? frame.headers.":error-code" ?? "Unknown";
+                *string message = frame.headers.":error-message";
+                hash<auto> detail = {};
+                if (frame.payload.size()) {
+                    try { detail = parse_json(frame.payload.toString("UTF-8")); } catch () {}
+                }
+                throw "BEDROCK-STREAM-EXCEPTION", exception_type + ": "
+                    + (message ?? detail.message ?? detail.Message ?? "Bedrock stream failed"), detail;
+            }
+            if (message_type != "event" || !event_type.val()) {
+                throw "BEDROCK-STREAM-FORMAT-ERROR", "missing or invalid Bedrock event type";
+            }
+            auto payload;
+            try {
+                payload = frame.payload.size() ? parse_json(frame.payload.toString("UTF-8")) : {};
+            } catch (hash<ExceptionInfo> ex) {
+                throw "BEDROCK-STREAM-FORMAT-ERROR", "event payload is not valid JSON", ex;
+            }
+            if (payload.typeCode() != NT_HASH) {
+                throw "BEDROCK-STREAM-FORMAT-ERROR", "event payload must be a JSON object";
+            }
+            if (event_type == "chunk") {
+                if (payload.bytes.typeCode() != NT_STRING) {
+                    throw "BEDROCK-STREAM-FORMAT-ERROR", "chunk.bytes must be a base64 string";
+                }
+                payload.bytes = parse_base64_string(payload.bytes);
+            }
+            return {event_type: payload};
+        } catch (hash<ExceptionInfo> ex) {
+            stream.close();
+            rethrow;
+        }
+    }
+
+    #! Sends a model-native input payload on a bidirectional session
+    /** @param payload model-native bytes, typically a serialized Nova Sonic JSON event
+        @throw AWS-EVENT-STREAM-CLOSED this session does not have an open upload
+    */
+    send(data payload) {
+        stream.sendEvent({":message-type": "event", ":event-type": "chunk", ":content-type": MimeTypeJson},
+            binary(make_json({"bytes": binary(payload).toBase64()})));
+    }
+
+    #! Half-closes the upload after signing its terminal event; responses remain readable
+    /** @throw AWS-EVENT-STREAM-CLOSED the session is closed or response-only */
+    writesDone() {
+        stream.writesDone();
+    }
+
+    #! Returns the HTTP response metadata
+    /** @return HTTP status and response headers available so far */
+    hash<auto> getResponseInfo() {
+        return stream.getResponseInfo();
+    }
+
+    #! Cancels the session, including a blocked read; safe to call repeatedly
+    close() {
+        stream.close();
+    }
+}
 
 #! Bedrock REST connection (registered under the \c "bedrock" scheme)
 public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
@@ -348,6 +539,11 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
         authSuccess();
     }
 
+    #! Returns a runtime client with native event-stream support
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BedrockRestClientIo(getConnectionOptions(rtopts));
+    }
+
     #! Keeps the derived endpoint synchronized with connection option updates
     /** @param update_options callback used to persist corrected options */
     setUpdateOptionsCode(*code update_options) {
@@ -368,8 +564,8 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
 #! Bedrock LLM provider — speaks the unified Converse API
 /** Implements @ref QoreLlmUtils::AbstractLlmProvider for any model
     available via Bedrock's Converse endpoint.  A streamed request is
-    delivered as a single event with the complete response; token-level
-    streaming through Bedrock's ConverseStream endpoint is not implemented.
+    delivered incrementally through Bedrock's ConverseStream endpoint, including text,
+    tool-call fragments, stop reasons, and usage metadata.
 
     @par Authentication
 
@@ -394,7 +590,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     private {
-        *AwsRestClient::AwsRestClientIo rest_client;
+        *BedrockRestClientIo rest_client;
         Mutex rest_mutex();
     }
 
@@ -432,17 +628,13 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return parseConverseResponse(resp.body, opts);
     }
 
-    #! Streaming chat — delivers the complete Converse response as one event
-    /** Token-level streaming via Bedrock's ConverseStream endpoint and the
-        AwsEventStream binary frame decoder is not implemented; this method
-        makes one Converse request and delivers the response as a single
-        @ref QoreLlmUtils::ChatStreamEvent with \c done set, the complete text
-        in \c delta, and the Converse response in \c raw, from which
-        @ref updateOpenAiStreamStateFromRaw() and @ref getOpenAiToolCallDeltas()
-        read the stop reason, usage, and tool calls.
+    #! Streams text, tool-call fragments, stop reason, and usage from ConverseStream
+    /** Each native event is delivered immediately. Exactly one final `done` event follows clean EOF,
+        after the message stop and usage metadata; errors or callback failures cancel the stream without
+        retrying a partially delivered generation.
 
         @param messages conversation history
-        @param callback receives the event
+        @param callback receives each incremental event
         @param tools optional tool definitions
         @param opts per-call overrides
 
@@ -452,20 +644,50 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<QoreLlmUtils::ChatResponse> r = chat(messages, tools, opts);
-        hash<QoreLlmUtils::ChatStreamEvent> event = <QoreLlmUtils::ChatStreamEvent>{
-            "done": True,
-            "raw": r.raw,
-        };
-        if (r.content.val()) {
-            event.delta = r.content;
+        ensureRestClient();
+        hash<auto> body = buildConverseBody(messages, tools, opts);
+        *BedrockEventStream stream;
+        bool stopped = False;
+        try {
+            stream = rest_client.openConverseStream(getBedrockModelId(opts), body);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
         }
-        callback(event);
+        on_exit stream.close();
+        while (True) {
+            *hash<auto> raw;
+            try {
+                raw = stream.readEvent(getRequestTimeoutMs(opts));
+            } catch (hash<ExceptionInfo> ex) {
+                throw "LLM-ERROR", "Bedrock ConverseStream failed: " + ex.desc, ex;
+            }
+            if (!raw) {
+                break;
+            }
+            string event_name = (keys raw)[0];
+            raw = raw + {"requestId": stream.getResponseInfo().headers."x-amzn-requestid"};
+            if (exists raw.messageStop) {
+                stopped = True;
+            }
+            hash<QoreLlmUtils::ChatStreamEvent> event = <QoreLlmUtils::ChatStreamEvent>{
+                "event": event_name,
+                "raw": raw,
+            };
+            if (exists raw.contentBlockDelta.delta.text) {
+                event.delta = raw.contentBlockDelta.delta.text;
+            }
+            callback(event);
+        }
+        if (!stopped) {
+            throw "LLM-ERROR", "Bedrock ConverseStream ended without messageStop";
+        }
+        stream.close();
+        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
     }
 
-    #! Updates OpenAI stream state from a Converse response
+    #! Updates OpenAI stream state from a native Converse stream event
     /** @param state the OpenAI-compatible stream state
-        @param raw the Converse response delivered by @ref chatStream()
+        @param raw the native event delivered by @ref chatStream(), or a legacy completed response
     */
     updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
             *hash<auto> raw) {
@@ -476,27 +698,54 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         if (request_id.val()) {
             state.id = request_id;
         }
-        if (raw.usage.typeCode() == NT_HASH) {
-            state.usage = normalizeUsage(cast<hash>(raw.usage));
+        *hash<auto> usage = raw.metadata.usage ?? raw.usage;
+        if (usage) {
+            state.usage = normalizeUsage(usage);
         }
-        if (raw.stopReason.val()) {
+        *string stop_reason = raw.messageStop.stopReason ?? raw.stopReason;
+        if (stop_reason.val()) {
             state.finish_reason =
-                BedrockLlmProvider::stopReasonToOpenAi(raw.stopReason);
+                BedrockLlmProvider::stopReasonToOpenAi(stop_reason);
         }
     }
 
-    #! Returns OpenAI tool-call deltas for the tool calls in a Converse response
+    #! Returns incremental OpenAI tool-call deltas from native Converse events
     /** @param state the OpenAI-compatible stream state
-        @param raw the Converse response delivered by @ref chatStream()
+        @param raw the native event delivered by @ref chatStream(), or a legacy completed response
 
-        @return one complete OpenAI-shaped tool-call delta for each
-        \c toolUse block
+        @return OpenAI-shaped tool starts and argument fragments with stable contiguous indices
+        @throw LLM-ERROR a tool argument fragment arrived before its tool start
     */
     list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
             *hash<auto> raw) {
         list<hash<auto>> streamed = ();
         if (!raw) {
             return streamed;
+        }
+        if (raw.contentBlockStart.start.toolUse.typeCode() == NT_HASH) {
+            hash<auto> tool_use = raw.contentBlockStart.start.toolUse;
+            if (state.tool_calls.typeCode() != NT_LIST) {
+                state.tool_calls = ();
+            }
+            int idx = state.tool_calls.size();
+            state.bedrock_tool_indices{string(raw.contentBlockStart.contentBlockIndex)} = idx;
+            hash<auto> tool_call = {
+                "id": tool_use.toolUseId,
+                "type": "function",
+                "function": {"name": tool_use.name, "arguments": ""},
+            };
+            state.tool_calls += tool_call;
+            return ({"index": idx} + tool_call,);
+        }
+        if (raw.contentBlockDelta.delta.toolUse.typeCode() == NT_HASH) {
+            string block_index = string(raw.contentBlockDelta.contentBlockIndex);
+            if (!exists state.bedrock_tool_indices{block_index}) {
+                throw "LLM-ERROR", "Bedrock tool delta arrived before its contentBlockStart";
+            }
+            int idx = state.bedrock_tool_indices{block_index};
+            string args = raw.contentBlockDelta.delta.toolUse.input;
+            state.tool_calls[idx].function.arguments += args;
+            return ({"index": idx, "function": {"arguments": args}},);
         }
         foreach auto block in (raw.output.message.content ?? ()) {
             if (block.typeCode() != NT_HASH
@@ -844,7 +1093,9 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                         opts{key} = getConfig().provider_options{key};
                     }
                 }
-                rest_client = new AwsRestClient::AwsRestClientIo(opts);
+                opts.request_timeout = getConfig().timeout_ms;
+                opts.connect_timeout = getConfig().connect_timeout_ms;
+                rest_client = new BedrockRestClientIo(opts);
             }
         }
     }
@@ -870,7 +1121,7 @@ public class BedrockLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvide
             "mode": getMode(),
             "display_name": getDisplayName(),
             "module_name": Class::getClass(self).getModuleName(),
-            "supports_streaming": True,  # via synthetic single-delta fallback in v1
+            "supports_streaming": True,
             "supports_tools": True,
             "supports_structured_output": False,  # no native response_format in Converse
             "supports_multimodal": True,

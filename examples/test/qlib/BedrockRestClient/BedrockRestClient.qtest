@@ -15,6 +15,7 @@
 %requires QoreRagTypes
 %requires QoreLlmUtils
 %requires AwsRestClient
+%requires AwsEventStream
 %requires BedrockRestClient
 %requires BedrockDataProvider
 
@@ -70,6 +71,30 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(converse_response));
         }
+        if (last_path =~ /\/converse-stream$/) {
+            binary frames = event("messageStart", {"role": "assistant"});
+            int index = 0;
+            foreach hash<auto> block in (converse_response.output.message.content) {
+                if (exists block.text) {
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"text": block.text.substr(0, 3)}});
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"text": block.text.substr(3)}});
+                } else if (block.toolUse) {
+                    frames += event("contentBlockStart", {"contentBlockIndex": index,
+                        "start": {"toolUse": block.toolUse - "input"}});
+                    string args = make_json(block.toolUse.input);
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"toolUse": {"input": args.substr(0, 3)}}});
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"toolUse": {"input": args.substr(3)}}});
+                }
+                frames += event("contentBlockStop", {"contentBlockIndex": index++});
+            }
+            frames += event("messageStop", {"stopReason": converse_response.stopReason});
+            frames += event("metadata", {"usage": converse_response.usage});
+            return makeResponse({"Content-Type": "application/vnd.amazon.eventstream"}, 200, frames);
+        }
         if (last_path =~ /\/invoke$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(embed_response));
@@ -83,6 +108,11 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
                 make_json({"modelSummaries": ()}));
         }
         return makeResponse(404, "unknown bedrock path: " + last_path);
+    }
+
+    private static binary event(string name, hash<auto> value) {
+        return AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": name,
+            ":content-type": MimeTypeJson}, binary(make_json(value)));
     }
 }
 
@@ -126,7 +156,7 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("Converse chat round-trip",           \converseChatTest());
         addTestCase("Converse tool_use round-trip",       \converseToolUseTest());
         addTestCase("Converse complete() helper",         \completeTest());
-        addTestCase("chatStream delivers the response as one event", \chatStreamTest());
+        addTestCase("chatStream delivers native incremental events", \chatStreamTest());
         addTestCase("streamed tool calls are collected", \chatStreamToolUseTest());
         addTestCase("SigV4 authorization header is signed", \sigV4Test());
         addTestCase("missing region throws at construction", \missingRegionTest());
@@ -270,10 +300,13 @@ public class BedrockTest inherits QUnit::Test {
         ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
             push events, e;
         });
-        assertEq(1, events.size(), "the response is delivered as one event");
-        assertEq("Hello from Bedrock", events[0].delta);
-        assertTrue(events[0].done);
-        assertEq("end_turn", events[0].raw.stopReason);
+        assertEq(7, events.size(), "native events and one final completion are delivered");
+        assertEq("Hel", events[1].delta);
+        assertEq("lo from Bedrock", events[2].delta);
+        assertEq(1, (select events, $1.done).size());
+        assertTrue(events[-1].done);
+        assertEq("end_turn", events[4].raw.messageStop.stopReason);
+        assertTrue(handler.last_path =~ /\/converse-stream$/);
 
         # stream consumers read the stop reason and usage from the event
         QoreLlmUtils::LlmBackend backend = newBackend();

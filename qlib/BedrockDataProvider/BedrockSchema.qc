@@ -64,8 +64,7 @@ public hashdecl BedrockSchemaProvenanceInfo {
     The completed-response surface exports every control-plane operation and every non-streaming runtime
     operation. `ConverseStream`, `InvokeModelWithBidirectionalStream`, and
     `InvokeModelWithResponseStream` are excluded because a completed-value data-provider action cannot
-    represent their event-stream lifetime. They require a separate streaming client; native event streaming
-    is not implemented by the Qore Bedrock client.
+    represent their event-stream lifetime. Use `BedrockRestClientIo` for these native streaming operations.
 */
 public class BedrockSchema {
     public {

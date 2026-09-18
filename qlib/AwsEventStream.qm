@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file AwsEventStream.qm decoder for the AWS event-stream binary framing format
+#! @file AwsEventStream.qm encoder and decoder for the AWS event-stream binary framing format
 
 /*  AwsEventStream.qm Copyright 2026 Qore Technologies, s.r.o.
 
@@ -26,8 +26,8 @@
 %modern
 
 module AwsEventStream {
-    version = "1.0";
-    desc = "AWS event-stream binary frame decoder for Bedrock InvokeModelWithResponseStream, "
+    version = "1.1";
+    desc = "AWS event-stream binary frame encoder and decoder for Bedrock, "
         "Kinesis, S3 Select, and Transcribe streaming";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -40,7 +40,7 @@ module AwsEventStream {
 
     @section awseventstreamintro Introduction to the AwsEventStream Module
 
-    The %AwsEventStream module decodes the **AWS event-stream binary framing
+    The %AwsEventStream module encodes and decodes the **AWS event-stream binary framing
     format** used by Bedrock's \c InvokeModelWithResponseStream, Kinesis
     SubscribeToShard, S3 Select, and Transcribe streaming endpoints.
 
@@ -79,9 +79,14 @@ while (binary chunk = read_next_http_chunk()) {
         on_frame(f);
     }
 }
+dec.finish();  # reject truncated data at EOF
     @endcode
 
     @section awseventstreamrelnotes Release Notes
+
+    @subsection awseventstream_v1_1 AwsEventStream v1.1
+    - adds stateless encoding of messages and typed headers for signed bidirectional streams
+    - validates protocol size limits, duplicate headers, truncated header values, and partial frames at EOF
 
     @subsection awseventstream_v1_0 AwsEventStream v1.0
     - initial release: prelude + header + payload + CRC32 validation
@@ -95,6 +100,97 @@ public hashdecl AwsEventStreamFrame {
     hash<string, auto> headers;
     #! Frame payload (caller's responsibility to interpret per the headers)
     binary payload;
+}
+
+#! Maximum event payload size accepted by the AWS event-stream protocol
+public const EventStreamMaxPayload = 24 * 1024 * 1024;
+#! Maximum encoded header block size accepted by the AWS event-stream protocol
+public const EventStreamMaxHeaders = 128 * 1024;
+
+#! Encodes AWS event-stream messages, including the two CRC checksums
+/** Header types are inferred from Qore values: boolean, signed 64-bit integer, binary, UTF-8 string,
+    or absolute date (millisecond timestamp). Instances are unnecessary; all methods are stateless.
+
+    @par Example
+    Encode a model input chunk before transmitting it over an authenticated bidirectional connection:
+    @code{.py}
+binary frame = AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": "chunk"}, payload);
+    @endcode
+*/
+public class AwsEventStreamEncoder {
+    #! Encodes one complete message
+    /** @param headers typed message headers
+        @param payload raw payload bytes
+        @return the complete binary frame
+        @throw AWS-EVENT-STREAM-FORMAT-ERROR invalid header values or protocol size limits
+    */
+    static binary encode(hash<string, auto> headers, binary payload) {
+        if (payload.size() > EventStreamMaxPayload) {
+            throw "AWS-EVENT-STREAM-FORMAT-ERROR", "event payload exceeds 24 MiB";
+        }
+        binary hb = encodeHeaders(headers);
+        binary prelude = integerBytes(16 + hb.size() + payload.size(), 4) + integerBytes(hb.size(), 4);
+        binary frame = prelude + integerBytes(AwsEventStreamDecoder::crc32(prelude), 4) + hb + payload;
+        return frame + integerBytes(AwsEventStreamDecoder::crc32(frame), 4);
+    }
+
+    #! Encodes headers in insertion order, also used when signing event headers
+    /** @param headers typed message headers
+        @return the encoded header block
+        @throw AWS-EVENT-STREAM-FORMAT-ERROR invalid names, values, or header block size
+    */
+    static binary encodeHeaders(hash<string, auto> headers) {
+        binary result = binary();
+        foreach hash<auto> item in (headers.pairIterator()) {
+            binary name = binary(string(item.key, "UTF-8"));
+            if (!name.size() || name.size() > 255) {
+                throw "AWS-EVENT-STREAM-FORMAT-ERROR", "header names must contain 1 to 255 UTF-8 bytes";
+            }
+            result += integerBytes(name.size(), 1) + name;
+            switch (item.value.typeCode()) {
+                case NT_BOOLEAN:
+                    result += item.value ? <00> : <01>;
+                    break;
+                case NT_INT:
+                    result += <05> + integerBytes(item.value, 8);
+                    break;
+                case NT_DATE:
+                    if (item.value.relative()) {
+                        throw "AWS-EVENT-STREAM-FORMAT-ERROR", "event timestamps must be absolute dates";
+                    }
+                    result += <08> + integerBytes(item.value.getEpochSeconds() * 1000
+                        + item.value.milliseconds(), 8);
+                    break;
+                case NT_STRING:
+                case NT_BINARY: {
+                    binary value = item.value.typeCode() == NT_BINARY
+                        ? item.value : binary(string(item.value, "UTF-8"));
+                    if (value.size() > 65535) {
+                        throw "AWS-EVENT-STREAM-FORMAT-ERROR", "header value exceeds 65535 bytes";
+                    }
+                    result += (item.value.typeCode() == NT_BINARY ? <06> : <07>)
+                        + integerBytes(value.size(), 2) + value;
+                    break;
+                }
+                default:
+                    throw "AWS-EVENT-STREAM-FORMAT-ERROR", "unsupported event header value type: "
+                        + item.value.type();
+            }
+            if (result.size() > EventStreamMaxHeaders) {
+                throw "AWS-EVENT-STREAM-FORMAT-ERROR", "event headers exceed 128 KiB";
+            }
+        }
+        return result;
+    }
+
+    #! Encodes a fixed-width big-endian integer
+    private static binary integerBytes(int value, int width) {
+        binary result = binary();
+        for (int bit_offset = (width - 1) * 8; bit_offset >= 0; bit_offset -= 8) {
+            result += chr((value >> bit_offset) & 255).toBinary();
+        }
+        return result;
+    }
 }
 
 #! Streaming decoder for the AWS event-stream binary framing format
@@ -171,6 +267,9 @@ public class AwsEventStreamDecoder {
                 sprintf("invalid headers length %d for total %d",
                     headers_len, total_len);
         }
+        if (headers_len > EventStreamMaxHeaders || total_len - headers_len - 16 > EventStreamMaxPayload) {
+            throw "AWS-EVENT-STREAM-FORMAT-ERROR", "event frame exceeds protocol size limits";
+        }
         int computed_prelude_crc = AwsEventStreamDecoder::crc32(buf[0..7]);
         if (computed_prelude_crc != prelude_crc) {
             throw "AWS-EVENT-STREAM-CRC-ERROR",
@@ -196,12 +295,15 @@ public class AwsEventStreamDecoder {
         while (hpos < hend) {
             int name_len = get_byte(buf, hpos);
             hpos += 1;
-            if (hpos + name_len > hend) {
+            if (!name_len || hpos + name_len >= hend) {
                 throw "AWS-EVENT-STREAM-FORMAT-ERROR",
                     "header name extends past headers block";
             }
             string name = AwsEventStreamDecoder::bytesToString(
                 buf[hpos..hpos + name_len - 1]);
+            if (exists headers{name}) {
+                throw "AWS-EVENT-STREAM-FORMAT-ERROR", "duplicate event header: " + name;
+            }
             hpos += name_len;
             int type_tag = get_byte(buf, hpos);
             hpos += 1;
@@ -225,8 +327,17 @@ public class AwsEventStreamDecoder {
     }
 
     #! Returns the current internal buffer size (for diagnostics / tests)
+    /** @return the number of unconsumed bytes */
     int getBufferSize() {
         return buf.size();
+    }
+
+    #! Verifies that the stream ended on a frame boundary after draining nextFrame()
+    /** @throw AWS-EVENT-STREAM-FORMAT-ERROR unconsumed or truncated frame bytes remain */
+    finish() {
+        if (buf.size()) {
+            throw "AWS-EVENT-STREAM-FORMAT-ERROR", sprintf("stream ended with %d unconsumed frame bytes", buf.size());
+        }
     }
 
     #! Reads a big-endian unsigned 32-bit int from \a b at offset \a off
@@ -266,6 +377,10 @@ public class AwsEventStreamDecoder {
     #! Decodes a single header value at \a off; returns (value, new_off)
     private:internal static list<auto> readHeaderValue(binary b, int off,
             int type_tag, int hend) {
+        const list<int> Widths = (0, 0, 1, 2, 4, 8, 2, 2, 8, 16);
+        if (type_tag < 0 || type_tag >= Widths.size() || off + Widths[type_tag] > hend) {
+            throw "AWS-EVENT-STREAM-FORMAT-ERROR", "invalid or truncated event header value";
+        }
         switch (type_tag) {
             case 0: # bool true
                 return (True, off);
@@ -349,6 +464,8 @@ public class AwsEventStreamDecoder {
     /** Public so external tests can verify fixture round-tripping and other
         AWS-services callers (Kinesis, S3 Select) can sign frames they emit.
         Cached internal lookup table is built on first call.
+        @param b bytes to checksum
+        @return unsigned 32-bit CRC value
     */
     static int crc32(binary b) {
         list<int> table = AwsEventStreamDecoder::getCrcTable();

@@ -76,8 +76,8 @@ module BedrockDataProvider {
                 "tags, marketplace endpoints, and provisioned throughput\n"
                 "- Manage custom and imported models, deployments, optimization and customization jobs, "
                 "evaluations, prompt routers, and Automated Reasoning policies\n\n"
-                "The three event-stream operations require a separate streaming client; native event streaming "
-                "is not implemented here.\n\n"
+                "The three event-stream operations are available through the native Bedrock client, "
+                "not as completed-value actions.\n\n"
                 "Authentication uses the standard AWS credential chain: explicit "
                 "keys → environment variables → ECS task role → IMDSv2 → STS "
                 "AssumeRole — handled by the underlying `AwsRestClient`.\n\n"
@@ -115,8 +115,8 @@ module BedrockDataProvider {
     @par Streaming operations
 
     `ConverseStream`, `InvokeModelWithBidirectionalStream`, and `InvokeModelWithResponseStream` are deliberately
-    not registered as completed-value actions. They require a separate streaming client; the Qore Bedrock client
-    does not implement native event streaming. Its chat callback delivers one completed Converse response.
+    not registered as completed-value actions. Use `BedrockRestClientIo` for their native event-stream lifetimes,
+    including bidirectional input over HTTP/2. `BedrockLlmProvider::chatStream()` emits incremental Converse events.
 
     @par Factory
 

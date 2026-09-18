@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires BedrockRestClient
+%requires AwsEventStream
+%requires HttpServer
+%requires Logger
+%requires json
+%exec-class BedrockBidirectionalTest
+
+#! Independent wire verifier that echoes each inner event before upload EOF
+class SignedEventEcho inherits InputStream {
+    private {
+        Queue input;
+        Queue results;
+        AwsEventStreamDecoder decoder();
+        string prior;
+        binary output = binary();
+        bool eof = False;
+    }
+    constructor(Queue input, Queue results, string prior) {
+        self.input = input;
+        self.results = results;
+        self.prior = prior;
+    }
+    *binary read(int limit) {
+        fill();
+        if (!output.size()) return NOTHING;
+        binary rv = output[0..min(limit, output.size()) - 1];
+        output = output[rv.size()..];
+        return rv;
+    }
+    int peek() {
+        fill();
+        return output.size() ? output[0] : -1;
+    }
+    private fill() {
+        while (!output.size() && !eof) {
+            *hash<AwsEventStreamFrame> frame = decoder.nextFrame();
+            if (!frame) {
+                auto chunk = input.get(5s);
+                if (!(chunk instanceof binary)) {
+                    decoder.finish();
+                    eof = True;
+                    return;
+                }
+                decoder.feed(chunk);
+                continue;
+            }
+            date timestamp = frame.headers.":date";
+            # Independently encode the non-signature header, rather than using the encoder under test.
+            binary date_header = <053A6461746508>;
+            int milliseconds = timestamp.getEpochSeconds() * 1000 + timestamp.milliseconds();
+            for (int bit_offset = 56; bit_offset >= 0; bit_offset -= 8) {
+                date_header += chr((milliseconds >> bit_offset) & 255).toBinary();
+            }
+            string day = timestamp.format("YYYYMMDD");
+            binary key = hmac("sha256", day, "AWS4test-secret");
+            foreach string value in ("us-east-1", "bedrock", "aws4_request") {
+                key = hmac("sha256", value, key);
+            }
+            string text = "AWS4-HMAC-SHA256-PAYLOAD\n" + timestamp.format("YYYYMMDDTHHmmSS")
+                + "Z\n" + day + "/us-east-1/bedrock/aws4_request\n" + prior + "\n"
+                + digest("sha256", date_header).toHex() + "\n" + digest("sha256", frame.payload).toHex();
+            binary expected = hmac("sha256", text, key);
+            results.push(expected == frame.headers.":chunk-signature");
+            prior = expected.toHex();
+            if (frame.payload.size()) {
+                # Echo the unsigned inner frame. This also proves nested framing and binary decoding.
+                output += frame.payload;
+            } else {
+                results.push("terminal");
+            }
+        }
+    }
+}
+
+class BidirectionalHandler inherits AbstractHttpRequestHandler {
+    public {
+        Queue requests();
+        Queue signatures();
+    }
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        Queue input(-1);
+        cx."header-info".register_body_queue(input);
+        if (cx."header-info".resume_body_streaming) cx."header-info".resume_body_streaming();
+        requests.push(hdr);
+        string seed = hdr.authorization.split("Signature=")[1];
+        return makeResponse(200, new SignedEventEcho(input, signatures, seed),
+            {"Content-Type": "application/vnd.amazon.eventstream"});
+    }
+}
+
+class BedrockBidirectionalTest inherits QUnit::Test {
+    constructor() : Test("Bedrock signed HTTP/2 bidirectional streaming", "1.0", \ARGV) {
+        addTestCase("duplex events, chained signatures, and upload half-close", \duplexTest());
+        set_return_value(main());
+    }
+    private duplexTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("bedrock-duplex", LoggerLevel::getLevelInfo())});
+        on_exit delete server;
+        BidirectionalHandler handler();
+        server.setDefaultHandler("duplex", handler);
+        server.waitForAsyncIo();
+        hash<auto> listener = server.addListener(<HttpListenerOptionInfo>{"service": 0,
+            "cert": new SSLCertificate(File::readTextFile(get_script_dir() + "/../ConnectionProvider/mycert.pem")),
+            "key": new SSLPrivateKey(File::readTextFile(get_script_dir() + "/../ConnectionProvider/mykey.pem"),
+                "password"),
+            "enable_h3": False});
+        server.waitForAsyncIo();
+        BedrockRestClientIo client({"url": "https://127.0.0.1:" + listener.port,
+            "http_version": "2.0", "accept_all_certs": True, "aws_region": "us-east-1",
+            "aws_keyid": "test-key", "aws_secret": "test-secret", "aws_imds_disabled": True});
+        BedrockEventStream stream = client.openInvokeModelWithBidirectionalStream("test:model:0");
+        on_exit stream.close();
+        foreach binary payload in (binary("first 日本語"), <00FF0102>) {
+            stream.send(payload);
+            assertEq(payload, stream.readEvent(5s).chunk.bytes);
+            assertTrue(handler.signatures.get(5s));
+        }
+        stream.writesDone();
+        stream.writesDone();
+        assertEq(NOTHING, stream.readEvent(5s));
+        assertTrue(handler.signatures.get(5s));
+        assertEq("terminal", handler.signatures.get(5s));
+        assertThrows("AWS-EVENT-STREAM-CLOSED", sub () { stream.send("late"); });
+        hash<auto> request = handler.requests.get(5s);
+        assertEq("STREAMING-AWS4-HMAC-SHA256-EVENTS", request."x-amz-content-sha256");
+        assertTrue(request.path =~ /\/invoke-with-bidirectional-stream$/);
+    }
+}

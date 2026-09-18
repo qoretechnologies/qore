@@ -2179,7 +2179,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         counterpart of the \c GrpcTypeHelper class in the \c GrpcDataProvider module
 
     - @ref awseventstreamintro "AwsEventStream" module
-      - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
+      - new module encoding and decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
+      - validates CRCs, protocol size limits, typed header bounds, and truncated frames at EOF
 
     - @ref awss3dataproviderintro "AwsS3DataProvider" module
       - new module providing a data provider API for <a href="https://aws.amazon.com/s3/">Amazon S3</a> object
@@ -2221,7 +2222,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref bedrockdataproviderintro "BedrockDataProvider" module
       - provides 118 actions: all 108 control-plane operations, all eight completed-response runtime operations,
-        curated embedding, and a generic API call; native event streaming is not implemented
+        curated embedding, and a generic API call; streaming sessions are exposed by the native client
       - adds recursive typed options and outputs, enum choices, reference data, explicit mutation metadata, an exact
         pre-materialization discovery inventory, and complete presentation catalogs in all twelve standard locales
       - preserves missing, null, empty, union, list, document, and wire-choice values and routes each operation to
@@ -2233,6 +2234,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         return the Bedrock provider, and verify credentials with an inference-free control-plane request
       - Converse and embedding calls sign encoded model identifiers correctly and send the exact JSON
         request and response media types required by model endpoints
+      - supports native Converse and model-response event streams plus HTTP/2 bidirectional inference with
+        chained SigV4 event signatures, upload half-close, timeouts, and cancellation
+      - delivers incremental LLM text and tool-call arguments with final usage and stop metadata
 
     - @ref bfldataproviderintro "BflDataProvider" module
       - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
