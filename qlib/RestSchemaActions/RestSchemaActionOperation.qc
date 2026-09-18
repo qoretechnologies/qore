@@ -1208,7 +1208,7 @@ public class RestSchemaActionOperation {
                     "operation does not declare; declared response codes: %y", info.response_code,
                     sort(keys resp_hash));
             }
-            if (!resp.getSchema()) {
+            if (!resp.getSchema() && !info.response_envelope) {
                 throw "REST-SCHEMA-ACTION-ERROR", sprintf("the manifest selects response code %y, which "
                     "declares no response body and therefore cannot provide an output type",
                     info.response_code);
@@ -1222,7 +1222,14 @@ public class RestSchemaActionOperation {
             response_code = codes[0];
             resp = resp_hash{response_code};
         } else {
-            # no success response with a body: the action has no output type
+            if (info.response_envelope) {
+                response_type = makeResponseEnvelopeType(NOTHING);
+            }
+            return;
+        }
+
+        if (!resp.getSchema()) {
+            response_type = makeResponseEnvelopeType(NOTHING);
             return;
         }
 
@@ -1244,6 +1251,12 @@ public class RestSchemaActionOperation {
         AbstractDataField body_field = schema.getFieldFromSchema("body", "REST response body argument",
             response_schema);
         AbstractDataProviderType type = body_field.getType();
+        # Large direction-neutral graphs (for example Stripe's expandable objects) can retain their
+        # shared cached types. Copy only when readOnly/writeOnly makes validation direction significant.
+        if (schema instanceof OpenApi3::OpenApi3Schema
+                && cast<OpenApi3::OpenApi3Schema>(schema).hasDirectionalProperties()) {
+            type = OpenApi3::OpenApi3HashDataType::forResponse(type);
+        }
 
         foreach string name in (info.response_unwrap) {
             *hash<string, AbstractDataField> tfields = type.getFields();
@@ -1260,7 +1273,21 @@ public class RestSchemaActionOperation {
             type = applyTypeOverlay(type, info.response_fields, "response body", \node);
             response_conv = node;
         }
-        response_type = type;
+        response_type = info.response_envelope ? makeResponseEnvelopeType(type) : type;
+    }
+
+    #! Builds a typed HTTP envelope without inventing a body for a bodyless response
+    private AbstractDataProviderType makeResponseEnvelopeType(*AbstractDataProviderType body_type) {
+        HashDataType result("RestSchemaResponseEnvelope");
+        result.addQoreFields({
+            "status_code": {"type": IntType, "display_name": "HTTP Status",
+                "desc": "HTTP response status code."},
+            "headers": {"type": AutoHashType, "display_name": "Response Headers",
+                "desc": "Response headers, including job locations and retry guidance."},
+            "body": {"type": body_type ?? AbstractDataProviderType::get(new Type("nothing")),
+                "display_name": "Response Body", "desc": "The typed response body, when present."},
+        });
+        return result;
     }
 
     #! Applies nested field overrides to each branch of a union that declares them

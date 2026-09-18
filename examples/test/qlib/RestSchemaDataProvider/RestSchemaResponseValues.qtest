@@ -1,6 +1,7 @@
 #!/usr/bin/env qore
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/RestSchemaDataProvider
 %requires json
@@ -9,11 +10,13 @@
 class ResponseValueClient inherits RestClientIo::RestClientIo {
     public {
         auto response;
+        *data last_body;
     }
     constructor() : RestClientIo({"url": "https://example.org"}) {
     }
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
             *hash<auto> headers) {
+        last_body = body;
         return <RestClient::RestResponseInfo>{"status_code": 200, "body": response, "headers": {"x-test": "yes"}};
     }
 }
@@ -21,6 +24,7 @@ class ResponseValueClient inherits RestClientIo::RestClientIo {
 class ResponseValuesTest inherits QUnit::Test {
     constructor() : Test("REST schema response values", "1.0", \ARGV) {
         addTestCase("empty and false values remain present", \valuesTest());
+        addTestCase("byte fields are serialized exactly once", \bytesTest());
         set_return_value(main());
     }
     private valuesTest() {
@@ -40,10 +44,26 @@ class ResponseValuesTest inherits QUnit::Test {
             assertEq(value, result.body);
             assertEq(value.typeCode(), result.body.typeCode());
             assertEq("yes", result.headers."x-test");
+            assertEq(200, result.status_code);
         }
         client.response = NOTHING;
         hash<auto> result = provider.doRequest({}, {"include_response_headers": True});
         assertFalse(exists result.body);
         assertEq("yes", result.headers."x-test");
+    }
+
+    private bytesTest() {
+        ResponseValueClient client();
+        RestSchemaDataProvider meta({"schema": make_json({
+            "openapi": "3.0.3", "info": {"title": "Byte Request", "version": "1"},
+            "paths": {"/bytes": {"post": {"requestBody": {"required": True, "content": {
+                "application/json": {"schema": {"type": "object", "properties": {
+                    "bytes": {"type": "string", "format": "byte"},
+                    "items": {"type": "array", "items": {"type": "string", "format": "byte"}},
+                }}}}}, "responses": {"204": {"description": "Accepted"}}}}},
+        })});
+        RestSchemaDataProvider root(meta.getSchema(), client);
+        root.getChildProviderPath("bytes/POST").doRequest({"body": {"bytes": <00ff0a>, "items": (<00>, binary())}});
+        assertEq({"bytes": "AP8K", "items": ("AA==", "")}, parse_json(client.last_body.toString()));
     }
 }

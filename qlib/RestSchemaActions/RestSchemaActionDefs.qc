@@ -547,6 +547,13 @@ public hashdecl RestSchemaActionInfo {
     */
     *string response_content_type;
 
+    #! Publish the HTTP status, headers, and typed body together
+    /** Useful for accepted asynchronous jobs whose identifier is returned in a response header,
+        including responses with no body. The default continues to publish only the response body.
+        Response unwrapping and codecs apply to the envelope's body member.
+    */
+    bool response_envelope = False;
+
     #! A path of field names to unwrap from the success response body
     /** Publishes a value nested inside the response body as the action output.  Use only when the enclosing
         object carries nothing a caller needs.

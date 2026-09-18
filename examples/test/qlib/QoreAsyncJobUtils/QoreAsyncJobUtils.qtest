@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -24,8 +25,9 @@ public class QoreAsyncJobUtilsTest inherits QUnit::Test {
         addTestCase("timeout exception carries last status",  \timeoutPayloadTest());
         addTestCase("setSleeper replaces sleeper after construction",
             \setSleeperTest());
-        addTestCase("custom poll interval is forwarded to sleeper",
+        addTestCase("poll sleep is bounded by the remaining deadline",
             \customIntervalTest());
+        addTestCase("late completion is a timeout and limits must be positive", \deadlineTest());
         addTestCase("the default sleeper waits between polls",
             \defaultSleeperTest());
         set_return_value(main());
@@ -174,7 +176,7 @@ public class QoreAsyncJobUtilsTest inherits QUnit::Test {
     }
 
     private customIntervalTest() {
-        # The interval the caller passes is exactly what the sleeper sees
+        # A long polling interval cannot extend a short overall deadline.
         timeout observed;
         QoreAsyncJobUtils::AsyncJobPoller p(
             hash<auto> sub (string j) { return {"status": "PENDING"}; },
@@ -186,6 +188,26 @@ public class QoreAsyncJobUtilsTest inherits QUnit::Test {
         } catch () {
             # expected timeout
         }
-        assertEq(250, observed);
+        assertTrue(observed > 0 && observed <= 1);
+    }
+
+    private deadlineTest() {
+        int fetches = 0;
+        AsyncJobPoller poller(hash<auto> sub (string id) {
+            ++fetches;
+            usleep(30ms);
+            return {"status": "succeeded"};
+        }, bool sub (hash<auto> status) { return True; });
+        assertThrows("ASYNC-JOB-TIMEOUT", sub () { poller.poll("job", 0, 1); });
+        assertThrows("ASYNC-JOB-TIMEOUT", sub () { poller.poll("job", 100, 0); });
+        assertEq(0, fetches);
+        try {
+            poller.poll("late", 10ms, 1ms);
+            fail("late success must retain a timeout");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("ASYNC-JOB-TIMEOUT", ex.err);
+            assertEq("late", ex.arg.job_id);
+            assertEq("succeeded", ex.arg.last_status.status);
+        }
     }
 }

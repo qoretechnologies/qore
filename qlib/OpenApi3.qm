@@ -971,11 +971,15 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
         #! type map; identifer -> {Y,N} -> type
         hash<string, hash<string, AbstractDataProviderType>> typemap;
+
+        #! Computed after parsing; direction-neutral documents can share cached input/output types
+        bool directional_properties = False;
     }
 
     private:internal {
         #! the raw parsed definitions; used for resolving out-of-order references
         *hash<auto> source_definition_hash;
+
     }
 
     #! Builds the schema representation from the deserialized schema hash describing the root document object
@@ -1237,6 +1241,15 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             *hash<auto> extDocsObj;
             if (optional_field(obj_type, oh, "externalDocs", NT_HASH, \extDocsObj))
                 externalDocs = new ExternalDocumentationObject(extDocsObj);
+        }
+        foreach hash<string, SchemaObject> variants in (so_map.iterator()) {
+            foreach *SchemaObject property in (variants.iterator()) {
+                if (property && (property.readOnly || property.writeOnly)) {
+                    directional_properties = True;
+                    break;
+                }
+            }
+            if (directional_properties) { break; }
         }
     }
 
@@ -1806,6 +1819,12 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     private *TimeZone getTimeZoneLocaleImpl() {
         return get_thread_tz();
     }
+
+    #! Reports whether request and response validation can differ for a declared property
+    /** @return True if any parsed schema declares a read-only or write-only property
+        @note Immutable after schema construction; includes properties reached through references.
+    */
+    bool hasDirectionalProperties() { return directional_properties; }
 
     #! Returns the data type for the given type specification
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
@@ -4630,6 +4649,62 @@ public class OpenApi3HashDataType inherits HashDataType {
         return for_request;
     }
 
+    #! Returns an independent response-validation snapshot of a complete type graph
+    /** @param type the cached schema type; it is never modified
+        @return a response type preserving fields, list elements, maps, unions, and shared nodes
+        Schema types are cached for requests. Response validation must accept read-only properties
+        and reject write-only properties without changing those cached request contracts. Only type
+        nodes are copied; the immutable schema remains shared with its owning action set. Serializing
+        an entire document for each operation would make application discovery scale quadratically.
+    */
+    static AbstractDataProviderType forResponse(AbstractDataProviderType type) {
+        Priv::OpenApi3ResponseCopyContext copy_ctx();
+        return copyResponse(type, copy_ctx);
+    }
+
+    private static AbstractDataProviderType copyResponse(AbstractDataProviderType type,
+            Priv::OpenApi3ResponseCopyContext copy_ctx) {
+        string id = type.uniqueHash();
+        if (copy_ctx.copies{id}) { return copy_ctx.copies{id}; }
+        AbstractDataProviderType result = type;
+        if (type instanceof QoreUnionDataType) {
+            # Schema composition construction already bounds cycles through union alternatives.
+            result = cast<QoreUnionDataType>(type).copyWithUnionTypes(
+                map copyResponse($1, copy_ctx), cast<QoreUnionDataType>(type).getUnionTypes());
+            if (result instanceof OpenApi3UnionDataType) {
+                cast<OpenApi3UnionDataType>(result).setResponseDirection();
+            }
+        } else if (type instanceof ListDataType) {
+            result = type.copy();
+            copy_ctx.copies{id} = result;
+            if (*AbstractDataProviderType element = type.getElementType()) {
+                cast<ListDataType>(result).updateElementType(copyResponse(element, copy_ctx));
+            }
+        } else if (type instanceof HashDataType) {
+            result = type.copy();
+            copy_ctx.copies{id} = result;
+            HashDataType object_type = cast<HashDataType>(result);
+            if (result instanceof OpenApi3HashDataType) {
+                cast<OpenApi3HashDataType>(result).for_request = False;
+            }
+            foreach AbstractDataField original in (type.getFields().iterator()) {
+                QoreDataField field = cast<QoreDataField>(original.copy());
+                field.updateFieldType(copyResponse(original.getType(), copy_ctx));
+                if (type instanceof OpenApi3HashDataType) {
+                    *SchemaObject property = cast<SchemaObject>(
+                        cast<OpenApi3HashDataType>(type).schema.properties{field.getName()});
+                    if (property && property.writeOnly) { field = cast<QoreDataField>(field.getOrNothingType()); }
+                }
+                object_type.addField(field);
+            }
+            if (*AbstractDataProviderType additional = object_type.getDefaultOtherFieldType()) {
+                object_type.setDefaultOtherFieldType(copyResponse(additional, copy_ctx));
+            }
+        }
+        copy_ctx.copies{id} = result;
+        return result;
+    }
+
     #! Validates the value against the schema including composition rules
     /**
         @param input_value the value to validate
@@ -4961,6 +5036,8 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 
         #! Original wire alternatives when the input accepts named multipart files
         *list<AbstractDataProviderType> multipart_wire_types;
+        #! Validation direction retained by snapshots and derived variants
+        bool for_request = True;
     }
 
     #! Creates the type with OpenAPI composition semantics
@@ -4982,7 +5059,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         @return this class's original members and strong document owners for restoration
     */
     private:internal hash<auto> serializeMembers(*hash<auto> members) {
-        return {"composition_keyword": composition_keyword, "schemas": schemas,
+        return {"composition_keyword": composition_keyword, "schemas": schemas, "for_request": for_request,
             "multipart_wire_types": multipart_wire_types, "documents": map $1.getDocument(), schemas};
     }
 
@@ -5010,8 +5087,13 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
     #! Copies the restored document owners without adding ownership to live cached types
     private OpenApi3UnionDataType retainSnapshotOwners(OpenApi3UnionDataType result) {
         result.documents = documents;
+        result.for_request = for_request;
         return result;
     }
+
+    #! Marks an independent type snapshot for response validation
+    /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
+    setResponseDirection() { for_request = False; }
 
     #! Returns the type's short description
     string getShortDescription() {
@@ -5048,7 +5130,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
                     continue;
                 }
                 if (schemas) {
-                    schemas[i].check(False, True, "/", "POST", schemas[i].name, \accepted);
+                    schemas[i].check(False, for_request, "/", "POST", schemas[i].name, \accepted);
                 }
                 # Validate the wire representation, then retain names and media types in the accepted input.
                 accepted = types[i].acceptsValue(multipart_wire_types ? value : accepted);
@@ -6942,6 +7024,11 @@ public class ScopesObject inherits ObjectBase {
 
 # private namespace for internal definitions
 namespace Priv {
+    #! Per-traversal mutable memo; avoids repeatedly filtering a large hash through nested typed references
+    class OpenApi3ResponseCopyContext {
+        public { hash<string, AbstractDataProviderType> copies = {}; }
+    }
+
     # a set of string values
     const OpenApi3ListToStringSet = -1;
     # a set of any type that can be converted to a string

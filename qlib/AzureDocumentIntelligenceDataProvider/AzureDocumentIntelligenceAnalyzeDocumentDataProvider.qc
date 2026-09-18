@@ -36,10 +36,23 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static AzureDocumentIntelligenceAnalyzeRequestDataType RequestType =
-            new AzureDocumentIntelligenceAnalyzeRequestDataType();
-        static AzureDocumentIntelligenceAnalyzeResponseDataType ResponseType =
-            new AzureDocumentIntelligenceAnalyzeResponseDataType();
+        static AzureDocumentIntelligenceAnalyzeRequestDataType RequestType;
+        static AzureDocumentIntelligenceAnalyzeResponseDataType ResponseType;
+    }
+    private {
+        static Mutex type_lock();
+    }
+
+    #! Initializes complete helper types after the lightweight inventory is registered
+    /** @throw AZURE-DOCUMENT-INTELLIGENCE-SCHEMA-ERROR an unreviewed schema resource is installed */
+    static initializeTypes() {
+        AutoLock al(type_lock);
+        if (!RequestType) {
+            AzureDocumentIntelligenceAnalyzeRequestDataType request();
+            AzureDocumentIntelligenceAnalyzeResponseDataType response();
+            RequestType = request;
+            ResponseType = response;
+        }
     }
 
     constructor(AzureDocumentIntelligenceRestClient::AzureDocumentIntelligenceRestClientIo rest)
@@ -53,6 +66,10 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        AzureDocumentIntelligenceReferences::validateAnalysisOptions(req);
+        if (int(exists req.document_url) + int(exists req.document_bytes) + int(exists req.document_path) != 1) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "supply exactly one document source";
+        }
         hash<auto!> body;
         if (req.document_url.val()) {
             body.urlSource = req.document_url;
@@ -66,10 +83,15 @@ public class AzureDocumentIntelligenceAnalyzeDocumentDataProvider
                 "one of document_url / document_bytes / document_path is required";
         }
 
+        if (exists body.base64Source && !body.base64Source.val()) {
+            throw "AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "document content cannot be empty";
+        }
+
         hash<auto> opts;
         if (req.api_version.val())      { opts.api_version = req.api_version; }
         if (exists req.poll_interval)   { opts.poll_interval = req.poll_interval; }
         if (exists req.analysis_timeout) { opts.analysis_timeout = req.analysis_timeout; }
+        opts += req{"pages", "locale", "stringIndexType", "features", "queryFields", "outputContentFormat", "output"};
 
         return rest.analyzeDocument(req.model_id, body, opts);
     }

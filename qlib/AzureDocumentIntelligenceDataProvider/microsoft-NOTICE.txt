@@ -1,0 +1,19 @@
+Azure Document Intelligence API contracts and test examples
+
+Copyright Microsoft Corporation. Licensed under the MIT License; see microsoft-LICENSE.txt.
+
+Source: https://github.com/Azure/azure-rest-api-specs
+Revision: f9a6d8b3ea13a55487777d3651380b49a787f1f6
+Directory: specification/ai/data-plane/DocumentIntelligence/stable/2024-11-30
+Original: DocumentIntelligence.json (preserved as azure-document-intelligence-swagger.json)
+SHA-256: 3f750834da9e3acc162b781711bf0eda02ab2bd8a30c2b4c6a62c6910e7f1bd0
+
+Qore's OpenAPI 3 artifacts are explicit adaptations, not Microsoft-published OpenAPI 3 files.
+Regenerate with tools/azure-document-intelligence-import.py and the preserved original;
+--qore selects a Qore runtime with the shared RestSchemaPruner.
+The inventory records every source operation and the overload normalization decisions.
+The official-examples.json test fixture retains Microsoft's 36 example documents and their
+individual original-byte SHA-256 checksums. Placeholder SAS values in these examples are
+Microsoft's public fixture text, not credentials.
+
+Adapter and Qore integration: Copyright 2026 Qore Technologies, s.r.o.; MIT License.

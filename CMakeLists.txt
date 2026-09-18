@@ -3642,7 +3642,16 @@ qore_user_module("qlib/GoogleDocumentAiRestClient.qm")
 qore_user_module("qlib/GoogleCloudStorageRestClient.qm")
 qore_user_module("qlib/GoogleDocumentAiDataProvider" "google-document-ai-logo.svg")
 qore_user_module("qlib/AzureDocumentIntelligenceRestClient.qm")
-qore_user_module("qlib/AzureDocumentIntelligenceDataProvider" "azure-document-intelligence-logo.svg")
+qore_user_module("qlib/AzureDocumentIntelligenceDataProvider"
+    "azure-document-intelligence-logo.svg;azure-document-intelligence-openapi.json;azure-document-intelligence-streams.json;azure-document-intelligence-inventory.json;azure-document-intelligence-swagger.json;microsoft-LICENSE.txt;microsoft-NOTICE.txt")
+install(FILES qlib/AzureDocumentIntelligenceDataProvider/microsoft-LICENSE.txt
+    qlib/AzureDocumentIntelligenceDataProvider/microsoft-NOTICE.txt
+    DESTINATION ${QORE_USER_MODULES_DIR}/AzureDocumentIntelligenceDataProvider COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if(QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/AzureDocumentIntelligenceDataProvider/microsoft-LICENSE.txt
+        qlib/AzureDocumentIntelligenceDataProvider/microsoft-NOTICE.txt
+        DESTINATION ${QORE_AOT_MODULES_DIR}/AzureDocumentIntelligenceDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/StabilityAiRestClient.qm")
 qore_user_module("qlib/StabilityAiDataProvider" "stability-ai-logo.svg")
 qore_user_module("qlib/BflRestClient.qm")

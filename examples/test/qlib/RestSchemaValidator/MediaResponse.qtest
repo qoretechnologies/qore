@@ -15,7 +15,7 @@ class MediaResponseTest inherits QUnit::Test {
 
     private mediaTest() {
         NullRestSchemaValidator validator();
-        foreach string mime in ("audio/wav", "audio/mpeg", "audio/ogg", "image/png", "video/mp4") {
+        foreach string mime in ("audio/wav", "audio/mpeg", "audio/ogg", "image/png", "video/mp4", "application/pdf") {
             foreach data body in (<00017fff52494646>, <00017fff52494646>.toString()) {
                 auto response = validator.parseResponse("POST", "/media", 200, body, {"content-type": mime});
                 assertEq(<00017fff52494646>, response.body, mime);

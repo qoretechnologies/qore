@@ -1,0 +1,191 @@
+{
+  "provenance": {
+    "boundary_version": 1,
+    "source_url": "https://raw.githubusercontent.com/Azure/azure-rest-api-specs/f9a6d8b3ea13a55487777d3651380b49a787f1f6/specification/ai/data-plane/DocumentIntelligence/stable/2024-11-30/DocumentIntelligence.json",
+    "source_sha256": "3f750834da9e3acc162b781711bf0eda02ab2bd8a30c2b4c6a62c6910e7f1bd0",
+    "source_size": 161416,
+    "source_revision": "f9a6d8b3ea13a55487777d3651380b49a787f1f6",
+    "api_version": "2024-11-30",
+    "source_operations": 34,
+    "source_schemas": 79
+  },
+  "operations": [
+    {
+      "operation_id": "DocumentClassifiers_ListClassifiers",
+      "method": "GET",
+      "path": "/documentClassifiers"
+    },
+    {
+      "operation_id": "DocumentClassifiers_GetClassifier",
+      "method": "GET",
+      "path": "/documentClassifiers/{classifierId}"
+    },
+    {
+      "operation_id": "DocumentClassifiers_DeleteClassifier",
+      "method": "DELETE",
+      "path": "/documentClassifiers/{classifierId}"
+    },
+    {
+      "operation_id": "DocumentClassifiers_ClassifyDocumentFromStream",
+      "method": "POST",
+      "path": "/documentClassifiers/{classifierId}:analyze"
+    },
+    {
+      "operation_id": "DocumentClassifiers_CopyClassifierTo",
+      "method": "POST",
+      "path": "/documentClassifiers/{classifierId}:copyTo"
+    },
+    {
+      "operation_id": "DocumentClassifiers_GetClassifyResult",
+      "method": "GET",
+      "path": "/documentClassifiers/{classifierId}/analyzeResults/{resultId}"
+    },
+    {
+      "operation_id": "DocumentClassifiers_AuthorizeClassifierCopy",
+      "method": "POST",
+      "path": "/documentClassifiers:authorizeCopy"
+    },
+    {
+      "operation_id": "DocumentClassifiers_BuildClassifier",
+      "method": "POST",
+      "path": "/documentClassifiers:build"
+    },
+    {
+      "operation_id": "DocumentModels_ListModels",
+      "method": "GET",
+      "path": "/documentModels"
+    },
+    {
+      "operation_id": "DocumentModels_AnalyzeDocumentFromStream",
+      "method": "POST",
+      "path": "/documentModels/{modelId}:analyze"
+    },
+    {
+      "operation_id": "DocumentModels_AnalyzeBatchDocuments",
+      "method": "POST",
+      "path": "/documentModels/{modelId}:analyzeBatch"
+    },
+    {
+      "operation_id": "DocumentModels_GetModel",
+      "method": "GET",
+      "path": "/documentModels/{modelId}"
+    },
+    {
+      "operation_id": "DocumentModels_DeleteModel",
+      "method": "DELETE",
+      "path": "/documentModels/{modelId}"
+    },
+    {
+      "operation_id": "DocumentModels_CopyModelTo",
+      "method": "POST",
+      "path": "/documentModels/{modelId}:copyTo"
+    },
+    {
+      "operation_id": "DocumentModels_ListAnalyzeBatchResults",
+      "method": "GET",
+      "path": "/documentModels/{modelId}/analyzeBatchResults"
+    },
+    {
+      "operation_id": "DocumentModels_GetAnalyzeBatchResult",
+      "method": "GET",
+      "path": "/documentModels/{modelId}/analyzeBatchResults/{resultId}"
+    },
+    {
+      "operation_id": "DocumentModels_DeleteAnalyzeBatchResult",
+      "method": "DELETE",
+      "path": "/documentModels/{modelId}/analyzeBatchResults/{resultId}"
+    },
+    {
+      "operation_id": "DocumentModels_GetAnalyzeResult",
+      "method": "GET",
+      "path": "/documentModels/{modelId}/analyzeResults/{resultId}"
+    },
+    {
+      "operation_id": "DocumentModels_DeleteAnalyzeResult",
+      "method": "DELETE",
+      "path": "/documentModels/{modelId}/analyzeResults/{resultId}"
+    },
+    {
+      "operation_id": "DocumentModels_GetAnalyzeResultFigure",
+      "method": "GET",
+      "path": "/documentModels/{modelId}/analyzeResults/{resultId}/figures/{figureId}"
+    },
+    {
+      "operation_id": "DocumentModels_GetAnalyzeResultPdf",
+      "method": "GET",
+      "path": "/documentModels/{modelId}/analyzeResults/{resultId}/pdf"
+    },
+    {
+      "operation_id": "DocumentModels_AuthorizeModelCopy",
+      "method": "POST",
+      "path": "/documentModels:authorizeCopy"
+    },
+    {
+      "operation_id": "DocumentModels_BuildModel",
+      "method": "POST",
+      "path": "/documentModels:build"
+    },
+    {
+      "operation_id": "DocumentModels_ComposeModel",
+      "method": "POST",
+      "path": "/documentModels:compose"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetResourceDetails",
+      "method": "GET",
+      "path": "/info"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_ListOperations",
+      "method": "GET",
+      "path": "/operations"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetDocumentModelBuildOperation",
+      "method": "GET",
+      "path": "/operations/{operationId}"
+    },
+    {
+      "operation_id": "DocumentClassifiers_ClassifyDocument",
+      "method": "POST",
+      "path": "/documentClassifiers/{classifierId}:analyze",
+      "normalization": "JSON request alternative; stream alternative in the stream partition"
+    },
+    {
+      "operation_id": "DocumentModels_AnalyzeDocument",
+      "method": "POST",
+      "path": "/documentModels/{modelId}:analyze",
+      "normalization": "JSON request alternative; stream alternative in the stream partition"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetDocumentClassifierBuildOperation",
+      "method": "GET",
+      "path": "/operations/{operationId}",
+      "normalization": "One wire operation; the kind discriminator retains every typed result"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetDocumentClassifierCopyToOperation",
+      "method": "GET",
+      "path": "/operations/{operationId}",
+      "normalization": "One wire operation; the kind discriminator retains every typed result"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetDocumentModelComposeOperation",
+      "method": "GET",
+      "path": "/operations/{operationId}",
+      "normalization": "One wire operation; the kind discriminator retains every typed result"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetDocumentModelCopyToOperation",
+      "method": "GET",
+      "path": "/operations/{operationId}",
+      "normalization": "One wire operation; the kind discriminator retains every typed result"
+    },
+    {
+      "operation_id": "MiscellaneousOperations_GetOperation",
+      "method": "GET",
+      "path": "/operations/{operationId}",
+      "normalization": "One wire operation; the kind discriminator retains every typed result"
+    }
+  ]
+}

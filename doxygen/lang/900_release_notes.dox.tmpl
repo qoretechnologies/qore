@@ -2210,9 +2210,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref azuredocumentintelligencedataproviderintro "AzureDocumentIntelligenceDataProvider" module
       - new module providing a data provider API for <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a> (formerly Form Recognizer)
+      - complete stable API coverage with 31 actions, nested types, paginated references, binary downloads,
+        preserved asynchronous job headers, and complete catalogs in twelve locales
 
     - @ref azuredocumentintelligencerestclientintro "AzureDocumentIntelligenceRestClient" module
       - new module providing a REST client for <a href="https://azure.microsoft.com/products/ai-services/ai-document-intelligence">Azure Document Intelligence</a>
+      - authenticated ping, subscription-key or caller-renewed Entra token authentication, safe resource links,
+        independent polling jobs, total deadlines, and bounded retry guidance
 
     - @ref azureopenaidataproviderintro "AzureOpenAiDataProvider" module
       - new module providing 99 reviewed Azure OpenAI actions, including Responses, media generation,
@@ -2787,6 +2791,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - independent response type snapshots retain read-only/write-only direction through nested types and serialization
       - validates declared object properties even when the schema also permits arbitrary additional properties
       - preserves composed field types and supports multipart file-or-URL inputs, including named file arrays
       - derives response types from every declared media representation and validates the selected Content-Type
@@ -2856,6 +2861,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" module
       - new module providing a provider-neutral async-job polling helper
+      - bounds sleep by the remaining deadline and rejects success arriving after the deadline
 
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
@@ -2931,6 +2937,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
 
     - @ref restschemaactionsintro "RestSchemaActions" module
+      - optional typed response envelopes preserve HTTP status and headers, including bodyless accepted jobs
       - actions can select a declared response media schema and send its Accept header while retaining typed codecs
       - imports partition operations by declared fixed servers and support checked schema value repairs
       - reference data supports exact local filters, grouped child lists, and single-record identity responses
@@ -2944,6 +2951,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         explicitly selected set of REST schema operations, including schema normalization and pruning
 
     - @ref restschemadataproviderintro "RestSchemaDataProvider" module
+      - serializes byte fields exactly once and keeps sensitive response content out of failure logs
       - serializes JSON parameter content before URI escaping
       - preserves empty collections, zero, and false response bodies
       - honors OpenAPI array \c style / \c explode and Swagger \c collectionFormat in query arguments,
@@ -3520,6 +3528,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - opaque PDF responses retain their original bytes on synchronous and asynchronous transports
       - boolean enumerations reject undeclared values and retain false in generated examples
       - fixed validating a request or response value holding @ref NULL "NULL", which failed to dispatch at
         all and raised \c RUNTIME-OVERLOAD-ERROR instead of giving any verdict on the value.  A record-based

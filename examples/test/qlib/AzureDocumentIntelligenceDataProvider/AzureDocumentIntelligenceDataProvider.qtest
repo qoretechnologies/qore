@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 %allow-injection
@@ -29,9 +30,13 @@ class FakeAzureDocIntelClient
     hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         push calls, {"method": "POST", "path": path, "body": body};
         return <RestClient::RestResponseInfo>{
-            "headers": {"operation-location": "/poll-url"},
+            "headers": {"operation-location": "/documentintelligence/poll-url"},
             "body": "",
         };
+    }
+    hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(string method, string path, auto body,
+            *hash<auto> headers, int timeout_ms) {
+        return method == "POST" ? restPost(path, body, headers) : restGet(path, headers);
     }
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
         push calls, {"method": "GET", "path": path};
@@ -79,8 +84,7 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
             \allowedValuesTest());
 
         # Live tests require a real Azure Document Intelligence connection.
-        # Cost: 1 page on prebuilt-document (free-tier eligible — 500
-        # pages/month for 12 months).
+        # Cost: one document analyzed with prebuilt-layout; the resource's pricing applies.
         if (conn_name) {
             addTestCase("live: ping + analyze-document",
                 \liveAzureDocIntelTest());
@@ -112,8 +116,8 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions = select
             DataProvider::DataProviderActionCatalog::getActions("AzureDocumentIntelligence"),
             $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(1, actions.size());
-        assertEq("analyze-document", actions[0].action);
+        assertEq(30, actions.size());
+        assertTrue(inlist("analyze-document", map $1.action, actions));
     }
 
     private urlSourceTest() {
@@ -177,7 +181,7 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
     /** Verifies the actual wire format against Azure's Document
         Intelligence service — including the operation-location header
         parsing and async poll-until-succeeded lifecycle.  Cost: 1 page
-        on the prebuilt-document model (free-tier eligible).
+        on the prebuilt-layout model; resource pricing applies.
     */
     private liveAzureDocIntelTest() {
         AbstractConnection conn = get_connection(conn_name);
@@ -188,14 +192,14 @@ public class AzureDocumentIntelligenceDataProviderTest inherits QUnit::Test {
         AbstractDataProvider prov = conn.getDataProvider();
         AbstractDataProvider ad = prov.getChildProvider("analyze-document");
         auto result = ad.doRequest({
-            "model_id":     "prebuilt-document",
+            "model_id":     "prebuilt-layout",
             "document_url": LiveDocUrl,
         });
         assertTrue(result.content.val(),
             "Azure DI returned non-empty content");
         assertTrue(result.pages.size() >= 1,
             "Azure DI returned at least one page");
-        assertEq("prebuilt-document", result.modelId,
+        assertEq("prebuilt-layout", result.modelId,
             "Azure DI echoed the model id");
     }
 }
