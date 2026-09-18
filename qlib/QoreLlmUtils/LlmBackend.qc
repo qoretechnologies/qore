@@ -1640,6 +1640,11 @@ if (resp.stop_reason == "tool_use") {
             return response;
         }
         hash<auto> choice = cast<hash>(choices[0]);
+        # Parseable text does not make an interrupted or filtered response
+        # complete.  Preserve its terminal status for the caller's gate.
+        if (choice.finish_reason == "length" || choice.finish_reason == "content_filter") {
+            return response;
+        }
         if (choice.message.typeCode() != NT_HASH) {
             return response;
         }

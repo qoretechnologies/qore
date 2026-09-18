@@ -1790,6 +1790,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
+      - chat clients preserve usage and output-limit status when tool arguments are incomplete;
+        truncated or content-filtered responses are not promoted to executable tool calls
       - strict LLM output and tool schemas transparently adapt optional fields for OpenAI and
         restore omitted-field semantics in completed responses; explicit nullable values are preserved
       - adapted structured streams deliver complete normalized JSON before their terminal event;

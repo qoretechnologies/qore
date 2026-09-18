@@ -203,6 +203,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("OpenAI strict schemas restore root-recursive optional fields", \openAiStrictSchemaRecursiveTest());
         addTestCase("OpenAI strict schemas relocate local references", \openAiStrictSchemaReferenceTest());
         addTestCase("OpenAI strict schemas retain incomplete and refused output", \openAiStrictSchemaIncompleteTest());
+        addTestCase("OpenAI and callback chats retain incomplete tool status and usage",
+            \openAiIncompleteToolResponseTest());
         addTestCase("OpenAI strict schemas preserve optional-field semantics", \openAiStrictSchemaRoundTripTest());
         addTestCase("OpenAI strict JSON streams restore optional fields", \openAiStrictSchemaStreamTest());
         addTestCase("OpenAI strict tool arguments restore optional fields", \openAiStrictToolSchemaTest());
@@ -2649,6 +2651,54 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", sub () {
             llm.chatCompletionsStream(request, sub (hash<auto> chunk) {});
         });
+    }
+
+    openAiIncompleteToolResponseTest() {
+        hash<auto> usage = {"prompt_tokens": 23, "completion_tokens": 9,
+            "total_tokens": 32};
+        foreach string finish in (("length", "content_filter")) {
+            foreach string arguments in (("{\"value\":", "{\"value\":1}")) {
+                hash<auto> body = {"id": "incomplete-tool-fixture", "usage": usage,
+                    "choices": ({"finish_reason": finish, "message": {
+                        "role": "assistant", "content": "{\"value\":1}",
+                        "tool_calls": ({"id": "call-incomplete", "type": "function",
+                            "function": {"name": "record", "arguments": arguments}},),
+                    }},)};
+                foreach string mode in (("http", "callback")) {
+                    installGeminiHandler({"/v1/chat/completions": {
+                        "code": 200, "body": body}});
+                    int callback_calls = 0;
+                    LlmBackend backend(<LlmBackendConfig>{
+                        "mode": mode, "model": "fixture",
+                        "url": "http://localhost:" + port,
+                        "api_callback": hash<auto> sub (string method, string path,
+                                hash<auto> request) {
+                            ++callback_calls;
+                            return body;
+                        },
+                    });
+                    hash<ChatResponse> chat = backend.chat((<ChatMessage>{
+                        "role": "user", "content": "fixture"},));
+                    assertEq(finish == "length" ? "max_tokens" : finish, chat.stop_reason);
+                    assertEq(usage, chat.usage);
+                    assertTrue(!chat.tool_calls,
+                        "incomplete responses must not expose executable tool calls");
+                    assertEq(arguments, chat.raw.choices[0].message.tool_calls[0]
+                        ."function".arguments, "raw provider evidence is preserved");
+                    hash<auto> rv = backend.chatCompletions({"messages": (),
+                        "tools": ({"type": "function", "function": {"name": "record",
+                            "parameters": {"type": "object", "properties": {
+                                "value": {"type": "integer"}}, "required": ("value",)}}},),
+                        "tool_choice": "required", "max_retries": 0});
+                    assertEq(finish, rv.choices[0].finish_reason,
+                        "forced-tool synthesis must not promote incomplete content to success");
+                    assertEq(usage, rv.usage);
+                    assertTrue(!rv.choices[0].message.tool_calls);
+                    assertEq(2, mode == "http" ? gemini_handler.requests.size() : callback_calls,
+                        "completed incomplete responses must not trigger automatic replay");
+                }
+            }
+        }
     }
 
     openAiStreamingToolCallOnlyDeltasTest() {

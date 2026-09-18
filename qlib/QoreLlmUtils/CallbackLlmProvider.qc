@@ -453,7 +453,11 @@ backend.chatStream(history,
         }
 
         *list<hash<ChatToolCall>> parsed_tool_calls;
-        if (msg.tool_calls) {
+        # A terminal output limit or content filter can leave even the first
+        # argument object unfinished.  Preserve status, usage and raw evidence
+        # without exposing any calls from this incomplete response for execution.
+        if (msg.tool_calls && choice.finish_reason != "length"
+                && choice.finish_reason != "content_filter") {
             parsed_tool_calls = ();
             foreach hash<auto> tc in (msg.tool_calls) {
                 *hash<auto> args;
