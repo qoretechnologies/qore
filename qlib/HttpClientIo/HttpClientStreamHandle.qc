@@ -841,11 +841,11 @@ public class HttpClientStreamHandle {
         # expose the bare MIME type so downstream consumers don't each re-strip parameters
         resp.content_type = mime_get_base_type(ct);
         if (resp.body && resp.body.typeCode() == NT_BINARY) {
-            if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
+            if (ct && (is_mime_json(resp.content_type) || ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
                     || ct =~ /\+(json|xml)/ || ct =~ /charset=/
                     || ct =~ /x-www-form-urlencoded/)) {
                 # JSON and YAML are always UTF-8 per their respective specs
-                bool force_utf8 = ct =~ /\/(json|x-yaml|yaml)/ || ct =~ /\+json/;
+                bool force_utf8 = is_mime_json(resp.content_type) || ct =~ /\/(json|x-yaml|yaml)/ || ct =~ /\+json/;
                 *string charset;
                 if (!force_utf8) {
                     *list<*string> m = (ct =~ x/charset=["']?([^\s;,"']+)/i);

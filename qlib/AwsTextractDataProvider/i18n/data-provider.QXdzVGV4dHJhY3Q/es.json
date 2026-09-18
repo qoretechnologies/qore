@@ -8,8 +8,8 @@
           "message": "AWS Textract"
         },
         "app.QXdzVGV4dHJhY3Q.short_desc": {
-          "source": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
-          "message": "IA documental de AWS Textract (OCR, diseño, tablas, formularios y consultas)"
+          "source": "Extract text and structured information from documents",
+          "message": "Extraiga texto e información estructurada de documentos."
         },
         "app.QXdzVGV4dHJhY3Q.desc": {
           "source": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) — a managed document-AI service for extracting text, structure, and answers from scanned documents and PDFs.\n\n**Common use cases**:\n- **Invoice and receipt parsing**: extract key/value pairs from forms with the `FORMS` feature\n- **Table extraction**: structured rows and columns from scanned tables with the `TABLES` feature\n- **Document Q&A**: ask specific questions of a document with the `QUERIES` feature (e.g., \"What is the total?\")\n- **Signature detection**: flag handwritten signatures in contracts with the `SIGNATURES` feature\n- **Layout-preserving OCR**: extract text grouped by paragraphs, titles, headers, footers with the `LAYOUT` feature",
@@ -344,12 +344,12 @@
           "message": "Detectar texto del documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
-          "source": "Extract raw text from a document (no structure)",
-          "message": "Extraer texto sin procesar de un documento (sin estructura)"
+          "source": "Extract lines and words from a document",
+          "message": "Extraer líneas y palabras de un documento."
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.desc": {
-          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a single-page or multi-page document.  Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\nPass the document via one of:\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
-          "message": "Llama a la API `DetectDocumentText` de Textract para extraer el contenido de texto de un documento de una o varias páginas. Devuelve una lista de objetos `Block` (`PAGE`, `LINE`, `WORD`) con texto, confianza y geometría de cuadro delimitador.\n\nPase el documento a través de uno de los siguientes:\n- `document_bytes` — bytes sin procesar (PNG / JPEG / PDF / TIFF, máx. 10 MB)\n- `document_path` — ruta de archivo local (se lee y se sube como bytes)\n- `s3_bucket` + `s3_name` — referencia a objeto de S3 (sin límite de tamaño)"
+          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\n**Pass the document via one of:**\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
+          "message": "Llama a la API `DetectDocumentText` de Textract para extraer el contenido de texto de un documento. Las entradas síncronas de PDF y TIFF deben tener una página. Devuelve una lista de objetos `Block` (`PAGE`, `LINE`, `WORD`) con texto, confianza y geometría de cuadro delimitador.\n\n**Pase el documento a través de uno de:**\n- `document_bytes` — bytes sin formato (PNG / JPEG / PDF / TIFF, máximo 10 MB)\n- `document_path`: ruta del archivo local (leído y cargado como bytes)\n- `s3_bucket` + `s3_name`: referencia de objeto S3 (también limitada a 10 MB)"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
           "source": "Document Bytes",
@@ -416,8 +416,8 @@
           "message": "Analizar documento"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
-          "source": "Extract text + tables/forms/signatures/queries from a document",
-          "message": "Extraer texto + tablas/formularios/firmas/consultas de un documento"
+          "source": "Extract tables, forms, signatures, layout, and query answers",
+          "message": "Extraiga tablas, formularios, firmas, diseños y respuestas a consultas."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
           "source": "Calls Textract's `AnalyzeDocument` API to extract text plus structural features.  `feature_types` selects which features to extract — pass at least one of `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nWhen `QUERIES` is included, also pass a `queries` list — each query has a `Text` field with the question to ask.",
@@ -454,6 +454,54 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
           "source": "Queries (ask questions of the document)",
           "message": "Consultas (hacer preguntas sobre el documento)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Consultas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
+          "source": "Custom queries to ask of the document (with QUERIES feature)",
+          "message": "Consultas personalizadas sobre el documento (con la función QUERIES)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
+          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
+          "message": "Lista de objetos de consulta cuando `QUERIES` está en `feature_types`. Cada consulta tiene un campo `Text` (la pregunta que se desea realizar) más un filtro opcional `Alias` y `Pages`.\n\n**Ejemplo**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.display_name": {
+          "source": "Alias",
+          "message": "Alias"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.short_desc": {
+          "source": "A short name for locating this question in the results",
+          "message": "Un nombre corto para ubicar esta pregunta en los resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.desc": {
+          "source": "A short name for locating this question in the results.",
+          "message": "Un nombre corto para ubicar esta pregunta en los resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Páginas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Selectores de página como '1', '1-3' o '4-*'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Selectores de página como `1`, `1-3` o `4-*`; use solo `*` para todas las páginas."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.short_desc": {
+          "source": "Question to answer, for example 'What is the invoice total?'",
+          "message": "Pregunta a responder, por ejemplo '¿Cuál es el total de la factura?'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.desc": {
+          "source": "Question to answer, for example `What is the invoice total?`.",
+          "message": "Pregunta a responder, por ejemplo `What is the invoice total?`."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
           "source": "Document Bytes",
@@ -503,18 +551,6 @@
           "source": "S3 object key (path within the bucket).",
           "message": "Clave del objeto de S3 (ruta dentro del bucket)."
         },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
-          "source": "Queries",
-          "message": "Consultas"
-        },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
-          "source": "Custom queries to ask of the document (with QUERIES feature)",
-          "message": "Consultas personalizadas sobre el documento (con la función QUERIES)"
-        },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
-          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
-          "message": "Lista de objetos de consulta cuando `QUERIES` está en `feature_types`. Cada consulta tiene un campo `Text` (la pregunta que se desea realizar) más un filtro opcional `Alias` y `Pages`.\n\n**Ejemplo**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
-        },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.display_name": {
           "source": "S3 Object Version",
           "message": "Versión del objeto de S3"
@@ -526,6 +562,1994 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.desc": {
           "source": "Optional S3 object version ID for versioned buckets.",
           "message": "ID de versión opcional del objeto de S3 para buckets con versiones."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.display_name": {
+          "source": "Human Review",
+          "message": "Revisión humana"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.short_desc": {
+          "source": "Human review settings for existing Amazon A2I customers only",
+          "message": "Configuración de revisión humana solo para clientes existentes de Amazon A2I"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.desc": {
+          "source": "Human review settings for existing Amazon A2I customers only.",
+          "message": "Configuración de revisión humana solo para clientes existentes de Amazon A2I."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.display_name": {
+          "source": "Data Attributes",
+          "message": "Atributos de datos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.short_desc": {
+          "source": "Content declarations used to route the document for human review",
+          "message": "Declaraciones de contenido utilizadas para enviar el documento a revisión humana"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.desc": {
+          "source": "Content declarations used to route the document for human review.",
+          "message": "Declaraciones de contenido utilizadas para enviar el documento a revisión humana."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
+          "source": "Content Classifiers",
+          "message": "Clasificadores de contenido"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
+          "source": "Content declarations for the human review workflow",
+          "message": "Declaraciones de contenido para el flujo de trabajo de revisión humana"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
+          "source": "Content declarations for the human review workflow.",
+          "message": "Declaraciones de contenido para el flujo de trabajo de revisión humana."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
+          "source": "Free of Personally Identifiable Information",
+          "message": "Sin información de identificación personal"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
+          "source": "Free of Adult Content",
+          "message": "Sin contenido para adultos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.display_name": {
+          "source": "Flow Definition Arn",
+          "message": "ARN de definición de flujo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.short_desc": {
+          "source": "ARN of an existing Amazon A2I human review workflow",
+          "message": "ARN de un flujo de trabajo de revisión humana de Amazon A2I existente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.desc": {
+          "source": "ARN of an existing Amazon A2I human review workflow.",
+          "message": "ARN de un flujo de trabajo de revisión humana de Amazon A2I existente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.display_name": {
+          "source": "Human Loop Name",
+          "message": "Nombre del bucle humano"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.short_desc": {
+          "source": "Unique name for this human review in the AWS region",
+          "message": "Nombre único para esta revisión humana en la región de AWS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.desc": {
+          "source": "Unique name for this human review in the AWS region.",
+          "message": "Nombre único para esta revisión humana en la región de AWS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.display_name": {
+          "source": "Adapters",
+          "message": "Adaptadores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.short_desc": {
+          "source": "Custom query adapters and versions to use for selected pages",
+          "message": "Adaptadores de consulta personalizados y versiones para usar en páginas seleccionadas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.desc": {
+          "source": "Custom query adapters and versions to use for selected pages.",
+          "message": "Adaptadores de consulta personalizados y versiones para usar en páginas seleccionadas."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.display_name": {
+          "source": "Adapters",
+          "message": "Adaptadores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.short_desc": {
+          "source": "Adapters to apply",
+          "message": "Adaptadores para aplicar"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.desc": {
+          "source": "Adapters to apply; selected page ranges must not overlap.",
+          "message": "Adaptadores para aplicar; los rangos de páginas seleccionados no deben superponerse."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Páginas"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Selectores de página como '1', '1-3' o '4-*'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Selectores de página como `1`, `1-3` o `4-*`; use solo `*` para todas las páginas."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
+          "source": "Analyze Expense",
+          "message": "Analizar gastos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
+          "source": "Extract invoice and receipt totals, vendors, and line items",
+          "message": "Extraiga los totales de facturas y recibos, proveedores y líneas de pedido"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.desc": {
+          "source": "Extract invoice and receipt totals, vendors, and line items. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeExpense.html).",
+          "message": "Extraiga totales de facturas y recibos, proveedores y líneas de pedido. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeExpense.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "Documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.display_name": {
+          "source": "Bytes",
+          "message": "Bytes"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.short_desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request",
+          "message": "Bytes de documentos sin procesar o contenido base64, hasta 10 MB para una solicitud sincrónica"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+          "message": "Bytes de documentos sin procesar o contenido base64, hasta 10 MB para una solicitud sincrónica."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Objeto de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.display_name": {
+          "source": "Analyze ID",
+          "message": "Analizar ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.short_desc": {
+          "source": "Extract identity fields from US passports and driver's licenses",
+          "message": "Extraiga campos de identidad de pasaportes y licencias de conducir estadounidenses"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.desc": {
+          "source": "Extract identity fields from US passports and driver's licenses. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html).",
+          "message": "Extraiga campos de identidad de pasaportes y licencias de conducir estadounidenses. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.display_name": {
+          "source": "Document Pages",
+          "message": "Páginas del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.short_desc": {
+          "source": "One or two images of a US passport or driver's license",
+          "message": "Una o dos imágenes de un pasaporte o licencia de conducir estadounidense."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.desc": {
+          "source": "One or two images of a US passport or driver's license.",
+          "message": "Una o dos imágenes de un pasaporte o licencia de conducir estadounidense."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.display_name": {
+          "source": "Bytes",
+          "message": "Bytes"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.short_desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request",
+          "message": "Bytes de documentos sin procesar o contenido base64, hasta 10 MB para una solicitud sincrónica"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+          "message": "Bytes de documentos sin procesar o contenido base64, hasta 10 MB para una solicitud sincrónica."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Objeto de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
+          "source": "Create Adapter",
+          "message": "Crear adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Create a custom query adapter",
+          "message": "Crear un adaptador de consulta personalizado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.desc": {
+          "source": "Create a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html).",
+          "message": "Cree un adaptador de consulta personalizado. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
+          "source": "Adapter Name",
+          "message": "Nombre del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
+          "source": "A descriptive name for the custom query adapter",
+          "message": "Un nombre descriptivo para el adaptador de consulta personalizado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.desc": {
+          "source": "A descriptive name for the custom query adapter.",
+          "message": "Un nombre descriptivo para el adaptador de consulta personalizado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Token de solicitud del cliente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.short_desc": {
+          "source": "A description explaining the adapter's purpose",
+          "message": "Una descripción que explique el propósito del adaptador."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.desc": {
+          "source": "A description explaining the adapter's purpose.",
+          "message": "Una descripción que explique el propósito del adaptador."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.display_name": {
+          "source": "Feature Types",
+          "message": "Tipos de características"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.short_desc": {
+          "source": "Custom adapters support the 'QUERIES' feature only",
+          "message": "Los adaptadores personalizados solo admiten la función 'QUERIES'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.desc": {
+          "source": "Custom adapters support the `QUERIES` feature only.",
+          "message": "Los adaptadores personalizados solo admiten la función `QUERIES`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries",
+          "message": "Consultas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
+          "source": "Auto Update",
+          "message": "Actualización automática"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
+          "source": "Whether AWS may automatically update the adapter",
+          "message": "Si AWS puede actualizar automáticamente el adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.desc": {
+          "source": "Whether AWS may automatically update the adapter.",
+          "message": "Si AWS puede actualizar automáticamente el adaptador."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkVOQUJMRUQ.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
+          "source": "Disabled",
+          "message": "Deshabilitado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Etiquetas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "Etiquetas de recursos como un mapa de nombres a valores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "Etiquetas de recursos como un mapa de nombres a valores; un valor de etiqueta vacío es válido."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Create Adapter Version",
+          "message": "Crear versión del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Train a version of a custom query adapter",
+          "message": "Entrenar una versión de un adaptador de consulta personalizado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Train a version of a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapterVersion.html). **Training incurs AWS charges** and requires an authorized S3 dataset and output location.",
+          "message": "Entrene una versión de un adaptador de consultas personalizado. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapterVersion.html). **La capacitación genera cargos de AWS** y requiere un conjunto de datos S3 autorizado y una ubicación de salida."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Token de solicitud del cliente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.display_name": {
+          "source": "Dataset Config",
+          "message": "Configuración del conjunto de datos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.short_desc": {
+          "source": "S3 manifest identifying the training and test documents",
+          "message": "Manifiesto S3 que identifica los documentos de capacitación y prueba."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.desc": {
+          "source": "S3 manifest identifying the training and test documents.",
+          "message": "Manifiesto S3 que identifica los documentos de capacitación y prueba."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.field.TWFuaWZlc3RTM09iamVjdA.display_name": {
+          "source": "Manifest S3Object",
+          "message": "Objeto S3 del manifiesto"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID de clave de KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "ID de clave KMS o ARN para cifrar la salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID de clave KMS o ARN para cifrar la salida; se deben otorgar los permisos requeridos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Configuración de salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Bucket de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Depósito S3 para recibir resultados"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "depósito S3 para recibir resultados; la persona que llama debe tener permiso para escribirlo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Prefijo de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Etiquetas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "Etiquetas de recursos como un mapa de nombres a valores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "Etiquetas de recursos como un mapa de nombres a valores; un valor de etiqueta vacío es válido."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
+          "source": "Delete Adapter",
+          "message": "Eliminar adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Delete an unused custom query adapter",
+          "message": "Eliminar un adaptador de consulta personalizado no utilizado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.desc": {
+          "source": "Delete an unused custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapter.html).",
+          "message": "Elimine un adaptador de consulta personalizado no utilizado. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Delete Adapter Version",
+          "message": "Eliminar versión del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Delete a version of a custom query adapter",
+          "message": "Eliminar una versión de un adaptador de consulta personalizado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Delete a version of a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapterVersion.html).",
+          "message": "Elimine una versión de un adaptador de consulta personalizado. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapterVersion.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
+          "source": "Adapter Version",
+          "message": "Versión del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
+          "source": "Version belonging to the selected adapter",
+          "message": "Versión perteneciente al adaptador seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.desc": {
+          "source": "Version belonging to the selected adapter.",
+          "message": "Versión perteneciente al adaptador seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
+          "source": "Get Adapter",
+          "message": "Obtener adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
+          "source": "Read a custom query adapter's settings",
+          "message": "Leer la configuración de un adaptador de consulta personalizado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.desc": {
+          "source": "Read a custom query adapter's settings. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapter.html).",
+          "message": "Lea la configuración de un adaptador de consulta personalizado. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Get Adapter Version",
+          "message": "Obtener la versión del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Read training status and evaluation results for an adapter version",
+          "message": "Leer el estado del entrenamiento y los resultados de la evaluación para una versión del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Read training status and evaluation results for an adapter version. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapterVersion.html).",
+          "message": "Lea el estado del entrenamiento y los resultados de la evaluación para una versión del adaptador. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapterVersion.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
+          "source": "Adapter Version",
+          "message": "Versión del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
+          "source": "Version belonging to the selected adapter",
+          "message": "Versión perteneciente al adaptador seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.desc": {
+          "source": "Version belonging to the selected adapter.",
+          "message": "Versión perteneciente al adaptador seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
+          "source": "Get Document Analysis",
+          "message": "Obtener análisis de documentos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
+          "source": "Read a page of asynchronous document analysis results",
+          "message": "Leer una página de resultados de análisis de documentos asincrónicos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.desc": {
+          "source": "Read a page of asynchronous document analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Lea una página de resultados de análisis de documentos asincrónicos. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentAnalysis.html). Verifique `JobStatus` antes de usar los resultados; `PARTIAL_SUCCESS` incluye advertencias y `FAILED` incluye un mensaje de estado. Pase `NextToken` a la misma acción para recuperar la página siguiente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente; AWS no proporciona ninguna lista de trabajos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Resultados máximos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Número máximo de resultados en esta página de respuesta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Número máximo de resultados en esta página de respuesta."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Siguiente Token"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Token de continuación de la respuesta anterior en la misma operación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Token de continuación de la respuesta anterior en la misma operación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
+          "source": "Get Document Text Detection",
+          "message": "Obtener detección de texto del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
+          "source": "Read a page of asynchronous text detection results",
+          "message": "Leer una página de resultados de detección de texto asincrónicos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.desc": {
+          "source": "Read a page of asynchronous text detection results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentTextDetection.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Lea una página de resultados de detección de texto asincrónicos. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentTextDetection.html). Verifique `JobStatus` antes de usar los resultados; `PARTIAL_SUCCESS` incluye advertencias y `FAILED` incluye un mensaje de estado. Pase `NextToken` a la misma acción para recuperar la página siguiente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente; AWS no proporciona ninguna lista de trabajos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Resultados máximos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Número máximo de resultados en esta página de respuesta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Número máximo de resultados en esta página de respuesta."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Siguiente Token"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Token de continuación de la respuesta anterior en la misma operación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Token de continuación de la respuesta anterior en la misma operación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
+          "source": "Get Expense Analysis",
+          "message": "Obtenga análisis de gastos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
+          "source": "Read a page of asynchronous expense analysis results",
+          "message": "Lea una página de resultados de análisis de gastos asincrónicos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.desc": {
+          "source": "Read a page of asynchronous expense analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetExpenseAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Lea una página de resultados de análisis de gastos asincrónicos. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetExpenseAnalysis.html). Verifique `JobStatus` antes de usar los resultados; `PARTIAL_SUCCESS` incluye advertencias y `FAILED` incluye un mensaje de estado. Pase `NextToken` a la misma acción para recuperar la página siguiente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente; AWS no proporciona ninguna lista de trabajos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Resultados máximos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Número máximo de resultados en esta página de respuesta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Número máximo de resultados en esta página de respuesta."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Siguiente Token"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Token de continuación de la respuesta anterior en la misma operación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Token de continuación de la respuesta anterior en la misma operación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
+          "source": "Get Lending Analysis",
+          "message": "Obtenga un análisis de préstamos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
+          "source": "Read a page of asynchronous lending analysis results",
+          "message": "Lea una página de resultados del análisis de préstamos asincrónicos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.desc": {
+          "source": "Read a page of asynchronous lending analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Lea una página de resultados de análisis de préstamos asincrónicos. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysis.html). Verifique `JobStatus` antes de usar los resultados; `PARTIAL_SUCCESS` incluye advertencias y `FAILED` incluye un mensaje de estado. Pase `NextToken` a la misma acción para recuperar la página siguiente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente; AWS no proporciona ninguna lista de trabajos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Resultados máximos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Número máximo de resultados en esta página de respuesta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Número máximo de resultados en esta página de respuesta."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Siguiente Token"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Token de continuación de la respuesta anterior en la misma operación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Token de continuación de la respuesta anterior en la misma operación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
+          "source": "Get Lending Analysis Summary",
+          "message": "Obtenga un resumen del análisis de préstamos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
+          "source": "Read the document classification summary for a lending job",
+          "message": "Lea el resumen de clasificación de documentos para un trabajo de préstamo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.desc": {
+          "source": "Read the document classification summary for a lending job. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysisSummary.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message.",
+          "message": "Lea el resumen de clasificación de documentos para un trabajo de préstamo. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysisSummary.html). Verifique `JobStatus` antes de usar los resultados; `PARTIAL_SUCCESS` incluye advertencias y `FAILED` incluye un mensaje de estado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "ID de trabajo devuelto por la acción de inicio coincidente; AWS no proporciona ninguna lista de trabajos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
+          "source": "List Adapter Versions",
+          "message": "Listar versiones de adaptadores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
+          "source": "List versions of custom query adapters",
+          "message": "Listar versiones de adaptadores de consultas personalizados"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.desc": {
+          "source": "List versions of custom query adapters. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapterVersions.html). Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Enumera versiones de adaptadores de consultas personalizados. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapterVersions.html). Pase `NextToken` a la misma acción para recuperar la página siguiente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
+          "source": "After Creation Time",
+          "message": "Después del tiempo de creación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
+          "source": "Return resources created after this time",
+          "message": "Devolver recursos creados después de este tiempo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.desc": {
+          "source": "Return resources created after this time.",
+          "message": "Devolver recursos creados después de este tiempo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
+          "source": "Before Creation Time",
+          "message": "Antes del tiempo de la creación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
+          "source": "Return resources created before this time",
+          "message": "Devolver recursos creados antes de este tiempo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.desc": {
+          "source": "Return resources created before this time.",
+          "message": "Devolver recursos creados antes de este tiempo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Resultados máximos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Número máximo de resultados en esta página de respuesta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Número máximo de resultados en esta página de respuesta."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Siguiente Token"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Token de continuación de la respuesta anterior en la misma operación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Token de continuación de la respuesta anterior en la misma operación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
+          "source": "List Adapters",
+          "message": "Lista de adaptadores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
+          "source": "List custom query adapters in this account and region",
+          "message": "Enumerar adaptadores de consultas personalizados en esta cuenta y región"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.desc": {
+          "source": "List custom query adapters in this account and region. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Enumere los adaptadores de consultas personalizados en esta cuenta y región. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Pase `NextToken` a la misma acción para recuperar la página siguiente."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
+          "source": "After Creation Time",
+          "message": "Después del tiempo de creación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
+          "source": "Return resources created after this time",
+          "message": "Devolver recursos creados después de este tiempo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.desc": {
+          "source": "Return resources created after this time.",
+          "message": "Devolver recursos creados después de este tiempo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
+          "source": "Before Creation Time",
+          "message": "Antes del tiempo de la creación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
+          "source": "Return resources created before this time",
+          "message": "Devolver recursos creados antes de este tiempo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.desc": {
+          "source": "Return resources created before this time.",
+          "message": "Devolver recursos creados antes de este tiempo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Resultados máximos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Número máximo de resultados en esta página de respuesta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Número máximo de resultados en esta página de respuesta."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Siguiente Token"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Token de continuación de la respuesta anterior en la misma operación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Token de continuación de la respuesta anterior en la misma operación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
+          "source": "List Tags For Resource",
+          "message": "Listar etiquetas para recurso"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
+          "source": "Read the tags attached to a Textract resource",
+          "message": "Leer las etiquetas adjuntas a un recurso de Texttract"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.desc": {
+          "source": "Read the tags attached to a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListTagsForResource.html).",
+          "message": "Lea las etiquetas adjuntas a un recurso de Texttract. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListTagsForResource.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "ARN de Recurso"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "Extraiga el ARN del recurso en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "Extraiga el ARN del recurso en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Document Analysis",
+          "message": "Iniciar análisis de documentos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
+          "source": "Start asynchronous extraction of document structure",
+          "message": "Iniciar la extracción asincrónica de la estructura del documento."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.desc": {
+          "source": "Start asynchronous extraction of document structure. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Inicie la extracción asincrónica de la estructura del documento. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Conserve `JobId` y utilice la acción de obtención coincidente para comprobar el estado y recuperar cada página de resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Ubicación del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "Ubicación del documento S3 para un trabajo de análisis asincrónico"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "Ubicación del documento S3 para un trabajo de análisis asincrónico."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Objeto de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.display_name": {
+          "source": "Feature Types",
+          "message": "Tipos de características"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.short_desc": {
+          "source": "Document features to extract",
+          "message": "Características del documento para extraer"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.desc": {
+          "source": "Document features to extract; select at least one.",
+          "message": "Características del documento a extraer; seleccione al menos uno."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlRBQkxFUw.display_name": {
+          "source": "Tables",
+          "message": "Tablas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOkZPUk1T.display_name": {
+          "source": "Forms",
+          "message": "Formularios"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries",
+          "message": "Consultas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlNJR05BVFVSRVM.display_name": {
+          "source": "Signatures",
+          "message": "Firmas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOkxBWU9VVA.display_name": {
+          "source": "Layout",
+          "message": "Diseño"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Token de solicitud del cliente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Etiqueta del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Canal de notificación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "Tema de SNS y función de IAM para notificaciones de finalización asincrónicas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "Tema de SNS y función de IAM para notificaciones de finalización asincrónicas."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN del rol"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "Tema de SNS Arn"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Configuración de salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "Destino S3 para análisis o resultados de capacitación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "Destino S3 para análisis o resultados de capacitación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Bucket de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Depósito S3 para recibir resultados"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "depósito S3 para recibir resultados; la persona que llama debe tener permiso para escribirlo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Prefijo de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID de clave de KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "ID de clave KMS o ARN para cifrar la salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID de clave KMS o ARN para cifrar la salida; se deben otorgar los permisos requeridos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.display_name": {
+          "source": "Queries Config",
+          "message": "Configuración de consultas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.field.UXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Consultas"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.display_name": {
+          "source": "Alias",
+          "message": "Alias"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.short_desc": {
+          "source": "A short name for locating this question in the results",
+          "message": "Un nombre corto para ubicar esta pregunta en los resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.desc": {
+          "source": "A short name for locating this question in the results.",
+          "message": "Un nombre corto para ubicar esta pregunta en los resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Páginas"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Selectores de página como '1', '1-3' o '4-*'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Selectores de página como `1`, `1-3` o `4-*`; use solo `*` para todas las páginas."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.short_desc": {
+          "source": "Question to answer, for example 'What is the invoice total?'",
+          "message": "Pregunta a responder, por ejemplo '¿Cuál es el total de la factura?'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.desc": {
+          "source": "Question to answer, for example `What is the invoice total?`.",
+          "message": "Pregunta a responder, por ejemplo `What is the invoice total?`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.display_name": {
+          "source": "Adapters Config",
+          "message": "Configuración de adaptadores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.short_desc": {
+          "source": "Custom query adapters and versions to use for selected pages",
+          "message": "Adaptadores de consulta personalizados y versiones para usar en páginas seleccionadas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.desc": {
+          "source": "Custom query adapters and versions to use for selected pages.",
+          "message": "Adaptadores de consulta personalizados y versiones para usar en páginas seleccionadas."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.display_name": {
+          "source": "Adapters",
+          "message": "Adaptadores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.short_desc": {
+          "source": "Adapters to apply",
+          "message": "Adaptadores para aplicar"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.desc": {
+          "source": "Adapters to apply; selected page ranges must not overlap.",
+          "message": "Adaptadores para aplicar; los rangos de páginas seleccionados no deben superponerse."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Páginas"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Selectores de página como '1', '1-3' o '4-*'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Selectores de página como `1`, `1-3` o `4-*`; use solo `*` para todas las páginas."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
+          "source": "Start Document Text Detection",
+          "message": "Iniciar la detección de texto del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
+          "source": "Start asynchronous extraction of document text",
+          "message": "Iniciar la extracción asincrónica del texto del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.desc": {
+          "source": "Start asynchronous extraction of document text. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Inicie la extracción asincrónica del texto del documento. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Conserve `JobId` y utilice la acción de obtención coincidente para comprobar el estado y recuperar cada página de resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Ubicación del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "Ubicación del documento S3 para un trabajo de análisis asincrónico"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "Ubicación del documento S3 para un trabajo de análisis asincrónico."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Objeto de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Token de solicitud del cliente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Etiqueta del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Canal de notificación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "Tema de SNS y función de IAM para notificaciones de finalización asincrónicas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "Tema de SNS y función de IAM para notificaciones de finalización asincrónicas."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN del rol"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "Tema de SNS Arn"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Configuración de salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "Destino S3 para análisis o resultados de capacitación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "Destino S3 para análisis o resultados de capacitación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Bucket de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Depósito S3 para recibir resultados"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "depósito S3 para recibir resultados; la persona que llama debe tener permiso para escribirlo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Prefijo de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID de clave de KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "ID de clave KMS o ARN para cifrar la salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID de clave KMS o ARN para cifrar la salida; se deben otorgar los permisos requeridos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
+          "source": "Start Expense Analysis",
+          "message": "Iniciar análisis de gastos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
+          "source": "Start asynchronous invoice and receipt analysis",
+          "message": "Iniciar análisis asincrónico de facturas y recibos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.desc": {
+          "source": "Start asynchronous invoice and receipt analysis. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Inicie el análisis asincrónico de facturas y recibos. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Conserve `JobId` y utilice la acción de obtención coincidente para comprobar el estado y recuperar cada página de resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Ubicación del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "Ubicación del documento S3 para un trabajo de análisis asincrónico"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "Ubicación del documento S3 para un trabajo de análisis asincrónico."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Objeto de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Token de solicitud del cliente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Etiqueta del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Canal de notificación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "Tema de SNS y función de IAM para notificaciones de finalización asincrónicas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "Tema de SNS y función de IAM para notificaciones de finalización asincrónicas."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN del rol"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "Tema de SNS Arn"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Configuración de salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "Destino S3 para análisis o resultados de capacitación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "Destino S3 para análisis o resultados de capacitación."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Bucket de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Depósito S3 para recibir resultados"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "depósito S3 para recibir resultados; la persona que llama debe tener permiso para escribirlo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Prefijo de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID de clave de KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "ID de clave KMS o ARN para cifrar la salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID de clave KMS o ARN para cifrar la salida; se deben otorgar los permisos requeridos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
+          "source": "Start Lending Analysis",
+          "message": "Iniciar análisis de préstamos"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
+          "source": "Start asynchronous classification and extraction of lending documents",
+          "message": "Iniciar la clasificación y extracción asincrónica de documentos de préstamo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.desc": {
+          "source": "Start asynchronous classification and extraction of lending documents. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Inicie la clasificación y extracción asincrónica de documentos de préstamo. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Conserve `JobId` y utilice la acción de obtención coincidente para comprobar el estado y recuperar cada página de resultados."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Ubicación del documento"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Objeto de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Objeto de origen en un depósito de S3 en la región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Nombre del depósito de S3 que contiene el documento fuente."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo 'invoices/sample.pdf'"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Clave de objeto dentro del depósito S3, por ejemplo `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Versión"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Versión del recurso seleccionado"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Versión del recurso seleccionado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Token de solicitud del cliente"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Token de idempotencia para volver a intentar la misma solicitud de forma segura."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Etiqueta del trabajo"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Una etiqueta incluida en la notificación de finalización del trabajo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Canal de notificación"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN del rol"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "ARN del rol de IAM que permite a Textract publicar en el tema de SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "Tema de SNS Arn"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN del tema SNS en la región de la conexión para notificaciones de finalización."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Configuración de salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Bucket de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Depósito S3 para recibir resultados"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "depósito S3 para recibir resultados; la persona que llama debe tener permiso para escribirlo."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Prefijo de S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Prefijo de clave de objeto para archivos de salida en el depósito de destino."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID de clave de KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "ID de clave KMS o ARN para cifrar la salida"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID de clave KMS o ARN para cifrar la salida; se deben otorgar los permisos requeridos."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
+          "source": "Tag Resource",
+          "message": "Etiquetar Recurso"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
+          "source": "Add or update tags on a Textract resource",
+          "message": "Agregar o actualizar etiquetas en un recurso de Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.desc": {
+          "source": "Add or update tags on a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_TagResource.html).",
+          "message": "Agregue o actualice etiquetas en un recurso de Textract. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_TagResource.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "ARN de Recurso"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "Extraiga el ARN del recurso en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "Extraiga el ARN del recurso en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Etiquetas"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "Etiquetas de recursos como un mapa de nombres a valores"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "Etiquetas de recursos como un mapa de nombres a valores; un valor de etiqueta vacío es válido."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
+          "source": "Untag Resource",
+          "message": "Quitar Etiqueta del Recurso"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
+          "source": "Remove tags from a Textract resource",
+          "message": "Eliminar etiquetas de un recurso de Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.desc": {
+          "source": "Remove tags from a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_UntagResource.html).",
+          "message": "Eliminar etiquetas de un recurso de Textract. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_UntagResource.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "ARN de Recurso"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "Extraiga el ARN del recurso en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "Extraiga el ARN del recurso en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.display_name": {
+          "source": "Tag Keys",
+          "message": "Llaves de Etiqueta"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.short_desc": {
+          "source": "Names of the resource tags to remove",
+          "message": "Nombres de las etiquetas de recursos que se eliminarán"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.desc": {
+          "source": "Names of the resource tags to remove.",
+          "message": "Nombres de las etiquetas de recursos que se eliminarán."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
+          "source": "Update Adapter",
+          "message": "Adaptador de actualización"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Update a custom query adapter's settings",
+          "message": "Actualizar la configuración de un adaptador de consulta personalizado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.desc": {
+          "source": "Update a custom query adapter's settings. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_UpdateAdapter.html).",
+          "message": "Actualice la configuración de un adaptador de consulta personalizado. Consulte la [referencia de la API de AWS](https://docs.aws.amazon.com/textract/latest/APIReference/API_UpdateAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Adaptador en la cuenta y región de AWS de la conexión."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descripción"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.short_desc": {
+          "source": "A description explaining the adapter's purpose",
+          "message": "Una descripción que explique el propósito del adaptador."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.desc": {
+          "source": "A description explaining the adapter's purpose.",
+          "message": "Una descripción que explique el propósito del adaptador."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
+          "source": "Adapter Name",
+          "message": "Nombre del adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
+          "source": "A descriptive name for the custom query adapter",
+          "message": "Un nombre descriptivo para el adaptador de consulta personalizado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.desc": {
+          "source": "A descriptive name for the custom query adapter.",
+          "message": "Un nombre descriptivo para el adaptador de consulta personalizado."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
+          "source": "Auto Update",
+          "message": "Actualización automática"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
+          "source": "Whether AWS may automatically update the adapter",
+          "message": "Si AWS puede actualizar automáticamente el adaptador"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.desc": {
+          "source": "Whether AWS may automatically update the adapter.",
+          "message": "Si AWS puede actualizar automáticamente el adaptador."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkVOQUJMRUQ.display_name": {
+          "source": "Enabled",
+          "message": "Habilitado"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
+          "source": "Disabled",
+          "message": "Deshabilitado"
         }
       }
     }

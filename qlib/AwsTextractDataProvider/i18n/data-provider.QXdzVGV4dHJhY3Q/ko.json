@@ -8,8 +8,8 @@
           "message": "AWS Textract"
         },
         "app.QXdzVGV4dHJhY3Q.short_desc": {
-          "source": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
-          "message": "AWS Textract 문서 AI(OCR + 레이아웃 + 표 + 양식 + 쿼리)"
+          "source": "Extract text and structured information from documents",
+          "message": "문서에서 텍스트 및 구조화된 정보 추출"
         },
         "app.QXdzVGV4dHJhY3Q.desc": {
           "source": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) — a managed document-AI service for extracting text, structure, and answers from scanned documents and PDFs.\n\n**Common use cases**:\n- **Invoice and receipt parsing**: extract key/value pairs from forms with the `FORMS` feature\n- **Table extraction**: structured rows and columns from scanned tables with the `TABLES` feature\n- **Document Q&A**: ask specific questions of a document with the `QUERIES` feature (e.g., \"What is the total?\")\n- **Signature detection**: flag handwritten signatures in contracts with the `SIGNATURES` feature\n- **Layout-preserving OCR**: extract text grouped by paragraphs, titles, headers, footers with the `LAYOUT` feature",
@@ -344,12 +344,12 @@
           "message": "문서 텍스트 감지"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
-          "source": "Extract raw text from a document (no structure)",
-          "message": "문서에서 원시 텍스트 추출 (구조 없음)"
+          "source": "Extract lines and words from a document",
+          "message": "문서에서 줄과 단어 추출"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.desc": {
-          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a single-page or multi-page document.  Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\nPass the document via one of:\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
-          "message": "단일 페이지 또는 다중 페이지 문서의 텍스트 콘텐츠를 추출하기 위해 Textract의 `DetectDocumentText` API를 호출합니다. 텍스트, 신뢰도 및 경계 상자 지오메트리가 포함된 `Block` 객체(`PAGE`, `LINE`, `WORD`) 목록을 반환합니다.\n\n다음 중 하나를 통해 문서를 전달하세요:\n- `document_bytes` — 원시 바이트 (PNG / JPEG / PDF / TIFF, 최대 10 MB)\n- `document_path` — 로컬 파일 경로 (바이트로 읽어 업로드됨)\n- `s3_bucket` + `s3_name` — S3 객체 참조 (크기 제한 없음)"
+          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\n**Pass the document via one of:**\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
+          "message": "Textract의 `DetectDocumentText` API를 호출하여 문서의 텍스트 콘텐츠를 추출합니다. 동기식 PDF 및 TIFF 입력에는 한 페이지가 있어야 합니다. 텍스트, 신뢰도 및 경계 상자 기하학이 포함된 `Block` 객체(`PAGE`, `LINE`, `WORD`) 목록을 반환합니다.\n\n**다음 중 하나를 통해 문서를 전달합니다.**\n- `document_bytes` — 원시 바이트(PNG / JPEG / PDF / TIFF, 최대 10MB)\n- `document_path` — 로컬 파일 경로(바이트로 읽고 업로드됨)\n- `s3_bucket` + `s3_name` — S3 객체 참조(또한 10MB로 제한됨)"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
           "source": "Document Bytes",
@@ -416,8 +416,8 @@
           "message": "문서 분석"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
-          "source": "Extract text + tables/forms/signatures/queries from a document",
-          "message": "문서에서 텍스트 + 표/양식/서명/쿼리 추출"
+          "source": "Extract tables, forms, signatures, layout, and query answers",
+          "message": "테이블, 양식, 서명, 레이아웃 및 쿼리 답변 추출"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
           "source": "Calls Textract's `AnalyzeDocument` API to extract text plus structural features.  `feature_types` selects which features to extract — pass at least one of `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nWhen `QUERIES` is included, also pass a `queries` list — each query has a `Text` field with the question to ask.",
@@ -454,6 +454,54 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
           "source": "Queries (ask questions of the document)",
           "message": "쿼리(문서에 질문하기)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "쿼리"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
+          "source": "Custom queries to ask of the document (with QUERIES feature)",
+          "message": "문서에 대해 질문할 사용자 정의 쿼리(QUERIES 기능 포함)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
+          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
+          "message": "`feature_types`에 `QUERIES`이(가) 포함되어 있을 때 사용할 쿼리 객체 목록입니다. 각 쿼리에는 `Text` 필드(질문할 내용)와 선택적 `Alias` 및 `Pages` 필터가 포함됩니다.\n\n**예시**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.display_name": {
+          "source": "Alias",
+          "message": "별칭"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.short_desc": {
+          "source": "A short name for locating this question in the results",
+          "message": "결과에서 이 질문을 찾기 위한 짧은 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.desc": {
+          "source": "A short name for locating this question in the results.",
+          "message": "결과에서 이 질문을 찾기 위한 짧은 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "페이지"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "'1', '1-3', '4-*' 등의 페이지 선택기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "`1`, `1-3` 또는 `4-*`와 같은 페이지 선택기; 모든 페이지에 `*`만 사용하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.short_desc": {
+          "source": "Question to answer, for example 'What is the invoice total?'",
+          "message": "대답할 질문(예: '송장 총액은 얼마입니까?')"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.desc": {
+          "source": "Question to answer, for example `What is the invoice total?`.",
+          "message": "대답할 질문(예: `What is the invoice total?`)."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
           "source": "Document Bytes",
@@ -503,18 +551,6 @@
           "source": "S3 object key (path within the bucket).",
           "message": "S3 객체 키(버킷 내 경로)입니다."
         },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
-          "source": "Queries",
-          "message": "쿼리"
-        },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
-          "source": "Custom queries to ask of the document (with QUERIES feature)",
-          "message": "문서에 대해 질문할 사용자 정의 쿼리(QUERIES 기능 포함)"
-        },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
-          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
-          "message": "`feature_types`에 `QUERIES`이(가) 포함되어 있을 때 사용할 쿼리 객체 목록입니다. 각 쿼리에는 `Text` 필드(질문할 내용)와 선택적 `Alias` 및 `Pages` 필터가 포함됩니다.\n\n**예시**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
-        },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.display_name": {
           "source": "S3 Object Version",
           "message": "S3 객체 버전"
@@ -526,6 +562,1994 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.desc": {
           "source": "Optional S3 object version ID for versioned buckets.",
           "message": "버전 관리가 사용되는 버킷을 위한 선택적 S3 객체 버전 ID입니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.display_name": {
+          "source": "Human Review",
+          "message": "사람의 검토"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.short_desc": {
+          "source": "Human review settings for existing Amazon A2I customers only",
+          "message": "기존 Amazon A2I 고객만을 위한 인적 검토 설정"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.desc": {
+          "source": "Human review settings for existing Amazon A2I customers only.",
+          "message": "기존 Amazon A2I 고객만을 위한 인적 검토 설정."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.display_name": {
+          "source": "Data Attributes",
+          "message": "데이터 속성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.short_desc": {
+          "source": "Content declarations used to route the document for human review",
+          "message": "사람의 검토를 위해 문서를 전달하는 데 사용되는 콘텐츠 선언"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.desc": {
+          "source": "Content declarations used to route the document for human review.",
+          "message": "사람의 검토를 위해 문서를 전달하는 데 사용되는 콘텐츠 선언."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
+          "source": "Content Classifiers",
+          "message": "콘텐츠 분류자"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
+          "source": "Content declarations for the human review workflow",
+          "message": "인적 검토 워크플로에 대한 콘텐츠 선언"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
+          "source": "Content declarations for the human review workflow.",
+          "message": "인적 검토 워크플로에 대한 콘텐츠 선언."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
+          "source": "Free of Personally Identifiable Information",
+          "message": "개인 식별 정보 없음"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
+          "source": "Free of Adult Content",
+          "message": "성인용 콘텐츠 없음"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.display_name": {
+          "source": "Flow Definition Arn",
+          "message": "흐름 정의 Arn"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.short_desc": {
+          "source": "ARN of an existing Amazon A2I human review workflow",
+          "message": "기존 Amazon A2I 인적 검토 워크플로의 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.desc": {
+          "source": "ARN of an existing Amazon A2I human review workflow.",
+          "message": "기존 Amazon A2I 인적 검토 워크플로의 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.display_name": {
+          "source": "Human Loop Name",
+          "message": "휴먼 루프 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.short_desc": {
+          "source": "Unique name for this human review in the AWS region",
+          "message": "AWS 리전에서 이 인적 검토에 대한 고유 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.desc": {
+          "source": "Unique name for this human review in the AWS region.",
+          "message": "AWS 리전에서 이 인적 검토에 대한 고유 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.display_name": {
+          "source": "Adapters",
+          "message": "어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.short_desc": {
+          "source": "Custom query adapters and versions to use for selected pages",
+          "message": "선택한 페이지에 사용할 사용자 정의 쿼리 어댑터 및 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.desc": {
+          "source": "Custom query adapters and versions to use for selected pages.",
+          "message": "선택한 페이지에 사용할 사용자 정의 쿼리 어댑터 및 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.display_name": {
+          "source": "Adapters",
+          "message": "어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.short_desc": {
+          "source": "Adapters to apply",
+          "message": "적용할 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.desc": {
+          "source": "Adapters to apply; selected page ranges must not overlap.",
+          "message": "적용할 어댑터; 선택한 페이지 범위는 겹쳐서는 안 됩니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "페이지"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "'1', '1-3', '4-*' 등의 페이지 선택기"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "`1`, `1-3` 또는 `4-*`와 같은 페이지 선택기; 모든 페이지에 `*`만 사용하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
+          "source": "Analyze Expense",
+          "message": "비용 분석"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
+          "source": "Extract invoice and receipt totals, vendors, and line items",
+          "message": "송장 및 영수증 총액, 공급업체, 품목 추출"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.desc": {
+          "source": "Extract invoice and receipt totals, vendors, and line items. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeExpense.html).",
+          "message": "송장 및 영수증 총액, 공급업체, 품목을 추출합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeExpense.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "문서"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.display_name": {
+          "source": "Bytes",
+          "message": "바이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.short_desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request",
+          "message": "원시 문서 바이트 또는 base64 콘텐츠(동기 요청의 경우 최대 10MB)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+          "message": "원시 문서 바이트 또는 base64 콘텐츠(동기 요청의 경우 최대 10MB)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.display_name": {
+          "source": "Analyze ID",
+          "message": "ID 분석"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.short_desc": {
+          "source": "Extract identity fields from US passports and driver's licenses",
+          "message": "미국 여권 및 운전면허증에서 신원 필드 추출"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.desc": {
+          "source": "Extract identity fields from US passports and driver's licenses. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html).",
+          "message": "미국 여권과 운전면허증에서 신원 필드를 추출합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.display_name": {
+          "source": "Document Pages",
+          "message": "문서 페이지"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.short_desc": {
+          "source": "One or two images of a US passport or driver's license",
+          "message": "미국 여권 또는 운전면허증 이미지 1~2장"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.desc": {
+          "source": "One or two images of a US passport or driver's license.",
+          "message": "미국 여권 또는 운전면허증 이미지 1~2장."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.display_name": {
+          "source": "Bytes",
+          "message": "바이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.short_desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request",
+          "message": "원시 문서 바이트 또는 base64 콘텐츠(동기 요청의 경우 최대 10MB)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+          "message": "원시 문서 바이트 또는 base64 콘텐츠(동기 요청의 경우 최대 10MB)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
+          "source": "Create Adapter",
+          "message": "어댑터 생성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Create a custom query adapter",
+          "message": "사용자 정의 쿼리 어댑터 만들기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.desc": {
+          "source": "Create a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html).",
+          "message": "사용자 정의 쿼리 어댑터를 만듭니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
+          "source": "Adapter Name",
+          "message": "어댑터 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
+          "source": "A descriptive name for the custom query adapter",
+          "message": "사용자 정의 쿼리 어댑터를 설명하는 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.desc": {
+          "source": "A descriptive name for the custom query adapter.",
+          "message": "사용자 정의 쿼리 어댑터를 설명하는 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "클라이언트 요청 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.short_desc": {
+          "source": "A description explaining the adapter's purpose",
+          "message": "어댑터의 목적을 설명하는 설명"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.desc": {
+          "source": "A description explaining the adapter's purpose.",
+          "message": "어댑터의 목적을 설명하는 설명."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.display_name": {
+          "source": "Feature Types",
+          "message": "특징 유형"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.short_desc": {
+          "source": "Custom adapters support the 'QUERIES' feature only",
+          "message": "사용자 지정 어댑터는 'QUERIES' 기능만 지원합니다"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.desc": {
+          "source": "Custom adapters support the `QUERIES` feature only.",
+          "message": "사용자 지정 어댑터는 `QUERIES` 기능만 지원합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries",
+          "message": "쿼리"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
+          "source": "Auto Update",
+          "message": "자동 업데이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
+          "source": "Whether AWS may automatically update the adapter",
+          "message": "AWS가 어댑터를 자동으로 업데이트할 수 있는지 여부"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.desc": {
+          "source": "Whether AWS may automatically update the adapter.",
+          "message": "AWS가 어댑터를 자동으로 업데이트할 수 있는지 여부."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkVOQUJMRUQ.display_name": {
+          "source": "Enabled",
+          "message": "사용됨"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
+          "source": "Disabled",
+          "message": "사용 안 함"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "이름과 값의 매핑인 리소스 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "이름과 값의 매핑인 리소스 태그 빈 태그 값이 유효합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Create Adapter Version",
+          "message": "어댑터 버전 생성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Train a version of a custom query adapter",
+          "message": "사용자 정의 쿼리 어댑터 버전 학습"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Train a version of a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapterVersion.html). **Training incurs AWS charges** and requires an authorized S3 dataset and output location.",
+          "message": "사용자 정의 쿼리 어댑터 버전을 학습합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapterVersion.html)를 확인하세요. **교육에는 AWS 요금이 발생하며** 승인된 S3 데이터 세트 및 출력 위치가 필요합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "클라이언트 요청 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.display_name": {
+          "source": "Dataset Config",
+          "message": "데이터 세트 설정"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.short_desc": {
+          "source": "S3 manifest identifying the training and test documents",
+          "message": "교육 및 테스트 문서를 식별하는 S3 매니페스트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.desc": {
+          "source": "S3 manifest identifying the training and test documents.",
+          "message": "교육 및 테스트 문서를 식별하는 S3 매니페스트."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.field.TWFuaWZlc3RTM09iamVjdA.display_name": {
+          "source": "Manifest S3Object",
+          "message": "매니페스트 S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS 키 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN. 필수 권한을 부여해야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "출력 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "출력을 수신할 S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "출력을 수신하는 S3 버킷 호출자에게 쓰기 권한이 있어야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "S3 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "이름과 값의 매핑인 리소스 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "이름과 값의 매핑인 리소스 태그 빈 태그 값이 유효합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
+          "source": "Delete Adapter",
+          "message": "어댑터 삭제"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Delete an unused custom query adapter",
+          "message": "사용하지 않는 사용자 정의 쿼리 어댑터 삭제"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.desc": {
+          "source": "Delete an unused custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapter.html).",
+          "message": "사용하지 않는 사용자 정의 쿼리 어댑터를 삭제합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapter.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Delete Adapter Version",
+          "message": "어댑터 버전 삭제"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Delete a version of a custom query adapter",
+          "message": "사용자 정의 쿼리 어댑터 버전 삭제"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Delete a version of a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapterVersion.html).",
+          "message": "사용자 정의 쿼리 어댑터 버전을 삭제합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapterVersion.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
+          "source": "Adapter Version",
+          "message": "어댑터 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
+          "source": "Version belonging to the selected adapter",
+          "message": "선택한 어댑터에 속하는 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.desc": {
+          "source": "Version belonging to the selected adapter.",
+          "message": "선택한 어댑터에 속하는 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
+          "source": "Get Adapter",
+          "message": "어댑터 받기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
+          "source": "Read a custom query adapter's settings",
+          "message": "사용자 정의 쿼리 어댑터 설정 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.desc": {
+          "source": "Read a custom query adapter's settings. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapter.html).",
+          "message": "사용자 정의 쿼리 어댑터의 설정을 읽습니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapter.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Get Adapter Version",
+          "message": "어댑터 버전 가져오기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Read training status and evaluation results for an adapter version",
+          "message": "어댑터 버전에 대한 교육 상태 및 평가 결과 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Read training status and evaluation results for an adapter version. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapterVersion.html).",
+          "message": "어댑터 버전에 대한 교육 상태 및 평가 결과를 읽습니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapterVersion.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
+          "source": "Adapter Version",
+          "message": "어댑터 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
+          "source": "Version belonging to the selected adapter",
+          "message": "선택한 어댑터에 속하는 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.desc": {
+          "source": "Version belonging to the selected adapter.",
+          "message": "선택한 어댑터에 속하는 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
+          "source": "Get Document Analysis",
+          "message": "문서 분석 받기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
+          "source": "Read a page of asynchronous document analysis results",
+          "message": "비동기 문서 분석 결과 페이지 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.desc": {
+          "source": "Read a page of asynchronous document analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "비동기 문서 분석 결과 페이지를 읽습니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentAnalysis.html)를 확인하세요. 결과를 사용하기 전에 `JobStatus`를 확인하세요. `PARTIAL_SUCCESS`에는 경고가 포함되고 `FAILED`에는 상태 메시지가 포함됩니다. 다음 페이지를 검색하려면 동일한 작업에 `NextToken`를 전달하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID입니다. AWS는 채용 정보를 제공하지 않습니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "이 응답 페이지의 최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "이 응답 페이지의 최대 결과 수."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "다음 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
+          "source": "Get Document Text Detection",
+          "message": "문서 텍스트 감지 받기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
+          "source": "Read a page of asynchronous text detection results",
+          "message": "비동기 텍스트 감지 결과 페이지 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.desc": {
+          "source": "Read a page of asynchronous text detection results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentTextDetection.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "비동기 텍스트 감지 결과 페이지를 읽습니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentTextDetection.html)를 확인하세요. 결과를 사용하기 전에 `JobStatus`를 확인하세요. `PARTIAL_SUCCESS`에는 경고가 포함되고 `FAILED`에는 상태 메시지가 포함됩니다. 다음 페이지를 검색하려면 동일한 작업에 `NextToken`를 전달하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID입니다. AWS는 채용 정보를 제공하지 않습니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "이 응답 페이지의 최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "이 응답 페이지의 최대 결과 수."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "다음 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
+          "source": "Get Expense Analysis",
+          "message": "비용 분석 받기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
+          "source": "Read a page of asynchronous expense analysis results",
+          "message": "비동기식 비용 분석 결과 페이지 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.desc": {
+          "source": "Read a page of asynchronous expense analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetExpenseAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "비동기식 비용 분석 결과 페이지를 읽습니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetExpenseAnalysis.html)를 확인하세요. 결과를 사용하기 전에 `JobStatus`를 확인하세요. `PARTIAL_SUCCESS`에는 경고가 포함되고 `FAILED`에는 상태 메시지가 포함됩니다. 다음 페이지를 검색하려면 동일한 작업에 `NextToken`를 전달하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID입니다. AWS는 채용 정보를 제공하지 않습니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "이 응답 페이지의 최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "이 응답 페이지의 최대 결과 수."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "다음 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
+          "source": "Get Lending Analysis",
+          "message": "대출 분석 받기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
+          "source": "Read a page of asynchronous lending analysis results",
+          "message": "비동기 대출 분석 결과 페이지 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.desc": {
+          "source": "Read a page of asynchronous lending analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "비동기 대출 분석 결과 페이지를 읽어보세요. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysis.html)를 확인하세요. 결과를 사용하기 전에 `JobStatus`를 확인하세요. `PARTIAL_SUCCESS`에는 경고가 포함되고 `FAILED`에는 상태 메시지가 포함됩니다. 다음 페이지를 검색하려면 동일한 작업에 `NextToken`를 전달하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID입니다. AWS는 채용 정보를 제공하지 않습니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "이 응답 페이지의 최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "이 응답 페이지의 최대 결과 수."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "다음 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
+          "source": "Get Lending Analysis Summary",
+          "message": "대출 분석 요약 가져오기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
+          "source": "Read the document classification summary for a lending job",
+          "message": "대출 업무에 대한 문서 분류 요약 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.desc": {
+          "source": "Read the document classification summary for a lending job. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysisSummary.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message.",
+          "message": "대출 업무에 대한 문서 분류 요약을 읽어보세요. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysisSummary.html)를 확인하세요. 결과를 사용하기 전에 `JobStatus`를 확인하세요. `PARTIAL_SUCCESS`에는 경고가 포함되고 `FAILED`에는 상태 메시지가 포함됩니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "일치하는 시작 작업에 의해 반환된 작업 ID입니다. AWS는 채용 정보를 제공하지 않습니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
+          "source": "List Adapter Versions",
+          "message": "어댑터 버전 나열"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
+          "source": "List versions of custom query adapters",
+          "message": "사용자 정의 쿼리 어댑터 버전 나열"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.desc": {
+          "source": "List versions of custom query adapters. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapterVersions.html). Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "사용자 정의 쿼리 어댑터의 버전을 나열합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapterVersions.html)를 확인하세요. 다음 페이지를 검색하려면 동일한 작업에 `NextToken`를 전달하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
+          "source": "After Creation Time",
+          "message": "생성 시간 이후"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
+          "source": "Return resources created after this time",
+          "message": "이 시간 이후에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.desc": {
+          "source": "Return resources created after this time.",
+          "message": "이 시간 이후에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
+          "source": "Before Creation Time",
+          "message": "생성 시간 이전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
+          "source": "Return resources created before this time",
+          "message": "이 시간 이전에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.desc": {
+          "source": "Return resources created before this time.",
+          "message": "이 시간 이전에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "이 응답 페이지의 최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "이 응답 페이지의 최대 결과 수."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "다음 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
+          "source": "List Adapters",
+          "message": "어댑터 나열"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
+          "source": "List custom query adapters in this account and region",
+          "message": "이 계정 및 지역의 사용자 정의 쿼리 어댑터 나열"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.desc": {
+          "source": "List custom query adapters in this account and region. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "이 계정 및 지역의 사용자 지정 쿼리 어댑터를 나열합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html)를 확인하세요. 다음 페이지를 검색하려면 동일한 작업에 `NextToken`를 전달하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
+          "source": "After Creation Time",
+          "message": "생성 시간 이후"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
+          "source": "Return resources created after this time",
+          "message": "이 시간 이후에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.desc": {
+          "source": "Return resources created after this time.",
+          "message": "이 시간 이후에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
+          "source": "Before Creation Time",
+          "message": "생성 시간 이전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
+          "source": "Return resources created before this time",
+          "message": "이 시간 이전에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.desc": {
+          "source": "Return resources created before this time.",
+          "message": "이 시간 이전에 생성된 리소스를 반환합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "이 응답 페이지의 최대 결과 수"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "이 응답 페이지의 최대 결과 수."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "다음 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "동일한 작업에서 이전 응답의 연속 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
+          "source": "List Tags For Resource",
+          "message": "리소스에 대한 태그 목록"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
+          "source": "Read the tags attached to a Textract resource",
+          "message": "Textract 리소스에 연결된 태그 읽기"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.desc": {
+          "source": "Read the tags attached to a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListTagsForResource.html).",
+          "message": "Textract 리소스에 연결된 태그를 읽습니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListTagsForResource.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "리소스 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 리전의 Textract 리소스 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 리전의 Textract 리소스 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Document Analysis",
+          "message": "문서 분석 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
+          "source": "Start asynchronous extraction of document structure",
+          "message": "문서 구조의 비동기 추출 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.desc": {
+          "source": "Start asynchronous extraction of document structure. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "문서 구조의 비동기 추출을 시작합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html)를 확인하세요. `JobId`를 유지하고 일치하는 가져오기 작업을 사용하여 상태를 확인하고 모든 결과 페이지를 검색합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "비동기 분석 작업을 위한 S3 문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "비동기 분석 작업을 위한 S3 문서 위치."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.display_name": {
+          "source": "Feature Types",
+          "message": "특징 유형"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.short_desc": {
+          "source": "Document features to extract",
+          "message": "추출할 문서 기능"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.desc": {
+          "source": "Document features to extract; select at least one.",
+          "message": "추출할 기능을 문서화합니다. 하나 이상 선택."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlRBQkxFUw.display_name": {
+          "source": "Tables",
+          "message": "표"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOkZPUk1T.display_name": {
+          "source": "Forms",
+          "message": "양식"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries",
+          "message": "쿼리"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlNJR05BVFVSRVM.display_name": {
+          "source": "Signatures",
+          "message": "서명"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOkxBWU9VVA.display_name": {
+          "source": "Layout",
+          "message": "레이아웃"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "클라이언트 요청 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "작업 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "작업 완료 알림에 포함된 라벨"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "작업 완료 알림에 포함된 라벨."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "알림 채널"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "비동기식 완료 알림을 위한 SNS 주제 및 IAM 역할"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "비동기식 완료 알림을 위한 SNS 주제 및 IAM 역할."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS 주제아른"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "출력 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "분석 또는 훈련 출력을 위한 S3 대상"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "분석 또는 훈련 출력을 위한 S3 대상."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "출력을 수신할 S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "출력을 수신하는 S3 버킷 호출자에게 쓰기 권한이 있어야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "S3 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS 키 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN. 필수 권한을 부여해야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.display_name": {
+          "source": "Queries Config",
+          "message": "쿼리 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.field.UXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "쿼리"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.display_name": {
+          "source": "Alias",
+          "message": "별칭"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.short_desc": {
+          "source": "A short name for locating this question in the results",
+          "message": "결과에서 이 질문을 찾기 위한 짧은 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.desc": {
+          "source": "A short name for locating this question in the results.",
+          "message": "결과에서 이 질문을 찾기 위한 짧은 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "페이지"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "'1', '1-3', '4-*' 등의 페이지 선택기"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "`1`, `1-3` 또는 `4-*`와 같은 페이지 선택기; 모든 페이지에 `*`만 사용하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.short_desc": {
+          "source": "Question to answer, for example 'What is the invoice total?'",
+          "message": "대답할 질문(예: '송장 총액은 얼마입니까?')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.desc": {
+          "source": "Question to answer, for example `What is the invoice total?`.",
+          "message": "대답할 질문(예: `What is the invoice total?`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.display_name": {
+          "source": "Adapters Config",
+          "message": "어댑터 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.short_desc": {
+          "source": "Custom query adapters and versions to use for selected pages",
+          "message": "선택한 페이지에 사용할 사용자 정의 쿼리 어댑터 및 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.desc": {
+          "source": "Custom query adapters and versions to use for selected pages.",
+          "message": "선택한 페이지에 사용할 사용자 정의 쿼리 어댑터 및 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.display_name": {
+          "source": "Adapters",
+          "message": "어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.short_desc": {
+          "source": "Adapters to apply",
+          "message": "적용할 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.desc": {
+          "source": "Adapters to apply; selected page ranges must not overlap.",
+          "message": "적용할 어댑터; 선택한 페이지 범위는 겹쳐서는 안 됩니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "페이지"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "'1', '1-3', '4-*' 등의 페이지 선택기"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "`1`, `1-3` 또는 `4-*`와 같은 페이지 선택기; 모든 페이지에 `*`만 사용하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
+          "source": "Start Document Text Detection",
+          "message": "문서 텍스트 감지 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
+          "source": "Start asynchronous extraction of document text",
+          "message": "문서 텍스트의 비동기 추출 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.desc": {
+          "source": "Start asynchronous extraction of document text. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "문서 텍스트의 비동기 추출을 시작합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html)를 확인하세요. `JobId`를 유지하고 일치하는 가져오기 작업을 사용하여 상태를 확인하고 모든 결과 페이지를 검색합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "비동기 분석 작업을 위한 S3 문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "비동기 분석 작업을 위한 S3 문서 위치."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "클라이언트 요청 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "작업 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "작업 완료 알림에 포함된 라벨"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "작업 완료 알림에 포함된 라벨."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "알림 채널"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "비동기식 완료 알림을 위한 SNS 주제 및 IAM 역할"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "비동기식 완료 알림을 위한 SNS 주제 및 IAM 역할."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS 주제아른"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "출력 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "분석 또는 훈련 출력을 위한 S3 대상"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "분석 또는 훈련 출력을 위한 S3 대상."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "출력을 수신할 S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "출력을 수신하는 S3 버킷 호출자에게 쓰기 권한이 있어야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "S3 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS 키 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN. 필수 권한을 부여해야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
+          "source": "Start Expense Analysis",
+          "message": "비용 분석 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
+          "source": "Start asynchronous invoice and receipt analysis",
+          "message": "비동기 송장 및 영수증 분석 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.desc": {
+          "source": "Start asynchronous invoice and receipt analysis. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "비동기 송장 및 영수증 분석을 시작합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html)를 확인하세요. `JobId`를 유지하고 일치하는 가져오기 작업을 사용하여 상태를 확인하고 모든 결과 페이지를 검색합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "비동기 분석 작업을 위한 S3 문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "비동기 분석 작업을 위한 S3 문서 위치."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "클라이언트 요청 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "작업 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "작업 완료 알림에 포함된 라벨"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "작업 완료 알림에 포함된 라벨."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "알림 채널"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "비동기식 완료 알림을 위한 SNS 주제 및 IAM 역할"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "비동기식 완료 알림을 위한 SNS 주제 및 IAM 역할."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS 주제아른"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "출력 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "분석 또는 훈련 출력을 위한 S3 대상"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "분석 또는 훈련 출력을 위한 S3 대상."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "출력을 수신할 S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "출력을 수신하는 S3 버킷 호출자에게 쓰기 권한이 있어야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "S3 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS 키 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN. 필수 권한을 부여해야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
+          "source": "Start Lending Analysis",
+          "message": "대출 분석 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
+          "source": "Start asynchronous classification and extraction of lending documents",
+          "message": "대출 문서의 비동기 분류 및 추출 시작"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.desc": {
+          "source": "Start asynchronous classification and extraction of lending documents. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "대출 문서의 비동기 분류 및 추출을 시작합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html)를 확인하세요. `JobId`를 유지하고 일치하는 가져오기 작업을 사용하여 상태를 확인하고 모든 결과 페이지를 검색합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "문서 위치"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "S3 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "연결 AWS 리전의 S3 버킷에 있는 소스 객체."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "소스 문서가 포함된 S3 버킷의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "소스 문서가 포함된 S3 버킷의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "S3 버킷 내부의 객체 키(예: 'invoices/sample.pdf')"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "S3 버킷 내부의 객체 키(예: `invoices/sample.pdf`)."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "선택한 리소스의 버전"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "선택한 리소스의 버전."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "클라이언트 요청 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "동일한 요청을 안전하게 재시도하기 위한 멱등성 토큰."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "작업 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "작업 완료 알림에 포함된 라벨"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "작업 완료 알림에 포함된 라벨."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "알림 채널"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Textract가 SNS 주제에 게시할 수 있도록 허용하는 IAM 역할 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS 주제아른"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "완료 알림을 위한 연결 지역의 SNS 주제 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "출력 구성"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "출력을 수신할 S3 버킷"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "출력을 수신하는 S3 버킷 호출자에게 쓰기 권한이 있어야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "S3 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "대상 버킷의 출력 파일에 대한 객체 키 접두사."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "KMS 키 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "출력 암호화를 위한 KMS 키 ID 또는 ARN. 필수 권한을 부여해야 합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
+          "source": "Tag Resource",
+          "message": "리소스 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
+          "source": "Add or update tags on a Textract resource",
+          "message": "Textract 리소스에 태그 추가 또는 업데이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.desc": {
+          "source": "Add or update tags on a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_TagResource.html).",
+          "message": "Textract 리소스에 태그를 추가하거나 업데이트합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_TagResource.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "리소스 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 리전의 Textract 리소스 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 리전의 Textract 리소스 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "이름과 값의 매핑인 리소스 태그"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "이름과 값의 매핑인 리소스 태그 빈 태그 값이 유효합니다."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
+          "source": "Untag Resource",
+          "message": "리소스 태그 해제"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
+          "source": "Remove tags from a Textract resource",
+          "message": "Textract 리소스에서 태그 제거"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.desc": {
+          "source": "Remove tags from a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_UntagResource.html).",
+          "message": "Textract 리소스에서 태그를 제거합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_UntagResource.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "리소스 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 리전의 Textract 리소스 ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 리전의 Textract 리소스 ARN."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.display_name": {
+          "source": "Tag Keys",
+          "message": "태그 키"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.short_desc": {
+          "source": "Names of the resource tags to remove",
+          "message": "제거할 리소스 태그의 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.desc": {
+          "source": "Names of the resource tags to remove.",
+          "message": "제거할 리소스 태그의 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
+          "source": "Update Adapter",
+          "message": "어댑터 업데이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Update a custom query adapter's settings",
+          "message": "사용자 정의 쿼리 어댑터 설정 업데이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.desc": {
+          "source": "Update a custom query adapter's settings. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_UpdateAdapter.html).",
+          "message": "사용자 정의 쿼리 어댑터의 설정을 업데이트합니다. [AWS API 참조](https://docs.aws.amazon.com/textract/latest/APIReference/API_UpdateAdapter.html)를 확인하세요."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "어댑터 ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "연결의 AWS 계정 및 지역에 있는 어댑터."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.short_desc": {
+          "source": "A description explaining the adapter's purpose",
+          "message": "어댑터의 목적을 설명하는 설명"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.desc": {
+          "source": "A description explaining the adapter's purpose.",
+          "message": "어댑터의 목적을 설명하는 설명."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
+          "source": "Adapter Name",
+          "message": "어댑터 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
+          "source": "A descriptive name for the custom query adapter",
+          "message": "사용자 정의 쿼리 어댑터를 설명하는 이름"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.desc": {
+          "source": "A descriptive name for the custom query adapter.",
+          "message": "사용자 정의 쿼리 어댑터를 설명하는 이름."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
+          "source": "Auto Update",
+          "message": "자동 업데이트"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
+          "source": "Whether AWS may automatically update the adapter",
+          "message": "AWS가 어댑터를 자동으로 업데이트할 수 있는지 여부"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.desc": {
+          "source": "Whether AWS may automatically update the adapter.",
+          "message": "AWS가 어댑터를 자동으로 업데이트할 수 있는지 여부."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkVOQUJMRUQ.display_name": {
+          "source": "Enabled",
+          "message": "사용됨"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
+          "source": "Disabled",
+          "message": "사용 안 함"
         }
       }
     }

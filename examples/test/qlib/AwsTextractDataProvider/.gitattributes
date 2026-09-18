@@ -1,0 +1,3 @@
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+# Preserve the PDF byte offsets and fixed-width cross-reference entries.
+synthetic-invoice.pdf binary

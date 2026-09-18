@@ -1,0 +1,3748 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Textract action value types",
+    "version": "2018-06-27"
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Adapter": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          },
+          "Pages": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterPages"
+              }
+            ],
+            "description": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+            "title": "Pages"
+          },
+          "Version": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersion"
+              }
+            ],
+            "description": "Version of the selected resource.",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId",
+          "Version"
+        ]
+      },
+      "AdapterDescription": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "pattern": "^[a-zA-Z0-9\\s!\"\\#\\$%'&\\(\\)\\*\\+\\,\\-\\./:;=\\?@\\[\\\\\\]\\^_`\\{\\|\\}~><]+$"
+      },
+      "AdapterId": {
+        "type": "string",
+        "minLength": 12,
+        "maxLength": 1011
+      },
+      "AdapterList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdapterOverview"
+        }
+      },
+      "AdapterName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "[a-zA-Z0-9-_]+"
+      },
+      "AdapterOverview": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A unique identifier for the adapter resource."
+          },
+          "AdapterName": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterName"
+              }
+            ],
+            "description": "A string naming the adapter resource."
+          },
+          "CreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "The date and time that the adapter was created."
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "The feature types that the adapter is operating on."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information on the adapter, including the adapter ID, Name, Creation time, and feature types."
+      },
+      "AdapterPage": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 9,
+        "pattern": "^[0-9\\*\\-]+$"
+      },
+      "AdapterPages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdapterPage"
+        },
+        "minItems": 1
+      },
+      "AdapterVersion": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "AdapterVersionDatasetConfig": {
+        "type": "object",
+        "properties": {
+          "ManifestS3Object": {
+            "$ref": "#/components/schemas/S3Object",
+            "title": "Manifest S3 Object",
+            "description": "S3 object containing the adapter training dataset manifest."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ManifestS3Object"
+        ]
+      },
+      "AdapterVersionEvaluationMetric": {
+        "type": "object",
+        "properties": {
+          "Baseline": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EvaluationMetric"
+              }
+            ],
+            "description": "The F1 score, precision, and recall metrics for the baseline model."
+          },
+          "AdapterVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EvaluationMetric"
+              }
+            ],
+            "description": "The F1 score, precision, and recall metrics for the baseline model."
+          },
+          "FeatureType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureType"
+              }
+            ],
+            "description": "Indicates the feature type being analyzed by a given adapter version."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information on the metrics used to evalute the peformance of a given adapter version. Includes data for baseline model performance and individual adapter version perfromance."
+      },
+      "AdapterVersionEvaluationMetrics": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdapterVersionEvaluationMetric"
+        }
+      },
+      "AdapterVersionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/AdapterVersionOverview"
+        }
+      },
+      "AdapterVersionOverview": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A unique identifier for the adapter associated with a given adapter version."
+          },
+          "AdapterVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersion"
+              }
+            ],
+            "description": "An identified for a given adapter version."
+          },
+          "CreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "The date and time that a given adapter version was created."
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "The feature types that the adapter version is operating on."
+          },
+          "Status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionStatus"
+              }
+            ],
+            "description": "Contains information on the status of a given adapter version."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionStatusMessage"
+              }
+            ],
+            "description": "A message explaining the status of a given adapter vesion."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Summary info for an adapter version. Contains information on the AdapterId, AdapterVersion, CreationTime, FeatureTypes, and Status."
+      },
+      "AdapterVersionStatus": {
+        "type": "string",
+        "enum": [
+          "ACTIVE",
+          "AT_RISK",
+          "DEPRECATED",
+          "CREATION_ERROR",
+          "CREATION_IN_PROGRESS"
+        ]
+      },
+      "AdapterVersionStatusMessage": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "pattern": "^[a-zA-Z0-9\\s!\"\\#\\$%'&\\(\\)\\*\\+\\,\\-\\./:;=\\?@\\[\\\\\\]\\^_`\\{\\|\\}~><]+$"
+      },
+      "Adapters": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Adapter"
+        },
+        "minItems": 1,
+        "maxItems": 100
+      },
+      "AdaptersConfig": {
+        "type": "object",
+        "properties": {
+          "Adapters": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Adapters"
+              }
+            ],
+            "description": "Adapters to apply; selected page ranges must not overlap.",
+            "title": "Adapters"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Adapters"
+        ]
+      },
+      "AmazonResourceName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1011
+      },
+      "AnalyzeDocumentRequest": {
+        "type": "object",
+        "properties": {
+          "Document": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Document"
+              }
+            ],
+            "description": "Document to process, supplied as bytes or an S3 object.",
+            "title": "Document"
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "Document features to extract; select at least one.",
+            "title": "Feature Types"
+          },
+          "HumanLoopConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopConfig"
+              }
+            ],
+            "description": "Human review settings for existing Amazon A2I customers only.",
+            "title": "Human Loop Config"
+          },
+          "QueriesConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueriesConfig"
+              }
+            ],
+            "description": "Questions to answer when the `QUERIES` feature is selected.",
+            "title": "Queries Config"
+          },
+          "AdaptersConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdaptersConfig"
+              }
+            ],
+            "description": "Custom query adapters and versions to use for selected pages.",
+            "title": "Adapters Config"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Document",
+          "FeatureTypes"
+        ]
+      },
+      "AnalyzeDocumentResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentMetadata"
+              }
+            ],
+            "description": "Metadata about the analyzed document. An example is the number of pages."
+          },
+          "Blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockList"
+              }
+            ],
+            "description": "The items that are detected and analyzed by `AnalyzeDocument`."
+          },
+          "HumanLoopActivationOutput": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopActivationOutput"
+              }
+            ],
+            "description": "Shows the results of the human in the loop evaluation."
+          },
+          "AnalyzeDocumentModelVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The version of the model used to analyze the document."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnalyzeExpenseRequest": {
+        "type": "object",
+        "properties": {
+          "Document": {
+            "$ref": "#/components/schemas/Document",
+            "title": "Document",
+            "description": "Document to process, supplied as bytes or an S3 object."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Document"
+        ]
+      },
+      "AnalyzeExpenseResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "$ref": "#/components/schemas/DocumentMetadata"
+          },
+          "ExpenseDocuments": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseDocumentList"
+              }
+            ],
+            "description": "The expenses detected by Amazon Textract."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnalyzeIDDetections": {
+        "type": "object",
+        "properties": {
+          "Text": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "Text of either the normalized field or value associated with it."
+          },
+          "NormalizedValue": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NormalizedValue"
+              }
+            ],
+            "description": "Only returned for dates, returns the type of value detected and the date written in a more machine readable way."
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "The confidence score of the detected text."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Text"
+        ],
+        "description": "Used to contain the information detected by an AnalyzeID operation."
+      },
+      "AnalyzeIDRequest": {
+        "type": "object",
+        "properties": {
+          "DocumentPages": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentPages"
+              }
+            ],
+            "description": "One or two images of a US passport or driver's license.",
+            "title": "Document Pages"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "DocumentPages"
+        ]
+      },
+      "AnalyzeIDResponse": {
+        "type": "object",
+        "properties": {
+          "IdentityDocuments": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IdentityDocumentList"
+              }
+            ],
+            "description": "The list of documents processed by AnalyzeID. Includes a number denoting their place in the list and the response structure for the document."
+          },
+          "DocumentMetadata": {
+            "$ref": "#/components/schemas/DocumentMetadata"
+          },
+          "AnalyzeIDModelVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The version of the AnalyzeIdentity API being used to process documents."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Angle": {
+        "type": "number",
+        "format": "float"
+      },
+      "AutoUpdate": {
+        "type": "string",
+        "enum": [
+          "ENABLED",
+          "DISABLED"
+        ]
+      },
+      "Block": {
+        "type": "object",
+        "properties": {
+          "BlockType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockType"
+              }
+            ],
+            "description": "The type of text item that's recognized. In operations for text detection, the following types are returned:\n\n- *PAGE* - Contains a list of the LINE `Block` objects that are detected on a document page.\n\n- *WORD* - A word detected on a document page. A word is one or more ISO basic Latin script characters that aren't separated by spaces.\n\n- *LINE* - A string of space-delimited, contiguous words that are detected on a document page.\n\nIn text analysis operations, the following types are returned:\n\n- *PAGE* - Contains a list of child `Block` objects that are detected on a document page.\n\n- *KEY_VALUE_SET* - Stores the KEY and VALUE `Block` objects for linked text that's detected on a document page. Use the `EntityType` field to determine if a KEY_VALUE_SET object is a KEY `Block` object or a VALUE `Block` object.\n\n- *WORD* - A word that's detected on a document page. A word is one or more ISO basic Latin script characters that aren't separated by spaces.\n\n- *LINE* - A string of tab-delimited, contiguous words that are detected on a document page.\n\n- *TABLE* - A table that's detected on a document page. A table is grid-based information with two or more rows or columns, with a cell span of one row and one column each.\n\n- *TABLE_TITLE* - The title of a table. A title is typically a line of text above or below a table, or embedded as the first row of a table.\n\n- *TABLE_FOOTER* - The footer associated with a table. A footer is typically a line or lines of text below a table or embedded as the last row of a table.\n\n- *CELL* - A cell within a detected table. The cell is the parent of the block that contains the text in the cell.\n\n- *MERGED_CELL* - A cell in a table whose content spans more than one row or column. The `Relationships` array for this cell contain data from individual cells.\n\n- *SELECTION_ELEMENT* - A selection element such as an option button (radio button) or a check box that's detected on a document page. Use the value of `SelectionStatus` to determine the status of the selection element.\n\n- *SIGNATURE* - The location and confidence score of a signature detected on a document page. Can be returned as part of a Key-Value pair or a detected cell.\n\n- *QUERY* - A question asked during the call of AnalyzeDocument. Contains an alias and an ID that attaches it to its answer.\n\n- *QUERY_RESULT* - A response to a question asked during the call of analyze document. Comes with an alias and ID for ease of locating in a response. Also contains location and confidence score.\n\nThe following BlockTypes are only returned for Amazon Textract Layout.\n\n- `LAYOUT_TITLE` - The main title of the document.\n\n- `LAYOUT_HEADER` - Text located in the top margin of the document.\n\n- `LAYOUT_FOOTER` - Text located in the bottom margin of the document.\n\n- `LAYOUT_SECTION_HEADER` - The titles of sections within a document.\n\n- `LAYOUT_PAGE_NUMBER` - The page number of the documents.\n\n- `LAYOUT_LIST` - Any information grouped together in list form.\n\n- `LAYOUT_FIGURE` - Indicates the location of an image in a document.\n\n- `LAYOUT_TABLE` - Indicates the location of a table in the document.\n\n- `LAYOUT_KEY_VALUE` - Indicates the location of form key-values in a document.\n\n- `LAYOUT_TEXT` - Text that is present typically as a part of paragraphs in documents."
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "The confidence score that Amazon Textract has in the accuracy of the recognized text and the accuracy of the geometry points around the recognized text."
+          },
+          "Text": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The word or line of text that's recognized by Amazon Textract."
+          },
+          "TextType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TextType"
+              }
+            ],
+            "description": "The kind of text that Amazon Textract has detected. Can check for handwritten text and printed text."
+          },
+          "RowIndex": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The row in which a table cell is located. The first row position is 1. `RowIndex` isn't returned by `DetectDocumentText` and `GetDocumentTextDetection`."
+          },
+          "ColumnIndex": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The column in which a table cell appears. The first column position is 1. `ColumnIndex` isn't returned by `DetectDocumentText` and `GetDocumentTextDetection`."
+          },
+          "RowSpan": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The number of rows that a table cell spans. `RowSpan` isn't returned by `DetectDocumentText` and `GetDocumentTextDetection`."
+          },
+          "ColumnSpan": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The number of columns that a table cell spans. `ColumnSpan` isn't returned by `DetectDocumentText` and `GetDocumentTextDetection`."
+          },
+          "Geometry": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Geometry"
+              }
+            ],
+            "description": "The location of the recognized text on the image. It includes an axis-aligned, coarse bounding box that surrounds the text, and a finer-grain polygon for more accurate spatial information."
+          },
+          "Id": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NonEmptyString"
+              }
+            ],
+            "description": "The identifier for the recognized text. The identifier is only unique for a single operation."
+          },
+          "Relationships": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RelationshipList"
+              }
+            ],
+            "description": "A list of relationship objects that describe how blocks are related to each other. For example, a LINE block object contains a CHILD relationship type with the WORD blocks that make up the line of text. There aren't Relationship objects in the list for relationships that don't exist, such as when the current block has no child blocks."
+          },
+          "EntityTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EntityTypes"
+              }
+            ],
+            "description": "The type of entity.\n\nThe following entity types can be returned by FORMS analysis:\n\n- *KEY* - An identifier for a field on the document.\n\n- *VALUE* - The field text.\n\nThe following entity types can be returned by TABLES analysis:\n\n- *COLUMN_HEADER* - Identifies a cell that is a header of a column.\n\n- *TABLE_TITLE* - Identifies a cell that is a title within the table.\n\n- *TABLE_SECTION_TITLE* - Identifies a cell that is a title of a section within a table. A section title is a cell that typically spans an entire row above a section.\n\n- *TABLE_FOOTER* - Identifies a cell that is a footer of a table.\n\n- *TABLE_SUMMARY* - Identifies a summary cell of a table. A summary cell can be a row of a table or an additional, smaller table that contains summary information for another table.\n\n- *STRUCTURED_TABLE * - Identifies a table with column headers where the content of each row corresponds to the headers.\n\n- *SEMI_STRUCTURED_TABLE* - Identifies a non-structured table.\n\n`EntityTypes` isn't returned by `DetectDocumentText` and `GetDocumentTextDetection`."
+          },
+          "SelectionStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SelectionStatus"
+              }
+            ],
+            "description": "The selection status of a selection element, such as an option button or check box."
+          },
+          "Page": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The page on which a block was detected. `Page` is returned by synchronous and asynchronous operations. Page values greater than 1 are only returned for multipage documents that are in PDF or TIFF format. A scanned image (JPEG/PNG) provided to an asynchronous operation, even if it contains multiple document pages, is considered a single-page document. This means that for scanned images the value of `Page` is always 1."
+          },
+          "Query": {
+            "$ref": "#/components/schemas/Query"
+          }
+        },
+        "additionalProperties": false,
+        "description": "A `Block` represents items that are recognized in a document within a group of pixels close to each other. The information returned in a `Block` object depends on the type of operation. In text detection for documents (for example [DetectDocumentText]()), you get information about the detected words and lines of text. In text analysis (for example [AnalyzeDocument]()), you can also get information about the fields, tables, and selection elements that are detected in the document.\n\nAn array of `Block` objects is returned by both synchronous and asynchronous operations. In synchronous operations, such as [DetectDocumentText](), the array of `Block` objects is the entire set of results. In asynchronous operations, such as [GetDocumentAnalysis](), the array is returned over one or more responses.\n\nFor more information, see [How Amazon Textract Works](https://docs.aws.amazon.com/textract/latest/dg/how-it-works.html)."
+      },
+      "BlockList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Block"
+        }
+      },
+      "BlockType": {
+        "type": "string",
+        "enum": [
+          "KEY_VALUE_SET",
+          "PAGE",
+          "LINE",
+          "WORD",
+          "TABLE",
+          "CELL",
+          "SELECTION_ELEMENT",
+          "MERGED_CELL",
+          "TITLE",
+          "QUERY",
+          "QUERY_RESULT",
+          "SIGNATURE",
+          "TABLE_TITLE",
+          "TABLE_FOOTER",
+          "LAYOUT_TEXT",
+          "LAYOUT_TITLE",
+          "LAYOUT_HEADER",
+          "LAYOUT_FOOTER",
+          "LAYOUT_SECTION_HEADER",
+          "LAYOUT_PAGE_NUMBER",
+          "LAYOUT_LIST",
+          "LAYOUT_FIGURE",
+          "LAYOUT_TABLE",
+          "LAYOUT_KEY_VALUE"
+        ]
+      },
+      "BoundingBox": {
+        "type": "object",
+        "properties": {
+          "Width": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The width of the bounding box as a ratio of the overall document page width."
+          },
+          "Height": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The height of the bounding box as a ratio of the overall document page height."
+          },
+          "Left": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The left coordinate of the bounding box as a ratio of overall document page width."
+          },
+          "Top": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The top coordinate of the bounding box as a ratio of overall document page height."
+          }
+        },
+        "additionalProperties": false,
+        "description": "The bounding box around the detected page, text, key-value pair, table, table cell, or selection element on a document page. The `left` (x-coordinate) and `top` (y-coordinate) are coordinates that represent the top and left sides of the bounding box. Note that the upper-left corner of the image is the origin (0,0).\n\nThe `top` and `left` values returned are ratios of the overall document page size. For example, if the input image is 700 x 200 pixels, and the top-left coordinate of the bounding box is 350 x 50 pixels, the API returns a `left` value of 0.5 (350/700) and a `top` value of 0.25 (50/200).\n\nThe `width` and `height` values represent the dimensions of the bounding box as a ratio of the overall document page dimension. For example, if the document page size is 700 x 200 pixels, and the bounding box width is 70 pixels, the width returned is 0.1."
+      },
+      "ClientRequestToken": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[a-zA-Z0-9-_]+$"
+      },
+      "ContentClassifier": {
+        "type": "string",
+        "enum": [
+          "FreeOfPersonallyIdentifiableInformation",
+          "FreeOfAdultContent"
+        ]
+      },
+      "ContentClassifiers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ContentClassifier"
+        },
+        "maxItems": 256
+      },
+      "CreateAdapterRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterName": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterName"
+              }
+            ],
+            "description": "A descriptive name for the custom query adapter.",
+            "title": "Adapter Name"
+          },
+          "ClientRequestToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRequestToken"
+              }
+            ],
+            "description": "Idempotency token for safely retrying the same request.",
+            "title": "Client Request Token"
+          },
+          "Description": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterDescription"
+              }
+            ],
+            "description": "A description explaining the adapter's purpose.",
+            "title": "Description"
+          },
+          "FeatureTypes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "QUERIES"
+              ]
+            },
+            "title": "Feature Types",
+            "description": "Custom adapters support the `QUERIES` feature only."
+          },
+          "AutoUpdate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoUpdate"
+              }
+            ],
+            "description": "Whether AWS may automatically update the adapter.",
+            "title": "Auto Update"
+          },
+          "Tags": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagMap"
+              }
+            ],
+            "description": "Resource tags as a map of names to values; an empty tag value is valid.",
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterName",
+          "FeatureTypes"
+        ]
+      },
+      "CreateAdapterResponse": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A string containing the unique ID for the adapter that has been created."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreateAdapterVersionRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          },
+          "ClientRequestToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRequestToken"
+              }
+            ],
+            "description": "Idempotency token for safely retrying the same request.",
+            "title": "Client Request Token"
+          },
+          "DatasetConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionDatasetConfig"
+              }
+            ],
+            "description": "S3 manifest identifying the training and test documents.",
+            "title": "Dataset Config"
+          },
+          "KMSKeyId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KMSKeyId"
+              }
+            ],
+            "description": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+            "title": "KMS Key Id"
+          },
+          "OutputConfig": {
+            "$ref": "#/components/schemas/OutputConfig",
+            "title": "Output Config",
+            "description": "S3 destination for analysis or training output."
+          },
+          "Tags": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagMap"
+              }
+            ],
+            "description": "Resource tags as a map of names to values; an empty tag value is valid.",
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId",
+          "DatasetConfig",
+          "OutputConfig"
+        ]
+      },
+      "CreateAdapterVersionResponse": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A string containing the unique ID for the adapter that has received a new version."
+          },
+          "AdapterVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersion"
+              }
+            ],
+            "description": "A string describing the new version of the adapter."
+          }
+        },
+        "additionalProperties": false
+      },
+      "DateTime": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "DeleteAdapterRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId"
+        ]
+      },
+      "DeleteAdapterResponse": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "DeleteAdapterVersionRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          },
+          "AdapterVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersion"
+              }
+            ],
+            "description": "Version belonging to the selected adapter.",
+            "title": "Adapter Version"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId",
+          "AdapterVersion"
+        ]
+      },
+      "DeleteAdapterVersionResponse": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "DetectDocumentTextRequest": {
+        "type": "object",
+        "properties": {
+          "Document": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Document"
+              }
+            ],
+            "description": "Document to process, supplied as bytes or an S3 object.",
+            "title": "Document"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Document"
+        ]
+      },
+      "DetectDocumentTextResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentMetadata"
+              }
+            ],
+            "description": "Metadata about the document. It contains the number of pages that are detected in the document."
+          },
+          "Blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockList"
+              }
+            ],
+            "description": "An array of `Block` objects that contain the text that's detected in the document."
+          },
+          "DetectDocumentTextModelVersion": {
+            "$ref": "#/components/schemas/String"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DetectedSignature": {
+        "type": "object",
+        "properties": {
+          "Page": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The page a detected signature was found on."
+          }
+        },
+        "additionalProperties": false,
+        "description": "A structure that holds information regarding a detected signature on a page."
+      },
+      "DetectedSignatureList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/DetectedSignature"
+        }
+      },
+      "Document": {
+        "type": "object",
+        "properties": {
+          "Bytes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ImageBlob"
+              }
+            ],
+            "description": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+            "title": "Bytes"
+          },
+          "S3Object": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3Object"
+              }
+            ],
+            "description": "Source object in an S3 bucket in the connection's AWS region.",
+            "title": "S3 Object"
+          }
+        },
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "required": [
+              "Bytes"
+            ]
+          },
+          {
+            "required": [
+              "S3Object"
+            ]
+          }
+        ]
+      },
+      "DocumentGroup": {
+        "type": "object",
+        "properties": {
+          "Type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NonEmptyString"
+              }
+            ],
+            "description": "The type of document that Amazon Textract has detected. See [Analyze Lending Response Objects](https://docs.aws.amazon.com/textract/latest/dg/lending-response-objects.html) for a list of all types returned by Textract."
+          },
+          "SplitDocuments": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SplitDocumentList"
+              }
+            ],
+            "description": "An array that contains information about the pages of a document, defined by logical boundary."
+          },
+          "DetectedSignatures": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DetectedSignatureList"
+              }
+            ],
+            "description": "A list of the detected signatures found in a document group."
+          },
+          "UndetectedSignatures": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UndetectedSignatureList"
+              }
+            ],
+            "description": "A list of any expected signatures not found in a document group."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Summary information about documents grouped by the same document type."
+      },
+      "DocumentGroupList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/DocumentGroup"
+        }
+      },
+      "DocumentLocation": {
+        "type": "object",
+        "properties": {
+          "S3Object": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3Object"
+              }
+            ],
+            "description": "Source object in an S3 bucket in the connection's AWS region.",
+            "title": "S3 Object"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "S3Object"
+        ]
+      },
+      "DocumentMetadata": {
+        "type": "object",
+        "properties": {
+          "Pages": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The number of pages that are detected in the document."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Information about the input document."
+      },
+      "DocumentPages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Document"
+        },
+        "minItems": 1,
+        "maxItems": 2
+      },
+      "EntityType": {
+        "type": "string",
+        "enum": [
+          "KEY",
+          "VALUE",
+          "COLUMN_HEADER",
+          "TABLE_TITLE",
+          "TABLE_FOOTER",
+          "TABLE_SECTION_TITLE",
+          "TABLE_SUMMARY",
+          "STRUCTURED_TABLE",
+          "SEMI_STRUCTURED_TABLE"
+        ]
+      },
+      "EntityTypes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EntityType"
+        }
+      },
+      "ErrorCode": {
+        "type": "string"
+      },
+      "EvaluationMetric": {
+        "type": "object",
+        "properties": {
+          "F1Score": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The F1 score for an adapter version."
+          },
+          "Precision": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The Precision score for an adapter version."
+          },
+          "Recall": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The Recall score for an adapter version."
+          }
+        },
+        "additionalProperties": false,
+        "description": "The evaluation metrics (F1 score, Precision, and Recall) for an adapter version."
+      },
+      "ExpenseCurrency": {
+        "type": "object",
+        "properties": {
+          "Code": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "Currency code for detected currency. the current supported codes are:\n\n- USD\n\n- EUR\n\n- GBP\n\n- CAD\n\n- INR\n\n- JPY\n\n- CHF\n\n- AUD\n\n- CNY\n\n- BZR\n\n- SEK\n\n- HKD"
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "Percentage confideence in the detected currency."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Returns the kind of currency detected."
+      },
+      "ExpenseDetection": {
+        "type": "object",
+        "properties": {
+          "Text": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The word or line of text recognized by Amazon Textract"
+          },
+          "Geometry": {
+            "$ref": "#/components/schemas/Geometry"
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "The confidence in detection, as a percentage"
+          }
+        },
+        "additionalProperties": false,
+        "description": "An object used to store information about the Value or Label detected by Amazon Textract."
+      },
+      "ExpenseDocument": {
+        "type": "object",
+        "properties": {
+          "ExpenseIndex": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "Denotes which invoice or receipt in the document the information is coming from. First document will be 1, the second 2, and so on."
+          },
+          "SummaryFields": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseFieldList"
+              }
+            ],
+            "description": "Any information found outside of a table by Amazon Textract."
+          },
+          "LineItemGroups": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LineItemGroupList"
+              }
+            ],
+            "description": "Information detected on each table of a document, seperated into `LineItems`."
+          },
+          "Blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockList"
+              }
+            ],
+            "description": "This is a block object, the same as reported when DetectDocumentText is run on a document. It provides word level recognition of text."
+          }
+        },
+        "additionalProperties": false,
+        "description": "The structure holding all the information returned by AnalyzeExpense"
+      },
+      "ExpenseDocumentList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ExpenseDocument"
+        }
+      },
+      "ExpenseField": {
+        "type": "object",
+        "properties": {
+          "Type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseType"
+              }
+            ],
+            "description": "The implied label of a detected element. Present alongside LabelDetection for explicit elements."
+          },
+          "LabelDetection": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseDetection"
+              }
+            ],
+            "description": "The explicitly stated label of a detected element."
+          },
+          "ValueDetection": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseDetection"
+              }
+            ],
+            "description": "The value of a detected element. Present in explicit and implicit elements."
+          },
+          "PageNumber": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The page number the value was detected on."
+          },
+          "Currency": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseCurrency"
+              }
+            ],
+            "description": "Shows the kind of currency, both the code and confidence associated with any monatary value detected."
+          },
+          "GroupProperties": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseGroupPropertyList"
+              }
+            ],
+            "description": "Shows which group a response object belongs to, such as whether an address line belongs to the vendor's address or the recipent's address."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Breakdown of detected information, seperated into the catagories Type, LabelDetection, and ValueDetection"
+      },
+      "ExpenseFieldList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ExpenseField"
+        }
+      },
+      "ExpenseGroupProperty": {
+        "type": "object",
+        "properties": {
+          "Types": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StringList"
+              }
+            ],
+            "description": "Informs you on whether the expense group is a name or an address."
+          },
+          "Id": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "Provides a group Id number, which will be the same for each in the group."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Shows the group that a certain key belongs to. This helps differentiate between names and addresses for different organizations, that can be hard to determine via JSON response."
+      },
+      "ExpenseGroupPropertyList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ExpenseGroupProperty"
+        }
+      },
+      "ExpenseType": {
+        "type": "object",
+        "properties": {
+          "Text": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The word or line of text detected by Amazon Textract."
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "The confidence of accuracy, as a percentage."
+          }
+        },
+        "additionalProperties": false,
+        "description": "An object used to store information about the Type detected by Amazon Textract."
+      },
+      "Extraction": {
+        "type": "object",
+        "properties": {
+          "LendingDocument": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LendingDocument"
+              }
+            ],
+            "description": "Holds the structured data returned by AnalyzeDocument for lending documents."
+          },
+          "ExpenseDocument": {
+            "$ref": "#/components/schemas/ExpenseDocument"
+          },
+          "IdentityDocument": {
+            "$ref": "#/components/schemas/IdentityDocument"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information extracted by an analysis operation after using StartLendingAnalysis."
+      },
+      "ExtractionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Extraction"
+        }
+      },
+      "FeatureType": {
+        "type": "string",
+        "enum": [
+          "TABLES",
+          "FORMS",
+          "QUERIES",
+          "SIGNATURES",
+          "LAYOUT"
+        ]
+      },
+      "FeatureTypes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/FeatureType"
+        },
+        "minItems": 1
+      },
+      "Float": {
+        "type": "number",
+        "format": "float"
+      },
+      "FlowDefinitionArn": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "Geometry": {
+        "type": "object",
+        "properties": {
+          "BoundingBox": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BoundingBox"
+              }
+            ],
+            "description": "An axis-aligned coarse representation of the location of the recognized item on the document page."
+          },
+          "Polygon": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Polygon"
+              }
+            ],
+            "description": "Within the bounding box, a fine-grained polygon around the recognized item."
+          },
+          "RotationAngle": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Angle"
+              }
+            ],
+            "description": "Provides a numerical value corresponding to the rotation of the WORD block. Possible values are 0, 90, 180, and 270."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Information about where the following items are located on a document page: detected page, text, key-value pairs, tables, table cells, and selection elements."
+      },
+      "GetAdapterRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId"
+        ]
+      },
+      "GetAdapterResponse": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A string identifying the adapter that information has been retrieved for."
+          },
+          "AdapterName": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterName"
+              }
+            ],
+            "description": "The name of the requested adapter."
+          },
+          "CreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "The date and time the requested adapter was created at."
+          },
+          "Description": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterDescription"
+              }
+            ],
+            "description": "The description for the requested adapter."
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "List of the targeted feature types for the requested adapter."
+          },
+          "AutoUpdate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoUpdate"
+              }
+            ],
+            "description": "Binary value indicating if the adapter is being automatically updated or not."
+          },
+          "Tags": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagMap"
+              }
+            ],
+            "description": "A set of tags (key-value pairs) associated with the adapter that has been retrieved."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetAdapterVersionRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          },
+          "AdapterVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersion"
+              }
+            ],
+            "description": "Version belonging to the selected adapter.",
+            "title": "Adapter Version"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId",
+          "AdapterVersion"
+        ]
+      },
+      "GetAdapterVersionResponse": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A string containing a unique ID for the adapter version being retrieved."
+          },
+          "AdapterVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersion"
+              }
+            ],
+            "description": "A string containing the adapter version that has been retrieved."
+          },
+          "CreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "The time that the adapter version was created."
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "List of the targeted feature types for the requested adapter version."
+          },
+          "Status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionStatus"
+              }
+            ],
+            "description": "The status of the adapter version that has been requested."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionStatusMessage"
+              }
+            ],
+            "description": "A message that describes the status of the requested adapter version."
+          },
+          "DatasetConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionDatasetConfig"
+              }
+            ],
+            "description": "Specifies a dataset used to train a new adapter version. Takes a ManifestS3Objec as the value."
+          },
+          "KMSKeyId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KMSKeyId"
+              }
+            ],
+            "description": "The identifier for your AWS Key Management Service key (AWS KMS key). Used to encrypt your documents."
+          },
+          "OutputConfig": {
+            "$ref": "#/components/schemas/OutputConfig"
+          },
+          "EvaluationMetrics": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionEvaluationMetrics"
+              }
+            ],
+            "description": "The evaluation metrics (F1 score, Precision, and Recall) for the requested version, grouped by baseline metrics and adapter version."
+          },
+          "Tags": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagMap"
+              }
+            ],
+            "description": "A set of tags (key-value pairs) that are associated with the adapter version."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetDocumentAnalysisRequest": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "Job ID returned by the matching start action; AWS provides no job listing.",
+            "title": "Job Id"
+          },
+          "MaxResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaxResults"
+              }
+            ],
+            "description": "Maximum number of results in this response page.",
+            "title": "Max Results"
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Continuation token from the preceding response in the same operation.",
+            "title": "Next Token"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "JobId"
+        ]
+      },
+      "GetDocumentAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentMetadata"
+              }
+            ],
+            "description": "Information about a document that Amazon Textract processed. `DocumentMetadata` is returned in every page of paginated responses from an Amazon Textract video operation."
+          },
+          "JobStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
+            "description": "The current status of the text detection job."
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "If the response is truncated, Amazon Textract returns this token. You can use this token in the subsequent request to retrieve the next set of text detection results."
+          },
+          "Blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockList"
+              }
+            ],
+            "description": "The results of the text-analysis operation."
+          },
+          "Warnings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Warnings"
+              }
+            ],
+            "description": "A list of warnings that occurred during the document-analysis operation."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusMessage"
+              }
+            ],
+            "description": "Returns if the detection job could not be completed. Contains explanation for what error occured."
+          },
+          "AnalyzeDocumentModelVersion": {
+            "$ref": "#/components/schemas/String"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetDocumentTextDetectionRequest": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "Job ID returned by the matching start action; AWS provides no job listing.",
+            "title": "Job Id"
+          },
+          "MaxResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaxResults"
+              }
+            ],
+            "description": "Maximum number of results in this response page.",
+            "title": "Max Results"
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Continuation token from the preceding response in the same operation.",
+            "title": "Next Token"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "JobId"
+        ]
+      },
+      "GetDocumentTextDetectionResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentMetadata"
+              }
+            ],
+            "description": "Information about a document that Amazon Textract processed. `DocumentMetadata` is returned in every page of paginated responses from an Amazon Textract video operation."
+          },
+          "JobStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
+            "description": "The current status of the text detection job."
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "If the response is truncated, Amazon Textract returns this token. You can use this token in the subsequent request to retrieve the next set of text-detection results."
+          },
+          "Blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockList"
+              }
+            ],
+            "description": "The results of the text-detection operation."
+          },
+          "Warnings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Warnings"
+              }
+            ],
+            "description": "A list of warnings that occurred during the text-detection operation for the document."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusMessage"
+              }
+            ],
+            "description": "Returns if the detection job could not be completed. Contains explanation for what error occured."
+          },
+          "DetectDocumentTextModelVersion": {
+            "$ref": "#/components/schemas/String"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetExpenseAnalysisRequest": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "Job ID returned by the matching start action; AWS provides no job listing.",
+            "title": "Job Id"
+          },
+          "MaxResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaxResults"
+              }
+            ],
+            "description": "Maximum number of results in this response page.",
+            "title": "Max Results"
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Continuation token from the preceding response in the same operation.",
+            "title": "Next Token"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "JobId"
+        ]
+      },
+      "GetExpenseAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentMetadata"
+              }
+            ],
+            "description": "Information about a document that Amazon Textract processed. `DocumentMetadata` is returned in every page of paginated responses from an Amazon Textract operation."
+          },
+          "JobStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
+            "description": "The current status of the text detection job."
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "If the response is truncated, Amazon Textract returns this token. You can use this token in the subsequent request to retrieve the next set of text-detection results."
+          },
+          "ExpenseDocuments": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseDocumentList"
+              }
+            ],
+            "description": "The expenses detected by Amazon Textract."
+          },
+          "Warnings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Warnings"
+              }
+            ],
+            "description": "A list of warnings that occurred during the text-detection operation for the document."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusMessage"
+              }
+            ],
+            "description": "Returns if the detection job could not be completed. Contains explanation for what error occured."
+          },
+          "AnalyzeExpenseModelVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The current model version of AnalyzeExpense."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetLendingAnalysisRequest": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "Job ID returned by the matching start action; AWS provides no job listing.",
+            "title": "Job Id"
+          },
+          "MaxResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaxResults"
+              }
+            ],
+            "description": "Maximum number of results in this response page.",
+            "title": "Max Results"
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Continuation token from the preceding response in the same operation.",
+            "title": "Next Token"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "JobId"
+        ]
+      },
+      "GetLendingAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "$ref": "#/components/schemas/DocumentMetadata"
+          },
+          "JobStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
+            "description": "The current status of the lending analysis job."
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "If the response is truncated, Amazon Textract returns this token. You can use this token in the subsequent request to retrieve the next set of lending results."
+          },
+          "Results": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LendingResultList"
+              }
+            ],
+            "description": "Holds the information returned by one of AmazonTextract's document analysis operations for the pinstripe."
+          },
+          "Warnings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Warnings"
+              }
+            ],
+            "description": "A list of warnings that occurred during the lending analysis operation."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusMessage"
+              }
+            ],
+            "description": "Returns if the lending analysis job could not be completed. Contains explanation for what error occurred."
+          },
+          "AnalyzeLendingModelVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The current model version of the Analyze Lending API."
+          }
+        },
+        "additionalProperties": false
+      },
+      "GetLendingAnalysisSummaryRequest": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "Job ID returned by the matching start action; AWS provides no job listing.",
+            "title": "Job Id"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "JobId"
+        ]
+      },
+      "GetLendingAnalysisSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "DocumentMetadata": {
+            "$ref": "#/components/schemas/DocumentMetadata"
+          },
+          "JobStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobStatus"
+              }
+            ],
+            "description": "The current status of the lending analysis job."
+          },
+          "Summary": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LendingSummary"
+              }
+            ],
+            "description": "Contains summary information for documents grouped by type."
+          },
+          "Warnings": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Warnings"
+              }
+            ],
+            "description": "A list of warnings that occurred during the lending analysis operation."
+          },
+          "StatusMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusMessage"
+              }
+            ],
+            "description": "Returns if the lending analysis could not be completed. Contains explanation for what error occurred."
+          },
+          "AnalyzeLendingModelVersion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The current model version of the Analyze Lending API."
+          }
+        },
+        "additionalProperties": false
+      },
+      "HumanLoopActivationConditionsEvaluationResults": {
+        "type": "string",
+        "maxLength": 10240
+      },
+      "HumanLoopActivationOutput": {
+        "type": "object",
+        "properties": {
+          "HumanLoopArn": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopArn"
+              }
+            ],
+            "description": "The Amazon Resource Name (ARN) of the HumanLoop created."
+          },
+          "HumanLoopActivationReasons": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopActivationReasons"
+              }
+            ],
+            "description": "Shows if and why human review was needed."
+          },
+          "HumanLoopActivationConditionsEvaluationResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopActivationConditionsEvaluationResults"
+              }
+            ],
+            "description": "Shows the result of condition evaluations, including those conditions which activated a human review."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Shows the results of the human in the loop evaluation. If there is no HumanLoopArn, the input did not trigger human review."
+      },
+      "HumanLoopActivationReason": {
+        "type": "string"
+      },
+      "HumanLoopActivationReasons": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/HumanLoopActivationReason"
+        },
+        "minItems": 1
+      },
+      "HumanLoopArn": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "HumanLoopConfig": {
+        "type": "object",
+        "properties": {
+          "HumanLoopName": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopName"
+              }
+            ],
+            "description": "Unique name for this human review in the AWS region.",
+            "title": "Human Loop Name"
+          },
+          "FlowDefinitionArn": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FlowDefinitionArn"
+              }
+            ],
+            "description": "ARN of an existing Amazon A2I human review workflow.",
+            "title": "Flow Definition Arn"
+          },
+          "DataAttributes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HumanLoopDataAttributes"
+              }
+            ],
+            "description": "Content declarations used to route the document for human review.",
+            "title": "Data Attributes"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "HumanLoopName",
+          "FlowDefinitionArn"
+        ]
+      },
+      "HumanLoopDataAttributes": {
+        "type": "object",
+        "properties": {
+          "ContentClassifiers": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ContentClassifiers"
+              }
+            ],
+            "description": "Content declarations for the human review workflow.",
+            "title": "Content Classifiers"
+          }
+        },
+        "additionalProperties": false
+      },
+      "HumanLoopName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 63,
+        "pattern": "^[a-z0-9](-*[a-z0-9])*"
+      },
+      "IdList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/NonEmptyString"
+        }
+      },
+      "IdentityDocument": {
+        "type": "object",
+        "properties": {
+          "DocumentIndex": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "Denotes the placement of a document in the IdentityDocument list. The first document is marked 1, the second 2 and so on."
+          },
+          "IdentityDocumentFields": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IdentityDocumentFieldList"
+              }
+            ],
+            "description": "The structure used to record information extracted from identity documents. Contains both normalized field and value of the extracted text."
+          },
+          "Blocks": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlockList"
+              }
+            ],
+            "description": "Individual word recognition, as returned by document detection."
+          }
+        },
+        "additionalProperties": false,
+        "description": "The structure that lists each document processed in an AnalyzeID operation."
+      },
+      "IdentityDocumentField": {
+        "type": "object",
+        "properties": {
+          "Type": {
+            "$ref": "#/components/schemas/AnalyzeIDDetections"
+          },
+          "ValueDetection": {
+            "$ref": "#/components/schemas/AnalyzeIDDetections"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Structure containing both the normalized type of the extracted information and the text associated with it. These are extracted as Type and Value respectively."
+      },
+      "IdentityDocumentFieldList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/IdentityDocumentField"
+        }
+      },
+      "IdentityDocumentList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/IdentityDocument"
+        }
+      },
+      "ImageBlob": {
+        "type": "string",
+        "format": "byte"
+      },
+      "JobId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[a-zA-Z0-9-_]+$"
+      },
+      "JobStatus": {
+        "type": "string",
+        "enum": [
+          "IN_PROGRESS",
+          "SUCCEEDED",
+          "FAILED",
+          "PARTIAL_SUCCESS"
+        ]
+      },
+      "JobTag": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "[a-zA-Z0-9_.\\-:]+"
+      },
+      "KMSKeyId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048,
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9:_/+=,@.-]{0,2048}$"
+      },
+      "LendingDetection": {
+        "type": "object",
+        "properties": {
+          "Text": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The text extracted for a detected value in a lending document."
+          },
+          "SelectionStatus": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SelectionStatus"
+              }
+            ],
+            "description": "The selection status of a selection element, such as an option button or check box."
+          },
+          "Geometry": {
+            "$ref": "#/components/schemas/Geometry"
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "The confidence level for the text of a detected value in a lending document."
+          }
+        },
+        "additionalProperties": false,
+        "description": "The results extracted for a lending document."
+      },
+      "LendingDetectionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/LendingDetection"
+        }
+      },
+      "LendingDocument": {
+        "type": "object",
+        "properties": {
+          "LendingFields": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LendingFieldList"
+              }
+            ],
+            "description": "An array of LendingField objects."
+          },
+          "SignatureDetections": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SignatureDetectionList"
+              }
+            ],
+            "description": "A list of signatures detected in a lending document."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Holds the structured data returned by AnalyzeDocument for lending documents."
+      },
+      "LendingField": {
+        "type": "object",
+        "properties": {
+          "Type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The type of the lending document."
+          },
+          "KeyDetection": {
+            "$ref": "#/components/schemas/LendingDetection"
+          },
+          "ValueDetections": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LendingDetectionList"
+              }
+            ],
+            "description": "An array of LendingDetection objects."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Holds the normalized key-value pairs returned by AnalyzeDocument, including the document type, detected text, and geometry."
+      },
+      "LendingFieldList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/LendingField"
+        }
+      },
+      "LendingResult": {
+        "type": "object",
+        "properties": {
+          "Page": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The page number for a page, with regard to whole submission."
+          },
+          "PageClassification": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PageClassification"
+              }
+            ],
+            "description": "The classifier result for a given page."
+          },
+          "Extractions": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExtractionList"
+              }
+            ],
+            "description": "An array of Extraction to hold structured data. e.g. normalized key value pairs instead of raw OCR detections ."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains the detections for each page analyzed through the Analyze Lending API."
+      },
+      "LendingResultList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/LendingResult"
+        }
+      },
+      "LendingSummary": {
+        "type": "object",
+        "properties": {
+          "DocumentGroups": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentGroupList"
+              }
+            ],
+            "description": "Contains an array of all DocumentGroup objects."
+          },
+          "UndetectedDocumentTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UndetectedDocumentTypeList"
+              }
+            ],
+            "description": "UndetectedDocumentTypes."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information regarding DocumentGroups and UndetectedDocumentTypes."
+      },
+      "LineItemFields": {
+        "type": "object",
+        "properties": {
+          "LineItemExpenseFields": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExpenseFieldList"
+              }
+            ],
+            "description": "ExpenseFields used to show information from detected lines on a table."
+          }
+        },
+        "additionalProperties": false,
+        "description": "A structure that holds information about the different lines found in a document's tables."
+      },
+      "LineItemGroup": {
+        "type": "object",
+        "properties": {
+          "LineItemGroupIndex": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The number used to identify a specific table in a document. The first table encountered will have a LineItemGroupIndex of 1, the second 2, etc."
+          },
+          "LineItems": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LineItemList"
+              }
+            ],
+            "description": "The breakdown of information on a particular line of a table."
+          }
+        },
+        "additionalProperties": false,
+        "description": "A grouping of tables which contain LineItems, with each table identified by the table's `LineItemGroupIndex`."
+      },
+      "LineItemGroupList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/LineItemGroup"
+        }
+      },
+      "LineItemList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/LineItemFields"
+        }
+      },
+      "ListAdapterVersionsRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          },
+          "AfterCreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "Return resources created after this time.",
+            "title": "After Creation Time"
+          },
+          "BeforeCreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "Return resources created before this time.",
+            "title": "Before Creation Time"
+          },
+          "MaxResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaxResults"
+              }
+            ],
+            "description": "Maximum number of results in this response page.",
+            "title": "Max Results"
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Continuation token from the preceding response in the same operation.",
+            "title": "Next Token"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ListAdapterVersionsResponse": {
+        "type": "object",
+        "properties": {
+          "AdapterVersions": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterVersionList"
+              }
+            ],
+            "description": "Adapter versions that match the filtering criteria specified when calling ListAdapters."
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Identifies the next page of results to return when listing adapter versions."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ListAdaptersRequest": {
+        "type": "object",
+        "properties": {
+          "AfterCreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "Return resources created after this time.",
+            "title": "After Creation Time"
+          },
+          "BeforeCreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "Return resources created before this time.",
+            "title": "Before Creation Time"
+          },
+          "MaxResults": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MaxResults"
+              }
+            ],
+            "description": "Maximum number of results in this response page.",
+            "title": "Max Results"
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Continuation token from the preceding response in the same operation.",
+            "title": "Next Token"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ListAdaptersResponse": {
+        "type": "object",
+        "properties": {
+          "Adapters": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterList"
+              }
+            ],
+            "description": "A list of adapters that matches the filtering criteria specified when calling ListAdapters."
+          },
+          "NextToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaginationToken"
+              }
+            ],
+            "description": "Identifies the next page of results to return when listing adapters."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ListTagsForResourceRequest": {
+        "type": "object",
+        "properties": {
+          "ResourceARN": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AmazonResourceName"
+              }
+            ],
+            "description": "Textract resource ARN in the connection's AWS account and region.",
+            "title": "Resource ARN"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ResourceARN"
+        ]
+      },
+      "ListTagsForResourceResponse": {
+        "type": "object",
+        "properties": {
+          "Tags": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagMap"
+              }
+            ],
+            "description": "A set of tags (key-value pairs) that are part of the requested resource."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MaxResults": {
+        "type": "integer",
+        "format": "int32",
+        "minimum": 1
+      },
+      "NonEmptyString": {
+        "type": "string",
+        "pattern": ".*\\S.*"
+      },
+      "NormalizedValue": {
+        "type": "object",
+        "properties": {
+          "Value": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/String"
+              }
+            ],
+            "description": "The value of the date, written as Year-Month-DayTHour:Minute:Second."
+          },
+          "ValueType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ValueType"
+              }
+            ],
+            "description": "The normalized type of the value detected. In this case, DATE."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information relating to dates in a document, including the type of value, and the value."
+      },
+      "NotificationChannel": {
+        "type": "object",
+        "properties": {
+          "SNSTopicArn": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SNSTopicArn"
+              }
+            ],
+            "description": "SNS topic ARN in the connection's region for completion notifications.",
+            "title": "SNS Topic Arn"
+          },
+          "RoleArn": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RoleArn"
+              }
+            ],
+            "description": "IAM role ARN allowing Textract to publish to the SNS topic.",
+            "title": "Role Arn"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "SNSTopicArn",
+          "RoleArn"
+        ]
+      },
+      "OutputConfig": {
+        "type": "object",
+        "properties": {
+          "S3Bucket": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3Bucket"
+              }
+            ],
+            "description": "S3 bucket to receive output; the caller must have permission to write it.",
+            "title": "S3 Bucket"
+          },
+          "S3Prefix": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3ObjectName"
+              }
+            ],
+            "description": "Object-key prefix for output files in the destination bucket.",
+            "title": "S3 Prefix"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "S3Bucket"
+        ]
+      },
+      "PageClassification": {
+        "type": "object",
+        "properties": {
+          "PageType": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PredictionList"
+              }
+            ],
+            "description": "The class, or document type, assigned to a detected Page object. The class, or document type, assigned to a detected Page object."
+          },
+          "PageNumber": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PredictionList"
+              }
+            ],
+            "description": "The page number the value was detected on, relative to Amazon Textract's starting position."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "PageType",
+          "PageNumber"
+        ],
+        "description": "The class assigned to a Page object detected in an input document. Contains information regarding the predicted type/class of a document's page and the page number that the Page object was detected on."
+      },
+      "PageList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UInteger"
+        }
+      },
+      "Pages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UInteger"
+        }
+      },
+      "PaginationToken": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024,
+        "pattern": ".*\\S.*"
+      },
+      "Percent": {
+        "type": "number",
+        "format": "float",
+        "minimum": 0,
+        "maximum": 100
+      },
+      "Point": {
+        "type": "object",
+        "properties": {
+          "X": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The value of the X coordinate for a point on a `Polygon`."
+          },
+          "Y": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Float"
+              }
+            ],
+            "description": "The value of the Y coordinate for a point on a `Polygon`."
+          }
+        },
+        "additionalProperties": false,
+        "description": "The X and Y coordinates of a point on a document page. The X and Y values that are returned are ratios of the overall document page size. For example, if the input document is 700 x 200 and the operation returns X=0.5 and Y=0.25, then the point is at the (350,50) pixel coordinate on the document page.\n\nAn array of `Point` objects, `Polygon`, is returned by [DetectDocumentText](). `Polygon` represents a fine-grained polygon around detected text. For more information, see Geometry in the Amazon Textract Developer Guide."
+      },
+      "Polygon": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Point"
+        }
+      },
+      "Prediction": {
+        "type": "object",
+        "properties": {
+          "Value": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NonEmptyString"
+              }
+            ],
+            "description": "The predicted value of a detected object."
+          },
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "Amazon Textract's confidence in its predicted value."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information regarding predicted values returned by Amazon Textract operations, including the predicted value and the confidence in the predicted value."
+      },
+      "PredictionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Prediction"
+        }
+      },
+      "Queries": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Query"
+        },
+        "minItems": 1
+      },
+      "QueriesConfig": {
+        "type": "object",
+        "properties": {
+          "Queries": {
+            "$ref": "#/components/schemas/Queries",
+            "title": "Queries",
+            "description": "Questions to ask about the document, each with optional page selectors."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Queries"
+        ]
+      },
+      "Query": {
+        "type": "object",
+        "properties": {
+          "Text": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryInput"
+              }
+            ],
+            "description": "Question to answer, for example `What is the invoice total?`.",
+            "title": "Text"
+          },
+          "Alias": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryInput"
+              }
+            ],
+            "description": "A short name for locating this question in the results.",
+            "title": "Alias"
+          },
+          "Pages": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QueryPages"
+              }
+            ],
+            "description": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+            "title": "Pages"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Text"
+        ]
+      },
+      "QueryInput": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^[a-zA-Z0-9\\s!\"\\#\\$%'&\\(\\)\\*\\+\\,\\-\\./:;=\\?@\\[\\\\\\]\\^_`\\{\\|\\}~><]+$"
+      },
+      "QueryPage": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 9,
+        "pattern": "^[0-9\\*\\-]+$"
+      },
+      "QueryPages": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/QueryPage"
+        },
+        "minItems": 1
+      },
+      "Relationship": {
+        "type": "object",
+        "properties": {
+          "Type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RelationshipType"
+              }
+            ],
+            "description": "The type of relationship between the blocks in the IDs array and the current block. The following list describes the relationship types that can be returned.\n\n- *VALUE* - A list that contains the ID of the VALUE block that's associated with the KEY of a key-value pair.\n\n- *CHILD* - A list of IDs that identify blocks found within the current block object. For example, WORD blocks have a CHILD relationship to the LINE block type.\n\n- *MERGED_CELL* - A list of IDs that identify each of the MERGED_CELL block types in a table.\n\n- *ANSWER* - A list that contains the ID of the QUERY_RESULT block that’s associated with the corresponding QUERY block.\n\n- *TABLE* - A list of IDs that identify associated TABLE block types.\n\n- *TABLE_TITLE* - A list that contains the ID for the TABLE_TITLE block type in a table.\n\n- *TABLE_FOOTER* - A list of IDs that identify the TABLE_FOOTER block types in a table."
+          },
+          "Ids": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/IdList"
+              }
+            ],
+            "description": "An array of IDs for related blocks. You can get the type of the relationship from the `Type` element."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Information about how blocks are related to each other. A `Block` object contains 0 or more `Relation` objects in a list, `Relationships`. For more information, see [Block]().\n\nThe `Type` element provides the type of the relationship for all blocks in the `IDs` array."
+      },
+      "RelationshipList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Relationship"
+        }
+      },
+      "RelationshipType": {
+        "type": "string",
+        "enum": [
+          "VALUE",
+          "CHILD",
+          "COMPLEX_FEATURES",
+          "MERGED_CELL",
+          "TITLE",
+          "ANSWER",
+          "TABLE",
+          "TABLE_TITLE",
+          "TABLE_FOOTER"
+        ]
+      },
+      "RoleArn": {
+        "type": "string",
+        "minLength": 20,
+        "maxLength": 2048,
+        "pattern": "arn:([a-z\\d-]+):iam::\\d{12}:role/?[a-zA-Z_0-9+=,.@\\-_/]+"
+      },
+      "S3Bucket": {
+        "type": "string",
+        "minLength": 3,
+        "maxLength": 255,
+        "pattern": "[0-9A-Za-z\\.\\-_]*"
+      },
+      "S3Object": {
+        "type": "object",
+        "properties": {
+          "Bucket": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3Bucket"
+              }
+            ],
+            "description": "Name of the S3 bucket containing the source document.",
+            "title": "Bucket"
+          },
+          "Name": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3ObjectName"
+              }
+            ],
+            "description": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+            "title": "Name"
+          },
+          "Version": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/S3ObjectVersion"
+              }
+            ],
+            "description": "Version of the selected resource.",
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "Bucket",
+          "Name"
+        ]
+      },
+      "S3ObjectName": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024,
+        "pattern": ".*\\S.*"
+      },
+      "S3ObjectVersion": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024,
+        "pattern": ".*\\S.*"
+      },
+      "SNSTopicArn": {
+        "type": "string",
+        "minLength": 20,
+        "maxLength": 1024,
+        "pattern": "(^arn:([a-z\\d-]+):sns:[a-zA-Z\\d-]{1,20}:\\w{12}:.+$)"
+      },
+      "SelectionStatus": {
+        "type": "string",
+        "enum": [
+          "SELECTED",
+          "NOT_SELECTED"
+        ]
+      },
+      "SignatureDetection": {
+        "type": "object",
+        "properties": {
+          "Confidence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Percent"
+              }
+            ],
+            "description": "The confidence, from 0 to 100, in the predicted values for a detected signature."
+          },
+          "Geometry": {
+            "$ref": "#/components/schemas/Geometry"
+          }
+        },
+        "additionalProperties": false,
+        "description": "Information regarding a detected signature on a page."
+      },
+      "SignatureDetectionList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SignatureDetection"
+        }
+      },
+      "SplitDocument": {
+        "type": "object",
+        "properties": {
+          "Index": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The index for a given document in a DocumentGroup of a specific Type."
+          },
+          "Pages": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PageList"
+              }
+            ],
+            "description": "An array of page numbers for a for a given document, ordered by logical boundary."
+          }
+        },
+        "additionalProperties": false,
+        "description": "Contains information about the pages of a document, defined by logical boundary."
+      },
+      "SplitDocumentList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/SplitDocument"
+        }
+      },
+      "StartDocumentAnalysisRequest": {
+        "type": "object",
+        "properties": {
+          "DocumentLocation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLocation"
+              }
+            ],
+            "description": "S3 document location for an asynchronous analysis job.",
+            "title": "Document Location"
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "Document features to extract; select at least one.",
+            "title": "Feature Types"
+          },
+          "ClientRequestToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRequestToken"
+              }
+            ],
+            "description": "Idempotency token for safely retrying the same request.",
+            "title": "Client Request Token"
+          },
+          "JobTag": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobTag"
+              }
+            ],
+            "description": "A label included in the job completion notification.",
+            "title": "Job Tag"
+          },
+          "NotificationChannel": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationChannel"
+              }
+            ],
+            "description": "SNS topic and IAM role for asynchronous completion notifications.",
+            "title": "Notification Channel"
+          },
+          "OutputConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutputConfig"
+              }
+            ],
+            "description": "S3 destination for analysis or training output.",
+            "title": "Output Config"
+          },
+          "KMSKeyId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KMSKeyId"
+              }
+            ],
+            "description": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+            "title": "KMS Key Id"
+          },
+          "QueriesConfig": {
+            "$ref": "#/components/schemas/QueriesConfig",
+            "title": "Queries Config",
+            "description": "Questions to answer when the `QUERIES` feature is selected."
+          },
+          "AdaptersConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdaptersConfig"
+              }
+            ],
+            "description": "Custom query adapters and versions to use for selected pages.",
+            "title": "Adapters Config"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "DocumentLocation",
+          "FeatureTypes"
+        ]
+      },
+      "StartDocumentAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "The identifier for the document text detection job. Use `JobId` to identify the job in a subsequent call to `GetDocumentAnalysis`. A `JobId` value is only valid for 7 days."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StartDocumentTextDetectionRequest": {
+        "type": "object",
+        "properties": {
+          "DocumentLocation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLocation"
+              }
+            ],
+            "description": "S3 document location for an asynchronous analysis job.",
+            "title": "Document Location"
+          },
+          "ClientRequestToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRequestToken"
+              }
+            ],
+            "description": "Idempotency token for safely retrying the same request.",
+            "title": "Client Request Token"
+          },
+          "JobTag": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobTag"
+              }
+            ],
+            "description": "A label included in the job completion notification.",
+            "title": "Job Tag"
+          },
+          "NotificationChannel": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationChannel"
+              }
+            ],
+            "description": "SNS topic and IAM role for asynchronous completion notifications.",
+            "title": "Notification Channel"
+          },
+          "OutputConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutputConfig"
+              }
+            ],
+            "description": "S3 destination for analysis or training output.",
+            "title": "Output Config"
+          },
+          "KMSKeyId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KMSKeyId"
+              }
+            ],
+            "description": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+            "title": "KMS Key Id"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "DocumentLocation"
+        ]
+      },
+      "StartDocumentTextDetectionResponse": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "The identifier of the text detection job for the document. Use `JobId` to identify the job in a subsequent call to `GetDocumentTextDetection`. A `JobId` value is only valid for 7 days."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StartExpenseAnalysisRequest": {
+        "type": "object",
+        "properties": {
+          "DocumentLocation": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentLocation"
+              }
+            ],
+            "description": "S3 document location for an asynchronous analysis job.",
+            "title": "Document Location"
+          },
+          "ClientRequestToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRequestToken"
+              }
+            ],
+            "description": "Idempotency token for safely retrying the same request.",
+            "title": "Client Request Token"
+          },
+          "JobTag": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobTag"
+              }
+            ],
+            "description": "A label included in the job completion notification.",
+            "title": "Job Tag"
+          },
+          "NotificationChannel": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationChannel"
+              }
+            ],
+            "description": "SNS topic and IAM role for asynchronous completion notifications.",
+            "title": "Notification Channel"
+          },
+          "OutputConfig": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutputConfig"
+              }
+            ],
+            "description": "S3 destination for analysis or training output.",
+            "title": "Output Config"
+          },
+          "KMSKeyId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KMSKeyId"
+              }
+            ],
+            "description": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+            "title": "KMS Key Id"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "DocumentLocation"
+        ]
+      },
+      "StartExpenseAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "A unique identifier for the text detection job. The `JobId` is returned from `StartExpenseAnalysis`. A `JobId` value is only valid for 7 days."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StartLendingAnalysisRequest": {
+        "type": "object",
+        "properties": {
+          "DocumentLocation": {
+            "$ref": "#/components/schemas/DocumentLocation",
+            "title": "Document Location",
+            "description": "S3 document location for an asynchronous analysis job."
+          },
+          "ClientRequestToken": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ClientRequestToken"
+              }
+            ],
+            "description": "Idempotency token for safely retrying the same request.",
+            "title": "Client Request Token"
+          },
+          "JobTag": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobTag"
+              }
+            ],
+            "description": "A label included in the job completion notification.",
+            "title": "Job Tag"
+          },
+          "NotificationChannel": {
+            "$ref": "#/components/schemas/NotificationChannel",
+            "title": "Notification Channel",
+            "description": "SNS topic and IAM role for asynchronous completion notifications."
+          },
+          "OutputConfig": {
+            "$ref": "#/components/schemas/OutputConfig",
+            "title": "Output Config",
+            "description": "S3 destination for analysis or training output."
+          },
+          "KMSKeyId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/KMSKeyId"
+              }
+            ],
+            "description": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+            "title": "KMS Key Id"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "DocumentLocation"
+        ]
+      },
+      "StartLendingAnalysisResponse": {
+        "type": "object",
+        "properties": {
+          "JobId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/JobId"
+              }
+            ],
+            "description": "A unique identifier for the lending or text-detection job. The `JobId` is returned from `StartLendingAnalysis`. A `JobId` value is only valid for 7 days."
+          }
+        },
+        "additionalProperties": false
+      },
+      "StatusMessage": {
+        "type": "string"
+      },
+      "String": {
+        "type": "string"
+      },
+      "StringList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/String"
+        }
+      },
+      "TagKey": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^(?!aws:)[\\p{L}\\p{Z}\\p{N}_.:/=+\\-@]*$"
+      },
+      "TagKeyList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/TagKey"
+        },
+        "minItems": 0,
+        "maxItems": 200
+      },
+      "TagMap": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/TagValue"
+        },
+        "minProperties": 0,
+        "maxProperties": 200
+      },
+      "TagResourceRequest": {
+        "type": "object",
+        "properties": {
+          "ResourceARN": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AmazonResourceName"
+              }
+            ],
+            "description": "Textract resource ARN in the connection's AWS account and region.",
+            "title": "Resource ARN"
+          },
+          "Tags": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagMap"
+              }
+            ],
+            "description": "Resource tags as a map of names to values; an empty tag value is valid.",
+            "title": "Tags"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ResourceARN",
+          "Tags"
+        ]
+      },
+      "TagResourceResponse": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "TagValue": {
+        "type": "string",
+        "minLength": 0,
+        "maxLength": 256,
+        "pattern": "^([\\p{L}\\p{Z}\\p{N}_.:/=+\\-@]*)$"
+      },
+      "TextType": {
+        "type": "string",
+        "enum": [
+          "HANDWRITING",
+          "PRINTED"
+        ]
+      },
+      "UInteger": {
+        "type": "integer",
+        "format": "int32",
+        "minimum": 0
+      },
+      "UndetectedDocumentTypeList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/NonEmptyString"
+        }
+      },
+      "UndetectedSignature": {
+        "type": "object",
+        "properties": {
+          "Page": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UInteger"
+              }
+            ],
+            "description": "The page where a signature was expected but not found."
+          }
+        },
+        "additionalProperties": false,
+        "description": "A structure containing information about an undetected signature on a page where it was expected but not found."
+      },
+      "UndetectedSignatureList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/UndetectedSignature"
+        }
+      },
+      "UntagResourceRequest": {
+        "type": "object",
+        "properties": {
+          "ResourceARN": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AmazonResourceName"
+              }
+            ],
+            "description": "Textract resource ARN in the connection's AWS account and region.",
+            "title": "Resource ARN"
+          },
+          "TagKeys": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TagKeyList"
+              }
+            ],
+            "description": "Names of the resource tags to remove.",
+            "title": "Tag Keys"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "ResourceARN",
+          "TagKeys"
+        ]
+      },
+      "UntagResourceResponse": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "UpdateAdapterRequest": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "Adapter in the connection's AWS account and region.",
+            "title": "Adapter Id"
+          },
+          "Description": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterDescription"
+              }
+            ],
+            "description": "A description explaining the adapter's purpose.",
+            "title": "Description"
+          },
+          "AdapterName": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterName"
+              }
+            ],
+            "description": "A descriptive name for the custom query adapter.",
+            "title": "Adapter Name"
+          },
+          "AutoUpdate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoUpdate"
+              }
+            ],
+            "description": "Whether AWS may automatically update the adapter.",
+            "title": "Auto Update"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "AdapterId"
+        ]
+      },
+      "UpdateAdapterResponse": {
+        "type": "object",
+        "properties": {
+          "AdapterId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterId"
+              }
+            ],
+            "description": "A string containing a unique ID for the adapter that has been updated."
+          },
+          "AdapterName": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterName"
+              }
+            ],
+            "description": "A string containing the name of the adapter that has been updated."
+          },
+          "CreationTime": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "description": "An object specifying the creation time of the the adapter that has been updated."
+          },
+          "Description": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AdapterDescription"
+              }
+            ],
+            "description": "A string containing the description of the adapter that has been updated."
+          },
+          "FeatureTypes": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureTypes"
+              }
+            ],
+            "description": "List of the targeted feature types for the updated adapter."
+          },
+          "AutoUpdate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoUpdate"
+              }
+            ],
+            "description": "The auto-update status of the adapter that has been updated."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ValueType": {
+        "type": "string",
+        "enum": [
+          "DATE"
+        ]
+      },
+      "Warning": {
+        "type": "object",
+        "properties": {
+          "ErrorCode": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCode"
+              }
+            ],
+            "description": "The error code for the warning."
+          },
+          "Pages": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Pages"
+              }
+            ],
+            "description": "A list of the pages that the warning applies to."
+          }
+        },
+        "additionalProperties": false,
+        "description": "A warning about an issue that occurred during asynchronous text analysis ([StartDocumentAnalysis]()) or asynchronous document text detection ([StartDocumentTextDetection]())."
+      },
+      "Warnings": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Warning"
+        }
+      }
+    }
+  },
+  "x-qore-textract-boundary": {
+    "version": 1,
+    "source_revision": "2891dd413e8b644590042d8ff226fc2181711985",
+    "source_sha256": "5ee161c8c63c848ff4b9ba3905d3fc00245b477056ccf042c9f79273a24b8da3",
+    "source_size": 145110,
+    "operations": 25,
+    "source_url": "https://raw.githubusercontent.com/boto/botocore/2891dd413e8b644590042d8ff226fc2181711985/botocore/data/textract/2018-06-27/service-2.json",
+    "representation": "Types only; native AWS JSON 1.1 transport is implemented separately",
+    "normalizations": [
+      "document source exclusivity",
+      "required asynchronous S3 source",
+      "required S3 bucket and key",
+      "required training manifest",
+      "nonempty features",
+      "query-only adapter creation",
+      "one or two identity images",
+      "timestamp action values",
+      "curated input presentation",
+      "native query dependencies and page-selector validation"
+    ]
+  }
+}

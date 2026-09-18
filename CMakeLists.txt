@@ -3628,7 +3628,16 @@ qore_user_module("qlib/DeepgramDataProvider" "deepgram-logo.svg")
 qore_user_module("qlib/AssemblyAiRestClient.qm")
 qore_user_module("qlib/AssemblyAiDataProvider" "assemblyai-logo.svg;assemblyai-transcripts-openapi.json;assemblyai-llm-gateway-openapi.json;assemblyai-streaming-token-openapi.json;assemblyai-voice-agent-token-openapi.json;assemblyai-agents-openapi.json;assemblyai-webhooks-openapi.json;assemblyai-sync-api-openapi.json;assemblyai-dictation-openapi.json;assemblyai-import.json")
 qore_user_module("qlib/AwsTextractRestClient.qm")
-qore_user_module("qlib/AwsTextractDataProvider" "aws-textract-logo.svg")
+qore_user_module("qlib/AwsTextractDataProvider" "aws-textract-logo.svg;textract-types.json;textract-service-2.json;botocore-LICENSE.txt;textract-model-NOTICE.txt")
+# Legal notices are not among the shared module-resource glob extensions.
+install(FILES qlib/AwsTextractDataProvider/botocore-LICENSE.txt
+    qlib/AwsTextractDataProvider/textract-model-NOTICE.txt
+    DESTINATION ${QORE_USER_MODULES_DIR}/AwsTextractDataProvider COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if(QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/AwsTextractDataProvider/botocore-LICENSE.txt
+        qlib/AwsTextractDataProvider/textract-model-NOTICE.txt
+        DESTINATION ${QORE_AOT_MODULES_DIR}/AwsTextractDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/GoogleDocumentAiRestClient.qm")
 qore_user_module("qlib/GoogleCloudStorageRestClient.qm")
 qore_user_module("qlib/GoogleDocumentAiDataProvider" "google-document-ai-logo.svg")

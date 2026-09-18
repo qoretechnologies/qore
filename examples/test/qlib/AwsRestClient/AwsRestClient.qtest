@@ -84,6 +84,7 @@ class AwsTest inherits QUnit::Test {
         addTestCase("STS XML response parse", \stsParseTest());
         addTestCase("STS AssumeRole end-to-end", \stsAssumeRoleE2ETest());
         addTestCase("IMDS credentials body parse", \imdsParseTest());
+        addTestCase("credential failures do not disclose values", \credentialPrivacyTest());
         addTestCase("IMDSv2 end-to-end against fake server", \imdsE2ETest());
         addTestCase("aws_imds_disabled skips IMDS", \imdsDisabledTest());
         addTestCase("IMDS probe is bounded by its timeout", \imdsTimeoutTest());
@@ -359,6 +360,33 @@ class AwsTest inherits QUnit::Test {
         assertThrows("AWSRESTCLIENT-IMDS-ERROR", sub () {
             AwsRestClientBase::parseImdsCredentialsBody(42);
         });
+    }
+
+    credentialPrivacyTest() {
+        hash<auto> incomplete = {"SecretAccessKey": "private-fixture-sentinel", "Token": "private-fixture-token"};
+        foreach code<nothing()> cb in (
+                sub () { AwsRestClientBase::parseImdsCredentialsBody(incomplete); },
+                sub () { AwsRestClientBase::parseAssumeRoleResponse({
+                    "AssumeRoleResponse": {"AssumeRoleResult": {"Credentials": incomplete}}}); }) {
+            bool rejected = False;
+            try { cb(); } catch (hash<ExceptionInfo> ex) {
+                rejected = True;
+                assertEq(-1, index(ex.desc, "private-fixture"));
+            }
+            assertTrue(rejected);
+        }
+        hash<auto> opts = {"url": "https://textract.us-east-1.amazonaws.com", "aws_service": "textract",
+            "aws_region": "us-east-1", "aws_keyid": "fixture", "aws_secret": ("private-fixture-sentinel",)};
+        foreach bool async_client in ((False, True)) {
+            bool rejected = False;
+            try {
+                if (async_client) { new AwsRestClientIo(opts); } else { new AwsRestClient(opts, True); }
+            } catch (hash<ExceptionInfo> ex) {
+                rejected = True;
+                assertEq(-1, index(ex.desc, "private-fixture"));
+            }
+            assertTrue(rejected);
+        }
     }
 
     #! End-to-end IMDSv2 flow against a fake IMDS server

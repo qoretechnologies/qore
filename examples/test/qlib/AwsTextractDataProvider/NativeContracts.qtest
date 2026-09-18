@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%allow-injection
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires AwsTextractDataProvider
+%exec-class Contracts
+
+class RecordedTextract inherits AwsTextractRestClient::AwsTextractRestClientIo {
+    public {
+        list<hash<auto>> calls = ();
+        list<hash<auto>> replies = ();
+        *string error;
+    }
+    constructor() : AwsTextractRestClient::AwsTextractRestClientIo({
+        "aws_region": "us-east-1", "aws_keyid": "fixture-key", "aws_secret": "fixture-secret",
+    }) {}
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> headers) {
+        calls += {"path": path, "body": body, "headers": headers};
+        if (error) { throw error, "fixture service failure"; }
+        return <RestClient::RestResponseInfo>{"body": replies ? shift replies : {}};
+    }
+}
+
+class Contracts inherits QUnit::Test {
+    constructor() : Test("Textract native contracts", "1.1", \ARGV) {
+        if (ENV.QORE_EXPECT_QMOD_ROOT) {
+            addTestCase("explicit AOT artifact paths", sub () {
+                foreach string name in ("AwsTextractDataProvider", "AwsTextractRestClient", "AwsRestClient",
+                        "OpenApi3", "DataProvider", "Mime", "HttpClientIo") {
+                    string filename = get_module_hash(){name}.filename;
+                    assertEq(0, index(filename, ENV.QORE_EXPECT_QMOD_ROOT + "/"));
+                    assertTrue(filename =~ /\.qmod$/);
+                }
+            });
+        }
+        addTestCase("all native requests and lifecycle results", \operations());
+        addTestCase("document sources and pretransport boundaries", \boundaries());
+        addTestCase("reference pagination and failure propagation", \references());
+        addTestCase("nested types and repeated serialization", \types());
+        set_return_value(main());
+    }
+    private operations() {
+        RecordedTextract fake();
+        AwsTextractDataProvider::AwsTextractDataProvider root(fake);
+        assertTrue(root.hasGenericApiCallChild());
+        assertEq(26, root.getChildProviderNames().size());
+        assertEq(26, root.getChildProviderSummaryInfo().size());
+        hash<auto> s3 = {"Bucket": "synthetic-fixture", "Name": "invoice.pdf"};
+        hash<auto> requests = {
+            "analyze-document": {"document_bytes": binary("fixture"), "feature_types": ("QUERIES",),
+                "queries": ({"Text": "What is the total?", "Alias": "total", "Pages": ("1",)},),
+                "adapters_config": {"Adapters": ({"AdapterId": "adapter123456", "Version": "1"},)}},
+            "detect-document-text": {"document_bytes": binary("fixture")},
+            "analyze-expense": {"Document": {"Bytes": binary("fixture")}},
+            "analyze-id": {"DocumentPages": ({"Bytes": binary("fixture")},)},
+            "create-adapter": {"AdapterName": "fixture", "FeatureTypes": ("QUERIES",), "Tags": {"value": ""}},
+            "create-adapter-version": {"AdapterId": "adapter123456", "DatasetConfig": {"ManifestS3Object": s3},
+                "OutputConfig": {"S3Bucket": "synthetic-fixture"}},
+            "delete-adapter": {"AdapterId": "adapter123456"},
+            "delete-adapter-version": {"AdapterId": "adapter123456", "AdapterVersion": "1"},
+            "get-adapter": {"AdapterId": "adapter123456"},
+            "get-adapter-version": {"AdapterId": "adapter123456", "AdapterVersion": "1"},
+            "list-adapters": {},
+            "list-adapter-versions": {"AdapterId": "adapter123456"},
+            "list-tags-for-resource": {"ResourceARN": "arn:aws:textract:us-east-1:123456789012:adapters/adapter123456"},
+            "tag-resource": {"ResourceARN": "arn:aws:textract:us-east-1:123456789012:adapters/adapter123456", "Tags": {"value": ""}},
+            "untag-resource": {"ResourceARN": "arn:aws:textract:us-east-1:123456789012:adapters/adapter123456", "TagKeys": ("value",)},
+            "update-adapter": {"AdapterId": "adapter123456", "Description": "Fixture", "AutoUpdate": "DISABLED"},
+        };
+        foreach string action in (("start-document-analysis", "start-document-text-detection",
+                "start-expense-analysis", "start-lending-analysis")) {
+            requests{action} = {"DocumentLocation": {"S3Object": s3}, "ClientRequestToken": "fixture"};
+            if (action == "start-document-analysis") { requests{action}.FeatureTypes = ("TABLES",); }
+        }
+        foreach string action in (("get-document-analysis", "get-document-text-detection",
+                "get-expense-analysis", "get-lending-analysis", "get-lending-analysis-summary")) {
+            requests{action} = {"JobId": "fixture"};
+        }
+        foreach hash<auto> entry in (requests.pairIterator()) {
+            fake.replies = ({"JobId": "fixture", "JobStatus": "PARTIAL_SUCCESS", "NextToken": "next",
+                "Warnings": ({"ErrorCode": "fixture", "Pages": (1,)},), "unknown": {"value": False}},);
+            hash<auto> result = root.getChildProvider(entry.key).doRequest(entry.value);
+            hash<auto> call = fake.calls[-1];
+            assertEq("/", call.path);
+            assertEq("application/x-amz-json-1.1", call.headers."Content-Type");
+            assertEq("Textract." + AwsTextractManifest::Operations{entry.key}.operation, call.headers."X-Amz-Target");
+            assertEq("PARTIAL_SUCCESS", result.JobStatus);
+            assertEq("next", result.NextToken);
+            assertEq(False, result.unknown.value);
+            if (call.body.Document.Bytes.val()) { assertEq("Zml4dHVyZQ==", call.body.Document.Bytes); }
+        }
+        assertEq(25, fake.calls.size());
+        foreach string status in (("IN_PROGRESS", "SUCCEEDED", "FAILED", "PARTIAL_SUCCESS")) {
+            fake.replies = ({"JobStatus": status, "StatusMessage": "fixture", "Blocks": (), "NextToken": "n"},);
+            assertEq(status, root.getChildProvider("get-document-analysis").doRequest(
+                {"JobId": "fixture", "NextToken": "n", "MaxResults": 1}).JobStatus);
+        }
+        fake.replies = ({"CreationTime": 0, "Tags": {"value": ""}},);
+        hash<auto> result = root.getChildProvider("get-adapter").doRequest({"AdapterId": "adapter123456"});
+        assertEq(NT_DATE, result.CreationTime.typeCode());
+        assertEq(0, get_epoch_seconds(result.CreationTime));
+        assertEq({"value": ""}, result.Tags);
+        root.getChildProvider("list-adapters").doRequest({"AfterCreationTime": gmtime(0)});
+        assertEq(0, fake.calls[-1].body.AfterCreationTime);
+        root.getChildProvider("list-adapters").doRequest({"AfterCreationTime": gmtime(1, 250000)});
+        assertEq(1.25, fake.calls[-1].body.AfterCreationTime);
+        fake.replies = ({"CreationTime": 1.25},);
+        result = root.getChildProvider("get-adapter").doRequest({"AdapterId": "adapter123456"});
+        assertEq(1250000, get_epoch_microseconds(result.CreationTime));
+        fake.error = "AWS-FIXTURE-DENIED";
+        assertThrows("AWS-FIXTURE-DENIED", sub () { root.getChildProvider("list-adapters").doRequest({}); });
+    }
+    private boundaries() {
+        RecordedTextract fake();
+        AwsTextractDataProvider::AwsTextractDataProvider root(fake);
+        AbstractDataProvider detect = root.getChildProvider("detect-document-text");
+        foreach hash<auto> req in (({}, {"document_bytes": binary("x"), "s3_bucket": "fixture"},
+                {"document_path": "", "document_bytes": binary("x")})) {
+            assertThrows("AWS-TEXTRACT-CONFIG-ERROR", sub () { detect.doRequest(req); });
+        }
+        foreach auto value in ((NOTHING, NULL, "", {}, (), False, 0, binary())) {
+            assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { detect.doRequest({"document_bytes": value}); });
+        }
+        foreach hash<auto> req in (({"s3_bucket": "fixture"}, {"s3_name": "invoice.pdf"},
+                {"s3_bucket": "", "s3_name": "invoice.pdf"}, {"document_path": ""})) {
+            assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { detect.doRequest(req); });
+        }
+        foreach auto value in ((NOTHING, NULL, "", {}, (), False, 0)) {
+            assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { root.getChildProvider("list-adapters").doRequest({"MaxResults": value}); });
+        }
+        assertEq(0, fake.calls.size());
+        detect.doRequest({"document_path": get_script_dir() + "/synthetic-invoice.pdf"});
+        assertEq(0, index(fake.calls[-1].body.Document.Bytes, "JVBER"));
+        foreach hash<auto> req in (({"Document": {}}, {"Document": {"Bytes": "%%%"}},
+                {"Document": {"Bytes": "eA==", "S3Object": {"Bucket": "fixture", "Name": "a"}}},
+                {"Document": {"S3Object": {}}})) {
+            assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { root.getChildProvider("analyze-expense").doRequest(req); });
+        }
+        foreach hash<auto> req in (({"document_bytes": binary("x"), "feature_types": ()},
+                {"document_bytes": binary("x"), "feature_types": ("Tables",)},
+                {"document_bytes": binary("x"), "feature_types": ("QUERIES",)},
+                {"document_bytes": binary("x"), "feature_types": ("QUERIES",), "queries": ()},
+                {"document_bytes": binary("x"), "feature_types": ("QUERIES",), "queries": ({"Text": "?", "Pages": ("0",)},)},
+                {"document_bytes": binary("x"), "feature_types": ("QUERIES",), "queries": ({"Text": "?", "Pages": ("4-2",)},)})) {
+            assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { root.getChildProvider("analyze-document").doRequest(req); });
+        }
+        root.getChildProvider("list-adapters").doRequest({});
+        assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () {
+            root.getChildProvider("update-adapter").doRequest({"AdapterId": "adapter123456", "Description": ""});
+        });
+        root.getChildProvider("create-adapter").doRequest({"AdapterName": "fixture", "FeatureTypes": ("QUERIES",), "Tags": {}});
+        assertEq({}, fake.calls[-1].body.Tags);
+    }
+    private references() {
+        RecordedTextract fake();
+        AwsTextractDataProvider::AwsTextractDataProvider root(fake);
+        assertEq(NOTHING, root.getReferenceData("adapter-versions", {}));
+        assertEq(0, fake.calls.size());
+        fake.replies = ({"Adapters": ({"AdapterId": "a1", "AdapterName": "First"},), "NextToken": "page2"},
+            {"Adapters": ({"AdapterId": "a2", "AdapterName": "Second"},)});
+        list<hash<AllowedValueInfo>> values = root.getReferenceData("adapters", {});
+        assertEq(("a1", "a2"), map $1.value, values);
+        assertEq("page2", fake.calls[-1].body.NextToken);
+        fake.replies = ({"AdapterVersions": ({"AdapterVersion": "1"},)},);
+        values = root.getReferenceData("adapter-versions", {"AdapterId": "a1"});
+        assertEq("a1", fake.calls[-1].body.AdapterId);
+        assertEq("1", values[0].value);
+        fake.replies = ({"Adapters": (), "NextToken": "repeated"}, {"Adapters": (), "NextToken": "repeated"});
+        assertThrows("REFERENCE-DATA-ERROR", sub () { root.getReferenceData("adapters", {}); });
+        fake.error = "AWS-FIXTURE-DENIED";
+        assertThrows("REFERENCE-DATA-ERROR", sub () { root.getReferenceData("adapters", {}); });
+    }
+    private types() {
+        foreach hash<auto> op in (AwsTextractManifest::Operations.iterator()) {
+            foreach string name in ((op.input, op.output)) {
+                AbstractDataProviderType type = AwsTextractSchema::getType(name);
+                AbstractDataProviderType restored = Serializable::deserialize(type.serialize());
+                restored = Serializable::deserialize(restored.serialize());
+                assertEq(type.getBaseTypeName(), restored.getBaseTypeName());
+                assertEq(sort(keys type.getFields()), sort(keys restored.getFields()));
+            }
+        }
+        AbstractDataProviderType type = AwsTextractSchema::getType("TagResourceRequest");
+        hash<auto> req = {"ResourceARN": "arn:aws:textract:us-east-1:123456789012:adapters/a1", "Tags": {"value": ""}};
+        for (int pass = 0; pass < 3; ++pass) {
+            type = Serializable::deserialize(type.serialize());
+            assertEq(req, type.acceptsValue(req));
+        }
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getActionHashEx("AwsTextract")."analyze-document";
+        assertEq(("TABLES", "FORMS", "SIGNATURES", "LAYOUT", "QUERIES"), map $1.value, action.options.feature_types.element_allowed_values);
+        assertTrue(action.options.queries.type.getElementType().getFields().Pages.val());
+        hash<DataFieldInfo> info = AwsTextractSchema::getType("AnalyzeDocumentRequest").getFields().FeatureTypes.getLocalInfo();
+        assertEq(5, info.element_allowed_values.size());
+        type = Serializable::deserialize(AwsTextractSchema::getType("AnalyzeDocumentRequest").serialize());
+        AbstractDataField field = type.getFields().FeatureTypes;
+        field.setElementAllowedValues((<AllowedValueInfo>{"value": "TABLES", "display_name": "Opaque label"},));
+        assertEq(("TABLES",), field.acceptsValue(("TABLES",)));
+        bool rejected = False;
+        try { field.acceptsValue(("Opaque label",)); } catch () { rejected = True; }
+        assertTrue(rejected);
+        type = Serializable::deserialize(type.serialize());
+        assertEq("Opaque label", type.getFields().FeatureTypes.getElementAllowedValues()[0].display_name);
+    }
+}

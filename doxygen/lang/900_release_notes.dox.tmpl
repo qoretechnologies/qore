@@ -2198,9 +2198,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref awstextractdataproviderintro "AwsTextractDataProvider" module
       - new module providing a data provider API for <a href="https://aws.amazon.com/textract/">AWS Textract</a> document AI
+      - complete native API coverage with nested request/response types, strict value validation, paginated
+        adapter references, and translated discovery metadata
 
     - @ref awstextractrestclientintro "AwsTextractRestClient" module
       - new module providing a SigV4-signed REST client for <a href="https://aws.amazon.com/textract/">AWS Textract</a>
+      - authenticated connection ping, consistent sync/async construction, and AWS JSON 1.1 wire handling
 
     - @ref azureauthintro "AzureAuth" module
       - new module exchanging Microsoft Entra (Azure AD) credentials for bearer access tokens

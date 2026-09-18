@@ -1,0 +1,11 @@
+Botocore
+Copyright 2012-2022 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+textract-service-2.json is the unmodified Textract service model from botocore
+revision 2891dd413e8b644590042d8ff226fc2181711985, distributed under the
+Apache License 2.0 in botocore-LICENSE.txt.
+
+textract-types.json is a modified, generated type representation. Its source
+checksum and versioned normalizations are recorded in x-qore-textract-boundary.
+The import script, native protocol adaptation, and curated presentation were
+added by Qore Technologies, s.r.o. in 2026.

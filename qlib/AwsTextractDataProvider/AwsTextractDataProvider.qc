@@ -54,12 +54,13 @@ public class AwsTextractDataProvider inherits AwsTextractDataProviderCommon {
     string getName() { return ProviderInfo.name; }
 
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        return map <DataProviderSummaryInfo>{"name": $1, "supports_request": True}, getChildProviderNames();
     }
-    private *list<string> getChildProviderNamesImpl() { return keys childMap; }
+    private *list<string> getChildProviderNamesImpl() { return keys AwsTextractManifest::Operations; }
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = childMap{name};
-        return cls ? cls.newObject(rest) : NOTHING;
+        return cls ? cls.newObject(rest) : AwsTextractManifest::Operations.hasKey(name)
+            ? new AwsTextractOperationDataProvider(rest, name) : NOTHING;
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

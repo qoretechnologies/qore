@@ -8,8 +8,8 @@
           "message": "AWS Textract"
         },
         "app.QXdzVGV4dHJhY3Q.short_desc": {
-          "source": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
-          "message": "AI для документів AWS Textract (OCR + макет + таблиці + форми + запити)"
+          "source": "Extract text and structured information from documents",
+          "message": "Вилучення тексту та структурованої інформації з документів"
         },
         "app.QXdzVGV4dHJhY3Q.desc": {
           "source": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) — a managed document-AI service for extracting text, structure, and answers from scanned documents and PDFs.\n\n**Common use cases**:\n- **Invoice and receipt parsing**: extract key/value pairs from forms with the `FORMS` feature\n- **Table extraction**: structured rows and columns from scanned tables with the `TABLES` feature\n- **Document Q&A**: ask specific questions of a document with the `QUERIES` feature (e.g., \"What is the total?\")\n- **Signature detection**: flag handwritten signatures in contracts with the `SIGNATURES` feature\n- **Layout-preserving OCR**: extract text grouped by paragraphs, titles, headers, footers with the `LAYOUT` feature",
@@ -344,12 +344,12 @@
           "message": "Виявити текст документа"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
-          "source": "Extract raw text from a document (no structure)",
-          "message": "Видобути необроблений текст із документа (без структури)"
+          "source": "Extract lines and words from a document",
+          "message": "Виділяйте рядки та слова з документа"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.desc": {
-          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a single-page or multi-page document.  Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\nPass the document via one of:\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
-          "message": "Викликає API Textract `DetectDocumentText` для вилучення текстового вмісту односторінкового або багатосторінкового документа. Повертає список об'єктів `Block` (`PAGE`, `LINE`, `WORD`) з текстом, достовірністю та геометрією обмежувальної рамки.\n\nПередайте документ одним із способів:\n- `document_bytes` — необроблені байти (PNG / JPEG / PDF / TIFF, макс. 10 МБ)\n- `document_path` — шлях до локального файлу (зчитується та вивантажується як байти)\n- `s3_bucket` + `s3_name` — посилання на об'єкт S3 (без обмеження розміру)"
+          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a document. Synchronous PDF and TIFF inputs must have one page. Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\n**Pass the document via one of:**\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (also limited to 10 MB)",
+          "message": "Викликає API `DetectDocumentText` Texttract для вилучення текстового вмісту документа. Синхронні вхідні дані PDF і TIFF повинні мати одну сторінку. Повертає список об’єктів `Block` (`PAGE`, `LINE`, `WORD`) із текстом, впевненістю та геометрією обмежувальної рамки.\n\n**Передайте документ одним із способів:**\n- `document_bytes` — необроблені байти (PNG / JPEG / PDF / TIFF, макс. 10 МБ)\n- `document_path` — локальний шлях до файлу (зчитується та завантажується як байти)\n- `s3_bucket` + `s3_name` — посилання на об’єкт S3 (також обмежено до 10 МБ)"
         },
         "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
           "source": "Document Bytes",
@@ -416,8 +416,8 @@
           "message": "Аналізувати документ"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
-          "source": "Extract text + tables/forms/signatures/queries from a document",
-          "message": "Вилучити текст + таблиці/форми/підписи/запити з документа"
+          "source": "Extract tables, forms, signatures, layout, and query answers",
+          "message": "Витягніть таблиці, форми, підписи, макет і відповіді на запити"
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
           "source": "Calls Textract's `AnalyzeDocument` API to extract text plus structural features.  `feature_types` selects which features to extract — pass at least one of `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nWhen `QUERIES` is included, also pass a `queries` list — each query has a `Text` field with the question to ask.",
@@ -454,6 +454,54 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
           "source": "Queries (ask questions of the document)",
           "message": "Запити (поставити запитання до документа)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Запити"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
+          "source": "Custom queries to ask of the document (with QUERIES feature)",
+          "message": "Користувацькі запити до документа (з функцією QUERIES)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
+          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
+          "message": "Список об'єктів запитів, коли `QUERIES` є в `feature_types`. Кожен запит має поле `Text` (запитання, яке слід поставити), а також необов'язковий фільтр `Alias` та `Pages`.\n\n**Приклад**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.display_name": {
+          "source": "Alias",
+          "message": "Псевдонім"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.short_desc": {
+          "source": "A short name for locating this question in the results",
+          "message": "Коротка назва для розміщення цього запитання в результатах"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.QWxpYXM.desc": {
+          "source": "A short name for locating this question in the results.",
+          "message": "Коротка назва для розміщення цього запитання в результатах."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Сторінки"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Селектори сторінок, наприклад «1», «1-3» або «4-*»"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Селектори сторінок, такі як `1`, `1-3` або `4-*`; використовуйте лише `*` для всіх сторінок."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.short_desc": {
+          "source": "Question to answer, for example 'What is the invoice total?'",
+          "message": "Питання, на яке потрібно відповісти, наприклад \"Яка загальна сума рахунку-фактури?\""
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.field.VGV4dA.desc": {
+          "source": "Question to answer, for example `What is the invoice total?`.",
+          "message": "Питання, на яке потрібно відповісти, наприклад `What is the invoice total?`."
         },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
           "source": "Document Bytes",
@@ -503,18 +551,6 @@
           "source": "S3 object key (path within the bucket).",
           "message": "Ключ об'єкта S3 (шлях усередині бакета)."
         },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
-          "source": "Queries",
-          "message": "Запити"
-        },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
-          "source": "Custom queries to ask of the document (with QUERIES feature)",
-          "message": "Користувацькі запити до документа (з функцією QUERIES)"
-        },
-        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
-          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
-          "message": "Список об'єктів запитів, коли `QUERIES` є в `feature_types`. Кожен запит має поле `Text` (запитання, яке слід поставити), а також необов'язковий фільтр `Alias` та `Pages`.\n\n**Приклад**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
-        },
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.display_name": {
           "source": "S3 Object Version",
           "message": "Версія об'єкта S3"
@@ -526,6 +562,1994 @@
         "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.desc": {
           "source": "Optional S3 object version ID for versioned buckets.",
           "message": "Необов'язковий ідентифікатор версії об'єкта S3 для версіонованих бакетів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.display_name": {
+          "source": "Human Review",
+          "message": "Перевірка людиною"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.short_desc": {
+          "source": "Human review settings for existing Amazon A2I customers only",
+          "message": "Налаштування перевірки персоналом лише для існуючих клієнтів Amazon A2I"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.desc": {
+          "source": "Human review settings for existing Amazon A2I customers only.",
+          "message": "Налаштування перевірки персоналом лише для існуючих клієнтів Amazon A2I."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.display_name": {
+          "source": "Data Attributes",
+          "message": "Атрибути даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.short_desc": {
+          "source": "Content declarations used to route the document for human review",
+          "message": "Оголошення вмісту, які використовуються для направлення документа на перевірку людиною"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.RGF0YUF0dHJpYnV0ZXM.desc": {
+          "source": "Content declarations used to route the document for human review.",
+          "message": "Оголошення вмісту, які використовуються для направлення документа на перевірку людиною."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.display_name": {
+          "source": "Content Classifiers",
+          "message": "Класифікатори вмісту"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.short_desc": {
+          "source": "Content declarations for the human review workflow",
+          "message": "Декларації вмісту для робочого циклу перевірки персоналом"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.desc": {
+          "source": "Content declarations for the human review workflow.",
+          "message": "Декларації вмісту для робочого циклу перевірки персоналом."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZlBlcnNvbmFsbHlJZGVudGlmaWFibGVJbmZvcm1hdGlvbg.display_name": {
+          "source": "Free of Personally Identifiable Information",
+          "message": "Без персональних ідентифікаційних даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6T3BlbkFwaTNIYXNoRGF0YVR5cGU6KkRhdGFBdHRyaWJ1dGVzIzRiZjRlMjg1NzcyZjA1NDA5ZGYzZjQ2MzhiZDk2NzM1NTcxMzMyNjQxMTE2OWJiMzliYzZjNDVjZGNkZjRhOTg6b3B0aW9uOmFIVnRZVzVmYkc5dmNGOWpiMjVtYVdjOmZpZWxkOlJHRjBZVUYwZEhKcFluVjBaWE0.field.Q29udGVudENsYXNzaWZpZXJz.element-allowed-value.c3RyaW5nOkZyZWVPZkFkdWx0Q29udGVudA.display_name": {
+          "source": "Free of Adult Content",
+          "message": "Без вмісту для дорослих"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.display_name": {
+          "source": "Flow Definition Arn",
+          "message": "ARN визначення потоку"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.short_desc": {
+          "source": "ARN of an existing Amazon A2I human review workflow",
+          "message": "ARN існуючого робочого процесу Amazon A2I перевірки людиною"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.Rmxvd0RlZmluaXRpb25Bcm4.desc": {
+          "source": "ARN of an existing Amazon A2I human review workflow.",
+          "message": "ARN існуючого робочого процесу Amazon A2I перевірки людиною."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.display_name": {
+          "source": "Human Loop Name",
+          "message": "Назва людського циклу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.short_desc": {
+          "source": "Unique name for this human review in the AWS region",
+          "message": "Унікальна назва для цієї перевірки людиною в регіоні AWS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.aHVtYW5fbG9vcF9jb25maWc.field.SHVtYW5Mb29wTmFtZQ.desc": {
+          "source": "Unique name for this human review in the AWS region.",
+          "message": "Унікальна назва для цієї перевірки людиною в регіоні AWS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.display_name": {
+          "source": "Adapters",
+          "message": "Перехідники"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.short_desc": {
+          "source": "Custom query adapters and versions to use for selected pages",
+          "message": "Спеціальні адаптери запитів і версії для використання для вибраних сторінок"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.desc": {
+          "source": "Custom query adapters and versions to use for selected pages.",
+          "message": "Спеціальні адаптери запитів і версії для використання для вибраних сторінок."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.display_name": {
+          "source": "Adapters",
+          "message": "Перехідники"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.short_desc": {
+          "source": "Adapters to apply",
+          "message": "Адаптери для застосування"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.YWRhcHRlcnNfY29uZmln.field.QWRhcHRlcnM.desc": {
+          "source": "Adapters to apply; selected page ranges must not overlap.",
+          "message": "Адаптери для застосування; вибрані діапазони сторінок не повинні перекриватися."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Сторінки"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Селектори сторінок, наприклад «1», «1-3» або «4-*»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Селектори сторінок, такі як `1`, `1-3` або `4-*`; використовуйте лише `*` для всіх сторінок."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxa2IyTjFiV1Z1ZEE6SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246WVdSaGNIUmxjbk5mWTI5dVptbG46ZmllbGQ6UVdSaGNIUmxjbk0.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.display_name": {
+          "source": "Analyze Expense",
+          "message": "Аналіз витрат"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.short_desc": {
+          "source": "Extract invoice and receipt totals, vendors, and line items",
+          "message": "Отримайте рахунки-фактури та квитанції, постачальників і позиції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.desc": {
+          "source": "Extract invoice and receipt totals, vendors, and line items. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeExpense.html).",
+          "message": "Отримайте рахунки-фактури та квитанції, постачальників і позиції. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeExpense.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "Документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.display_name": {
+          "source": "Bytes",
+          "message": "Байти"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.short_desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request",
+          "message": "Необроблені байти документів або вміст base64, до 10 МБ для синхронного запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.Qnl0ZXM.desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+          "message": "Необроблені байти документів або вміст base64, до 10 МБ для синхронного запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Об’єкт S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1leHBlbnNl.option.RG9jdW1lbnQ.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxbGVIQmxibk5sOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUTpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.display_name": {
+          "source": "Analyze ID",
+          "message": "Аналіз ID"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.short_desc": {
+          "source": "Extract identity fields from US passports and driver's licenses",
+          "message": "Витягніть поля ідентифікації з паспортів і водійських прав США"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.desc": {
+          "source": "Extract identity fields from US passports and driver's licenses. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html).",
+          "message": "Витягніть поля ідентифікації з паспортів і водійських прав США. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_AnalyzeID.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.display_name": {
+          "source": "Document Pages",
+          "message": "Сторінки документів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.short_desc": {
+          "source": "One or two images of a US passport or driver's license",
+          "message": "Одне або два зображення паспорта США або водійських прав"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.desc": {
+          "source": "One or two images of a US passport or driver's license.",
+          "message": "Одне або два зображення паспорта США або водійських прав."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.display_name": {
+          "source": "Bytes",
+          "message": "Байти"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.short_desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request",
+          "message": "Необроблені байти документів або вміст base64, до 10 МБ для синхронного запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.Qnl0ZXM.desc": {
+          "source": "Raw document bytes or base64 content, up to 10 MB for a synchronous request.",
+          "message": "Необроблені байти документів або вміст base64, до 10 МБ для синхронного запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Об’єкт S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1pZA.option.RG9jdW1lbnRQYWdlcw.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOllXNWhiSGw2WlMxcFpBOk9wZW5BcGkzSGFzaERhdGFUeXBlOipTM09iamVjdCMwZDFjMmJkMWM5YmY4NjdmNWRmZmM1NDZjODM0YTJiZGExZjA4NTA4YzliYWZhMDg3NzcxYjUyNzEwODhiZjcyOm9wdGlvbjpSRzlqZFcxbGJuUlFZV2RsY3c6ZmllbGQ6VXpOUFltcGxZM1E.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.display_name": {
+          "source": "Create Adapter",
+          "message": "Створити адаптер"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Create a custom query adapter",
+          "message": "Створіть спеціальний адаптер запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.desc": {
+          "source": "Create a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html).",
+          "message": "Створіть спеціальний адаптер запиту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
+          "source": "Adapter Name",
+          "message": "Назва адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
+          "source": "A descriptive name for the custom query adapter",
+          "message": "Описове ім’я адаптера користувацького запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.desc": {
+          "source": "A descriptive name for the custom query adapter.",
+          "message": "Описове ім’я адаптера користувацького запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Клієнтський токен запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.short_desc": {
+          "source": "A description explaining the adapter's purpose",
+          "message": "Опис, що пояснює призначення адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.desc": {
+          "source": "A description explaining the adapter's purpose.",
+          "message": "Опис, що пояснює призначення адаптера."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.display_name": {
+          "source": "Feature Types",
+          "message": "Типи елементів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.short_desc": {
+          "source": "Custom adapters support the 'QUERIES' feature only",
+          "message": "Власні адаптери підтримують лише функцію 'QUERIES'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.desc": {
+          "source": "Custom adapters support the `QUERIES` feature only.",
+          "message": "Власні адаптери підтримують лише функцію `QUERIES`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries",
+          "message": "Запити"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
+          "source": "Auto Update",
+          "message": "Автоматичне оновлення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
+          "source": "Whether AWS may automatically update the adapter",
+          "message": "Чи може AWS автоматично оновлювати адаптер"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.desc": {
+          "source": "Whether AWS may automatically update the adapter.",
+          "message": "Чи може AWS автоматично оновлювати адаптер."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkVOQUJMRUQ.display_name": {
+          "source": "Enabled",
+          "message": "Увімкнено"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
+          "source": "Disabled",
+          "message": "Вимкнено"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "Теги ресурсів як карта імен і значень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXI.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "Теги ресурсів як карта імен до значень; порожнє значення тегу є дійсним."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Create Adapter Version",
+          "message": "Створити версію адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Train a version of a custom query adapter",
+          "message": "Навчання версії користувацького адаптера запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Train a version of a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapterVersion.html). **Training incurs AWS charges** and requires an authorized S3 dataset and output location.",
+          "message": "Навчання версії користувацького адаптера запиту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_CreateAdapterVersion.html). **За навчання стягується плата AWS** і потрібен авторизований набір даних S3 і вихідне місце."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Клієнтський токен запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.display_name": {
+          "source": "Dataset Config",
+          "message": "Налаштування набору даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.short_desc": {
+          "source": "S3 manifest identifying the training and test documents",
+          "message": "Маніфест S3, що ідентифікує навчальні та тестові документи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.desc": {
+          "source": "S3 manifest identifying the training and test documents.",
+          "message": "Маніфест S3, що ідентифікує навчальні та тестові документи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.RGF0YXNldENvbmZpZw.field.TWFuaWZlc3RTM09iamVjdA.display_name": {
+          "source": "Manifest S3Object",
+          "message": "Об’єкт S3 маніфесту"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOlkzSmxZWFJsTFdGa1lYQjBaWEl0ZG1WeWMybHZiZzpIYXNoRGF0YVR5cGU6UzNPYmplY3QjMDBjMzNiYzQ0YjFmOGIzYTRhOWU5YWEwYjhlMjJkY2MwOWU3YTgyMDMzZDY3ODQyZTI5M2E3NTdlNWNjNWY3YTpvcHRpb246UkdGMFlYTmxkRU52Ym1acFp3OmZpZWxkOlRXRnVhV1psYzNSVE0wOWlhbVZqZEE.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "Ідентифікатор ключа KMS або ARN для шифрування вихідних даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Конфігурація виводу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Відро S3 для отримання результату"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "S3 відро для отримання виходу; абонент повинен мати дозвіл на його написання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Префікс S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "Теги ресурсів як карта імен і значень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Y3JlYXRlLWFkYXB0ZXItdmVyc2lvbg.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "Теги ресурсів як карта імен до значень; порожнє значення тегу є дійсним."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.display_name": {
+          "source": "Delete Adapter",
+          "message": "Видалити адаптер"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Delete an unused custom query adapter",
+          "message": "Видаліть невикористаний адаптор запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.desc": {
+          "source": "Delete an unused custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapter.html).",
+          "message": "Видаліть невикористаний адаптор запиту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Delete Adapter Version",
+          "message": "Видалити версію адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Delete a version of a custom query adapter",
+          "message": "Видалити версію користувацького адаптера запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Delete a version of a custom query adapter. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapterVersion.html).",
+          "message": "Видалити версію користувацького адаптера запиту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_DeleteAdapterVersion.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
+          "source": "Adapter Version",
+          "message": "Версія адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
+          "source": "Version belonging to the selected adapter",
+          "message": "Версія, що належить вибраному адаптеру"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGVsZXRlLWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.desc": {
+          "source": "Version belonging to the selected adapter.",
+          "message": "Версія, що належить вибраному адаптеру."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.display_name": {
+          "source": "Get Adapter",
+          "message": "Отримати адаптер"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.short_desc": {
+          "source": "Read a custom query adapter's settings",
+          "message": "Прочитайте налаштування адаптера спеціального запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.desc": {
+          "source": "Read a custom query adapter's settings. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapter.html).",
+          "message": "Прочитайте налаштування адаптера спеціального запиту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.display_name": {
+          "source": "Get Adapter Version",
+          "message": "Отримати версію адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.short_desc": {
+          "source": "Read training status and evaluation results for an adapter version",
+          "message": "Прочитайте статус навчання та результати оцінювання для версії адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.desc": {
+          "source": "Read training status and evaluation results for an adapter version. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapterVersion.html).",
+          "message": "Прочитайте статус навчання та результати оцінювання для версії адаптера. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetAdapterVersion.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.display_name": {
+          "source": "Adapter Version",
+          "message": "Версія адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.short_desc": {
+          "source": "Version belonging to the selected adapter",
+          "message": "Версія, що належить вибраному адаптеру"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWFkYXB0ZXItdmVyc2lvbg.option.QWRhcHRlclZlcnNpb24.desc": {
+          "source": "Version belonging to the selected adapter.",
+          "message": "Версія, що належить вибраному адаптеру."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.display_name": {
+          "source": "Get Document Analysis",
+          "message": "Отримати аналіз документів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.short_desc": {
+          "source": "Read a page of asynchronous document analysis results",
+          "message": "Прочитайте сторінку результатів аналізу асинхронного документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.desc": {
+          "source": "Read a page of asynchronous document analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Прочитайте сторінку результатів аналізу асинхронного документа. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentAnalysis.html). Перевірте `JobStatus` перед використанням результатів; `PARTIAL_SUCCESS` містить попередження, а `FAILED` — повідомлення про стан. Передайте `NextToken` до тієї самої дії, щоб отримати наступну сторінку."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску; AWS не надає списку вакансій."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Наступний токен"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LWFuYWx5c2lz.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.display_name": {
+          "source": "Get Document Text Detection",
+          "message": "Отримайте функцію виявлення тексту документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.short_desc": {
+          "source": "Read a page of asynchronous text detection results",
+          "message": "Прочитайте сторінку результатів виявлення асинхронного тексту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.desc": {
+          "source": "Read a page of asynchronous text detection results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentTextDetection.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Прочитайте сторінку результатів виявлення асинхронного тексту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetDocumentTextDetection.html). Перевірте `JobStatus` перед використанням результатів; `PARTIAL_SUCCESS` містить попередження, а `FAILED` — повідомлення про стан. Передайте `NextToken` до тієї самої дії, щоб отримати наступну сторінку."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску; AWS не надає списку вакансій."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Наступний токен"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWRvY3VtZW50LXRleHQtZGV0ZWN0aW9u.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.display_name": {
+          "source": "Get Expense Analysis",
+          "message": "Отримати аналіз витрат"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.short_desc": {
+          "source": "Read a page of asynchronous expense analysis results",
+          "message": "Прочитайте сторінку результатів асинхронного аналізу витрат"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.desc": {
+          "source": "Read a page of asynchronous expense analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetExpenseAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Прочитайте сторінку результатів асинхронного аналізу витрат. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetExpenseAnalysis.html). Перевірте `JobStatus` перед використанням результатів; `PARTIAL_SUCCESS` містить попередження, а `FAILED` — повідомлення про стан. Передайте `NextToken` до тієї самої дії, щоб отримати наступну сторінку."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску; AWS не надає списку вакансій."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Наступний токен"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWV4cGVuc2UtYW5hbHlzaXM.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.display_name": {
+          "source": "Get Lending Analysis",
+          "message": "Отримати кредитний аналіз"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.short_desc": {
+          "source": "Read a page of asynchronous lending analysis results",
+          "message": "Прочитайте сторінку результатів аналізу асинхронного кредитування"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.desc": {
+          "source": "Read a page of asynchronous lending analysis results. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysis.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message. Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Прочитайте сторінку результатів аналізу асинхронного кредитування. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysis.html). Перевірте `JobStatus` перед використанням результатів; `PARTIAL_SUCCESS` містить попередження, а `FAILED` — повідомлення про стан. Передайте `NextToken` до тієї самої дії, щоб отримати наступну сторінку."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску; AWS не надає списку вакансій."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Наступний токен"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXM.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.display_name": {
+          "source": "Get Lending Analysis Summary",
+          "message": "Отримайте підсумок аналізу кредитування"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.short_desc": {
+          "source": "Read the document classification summary for a lending job",
+          "message": "Прочитайте резюме класифікації документів для роботи з кредитування"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.desc": {
+          "source": "Read the document classification summary for a lending job. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysisSummary.html). Check `JobStatus` before using results; `PARTIAL_SUCCESS` includes warnings and `FAILED` includes a status message.",
+          "message": "Прочитайте резюме класифікації документів для роботи з кредитування. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_GetLendingAnalysisSummary.html). Перевірте `JobStatus` перед використанням результатів; `PARTIAL_SUCCESS` містить попередження, а `FAILED` — повідомлення про стан."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.short_desc": {
+          "source": "Job ID returned by the matching start action",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.Z2V0LWxlbmRpbmctYW5hbHlzaXMtc3VtbWFyeQ.option.Sm9iSWQ.desc": {
+          "source": "Job ID returned by the matching start action; AWS provides no job listing.",
+          "message": "Ідентифікатор завдання, повернутий відповідною дією запуску; AWS не надає списку вакансій."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.display_name": {
+          "source": "List Adapter Versions",
+          "message": "Список версій адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.short_desc": {
+          "source": "List versions of custom query adapters",
+          "message": "Список версій користувальницьких адаптерів запитів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.desc": {
+          "source": "List versions of custom query adapters. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapterVersions.html). Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Список версій користувальницьких адаптерів запитів. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapterVersions.html). Передайте `NextToken` до тієї ж дії, щоб отримати наступну сторінку."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
+          "source": "After Creation Time",
+          "message": "Після часу створення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
+          "source": "Return resources created after this time",
+          "message": "Повернути ресурси, створені після цього часу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QWZ0ZXJDcmVhdGlvblRpbWU.desc": {
+          "source": "Return resources created after this time.",
+          "message": "Повернути ресурси, створені після цього часу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
+          "source": "Before Creation Time",
+          "message": "До часу створення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
+          "source": "Return resources created before this time",
+          "message": "Повернути ресурси, створені до цього часу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.QmVmb3JlQ3JlYXRpb25UaW1l.desc": {
+          "source": "Return resources created before this time.",
+          "message": "Повернути ресурси, створені до цього часу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Наступний токен"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVyLXZlcnNpb25z.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.display_name": {
+          "source": "List Adapters",
+          "message": "Список адаптерів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.short_desc": {
+          "source": "List custom query adapters in this account and region",
+          "message": "Перелічіть користувацькі адаптери запитів у цьому обліковому записі та регіоні"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.desc": {
+          "source": "List custom query adapters in this account and region. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Pass `NextToken` to the same action to retrieve the next page.",
+          "message": "Перелічіть користувацькі адаптери запитів у цьому обліковому записі та регіоні. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListAdapters.html). Передайте `NextToken` до тієї ж дії, щоб отримати наступну сторінку."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.display_name": {
+          "source": "After Creation Time",
+          "message": "Після часу створення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.short_desc": {
+          "source": "Return resources created after this time",
+          "message": "Повернути ресурси, створені після цього часу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QWZ0ZXJDcmVhdGlvblRpbWU.desc": {
+          "source": "Return resources created after this time.",
+          "message": "Повернути ресурси, створені після цього часу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.display_name": {
+          "source": "Before Creation Time",
+          "message": "До часу створення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.short_desc": {
+          "source": "Return resources created before this time",
+          "message": "Повернути ресурси, створені до цього часу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.QmVmb3JlQ3JlYXRpb25UaW1l.desc": {
+          "source": "Return resources created before this time.",
+          "message": "Повернути ресурси, створені до цього часу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.short_desc": {
+          "source": "Maximum number of results in this response page",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TWF4UmVzdWx0cw.desc": {
+          "source": "Maximum number of results in this response page.",
+          "message": "Максимальна кількість результатів на цій сторінці відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.display_name": {
+          "source": "Next Token",
+          "message": "Наступний токен"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.short_desc": {
+          "source": "Continuation token from the preceding response in the same operation",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC1hZGFwdGVycw.option.TmV4dFRva2Vu.desc": {
+          "source": "Continuation token from the preceding response in the same operation.",
+          "message": "Маркер продовження з попередньої відповіді в тій самій операції."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.display_name": {
+          "source": "List Tags For Resource",
+          "message": "Список тегів для ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.short_desc": {
+          "source": "Read the tags attached to a Textract resource",
+          "message": "Прочитайте теги, додані до ресурсу Texttract"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.desc": {
+          "source": "Read the tags attached to a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListTagsForResource.html).",
+          "message": "Прочитайте теги, додані до ресурсу Texttract. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_ListTagsForResource.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "Ресурс ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bGlzdC10YWdzLWZvci1yZXNvdXJjZQ.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.display_name": {
+          "source": "Start Document Analysis",
+          "message": "Запустіть аналіз документів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.short_desc": {
+          "source": "Start asynchronous extraction of document structure",
+          "message": "Почати асинхронне вилучення структури документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.desc": {
+          "source": "Start asynchronous extraction of document structure. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Почати асинхронне вилучення структури документа. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentAnalysis.html). Збережіть `JobId` і використовуйте відповідну дію отримати, щоб перевірити статус і отримати кожну сторінку результатів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Розташування документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "Розташування документа S3 для завдання асинхронного аналізу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "Розташування документа S3 для завдання асинхронного аналізу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Об’єкт S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06T3BlbkFwaTNIYXNoRGF0YVR5cGU6UzNPYmplY3QjYmFmMTFkYTUwYTY4MjRlNzkyYzJjM2I3MTQ3Yzg5MDAxMzViZWZkYmViMzQyZjNjMTIwYjYxY2QxN2U1ZDFlYzpvcHRpb246Ukc5amRXMWxiblJNYjJOaGRHbHZiZzpmaWVsZDpVek5QWW1wbFkzUQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.display_name": {
+          "source": "Feature Types",
+          "message": "Типи елементів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.short_desc": {
+          "source": "Document features to extract",
+          "message": "Функції документа для вилучення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.desc": {
+          "source": "Document features to extract; select at least one.",
+          "message": "Функції документа для вилучення; виберіть хоча б одну."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlRBQkxFUw.display_name": {
+          "source": "Tables",
+          "message": "Таблиці"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOkZPUk1T.display_name": {
+          "source": "Forms",
+          "message": "Форми"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries",
+          "message": "Запити"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOlNJR05BVFVSRVM.display_name": {
+          "source": "Signatures",
+          "message": "Підписи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.RmVhdHVyZVR5cGVz.allowed-value.c3RyaW5nOkxBWU9VVA.display_name": {
+          "source": "Layout",
+          "message": "Макет"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Клієнтський токен запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Мітка завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Мітка, включена в повідомлення про завершення роботи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Мітка, включена в повідомлення про завершення роботи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Канал сповіщень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "Тема SNS і роль IAM для сповіщень про асинхронне завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "Тема SNS і роль IAM для сповіщень про асинхронне завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN ролі"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS Тема Арн"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Конфігурація виводу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "S3 місце призначення для аналізу або навчання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "S3 місце призначення для аналізу або навчання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Відро S3 для отримання результату"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "S3 відро для отримання виходу; абонент повинен мати дозвіл на його написання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Префікс S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "Ідентифікатор ключа KMS або ARN для шифрування вихідних даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.display_name": {
+          "source": "Queries Config",
+          "message": "Запити конфіг"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.UXVlcmllc0NvbmZpZw.field.UXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Запити"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.display_name": {
+          "source": "Alias",
+          "message": "Псевдонім"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.short_desc": {
+          "source": "A short name for locating this question in the results",
+          "message": "Коротка назва для розміщення цього запитання в результатах"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.QWxpYXM.desc": {
+          "source": "A short name for locating this question in the results.",
+          "message": "Коротка назва для розміщення цього запитання в результатах."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Сторінки"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Селектори сторінок, наприклад «1», «1-3» або «4-*»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Селектори сторінок, такі як `1`, `1-3` або `4-*`; використовуйте лише `*` для всіх сторінок."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.display_name": {
+          "source": "Text",
+          "message": "Текст"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.short_desc": {
+          "source": "Question to answer, for example 'What is the invoice total?'",
+          "message": "Питання, на яке потрібно відповісти, наприклад \"Яка загальна сума рахунку-фактури?\""
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOlF1ZXJ5Izg5OThmMGQ3OTljNWFiN2Y5NTYwOWI0MTExOWVhYTExYjM4MTcyYTBjOGQ3OTVhNGNlNTNhYTM1YjE2ZWM5NDk6b3B0aW9uOlVYVmxjbWxsYzBOdmJtWnBadzpmaWVsZDpVWFZsY21sbGN3.field.VGV4dA.desc": {
+          "source": "Question to answer, for example `What is the invoice total?`.",
+          "message": "Питання, на яке потрібно відповісти, наприклад `What is the invoice total?`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.display_name": {
+          "source": "Adapters Config",
+          "message": "Конфігурація адаптерів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.short_desc": {
+          "source": "Custom query adapters and versions to use for selected pages",
+          "message": "Спеціальні адаптери запитів і версії для використання для вибраних сторінок"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.desc": {
+          "source": "Custom query adapters and versions to use for selected pages.",
+          "message": "Спеціальні адаптери запитів і версії для використання для вибраних сторінок."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.display_name": {
+          "source": "Adapters",
+          "message": "Перехідники"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.short_desc": {
+          "source": "Adapters to apply",
+          "message": "Адаптери для застосування"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtYW5hbHlzaXM.option.QWRhcHRlcnNDb25maWc.field.QWRhcHRlcnM.desc": {
+          "source": "Adapters to apply; selected page ranges must not overlap.",
+          "message": "Адаптери для застосування; вибрані діапазони сторінок не повинні перекриватися."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Сторінки"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.short_desc": {
+          "source": "Page selectors such as '1', '1-3', or '4-*'",
+          "message": "Селектори сторінок, наприклад «1», «1-3» або «4-*»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.UGFnZXM.desc": {
+          "source": "Page selectors such as `1`, `1-3`, or `4-*`; use only `*` for all pages.",
+          "message": "Селектори сторінок, такі як `1`, `1-3` або `4-*`; використовуйте лише `*` для всіх сторінок."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0WVc1aGJIbHphWE06SGFzaERhdGFUeXBlOkFkYXB0ZXIjNmM1YTk5YzM0OTFmN2Y3YTM2NjBmOGMzODE5YzBiOGE2ZWFjN2Q2NWM3ZDlmMmRkNjEyNTgzZjU5OWNkOWFjMTpvcHRpb246UVdSaGNIUmxjbk5EYjI1bWFXYzpmaWVsZDpRV1JoY0hSbGNuTQ.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.display_name": {
+          "source": "Start Document Text Detection",
+          "message": "Запустіть функцію виявлення тексту документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.short_desc": {
+          "source": "Start asynchronous extraction of document text",
+          "message": "Почати асинхронне видобування тексту документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.desc": {
+          "source": "Start asynchronous extraction of document text. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Почати асинхронне видобування тексту документа. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartDocumentTextDetection.html). Збережіть `JobId` і використовуйте відповідну дію отримати, щоб перевірити статус і отримати кожну сторінку результатів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Розташування документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "Розташування документа S3 для завдання асинхронного аналізу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "Розташування документа S3 для завдання асинхронного аналізу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Об’єкт S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wkc5amRXMWxiblF0ZEdWNGRDMWtaWFJsWTNScGIyNDpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Клієнтський токен запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Мітка завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Мітка, включена в повідомлення про завершення роботи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Мітка, включена в повідомлення про завершення роботи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Канал сповіщень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "Тема SNS і роль IAM для сповіщень про асинхронне завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "Тема SNS і роль IAM для сповіщень про асинхронне завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN ролі"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS Тема Арн"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Конфігурація виводу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "S3 місце призначення для аналізу або навчання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "S3 місце призначення для аналізу або навчання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Відро S3 для отримання результату"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "S3 відро для отримання виходу; абонент повинен мати дозвіл на його написання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Префікс S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "Ідентифікатор ключа KMS або ARN для шифрування вихідних даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZG9jdW1lbnQtdGV4dC1kZXRlY3Rpb24.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.display_name": {
+          "source": "Start Expense Analysis",
+          "message": "Розпочати аналіз витрат"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.short_desc": {
+          "source": "Start asynchronous invoice and receipt analysis",
+          "message": "Почніть асинхронний аналіз рахунків-фактур і чеків"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.desc": {
+          "source": "Start asynchronous invoice and receipt analysis. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Почніть асинхронний аналіз рахунків-фактур і чеків. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartExpenseAnalysis.html). Збережіть `JobId` і використовуйте відповідну дію отримати, щоб перевірити статус і отримати кожну сторінку результатів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Розташування документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.short_desc": {
+          "source": "S3 document location for an asynchronous analysis job",
+          "message": "Розташування документа S3 для завдання асинхронного аналізу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.desc": {
+          "source": "S3 document location for an asynchronous analysis job.",
+          "message": "Розташування документа S3 для завдання асинхронного аналізу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Об’єкт S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0Wlhod1pXNXpaUzFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Клієнтський токен запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Мітка завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Мітка, включена в повідомлення про завершення роботи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Мітка, включена в повідомлення про завершення роботи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Канал сповіщень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.short_desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications",
+          "message": "Тема SNS і роль IAM для сповіщень про асинхронне завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.desc": {
+          "source": "SNS topic and IAM role for asynchronous completion notifications.",
+          "message": "Тема SNS і роль IAM для сповіщень про асинхронне завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN ролі"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS Тема Арн"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Конфігурація виводу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.short_desc": {
+          "source": "S3 destination for analysis or training output",
+          "message": "S3 місце призначення для аналізу або навчання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.desc": {
+          "source": "S3 destination for analysis or training output.",
+          "message": "S3 місце призначення для аналізу або навчання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Відро S3 для отримання результату"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "S3 відро для отримання виходу; абонент повинен мати дозвіл на його написання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Префікс S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "Ідентифікатор ключа KMS або ARN для шифрування вихідних даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtZXhwZW5zZS1hbmFseXNpcw.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.display_name": {
+          "source": "Start Lending Analysis",
+          "message": "Розпочніть аналіз позик"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.short_desc": {
+          "source": "Start asynchronous classification and extraction of lending documents",
+          "message": "Запустіть асинхронну класифікацію та вилучення кредитних документів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.desc": {
+          "source": "Start asynchronous classification and extraction of lending documents. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Retain `JobId` and use the matching get action to check status and retrieve every result page.",
+          "message": "Запустіть асинхронну класифікацію та вилучення кредитних документів. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_StartLendingAnalysis.html). Збережіть `JobId` і використовуйте відповідну дію отримати, щоб перевірити статус і отримати кожну сторінку результатів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.display_name": {
+          "source": "Document Location",
+          "message": "Розташування документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.display_name": {
+          "source": "S3Object",
+          "message": "Об’єкт S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.short_desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.RG9jdW1lbnRMb2NhdGlvbg.field.UzNPYmplY3Q.desc": {
+          "source": "Source object in an S3 bucket in the connection's AWS region.",
+          "message": "Вихідний об’єкт у сегменті S3 в області AWS з’єднання."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.short_desc": {
+          "source": "Name of the S3 bucket containing the source document",
+          "message": "Назва сегмента S3, що містить вихідний документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.QnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the source document.",
+          "message": "Назва сегмента S3, що містить вихідний документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.short_desc": {
+          "source": "Object key inside the S3 bucket, for example 'invoices/sample.pdf'",
+          "message": "Ключ об’єкта в сегменті S3, наприклад «invoices/sample.pdf»"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.TmFtZQ.desc": {
+          "source": "Object key inside the S3 bucket, for example `invoices/sample.pdf`.",
+          "message": "Ключ об’єкта всередині відра S3, наприклад `invoices/sample.pdf`."
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "Версія"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.short_desc": {
+          "source": "Version of the selected resource",
+          "message": "Версія вибраного ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.type.YWN0aW9uOmMzUmhjblF0YkdWdVpHbHVaeTFoYm1Gc2VYTnBjdzpPcGVuQXBpM0hhc2hEYXRhVHlwZTpTM09iamVjdCNiYWYxMWRhNTBhNjgyNGU3OTJjMmMzYjcxNDdjODkwMDEzNWJlZmRiZWIzNDJmM2MxMjBiNjFjZDE3ZTVkMWVjOm9wdGlvbjpSRzlqZFcxbGJuUk1iMk5oZEdsdmJnOmZpZWxkOlV6TlBZbXBsWTNR.field.VmVyc2lvbg.desc": {
+          "source": "Version of the selected resource.",
+          "message": "Версія вибраного ресурсу."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.display_name": {
+          "source": "Client Request Token",
+          "message": "Клієнтський токен запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.short_desc": {
+          "source": "Idempotency token for safely retrying the same request",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Q2xpZW50UmVxdWVzdFRva2Vu.desc": {
+          "source": "Idempotency token for safely retrying the same request.",
+          "message": "Маркер ідемпотентності для безпечної повторної спроби того самого запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.display_name": {
+          "source": "Job Tag",
+          "message": "Мітка завдання"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.short_desc": {
+          "source": "A label included in the job completion notification",
+          "message": "Мітка, включена в повідомлення про завершення роботи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Sm9iVGFn.desc": {
+          "source": "A label included in the job completion notification.",
+          "message": "Мітка, включена в повідомлення про завершення роботи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.display_name": {
+          "source": "Notification Channel",
+          "message": "Канал сповіщень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.display_name": {
+          "source": "Role Arn",
+          "message": "ARN ролі"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.short_desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.Um9sZUFybg.desc": {
+          "source": "IAM role ARN allowing Textract to publish to the SNS topic.",
+          "message": "Роль IAM ARN, що дозволяє публікувати Texttract у темі SNS."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.display_name": {
+          "source": "SNS Topic Arn",
+          "message": "SNS Тема Арн"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.short_desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.Tm90aWZpY2F0aW9uQ2hhbm5lbA.field.U05TVG9waWNBcm4.desc": {
+          "source": "SNS topic ARN in the connection's region for completion notifications.",
+          "message": "ARN теми SNS у регіоні підключення для сповіщень про завершення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.display_name": {
+          "source": "Output Config",
+          "message": "Конфігурація виводу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.display_name": {
+          "source": "S3Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.short_desc": {
+          "source": "S3 bucket to receive output",
+          "message": "Відро S3 для отримання результату"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNCdWNrZXQ.desc": {
+          "source": "S3 bucket to receive output; the caller must have permission to write it.",
+          "message": "S3 відро для отримання виходу; абонент повинен мати дозвіл на його написання."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.display_name": {
+          "source": "S3Prefix",
+          "message": "Префікс S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.short_desc": {
+          "source": "Object-key prefix for output files in the destination bucket",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.T3V0cHV0Q29uZmln.field.UzNQcmVmaXg.desc": {
+          "source": "Object-key prefix for output files in the destination bucket.",
+          "message": "Префікс ключа об’єкта для вихідних файлів у цільовому сегменті."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.display_name": {
+          "source": "KMS Key ID",
+          "message": "ID ключа KMS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.short_desc": {
+          "source": "KMS key ID or ARN for encrypting output",
+          "message": "Ідентифікатор ключа KMS або ARN для шифрування вихідних даних"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.c3RhcnQtbGVuZGluZy1hbmFseXNpcw.option.S01TS2V5SWQ.desc": {
+          "source": "KMS key ID or ARN for encrypting output; required permissions must be granted.",
+          "message": "ID ключа KMS або ARN для шифрування виведення; необхідно надати необхідні дозволи."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.display_name": {
+          "source": "Tag Resource",
+          "message": "Тегувати ресурс"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.short_desc": {
+          "source": "Add or update tags on a Textract resource",
+          "message": "Додайте або оновіть теги на ресурсі Texttract"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.desc": {
+          "source": "Add or update tags on a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_TagResource.html).",
+          "message": "Додайте або оновіть теги на ресурсі Texttract. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_TagResource.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "Ресурс ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.short_desc": {
+          "source": "Resource tags as a map of names to values",
+          "message": "Теги ресурсів як карта імен і значень"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dGFnLXJlc291cmNl.option.VGFncw.desc": {
+          "source": "Resource tags as a map of names to values; an empty tag value is valid.",
+          "message": "Теги ресурсів як карта імен до значень; порожнє значення тегу є дійсним."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.display_name": {
+          "source": "Untag Resource",
+          "message": "Зняти тег ресурсу"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.short_desc": {
+          "source": "Remove tags from a Textract resource",
+          "message": "Видаліть теги з ресурсу Texttract"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.desc": {
+          "source": "Remove tags from a Textract resource. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_UntagResource.html).",
+          "message": "Видаліть теги з ресурсу Texttract. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_UntagResource.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.display_name": {
+          "source": "Resource ARN",
+          "message": "Ресурс ARN"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.short_desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region",
+          "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.UmVzb3VyY2VBUk4.desc": {
+          "source": "Textract resource ARN in the connection's AWS account and region.",
+          "message": "Витягніть ARN ресурсу в обліковий запис AWS і регіон підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.display_name": {
+          "source": "Tag Keys",
+          "message": "Ключі тегів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.short_desc": {
+          "source": "Names of the resource tags to remove",
+          "message": "Назви тегів ресурсів, які потрібно видалити"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dW50YWctcmVzb3VyY2U.option.VGFnS2V5cw.desc": {
+          "source": "Names of the resource tags to remove.",
+          "message": "Назви тегів ресурсів, які потрібно видалити."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.display_name": {
+          "source": "Update Adapter",
+          "message": "Оновити адаптер"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.short_desc": {
+          "source": "Update a custom query adapter's settings",
+          "message": "Оновлення налаштувань користувацького адаптера запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.desc": {
+          "source": "Update a custom query adapter's settings. See the [AWS API reference](https://docs.aws.amazon.com/textract/latest/APIReference/API_UpdateAdapter.html).",
+          "message": "Оновлення налаштувань користувацького адаптера запиту. Див. [посилання на AWS API](https://docs.aws.amazon.com/textract/latest/APIReference/API_UpdateAdapter.html)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.display_name": {
+          "source": "Adapter ID",
+          "message": "ID адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.short_desc": {
+          "source": "Adapter in the connection's AWS account and region",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlcklk.desc": {
+          "source": "Adapter in the connection's AWS account and region.",
+          "message": "Адаптер в обліковому записі AWS і регіоні підключення."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.short_desc": {
+          "source": "A description explaining the adapter's purpose",
+          "message": "Опис, що пояснює призначення адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.RGVzY3JpcHRpb24.desc": {
+          "source": "A description explaining the adapter's purpose.",
+          "message": "Опис, що пояснює призначення адаптера."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.display_name": {
+          "source": "Adapter Name",
+          "message": "Назва адаптера"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.short_desc": {
+          "source": "A descriptive name for the custom query adapter",
+          "message": "Описове ім’я адаптера користувацького запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QWRhcHRlck5hbWU.desc": {
+          "source": "A descriptive name for the custom query adapter.",
+          "message": "Описове ім’я адаптера користувацького запиту."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.display_name": {
+          "source": "Auto Update",
+          "message": "Автоматичне оновлення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.short_desc": {
+          "source": "Whether AWS may automatically update the adapter",
+          "message": "Чи може AWS автоматично оновлювати адаптер"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.desc": {
+          "source": "Whether AWS may automatically update the adapter.",
+          "message": "Чи може AWS автоматично оновлювати адаптер."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkVOQUJMRUQ.display_name": {
+          "source": "Enabled",
+          "message": "Увімкнено"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.dXBkYXRlLWFkYXB0ZXI.option.QXV0b1VwZGF0ZQ.allowed-value.c3RyaW5nOkRJU0FCTEVE.display_name": {
+          "source": "Disabled",
+          "message": "Вимкнено"
         }
       }
     }
