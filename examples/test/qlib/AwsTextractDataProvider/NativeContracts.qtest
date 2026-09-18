@@ -127,6 +127,19 @@ class Contracts inherits QUnit::Test {
                 {"s3_bucket": "", "s3_name": "invoice.pdf"}, {"document_path": ""})) {
             assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { detect.doRequest(req); });
         }
+        foreach string field in ("s3_bucket", "s3_name") {
+            foreach auto value in (NOTHING, NULL, "", 42, {}, ()) {
+                hash<auto> req;
+                req.s3_bucket = "fixture";
+                req.s3_name = "invoice.pdf";
+                req.s3_version = "v1";
+                req{field} = value;
+                assertThrows("AWS-TEXTRACT-INPUT-ERROR", field + " must be a nonempty string for an S3 document",
+                    sub () { detect.doRequest(req); });
+            }
+        }
+        assertThrows("AWS-TEXTRACT-INPUT-ERROR", "s3_bucket must be a nonempty string for an S3 document",
+            sub () { detect.doRequest({"s3_version": "v1"}); });
         foreach auto value in ((NOTHING, NULL, "", {}, (), False, 0)) {
             assertThrows("AWS-TEXTRACT-INPUT-ERROR", sub () { root.getChildProvider("list-adapters").doRequest({"MaxResults": value}); });
         }

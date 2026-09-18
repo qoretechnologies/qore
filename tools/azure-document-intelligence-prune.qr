@@ -5,6 +5,11 @@
 %requires RestSchemaActions
 %requires json
 
+if (ARGV.size() != 1) {
+    stderr.printf("Usage: %s <documents.json>\n", get_script_name());
+    return 2;
+}
+
 # Called by the checked Swagger normalizer; all operation selection and reachability use shared code.
 hash<auto> documents = parse_json(File::readTextFile(ARGV[0]));
 foreach string name in (keys documents) {

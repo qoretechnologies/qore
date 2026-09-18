@@ -170,6 +170,11 @@ public class AwsTextractDataProviderCommon inherits DataProvider::AbstractDataPr
             }
             document = {"Bytes": read_file ? File::readBinaryFile(req.document_path) : binary("validation")};
         } else {
+            foreach string field in ("s3_bucket", "s3_name") {
+                if (req{field}.typeCode() != NT_STRING || !req{field}.val()) {
+                    throw "AWS-TEXTRACT-INPUT-ERROR", field + " must be a nonempty string for an S3 document";
+                }
+            }
             document = {"S3Object": {"Bucket": req.s3_bucket, "Name": req.s3_name}};
             if (req.hasKey("s3_version")) { document.S3Object.Version = req.s3_version; }
         }

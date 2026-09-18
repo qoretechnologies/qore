@@ -48,8 +48,8 @@ class AzureWireHandler inherits AbstractHttpRequestHandler {
                 value.body.nextLink = reply.next ?? "/documentintelligence/documentModels?api-version=2024-11-30&page=2";
             }
         }
-        return makeResponse(({"Content-Type": value.media ?? "application/json"}) + (value.headers ?? {}),
-            value.status ?? 200, value.raw ?? (exists value.body ? make_json(value.body) : ""));
+        return makeResponse(value.status ?? 200, value.raw ?? (exists value.body ? make_json(value.body) : ""),
+            ({"Content-Type": value.media ?? "application/json"}) + (value.headers ?? {}));
     }
 }
 
@@ -73,6 +73,7 @@ class AzureDocumentIntelligenceWireTest inherits QUnit::Test {
         addTestCase("both connection constructors require authenticated ping", \pingTest());
         addTestCase("accepted jobs and binary downloads retain HTTP metadata", \responseTest());
         addTestCase("JSON base64 raw bytes and query encoding reach the wire", \requestTest());
+        addTestCase("helper rejects invalid document sources before making requests", \sourceTest());
         addTestCase("safe service links reject credential forwarding", \linkTest());
         addTestCase("resource references paginate and reject unsafe or repeated links", \referenceTest());
         addTestCase("concurrent copied clients own independent polling jobs", \jobsTest());
@@ -250,6 +251,30 @@ class AzureDocumentIntelligenceWireTest inherits QUnit::Test {
             });
         }
         assertEq(before, handler.count());
+    }
+
+    private sourceTest() {
+        AbstractDataProvider action = provider.getChildProvider("analyze-document");
+        int before = handler.count();
+        foreach string url in ("", "invoice.pdf", "file:///tmp/invoice.pdf", "https://", "https:///invoice.pdf",
+                "https://?sig=synthetic-secret", "https://example.com/a b.pdf") {
+            assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR",
+                "document_url must be a nonempty HTTP or HTTPS URL with a host", sub () {
+                    action.doRequest({"model_id": "prebuilt-layout", "document_url": url});
+                });
+        }
+        assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "document_path must be a nonempty local file path",
+            sub () { action.doRequest({"model_id": "prebuilt-layout", "document_path": ""}); });
+        assertThrows("AZURE-DOCUMENT-INTELLIGENCE-CONFIG-ERROR", "supply exactly one document source", sub () {
+            action.doRequest({"model_id": "prebuilt-layout", "document_url": "", "document_path": ""});
+        });
+        assertEq(before, handler.count());
+        handler.configure({}, "jobs");
+        foreach string url in ("https://example.com/invoice%20one.pdf?sig=synthetic%2Bsignature&sp=r",
+                "http://example.com/invoice.pdf") {
+            hash<auto> result = action.doRequest({"model_id": "prebuilt-layout", "document_url": url});
+            assertEq(url, result.content);
+        }
     }
 
     private linkTest() {
