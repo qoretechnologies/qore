@@ -73,6 +73,7 @@ class Test inherits QUnit::Test {
         assertThrows("LOGGER-ERROR", \l0.getLevel());
         assertEq((), l0.getAppenders());
         Logger l1 = Serializable::deserialize(l0.serialize());
+        l1 = Serializable::deserialize(l1.serialize());
         assertNothing(l1.getName());
         assertThrows("LOGGER-ERROR", \l1.getLevel());
         assertTrue(l1.getAdditivity());

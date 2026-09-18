@@ -14,7 +14,35 @@ class UnionCodecTest inherits QUnit::Test {
         addTestCase("branch-specific conversions are rejected", \differentTest());
         addTestCase("presentation can target a subset of branches", \presentationTest());
         addTestCase("an optional union keeps its conversion and wire contract", \optionalUnionTest());
+        addTestCase("copied restored unions retain their validation context", \snapshotLifetimeTest());
         set_return_value(main());
+    }
+
+    private AbstractDataProviderType copiedSnapshot(string kind) {
+        OpenApi3Schema source = document({"anyOf": (
+            {"type": "string", "enum": ("one",)}, {"type": "integer", "enum": (2,)})});
+        RestSchemaActionOperation op(source, <RestSchemaActionInfo>{"action": "snapshot", "method": "POST",
+            "path": "/response", "display_name": "Snapshot", "short_desc": "Copy a union",
+            "desc": "Copy a union while retaining its constraints."});
+        OpenApi3UnionDataType restored = Serializable::deserialize(op.getResponseType().serialize());
+        switch (kind) {
+            case "mandatory": return restored.getOrNothingType().getMandatoryType();
+            case "optional": return restored.getOrNothingType();
+            case "soft": return restored.getSoftType();
+            case "rebuild": return restored.copyWithUnionTypes(restored.getUnionTypes());
+            default: return restored.copyForMultipart(restored.getUnionTypes());
+        }
+    }
+
+    private snapshotLifetimeTest() {
+        foreach string kind in ("mandatory", "optional", "soft", "rebuild", "multipart") {
+            # Both the source document and the original restored type are out of scope here.
+            AbstractDataProviderType type = copiedSnapshot(kind);
+            type = Serializable::deserialize(type.serialize());
+            assertEq("one", type.acceptsValue("one"), kind);
+            assertEq(2, type.acceptsValue(2), kind);
+            assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue("unknown"); });
+        }
     }
 
     private hash<auto> unionSchema(bool uniform) {
@@ -65,6 +93,7 @@ class UnionCodecTest inherits QUnit::Test {
         OpenApi3Schema doc = schema(True);
         RestSchemaActionOperation op(doc, manifest());
         AbstractDataProviderType restored = Serializable::deserialize(op.getResponseType().serialize());
+        restored = Serializable::deserialize(restored.serialize());
         assertEq({"kind": "complete", "created": 1970-01-01Z},
             restored.acceptsValue({"kind": "complete", "created": 1970-01-01Z}));
         foreach string kind in (("complete", "chunk")) {

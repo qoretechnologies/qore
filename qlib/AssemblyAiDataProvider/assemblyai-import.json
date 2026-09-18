@@ -1,0 +1,281 @@
+{
+  "documents": [
+    {
+      "name": "transcripts",
+      "source": "https://www.assemblyai.com/docs/openapi.json",
+      "output": "assemblyai-transcripts-openapi.json",
+      "json": true,
+      "normalize": [
+        {
+          "reason": "The official Summarization example and required list use summarization; the schema property is misspelled summariazation. https://www.assemblyai.com/docs/speech-understanding/summarization",
+          "replace_values": [
+            {
+              "pointer": "#/components/schemas/SummarizationRequestBody/properties",
+              "expected": {
+                "summariazation": {
+                  "type": "object",
+                  "properties": {
+                    "summary_type": {
+                      "type": "string",
+                      "enum": [
+                        "paragraph",
+                        "bullets"
+                      ],
+                      "description": "Type of summary. Bullets returns short bullet point style summaries, paragraph is generally more verbose and detailed."
+                    },
+                    "effort": {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium"
+                      ]
+                    }
+                  }
+                }
+              },
+              "replacement": {
+                "summarization": {
+                  "type": "object",
+                  "properties": {
+                    "summary_type": {
+                      "type": "string",
+                      "enum": [
+                        "paragraph",
+                        "bullets"
+                      ],
+                      "description": "Type of summary. Bullets returns short bullet point style summaries, paragraph is generally more verbose and detailed."
+                    },
+                    "effort": {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "reason": "The vendor uses bool for boolean schema properties. OpenAPI requires the boolean type name; values and field contracts are unchanged.",
+          "replace_values": [
+            {
+              "pointer": "#/components/schemas/ActionItemsRequestBody/properties/action_items/properties/include_decisions/type",
+              "expected": "bool",
+              "replacement": "boolean"
+            }
+          ]
+        },
+        {
+          "reason": "SummarizationResponse places a required array inside properties instead of beside the summary/status properties. The official response example confirms this nesting. https://www.assemblyai.com/docs/speech-understanding/summarization",
+          "replace_values": [
+            {
+              "pointer": "#/components/schemas/SummarizationResponse",
+              "expected": {
+                "type": "object",
+                "properties": {
+                  "summarization": {
+                    "type": "object",
+                    "properties": {
+                      "summary": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "summary",
+                    "status"
+                  ]
+                }
+              },
+              "replacement": {
+                "type": "object",
+                "properties": {
+                  "summarization": {
+                    "type": "object",
+                    "properties": {
+                      "summary": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "summary",
+                      "status"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "reason": "ActionItemsResponse misplaces required inside properties and names the wrapper instead of its items field. Align it with the declared items/status envelope. https://www.assemblyai.com/docs/speech-understanding/action-items",
+          "replace_values": [
+            {
+              "pointer": "#/components/schemas/ActionItemsResponse",
+              "expected": {
+                "type": "object",
+                "properties": {
+                  "action_items": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "action_items",
+                    "status"
+                  ]
+                }
+              },
+              "replacement": {
+                "type": "object",
+                "properties": {
+                  "action_items": {
+                    "type": "object",
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "object"
+                        }
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "items",
+                      "status"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "reason": "A recorded audio URL must be nonempty and absolute. Normalize the vendor's nonstandard url format to uri and make the nonempty constraint explicit. https://www.assemblyai.com/docs/api-reference/transcripts/submit",
+          "replace_values": [
+            {
+              "pointer": "#/components/schemas/TranscriptParams/allOf/0/properties/audio_url",
+              "expected": {
+                "x-label": "Audio URL",
+                "description": "The URL of the audio or video file to transcribe.",
+                "type": "string",
+                "format": "url"
+              },
+              "replacement": {
+                "x-label": "Audio URL",
+                "description": "The URL of the audio or video file to transcribe.",
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              }
+            }
+          ]
+        }
+      ],
+      "manifest": "AssemblyAiDataProvider:AssemblyAiTranscriptsManifest::Manifest"
+    },
+    {
+      "name": "llm-gateway",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/llm-gateway.yaml",
+      "output": "assemblyai-llm-gateway-openapi.json",
+      "json": true,
+      "normalize": [
+        {
+          "reason": "The action-items response declares items and status, but its required list incorrectly names action_items instead of items. https://www.assemblyai.com/docs/llm-gateway/api-reference/create-speech-understanding",
+          "replace_required": [
+            {
+              "pointer": "#/components/schemas/LLMGatewayActionItemsResponse/properties/speech_understanding/properties/response/properties/action_items",
+              "expected": [
+                "action_items",
+                "status"
+              ],
+              "replacement": [
+                "items",
+                "status"
+              ]
+            }
+          ]
+        },
+        {
+          "reason": "The vendor uses bool for boolean schema properties. OpenAPI requires the boolean type name; values and field contracts are unchanged.",
+          "replace_values": [
+            {
+              "pointer": "#/components/schemas/ActionItemsRequestBody/properties/action_items/properties/include_decisions/type",
+              "expected": "bool",
+              "replacement": "boolean"
+            }
+          ]
+        }
+      ],
+      "manifest": "AssemblyAiDataProvider:AssemblyAiLlmGatewayManifest::Manifest"
+    },
+    {
+      "name": "streaming-token",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/streaming-token.yaml",
+      "output": "assemblyai-streaming-token-openapi.json",
+      "json": true,
+      "manifest": "AssemblyAiDataProvider:AssemblyAiStreamingTokenManifest::Manifest"
+    },
+    {
+      "name": "voice-agent-token",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/voice-agent-token.yaml",
+      "output": "assemblyai-voice-agent-token-openapi.json",
+      "json": true,
+      "manifest": "AssemblyAiDataProvider:AssemblyAiVoiceAgentTokenManifest::Manifest"
+    },
+    {
+      "name": "agents",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/agents.yaml",
+      "output": "assemblyai-agents-openapi.json",
+      "json": true,
+      "manifest": "AssemblyAiDataProvider:AssemblyAiAgentsManifest::Manifest"
+    },
+    {
+      "name": "webhooks",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/webhooks.yaml",
+      "output": "assemblyai-webhooks-openapi.json",
+      "json": true,
+      "manifest": "AssemblyAiDataProvider:AssemblyAiWebhooksManifest::Manifest"
+    },
+    {
+      "name": "sync-api",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/sync-api.yaml",
+      "output": "assemblyai-sync-api-openapi.json",
+      "json": true,
+      "manifest": "AssemblyAiDataProvider:AssemblyAiSyncApiManifest::Manifest"
+    },
+    {
+      "name": "dictation",
+      "source": "https://www.assemblyai.com/docs/api-reference/specs/dictation.yaml",
+      "output": "assemblyai-dictation-openapi.json",
+      "json": true,
+      "manifest": "AssemblyAiDataProvider:AssemblyAiDictationManifest::Manifest"
+    }
+  ]
+}

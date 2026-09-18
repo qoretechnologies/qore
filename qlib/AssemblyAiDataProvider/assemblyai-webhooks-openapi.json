@@ -1,0 +1,395 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "AssemblyAI Voice Agent Webhooks API",
+    "description": "Subscribe to session and call lifecycle events for your voice agents. AssemblyAI\nPOSTs a signed JSON payload to your URL when each event fires. See\n[Webhooks](/voice-agents/voice-agent-api/webhooks).\n",
+    "version": "1.0.0",
+    "termsOfService": "https://www.assemblyai.com/legal/terms-of-service",
+    "contact": {
+      "name": "API Support",
+      "email": "support@assemblyai.com",
+      "url": "https://www.assemblyai.com/docs/"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://agents.assemblyai.com",
+      "description": "Production server",
+      "x-fern-server-name": "Default"
+    }
+  ],
+  "paths": {
+    "/v1/webhook-subscriptions": {
+      "post": {
+        "summary": "Create a webhook subscription",
+        "description": "Subscribe a URL to one or more events. Scope to a single agent with agent_id, or omit it for account-wide events.",
+        "operationId": "createWebhookSubscription",
+        "x-fern-sdk-group-name": "Voice Agent API",
+        "x-fern-sdk-method-name": "createWebhookSubscription",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhookSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created subscription.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscription"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "description": "Invalid request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List webhook subscriptions",
+        "operationId": "listWebhookSubscriptions",
+        "x-fern-sdk-group-name": "Voice Agent API",
+        "x-fern-sdk-method-name": "listWebhookSubscriptions",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of subscriptions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscriptionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/v1/webhook-subscriptions/{subscription_id}": {
+      "parameters": [
+        {
+          "name": "subscription_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "example": "0d75ebd7-937c-495c-b638-ba582ec05b39"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Retrieve a webhook subscription",
+        "operationId": "getWebhookSubscription",
+        "x-fern-sdk-group-name": "Voice Agent API",
+        "x-fern-sdk-method-name": "getWebhookSubscription",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subscription.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscription"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a webhook subscription",
+        "description": "Update any of url, events, secret, or enabled. Sending a new secret rotates it and increments secret_version.",
+        "operationId": "updateWebhookSubscription",
+        "x-fern-sdk-group-name": "Voice Agent API",
+        "x-fern-sdk-method-name": "updateWebhookSubscription",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookSubscriptionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated subscription.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookSubscription"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a webhook subscription",
+        "operationId": "deleteWebhookSubscription",
+        "x-fern-sdk-group-name": "Voice Agent API",
+        "x-fern-sdk-method-name": "deleteWebhookSubscription",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The subscription was deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Your AssemblyAI API key in the Authorization header (raw key; a Bearer prefix is also accepted)."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Unauthorized. Invalid or missing API key.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The subscription was not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "WebhookEvent": {
+        "type": "string",
+        "enum": [
+          "session.started",
+          "session.completed",
+          "call.connected",
+          "call.ended",
+          "call.failed"
+        ]
+      },
+      "CreateWebhookSubscriptionRequest": {
+        "type": "object",
+        "required": [
+          "url",
+          "events",
+          "secret"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Delivery URL. Must be https and a public host.",
+            "example": "https://your-app.com/webhooks/assemblyai"
+          },
+          "events": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WebhookEvent"
+            }
+          },
+          "secret": {
+            "type": "string",
+            "description": "Signing secret, 32–256 printable ASCII chars (no whitespace). Write-only; never returned.",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "agent_id": {
+            "type": "string",
+            "description": "Scope to one agent. Omit for account-wide events.",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "UpdateWebhookSubscriptionRequest": {
+        "type": "object",
+        "description": "All fields optional. A new secret rotates it and increments secret_version.",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEvent"
+            }
+          },
+          "secret": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 256
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "WebhookSubscription": {
+        "type": "object",
+        "description": "A subscription. The signing secret is never returned, only its version.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookEvent"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "secret_version": {
+            "type": "integer",
+            "example": 1
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WebhookSubscriptionList": {
+        "type": "object",
+        "properties": {
+          "subscriptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebhookSubscription"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "response_metadata": {
+            "type": "object",
+            "properties": {
+              "next_cursor": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "example": "Unauthorized"
+          }
+        }
+      }
+    }
+  }
+}

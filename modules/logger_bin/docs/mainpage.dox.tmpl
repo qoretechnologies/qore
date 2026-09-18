@@ -17,4 +17,7 @@
     @section logger_binreleasenotes logger Module Release Notes
 
     This module is always delivered with %Qore and therefore mirrors the %Qore version.
+
+    Logger interface deserialization restores its native callback adapter. Logger wrappers and
+    schema objects inheriting the interface can be serialized repeatedly after restoration.
 */

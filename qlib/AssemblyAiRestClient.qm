@@ -31,6 +31,9 @@
 %requires(reexport) ConnectionProvider >= 1.4
 %requires QoreAsyncJobUtils
 %requires QoreSpeechUtils
+%requires WebSocketClient
+%requires HttpClientStreamingIo
+%requires json
 
 module AssemblyAiRestClient {
     version = "1.0";
@@ -55,8 +58,7 @@ module AssemblyAiRestClient {
     The %AssemblyAiRestClient module provides an API for calling
     [AssemblyAI](https://www.assemblyai.com) speech-to-text REST services.
 
-    AssemblyAI is a speech AI platform offering high-accuracy transcription
-    with the Universal-2 and Slam-1 model families, plus optional analytics
+    AssemblyAI provides transcription with Universal-3.5 Pro and Universal-2, plus optional analytics
     (sentiment, summarization, entity detection, content safety, topic
     detection).  The transcription API is asynchronous: callers submit an
     audio URL and poll a job until completion.
@@ -66,8 +68,24 @@ module AssemblyAiRestClient {
     The main classes are:
     - @ref AssemblyAiRestClient::AssemblyAiRestClient — sync REST client
     - @ref AssemblyAiRestClient::AssemblyAiRestClientIo — async REST client
-      with high-level @ref AssemblyAiRestClientIo::transcribe() helper
+      with high-level @ref AssemblyAiRestClient::AssemblyAiRestClientIo::transcribe() helper
     - @ref AssemblyAiRestClient::AssemblyAiRestConnection — connection
+
+    @par Native streaming
+    Use openWebSocket("streaming", callback) for real-time speech, or openWebSocket("agents", callback)
+    for voice conversations. Send native protocol messages and disconnect when finished.
+    openChatStream() returns an incremental SSE reader; call cancel() when abandoning it.
+    openAudioUpload("sync") and openAudioUpload("dictation") send configuration before audio chunks;
+    sendAudio() writes each chunk immediately and finish() returns the completed JSON result.
+    Use close() to cancel. Set the client's timeout long enough for recording and transcription.
+
+    @code{.py}
+AssemblyAiRestClientIo client({"apikey": ENV.ASSEMBLYAI_APIKEY, "timeout": 3m});
+AssemblyAiAudioUpload upload = client.openAudioUpload("sync", {}, "audio/wav");
+on_exit upload.close();
+upload.sendAudio(File::readBinaryFile("short-recording.wav"));
+hash<auto> result = upload.finish();
+    @endcode
 
     @par Authentication
 
@@ -133,17 +151,43 @@ public class AssemblyAiRestClientBase {
         non-prefixed auth format).
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto!> rv;
-        rv += DefaultOptions + opts;
-        if (rv.apikey) {
-            hash<auto!> dh;
-            if (rv.headers) {
-                dh += rv.headers;
+        hash<auto!> rv = DefaultOptions + opts;
+        foreach string name in ("token", "oauth2_app", "oauth2_client_id", "oauth2_client_secret", "oauth2_refresh_token",
+                "username", "password", "custom_token_auth", "negotiate_auth") {
+            if (opts{name}) {
+                throw "ASSEMBLYAI-CONFIG-ERROR",
+                    "AssemblyAI uses an API key; other authentication methods cannot be combined with it";
             }
-            dh.Authorization = rv.apikey;
-            rv.headers = dh;
-            delete rv.apikey;
         }
+        if (exists opts.region) {
+            if (opts.region != "us" && opts.region != "eu") {
+                throw "ASSEMBLYAI-CONFIG-ERROR", "region must be 'us' or 'eu'";
+            }
+            if (!exists opts.url) {
+                rv.url = opts.region == "eu" ? "https://api.eu.assemblyai.com" : DefaultUrl;
+            }
+            remove rv.region;
+        }
+        hash<auto> headers = rv.headers ?? {};
+        if (exists rv.apikey) {
+            if (rv.apikey.typeCode() != NT_STRING || rv.apikey !~ /\S/
+                    || rv.apikey =~ /[\r\n]/) {
+                throw "ASSEMBLYAI-CONFIG-ERROR", "apikey must be a nonempty API key";
+            }
+            map remove headers{$1}, keys headers, $1.lwr() == "authorization";
+            headers.Authorization = remove rv.apikey;
+        }
+        bool authenticated = False;
+        foreach string name in (keys headers) {
+            if (name.lwr() == "authorization" && headers{name}.typeCode() == NT_STRING
+                    && headers{name} =~ /\S/) {
+                authenticated = True;
+            }
+        }
+        if (!authenticated) {
+            throw "ASSEMBLYAI-CONFIG-ERROR", "set the AssemblyAI connection's apikey option";
+        }
+        rv.headers = headers;
         return rv;
     }
 }
@@ -155,7 +199,7 @@ public class AssemblyAiRestClientBase {
 public class AssemblyAiRestClient inherits RestClient::RestClient, AssemblyAiRestClientBase {
     #! Creates the object with the given options
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(AssemblyAiRestClientBase::getOptions(opts), True) {
+            : RestClient(AssemblyAiRestClientBase::getOptions(opts), do_not_connect) {
     }
 }
 
@@ -167,8 +211,10 @@ public class AssemblyAiRestClient inherits RestClient::RestClient, AssemblyAiRes
 */
 public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, AssemblyAiRestClientBase {
     private {
-        #! Shared async-job poller (owns the polling loop + injectable sleeper)
-        QoreAsyncJobUtils::AsyncJobPoller poller;
+        #! Optional polling test seam; set before sharing the client between requests
+        *code<nothing(timeout)> sleeper;
+        #! Region retained even by copies targeting the global Voice Agents endpoint
+        bool eu_region;
     }
 
     #! Creates the object with the given options
@@ -177,16 +223,7 @@ public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, Assembl
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(AssemblyAiRestClientBase::getOptions(opts), shared_mgr) {
-        poller = new QoreAsyncJobUtils::AsyncJobPoller(
-            hash<auto> sub (string job_id) {
-                return restGet(sprintf("/v2/transcript/%s", job_id)).body;
-            },
-            bool sub (hash<auto> status) {
-                return status.status && inlist(status.status, TerminalStatuses);
-            },
-            "AssemblyAI transcript",
-            "ASSEMBLYAI-ERROR",
-        );
+        eu_region = parse_url(getUrl()).host =~ /\.eu\.assemblyai\.com$/;
     }
 
     #! Injects a custom sleeper closure (test seam)
@@ -194,7 +231,104 @@ public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, Assembl
         @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller".
     */
     setSleeper(code<nothing(timeout)> s) {
-        poller.setSleeper(s);
+        sleeper = s;
+    }
+
+    #! Returns an authenticated client for a companion AssemblyAI service
+    /** @param service one of llm-gateway, streaming, agents, sync, or dictation
+        @return a client sharing the connection manager and its lifetime owner
+        @throw ASSEMBLYAI-CONFIG-ERROR an unknown service is requested
+
+        Regional services follow the transcript endpoint. Voice Agents currently publishes
+        only its global endpoint. Copies retain all transport options and authentication.
+    */
+    AssemblyAiRestClientIo getServiceClient(string service) {
+        bool eu = eu_region;
+        hash<string, string> urls = {
+            "llm-gateway": eu ? "https://llm-gateway.eu.assemblyai.com" : "https://llm-gateway.assemblyai.com",
+            "streaming": eu ? "https://streaming.eu.assemblyai.com" : "https://streaming.us.assemblyai.com",
+            "agents": "https://agents.assemblyai.com",
+            "sync": eu ? "https://sync.eu.assemblyai.com" : "https://sync.us.assemblyai.com",
+            "dictation": eu ? "https://dictation.eu.assemblyai.com" : "https://dictation.us.assemblyai.com",
+        };
+        if (!urls.hasKey(service)) {
+            throw "ASSEMBLYAI-CONFIG-ERROR", sprintf("unknown AssemblyAI service %y", service);
+        }
+        return cast<AssemblyAiRestClientIo>(copyWithUrl(urls{service}));
+    }
+
+    #! Copies authentication, transport settings, lifetime ownership, and regional context
+    /** @param new_url target endpoint
+        @return an independently usable client sharing the connection manager
+    */
+    RestClient::AbstractRestClient copyWithUrl(string new_url) {
+        AssemblyAiRestClientIo copy = cast<AssemblyAiRestClientIo>(RestClientIo::copyWithUrl(new_url));
+        if (parse_url(new_url).host == "agents.assemblyai.com") {
+            copy.eu_region = eu_region;
+        }
+        return copy;
+    }
+
+    #! Opens a native incremental chat response
+    /** @param body LLM Gateway request; this method sets stream to true
+        @return an SSE reader; cancel it when finished or when abandoning the response
+        @throw any HTTP authentication, entitlement, or streaming error
+    */
+    HttpClientStreamingIo::SseStreamReader openChatStream(hash<auto> body) {
+        return getServiceClient("llm-gateway").restSseReader("POST", "/v1/chat/completions",
+            {"Content-Type": MimeTypeJson}, make_json(body + {"stream": True}));
+    }
+
+    #! Starts a native incremental audio upload
+    /** @param service sync or dictation
+        @param config service-specific transcription configuration, including PCM sample rate and channels
+        @param media_type audio/wav or audio/pcm
+        @return an upload session; sendAudio() accepts chunks and finish() returns the completed result
+        @throw ASSEMBLYAI-CONFIG-ERROR unsupported service or media type
+    */
+    AssemblyAiAudioUpload openAudioUpload(string service, hash<auto> config = {},
+            string media_type = "audio/wav") {
+        if (service != "sync" && service != "dictation") {
+            throw "ASSEMBLYAI-CONFIG-ERROR", "audio upload service must be sync or dictation";
+        }
+        return new AssemblyAiAudioUpload(getServiceClient(service), config, media_type, service == "sync");
+    }
+
+    #! Opens a native speech or voice-agent WebSocket
+    /** @param service streaming for speech recognition, or agents for voice conversations
+        @param callback native WebSocket callback, receiving frames as they arrive
+        @param query native query values, already serialized to strings; values are URL-encoded here
+        @return a connected WebSocket; send audio frames and protocol messages with send(), and disconnect
+            when finished. Reconnection is disabled because a new connection is a new billed session.
+        @throw ASSEMBLYAI-CONFIG-ERROR unsupported service or query authentication
+        @throw any WebSocket connection or authentication error
+
+        Speech uses /v3/ws. Voice Agents uses /v1/ws and requires session.update as the first message.
+        The callback receives the native protocol, including error and termination messages.
+    */
+    WebSocketClient::WebSocketClient openWebSocket(string service, code<nothing(*data)> callback,
+            *hash<string, string> query) {
+        if (service != "streaming" && service != "agents") {
+            throw "ASSEMBLYAI-CONFIG-ERROR", "WebSocket service must be streaming or agents";
+        }
+        if (exists query.token) {
+            throw "ASSEMBLYAI-CONFIG-ERROR", "this client authenticates WebSockets with its connection key";
+        }
+        AssemblyAiRestClientIo target = getServiceClient(service);
+        string url = target.getUrl().toString();
+        url =~ s/^https:/wss:/;
+        url =~ s/^http:/ws:/;
+        url += service == "streaming" ? "/v3/ws" : "/v1/ws";
+        if (query) {
+            url += "?" + join("&", map encode_url($1.key, True) + "=" + encode_url($1.value, True),
+                query.pairIterator());
+        }
+        hash<auto> opts = getConstructorOptions(){"connect_timeout", "timeout", "ssl_verify_cert",
+            "ssl_verify_mode", "proxy", "logger", "encoding"};
+        WebSocketClient::WebSocketClient ws(callback, opts + {"url": url, "reconnect": False});
+        on_error delete ws;
+        ws.connect({"hdr": target.getDefaultHeaders()});
+        return ws;
     }
 
     #! Submits a transcription job and waits for completion
@@ -203,7 +337,7 @@ public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, Assembl
 
         @param audio_url public URL of the audio file to transcribe
         @param options optional AssemblyAI parameters merged into the
-            \c /v2/transcript request body (e.g. \c speech_model,
+            \c /v2/transcript request body (e.g. \c speech_models,
             \c language_code, \c punctuate, \c speaker_labels,
             \c summarization, \c sentiment_analysis); also accepts two
             polling-control fields stripped before submission:
@@ -219,9 +353,29 @@ public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, Assembl
             the last observed job hash including any \c error message
     */
     hash<auto> transcribe(string audio_url, *hash<auto> options) {
+        if (!audio_url.val() || audio_url !~ /^https?:\/\//) {
+            throw "ASSEMBLYAI-ERROR", "audio_url must be a nonempty HTTP or HTTPS URL";
+        }
         timeout overall_to = options.transcription_timeout
             ?? DefaultTranscriptionTimeout;
         timeout poll_interval = options.poll_interval ?? DefaultPollInterval;
+        if (overall_to <= 0 || poll_interval <= 0) {
+            throw "ASSEMBLYAI-ERROR", "transcription_timeout and poll_interval must be positive";
+        }
+
+        QoreAsyncJobUtils::AsyncJobPoller poller(
+            hash<auto> sub (string job_id) {
+                hash<auto> body = restGet("/v2/transcript/" + encode_url(job_id, True)).body;
+                if (!inlist(body.status, ("queued", "processing", "completed", "error"))) {
+                    throw "ASSEMBLYAI-ERROR", "the transcript response has an invalid status";
+                }
+                return body;
+            },
+            bool sub (hash<auto> status) { return inlist(status.status, TerminalStatuses); },
+            "AssemblyAI transcript", "ASSEMBLYAI-ERROR");
+        if (sleeper) {
+            poller.setSleeper(sleeper);
+        }
 
         hash<auto> submit_body = (options - ("transcription_timeout", "poll_interval"))
             + {"audio_url": audio_url};
@@ -246,11 +400,146 @@ public class AssemblyAiRestClientIo inherits RestClientIo::RestClientIo, Assembl
     }
 }
 
+#! An incremental multipart audio request with explicit completion and cancellation
+/** Keep one producer per upload. The audio is sent as it arrives; only the final JSON response is buffered.
+    Call close() to cancel an abandoned session. The client retains the connection manager's lifetime owner.
+*/
+public class AssemblyAiAudioUpload {
+    private {
+        AssemblyAiRestClientIo client;
+        HttpClientIo::HttpClientStreamHandle stream;
+        string boundary = sprintf("qore-assemblyai-%d-%d", now_us(), rand());
+        bool finished = False;
+        Mutex state_lock();
+    }
+
+    #! Opens the upload and sends configuration before the audio part
+    /** @param client authenticated service client
+        @param config native JSON configuration
+        @param media_type WAV or PCM media type
+        @param sync whether the Sync STT model header is required
+        @throw ASSEMBLYAI-CONFIG-ERROR invalid media type or missing PCM configuration
+    */
+    constructor(AssemblyAiRestClientIo client, hash<auto> config, string media_type, bool sync) {
+        if (media_type != "audio/wav" && media_type != "audio/pcm") {
+            throw "ASSEMBLYAI-CONFIG-ERROR", "audio media type must be audio/wav or audio/pcm";
+        }
+        if (media_type == "audio/pcm") {
+            if (config.sample_rate.typeCode() != NT_INT || config.sample_rate <= 0
+                    || config.channels.typeCode() != NT_INT || !inlist(config.channels, (1, 2))
+                    || (sync && !inlist(config.sample_rate, (8000, 16000, 22050, 24000, 32000, 44100, 48000)))) {
+                throw "ASSEMBLYAI-CONFIG-ERROR", "PCM audio requires a supported positive sample_rate and channels (1 or 2)";
+            }
+        }
+        self.client = client;
+        hash<auto!> headers = client.getDefaultHeaders() + {
+            "Content-Type": "multipart/form-data; boundary=" + boundary, "Accept": MimeTypeJson,
+        };
+        if (sync) {
+            headers."X-AAI-Model" = "universal-3-5-pro";
+        }
+        stream = client.getConnectionManager().acquireStream(client.getUrl());
+        on_error stream.cancel();
+        stream.startStreaming("POST", "/v1/transcribe/live", headers, True);
+        stream.sendData("--" + boundary + "\r\nContent-Disposition: form-data; name=\"config\"\r\n"
+            + "Content-Type: application/json\r\n\r\n" + make_json(config) + "\r\n--" + boundary
+            + "\r\nContent-Disposition: form-data; name=\"audio\"; filename=\"audio\"\r\nContent-Type: "
+            + media_type + "\r\n\r\n");
+    }
+
+    #! Cancels an upload when the session is destroyed
+    destructor() {
+        close();
+    }
+
+    #! Sends audio bytes without buffering the recording
+    /** @param audio the next audio chunk
+        @throw ASSEMBLYAI-UPLOAD-ERROR the request has already been finished
+    */
+    sendAudio(binary audio) {
+        {
+            AutoLock al(state_lock);
+            if (finished) {
+                throw "ASSEMBLYAI-UPLOAD-ERROR", "the audio upload is already finished";
+            }
+        }
+        on_error close();
+        stream.sendData(audio);
+    }
+
+    #! Completes the upload and returns the final transcript
+    /** @param read_timeout maximum wait for each response event
+        @return native Sync STT or dictation response
+        @throw ASSEMBLYAI-UPLOAD-ERROR timeout, HTTP error, or oversized response
+    */
+    hash<auto> finish(timeout read_timeout = 3m) {
+        {
+            AutoLock al(state_lock);
+            if (finished || read_timeout <= 0) {
+                throw "ASSEMBLYAI-UPLOAD-ERROR", "finish requires an open upload and a positive timeout";
+            }
+            finished = True;
+        }
+        on_exit stream.cancel();
+        stream.sendData("\r\n--" + boundary + "--\r\n", True);
+        binary body = binary();
+        while (True) {
+            auto item = stream.readData(read_timeout);
+            if (!exists item) {
+                throw "ASSEMBLYAI-UPLOAD-ERROR", "timed out waiting for the audio upload result";
+            }
+            if (item.typeCode() == NT_HASH) {
+                if (item.error) {
+                    throw "ASSEMBLYAI-UPLOAD-ERROR", "audio upload transport failed", item.error;
+                }
+                if (item.end_stream) {
+                    break;
+                }
+            } else {
+                body += binary(item);
+                if (body.size() > 16 * 1024 * 1024) {
+                    throw "ASSEMBLYAI-UPLOAD-ERROR", "audio upload response exceeds 16 MiB";
+                }
+            }
+        }
+        int status = stream.getResponse().status_code;
+        if (status < 200 || status >= 300) {
+            throw "ASSEMBLYAI-UPLOAD-ERROR", sprintf("audio upload returned HTTP %d", status);
+        }
+        return parse_json(body.toString());
+    }
+
+    #! Cancels the underlying stream
+    close() {
+        {
+            AutoLock al(state_lock);
+            finished = True;
+        }
+        if (exists stream) {
+            stream.cancel();
+        }
+    }
+}
+
 #! Connection class for AssemblyAI REST endpoints
 public class AssemblyAiRestConnection inherits RestClient::RestConnection {
     public {
         #! Default AssemblyAI REST API URL (with assemblyai:// scheme)
         const DefaultUrl = "assemblyai://api.assemblyai.com";
+
+        #! Default URL used by connection editors
+        const DefaultConnectionUrl = DefaultUrl;
+
+        #! Transport and REST settings that apply to bare API-key authentication
+        const TransportOptions = map {$1.key: $1.value}, RestConnection::ConnectionScheme.options.pairIterator(),
+            $1.key !~ /^(oauth2_|negotiate_|custom_token_|token($|_)|username$|password$)/;
+
+        #! Retain stored defaults from older connection editors without offering alternative authentication
+        const LegacyAuthenticationOptions = map {$1.key: $1.value + {
+                "disabled": True, "preselected": False,
+                "desc": "Retained for existing connection configurations. AssemblyAI authenticates with the API Key option.",
+            }}, RestConnection::ConnectionScheme.options.pairIterator(),
+            $1.key =~ /^(oauth2_|negotiate_|custom_token_|token($|_)|username$|password$)/;
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -258,8 +547,8 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
             "short_desc": "A connection to the AssemblyAI speech-to-text REST API",
             "desc": "A connection to the [AssemblyAI](https://www.assemblyai.com) "
                 "speech-to-text REST API.\n\n"
-                "AssemblyAI offers async transcription with the Universal-2 and "
-                "Slam-1 model families plus a rich analytics layer "
+                "AssemblyAI offers recorded and real-time transcription, short-audio "
+                "dictation, language models, voice agents, and speech analysis "
                 "(summarization, sentiment, entity detection, content safety, "
                 "topic detection).\n\n"
                 "Requires an API key for `Authorization` header authentication "
@@ -274,7 +563,20 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
             "base_scheme_map": {
                 "https": "assemblyai",
             },
-            "options": RestConnection::ConnectionScheme.options + {
+            "options": TransportOptions + LegacyAuthenticationOptions + {
+                "region": <ConnectionOptionInfo>{
+                    "display_name": "Region",
+                    "short_desc": "Region for transcription and regional companion services",
+                    "desc": "Choose the US or EU endpoints for transcription, LLM Gateway, Sync STT, "
+                        "dictation, and streaming. Voice Agents uses its separately documented global endpoint.",
+                    "type": "string",
+                    "default_value": "us",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "us", "display_name": "United States"},
+                        <AllowedValueInfo>{"value": "eu", "display_name": "European Union"},
+                    ),
+                },
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
                     "short_desc": "AssemblyAI API key (sent as bare Authorization header)",
@@ -282,6 +584,7 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
                     "desc": "The AssemblyAI API key — sent as the bare `Authorization` "
                         "header value with no `Bearer` / `Token` prefix.",
                     "sensitive": True,
+                    "required": True,
                     "preselected": True,
                 },
                 "ping_method": RestConnection::ConnectionScheme.options.ping_method
@@ -309,7 +612,9 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
     #! Creates the AssemblyAiRestConnection object
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, DefaultUrl, attributes, options) {
+            : RestConnection(AssemblyAiRestConnection::getConfig({
+                "name": name, "desc": description, "url": url, "opts": options,
+            }), attributes) {
     }
 
     #! Creates the AssemblyAiRestConnection object from a configuration hash
@@ -318,15 +623,24 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns the config hash with the canonical URL forced
-    /** AssemblyAI has a single fixed API endpoint; the URL is always
-        overridden to prevent the framework's \c auto_url machinery from
-        falling back to \c "assemblyai://localhost" when no source option
-        exists to build a URL from.  See
-        data-provider-development-guide.md pitfall #17.
+    /** The region option selects the canonical US or EU transcript endpoint. An existing EU URL
+        supplies the region when no option was stored. Canonicalization also supports URL-free connection editors.
     */
     private static hash<auto> getConfig(hash<auto> config) {
-        config.url = DefaultUrl;
+        string region = config.opts.region
+            ?? (parse_url(config.url ?? DefaultUrl).host == "api.eu.assemblyai.com" ? "eu" : "us");
+        if (region != "us" && region != "eu") {
+            throw "ASSEMBLYAI-CONFIG-ERROR", "region must be 'us' or 'eu'";
+        }
+        config.opts.region = region;
+        config.url = region == "eu" ? "assemblyai://api.eu.assemblyai.com" : DefaultUrl;
         return config;
+    }
+
+    #! Returns the application served by this connection
+    /** @return the stable AssemblyAI app identity */
+    *string getAppName() {
+        return "AssemblyAI";
     }
 
     #! Returns \c "assemblyai"
@@ -376,8 +690,9 @@ public class AssemblyAiRestConnection inherits RestClient::RestConnection {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
             hash<auto> update;
-            if (url != AssemblyAiRestClientBase::DefaultUrl && url != DefaultUrl) {
-                update.url = DefaultUrl;
+            string canonical = opts.region == "eu" ? "assemblyai://api.eu.assemblyai.com" : DefaultUrl;
+            if (url != canonical) {
+                update.url = canonical;
             }
             if (opts.ping_path =~ /^\//) {
                 update.ping_path = opts.ping_path.substr(1);
@@ -416,7 +731,7 @@ public class AssemblyAiTranscriber inherits QoreSpeechUtils::AbstractTranscriber
             *hash<auto> opts) {
         hash<auto!> submit_opts;
         if (model) {
-            submit_opts.speech_model = model;
+            submit_opts.speech_models = (model,);
         }
         if (opts) {
             foreach hash<auto> p in (opts.pairIterator()) {
@@ -443,7 +758,7 @@ public class AssemblyAiTranscriberFactory inherits QoreSpeechUtils::AbstractTran
         return "assemblyai";
     }
     string getDisplayName() {
-        return "AssemblyAI ASR (Universal / Slam / Nano model families)";
+        return "AssemblyAI Speech Recognition";
     }
     QoreSpeechUtils::AbstractTranscriber create(
             hash<QoreSpeechUtils::TranscriberConfig> config) {

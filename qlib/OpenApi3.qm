@@ -302,6 +302,8 @@ excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObje
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
     @subsection openapi3_1_0 OpenApi3 v1.0
+    - keep schema validation context alive for independently serialized composition types and repeated round trips
+    - preserve raw binary request bodies, including empty uploads, and honor binary multipart media types
     - validate declared object properties even when `additionalProperties: true` also permits unknown keys
     - expand server-variable defaults before deriving the request base path
     - support discriminator-only inheritance mappings and escaped local schema references; a mapped branch
@@ -2077,6 +2079,15 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                     "content": content,
                 };
             }
+            if (body.typeCode() == NT_BINARY || (content =~ /^text\// && body.typeCode() == NT_STRING)) {
+                return rv += {"body": body, "content": content};
+            }
+        }
+
+        # The default preference list contains serialization formats, not every binary media type.
+        # A raw binary body uses its declared media type when no explicit preference was supplied.
+        if (content_types == MimeContentTypes && body.typeCode() == NT_BINARY && mime_types) {
+            return rv += {"body": body, "content": mime_types.firstKey()};
         }
 
         # check if the \c Content-Type header is already set
@@ -3213,8 +3224,12 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
                         files += <FormDataMessageInfo>{"name": name, "filename": file.name,
                             "hdr": {"Content-Type": file.mime_type}, "body": parse_base64_string(file.content)};
                     } else if (value.typeCode() == NT_BINARY) {
+                        # An Encoding Object can declare one media type or a comma-separated preference
+                        # list. Explicit file metadata above takes precedence over this default.
+                        string content_type = encoding{entry.key}.contentType
+                            ? trim(split(",", encoding{entry.key}.contentType)[0]) : MimeTypeOctetStream;
                         files += <FormDataMessageInfo>{"name": name, "filename": entry.key,
-                            "hdr": {"Content-Type": MimeTypeOctetStream}, "body": value};
+                            "hdr": {"Content-Type": content_type}, "body": value};
                     } else {
                         message.addRepeatedPart(formScalar(value), name);
                     }
@@ -3317,6 +3332,13 @@ public class OperationObject inherits ObjectBase, ParameterGroup, RestSchemaVali
         if (MimeDataTypes{ct}) {
             headers."Content-Type" = ct;
             return MimeDataTypes{ct}.serialize(body);
+        }
+
+        # Binary schemas describe the bytes on the wire, not a serialization envelope.
+        # Keep empty binary bodies too; absence was handled above.
+        if (body.typeCode() == NT_BINARY || (ct =~ /^text\// && body.typeCode() == NT_STRING)) {
+            headers."Content-Type" = ct;
+            return body;
         }
 
         throw "SERIALIZATION-ERROR", sprintf("%s %s: message body cannot be serialized; available MIME type(s): %y; "
@@ -4567,6 +4589,9 @@ public class OpenApi3HashDataType inherits HashDataType {
     }
 
     private {
+        #! Restored snapshots own their document; live cached types keep the existing weak graph
+        *OpenApi3Schema document;
+
         #! Reference to the schema object for validation
         SchemaObject schema;
 
@@ -4585,6 +4610,14 @@ public class OpenApi3HashDataType inherits HashDataType {
             : HashDataType(base_type, name) {
         self.schema = schema;
         self.for_request = for_request;
+    }
+
+    #! Retains validation context in independent snapshots without cycles in the live type cache
+    /** @param members default encoded members; original values below avoid encoding them twice
+        @return this class's original members and the document required after restoration
+    */
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"schema": schema, "for_request": for_request, "document": schema.getDocument()};
     }
 
     #! Returns the schema object
@@ -4923,6 +4956,9 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         #! OpenAPI schema alternatives in declaration order, if available
         *list<SchemaObject> schemas;
 
+        #! Restored snapshots retain ownership; live cached types do not form document cycles
+        *list<OpenApi3Schema> documents;
+
         #! Original wire alternatives when the input accepts named multipart files
         *list<AbstractDataProviderType> multipart_wire_types;
     }
@@ -4941,6 +4977,15 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         self.multipart_wire_types = multipart_wire_types;
     }
 
+    #! Retains the weak schema context only in the serialized snapshot
+    /** @param members default encoded members; original values below avoid encoding them twice
+        @return this class's original members and strong document owners for restoration
+    */
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"composition_keyword": composition_keyword, "schemas": schemas,
+            "multipart_wire_types": multipart_wire_types, "documents": map $1.getDocument(), schemas};
+    }
+
     #! Returns a union of the same kind over the given alternatives
     /** Carries the composition keyword and the schema alternatives across, so that a rebuilt union still
         validates the way the document says it does.
@@ -4950,7 +4995,7 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         @return an %OpenAPI union over \a types with this type's composition semantics
     */
     QoreUnionDataType copyWithUnionTypes(list<AbstractDataProviderType> types) {
-        return new OpenApi3UnionDataType(types, composition_keyword, schemas, multipart_wire_types);
+        return retainSnapshotOwners(new OpenApi3UnionDataType(types, composition_keyword, schemas, multipart_wire_types));
     }
 
     #! Copies the union for named multipart inputs without changing its wire contract
@@ -4958,8 +5003,14 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         @return the multipart union with the same composition matching rule
     */
     OpenApi3UnionDataType copyForMultipart(list<AbstractDataProviderType> types) {
-        return new OpenApi3UnionDataType(types, composition_keyword, schemas,
-            multipart_wire_types ?? getUnionTypes());
+        return retainSnapshotOwners(new OpenApi3UnionDataType(types, composition_keyword, schemas,
+            multipart_wire_types ?? getUnionTypes()));
+    }
+
+    #! Copies the restored document owners without adding ownership to live cached types
+    private OpenApi3UnionDataType retainSnapshotOwners(OpenApi3UnionDataType result) {
+        result.documents = documents;
+        return result;
     }
 
     #! Returns the type's short description
@@ -5092,8 +5143,8 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 
     #! Returns a "soft" type equivalent to the current type
     AbstractDataProviderType getSoftType() {
-        return new OpenApi3UnionDataType(AbstractDataProviderType::getSoftTypesShared(getUnionTypes()),
-            composition_keyword, schemas, multipart_wire_types);
+        return retainSnapshotOwners(new OpenApi3UnionDataType(AbstractDataProviderType::getSoftTypesShared(getUnionTypes()),
+            composition_keyword, schemas, multipart_wire_types));
     }
 
     #! Returns an "or nothing" type equivalent to the current type
@@ -5101,7 +5152,8 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         if (isOrNothingType()) {
             return self;
         }
-        return new OpenApi3UnionDataType((map $1.getOrNothingType(), getUnionTypes()), composition_keyword, schemas, multipart_wire_types);
+        return retainSnapshotOwners(new OpenApi3UnionDataType((map $1.getOrNothingType(), getUnionTypes()),
+            composition_keyword, schemas, multipart_wire_types));
     }
 
     #! Returns a mandatory type equivalent to the current type
@@ -5109,7 +5161,8 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
         if (!isOrNothingType()) {
             return self;
         }
-        return new OpenApi3UnionDataType((map $1.getMandatoryType(), getUnionTypes()), composition_keyword, schemas, multipart_wire_types);
+        return retainSnapshotOwners(new OpenApi3UnionDataType((map $1.getMandatoryType(), getUnionTypes()),
+            composition_keyword, schemas, multipart_wire_types));
     }
 }
 
@@ -5234,7 +5287,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     private {
-        #! Reference to the OpenApi3 schema
+        #! Weak reference to the document, owned by schema-backed data types when used independently
         OpenApi3Schema openapi3;
 
         #! Resolved discriminator branches, retained when the weak document reference is serialized away
@@ -5245,6 +5298,12 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
         #! The JSON value required by the const keyword; immutable after construction
         auto const_value;
+    }
+
+    #! Returns the document required for schema reference and type resolution
+    /** @return the owning document; callers retaining a schema-backed type must retain this owner */
+    OpenApi3Schema getDocument() {
+        return openapi3;
     }
 
     #! private constructor; use newSchemaObject() instead

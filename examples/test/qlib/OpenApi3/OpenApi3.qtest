@@ -5819,7 +5819,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 \so.processRequest(), ("POST", "/data", body, NOTHING, ("application/octet-stream",)));
         }
 
-        # Negative test: schema with only unsupported content type should fail default serialization
+        # A binary schema needs no serialization module; preserve its declared media type and bytes.
         {
             hash<auto> spec2 = {
                 "openapi": "3.0.0",
@@ -5847,9 +5847,11 @@ public class OpenApi3Test inherits QUnit::Test {
                 },
             };
             OpenApi3Schema so2("", spec2);
-            # With no matching serialization module for image/png, this should fail
-            assertThrows("SERIALIZATION-ERROR", "image/png",
-                \so2.processRequest(), ("POST", "/limited", <abcd>));
+            hash<RestRequestClientInfo> req = so2.processRequest("POST", "/limited", <abcd>);
+            assertEq("image/png", req.content);
+            assertEq(<abcd>, req.body);
+            assertThrows("SERIALIZATION-ERROR", "application/json",
+                \so2.processRequest(), ("POST", "/limited", <abcd>, NOTHING, (MimeTypeJson,)));
         }
 
         # Test that body parameter is created only once (not duplicated for each content type)

@@ -38,28 +38,30 @@ public class AssemblyAiDataProvider inherits AssemblyAiDataProviderCommon {
         });
     }
 
-    private {
-        static hash<string, Reflection::Class> childMap = {
-            "transcribe":
-                Class::forName("AssemblyAiDataProvider::AssemblyAiTranscribeDataProvider"),
-        };
-    }
-
     constructor(AssemblyAiRestClient::AssemblyAiRestClientIo rest)
             : AssemblyAiDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : AssemblyAiDataProviderCommon(options) {}
 
     string getName() { return ProviderInfo.name; }
 
-    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+    private *list<string> getChildProviderNamesImpl() {
+        list<string> names = ("transcribe",);
+        foreach RestSchemaActionSet actions in (AssemblyAiSchema::getActionSets().iterator()) {
+            names += actions.getActionNames();
+        }
+        return names;
     }
 
-    private *list<string> getChildProviderNamesImpl() { return keys childMap; }
-
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = childMap{name};
-        return cls ? cls.newObject(rest) : NOTHING;
+        if (name == "transcribe") {
+            return new AssemblyAiTranscribeDataProvider(rest);
+        }
+        *string doc = AssemblyAiSchema::findDocument(name);
+        if (!doc) {
+            return;
+        }
+        RestSchemaActionSet actions = AssemblyAiSchema::getActionSets(){doc};
+        return new AssemblyAiActionDataProvider(actions, actions.getOperationEx(name), rest);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

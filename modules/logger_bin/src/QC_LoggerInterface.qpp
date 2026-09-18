@@ -44,6 +44,7 @@ static QoreHashNode* LoggerInterface_serializer(const QoreObject& self, const Qo
 static void LoggerInterface_deserializer(QoreObject& self, const QoreHashNode* sdata,
         QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
     (void)runtime_cfg;
+    self.setPrivate(CID_LOGGERINTERFACE, new QoreLoggerInterface(&self));
 }
 
 //! This is the base class for logger levels
