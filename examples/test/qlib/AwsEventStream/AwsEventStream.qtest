@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
 
 %modern
 
@@ -21,6 +22,9 @@ public class AwsEventStreamTest inherits QUnit::Test {
         addTestCase("message CRC mismatch throws", \messageCrcErrorTest());
         addTestCase("invalid total length rejected", \invalidTotalLengthTest());
         addTestCase("empty payload frame", \emptyPayloadTest());
+        addTestCase("production encoder matches independent fixture", \encoderTest());
+        addTestCase("truncated headers and EOF are rejected", \truncatedTest());
+        addTestCase("malformed headers and oversized frames are rejected", \boundsTest());
         set_return_value(main());
     }
 
@@ -175,6 +179,76 @@ public class AwsEventStreamTest inherits QUnit::Test {
     }
 
     # ===== fixture builders =====
+
+    private boundsTest() {
+        # Duplicate name, missing type, missing length prefix, truncated string, empty name, invalid tag.
+        foreach binary hb in (<016100016101>, <0161>, <01610600>, <016107000261>, <0000>, <0161FF>) {
+            binary prelude = u32be(16 + hb.size()) + u32be(hb.size());
+            binary frame = prelude + u32be(AwsEventStreamDecoder::crc32(prelude)) + hb;
+            frame += u32be(AwsEventStreamDecoder::crc32(frame));
+            AwsEventStreamDecoder decoder();
+            decoder.feed(frame);
+            assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", \decoder.nextFrame());
+        }
+        foreach int header_size in (0, EventStreamMaxHeaders + 1) {
+            int total = header_size ? header_size + 16 : EventStreamMaxPayload + 17;
+            binary prelude = u32be(total) + u32be(header_size);
+            AwsEventStreamDecoder decoder();
+            decoder.feed(prelude + u32be(AwsEventStreamDecoder::crc32(prelude)));
+            assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", \decoder.nextFrame());
+        }
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", sub () {
+            AwsEventStreamEncoder::encodeHeaders({strmul("a", 256): "value"});
+        });
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", sub () {
+            AwsEventStreamEncoder::encodeHeaders({"name": strmul("a", 65536)});
+        });
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", sub () {
+            AwsEventStreamEncoder::encodeHeaders({"name": 1.2});
+        });
+    }
+
+    private encoderTest() {
+        hash<string, auto> headers = {
+            "s": "日本語", "b": <0080FF>, "true": True, "false": False, "i": -17,
+            "date": 2026-01-02T03:04:05.678Z,
+        };
+        binary payload = <000180FF>;
+        binary actual = AwsEventStreamEncoder::encode(headers, payload);
+        assertEq(buildFrame({"s": ("string", "日本語"), "b": ("bytes", <0080FF>),
+            "true": ("bool-true", True), "false": ("bool-false", False), "i": ("long", -17),
+            "date": ("timestamp", get_epoch_seconds(headers.date) * 1000 + 678)}, payload), actual);
+        AwsEventStreamDecoder decoder();
+        decoder.feed(actual);
+        hash<AwsEventStreamFrame> frame = decoder.nextFrame();
+        assertEq(headers, frame.headers);
+        assertEq(payload, frame.payload);
+        decoder.finish();
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", sub () {
+            AwsEventStreamEncoder::encode({"": "bad"}, binary());
+        });
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", sub () {
+            AwsEventStreamEncoder::encode({"date": 1s}, binary());
+        });
+    }
+
+    private truncatedTest() {
+        binary frame = buildFrame({"n": ("long", 42)}, binary("payload"));
+        for (int length = 1; length < frame.size(); ++length) {
+            AwsEventStreamDecoder decoder();
+            decoder.feed(frame[0..length - 1]);
+            assertEq(NOTHING, decoder.nextFrame());
+            assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", \decoder.finish());
+        }
+        # Correct CRCs with a header value extending into the payload must still be rejected.
+        binary headers = <016E05>; # name n, int64 tag, no value
+        binary prelude = u32be(16 + headers.size()) + u32be(headers.size());
+        binary bad = prelude + u32be(AwsEventStreamDecoder::crc32(prelude)) + headers;
+        bad += u32be(AwsEventStreamDecoder::crc32(bad));
+        AwsEventStreamDecoder decoder();
+        decoder.feed(bad);
+        assertThrows("AWS-EVENT-STREAM-FORMAT-ERROR", \decoder.nextFrame());
+    }
 
     #! Builds a valid AWS event-stream frame
     /** @param headers hash of name -> (type-tag, value), where type-tag is

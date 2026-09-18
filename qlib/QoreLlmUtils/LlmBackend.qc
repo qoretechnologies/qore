@@ -1261,6 +1261,9 @@ if (resp.stop_reason == "tool_use") {
         if (exists body.reasoning_token_budget) {
             options_h.reasoning_token_budget = body.reasoning_token_budget;
         }
+        if (exists body.reasoning_effort) {
+            options_h.reasoning_effort = body.reasoning_effort;
+        }
         if (exists body.temperature) {
             options_h.temperature = body.temperature;
         }
@@ -1272,6 +1275,7 @@ if (resp.stop_reason == "tool_use") {
         }
 
         hash<auto!> body_options;
+        provider.applyOpenAiRequestControls(\body_options, body);
         if (body.generationConfig.typeCode() == NT_HASH) {
             body_options.generationConfig = body.generationConfig;
         }
@@ -1404,6 +1408,7 @@ if (resp.stop_reason == "tool_use") {
                     "name": tool.function.name,
                     "description": tool.function.description,
                     "parameters": tool.function.parameters,
+                    "strict": tool.function.strict,
                     "cache_control": tool.cache_control,
                 };
             }

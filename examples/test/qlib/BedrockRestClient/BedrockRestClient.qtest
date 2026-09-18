@@ -15,6 +15,7 @@
 %requires QoreRagTypes
 %requires QoreLlmUtils
 %requires AwsRestClient
+%requires AwsEventStream
 %requires BedrockRestClient
 %requires BedrockDataProvider
 
@@ -27,6 +28,8 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
         string last_path = "";
         *hash<auto> last_body;
         string last_authorization = "";
+        hash<auto> last_headers;
+        string last_raw_body;
         # default canned response for /model/.../converse
         hash<auto> converse_response = {
             "output": {
@@ -52,9 +55,12 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         last_path = cx.raw_path;
         last_authorization = hdr."authorization" ?? "";
+        last_headers = hdr;
+        last_headers."content-type" = hdr."_qore_orig_content_type" ?? hdr."content-type";
         string body_str = body
             ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
             : "";
+        last_raw_body = body_str;
         try {
             last_body = parse_json(body_str);
         } catch () {
@@ -64,6 +70,30 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
         if (last_path =~ /\/converse$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(converse_response));
+        }
+        if (last_path =~ /\/converse-stream$/) {
+            binary frames = event("messageStart", {"role": "assistant"});
+            int index = 0;
+            foreach hash<auto> block in (converse_response.output.message.content) {
+                if (exists block.text) {
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"text": block.text.substr(0, 3)}});
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"text": block.text.substr(3)}});
+                } else if (block.toolUse) {
+                    frames += event("contentBlockStart", {"contentBlockIndex": index,
+                        "start": {"toolUse": block.toolUse - "input"}});
+                    string args = make_json(block.toolUse.input);
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"toolUse": {"input": args.substr(0, 3)}}});
+                    frames += event("contentBlockDelta", {"contentBlockIndex": index,
+                        "delta": {"toolUse": {"input": args.substr(3)}}});
+                }
+                frames += event("contentBlockStop", {"contentBlockIndex": index++});
+            }
+            frames += event("messageStop", {"stopReason": converse_response.stopReason});
+            frames += event("metadata", {"usage": converse_response.usage});
+            return makeResponse({"Content-Type": "application/vnd.amazon.eventstream"}, 200, frames);
         }
         if (last_path =~ /\/invoke$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
@@ -78,6 +108,11 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
                 make_json({"modelSummaries": ()}));
         }
         return makeResponse(404, "unknown bedrock path: " + last_path);
+    }
+
+    private static binary event(string name, hash<auto> value) {
+        return AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": name,
+            ":content-type": MimeTypeJson}, binary(make_json(value)));
     }
 }
 
@@ -121,7 +156,7 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("Converse chat round-trip",           \converseChatTest());
         addTestCase("Converse tool_use round-trip",       \converseToolUseTest());
         addTestCase("Converse complete() helper",         \completeTest());
-        addTestCase("chatStream delivers the response as one event", \chatStreamTest());
+        addTestCase("chatStream delivers native incremental events", \chatStreamTest());
         addTestCase("streamed tool calls are collected", \chatStreamToolUseTest());
         addTestCase("SigV4 authorization header is signed", \sigV4Test());
         addTestCase("missing region throws at construction", \missingRegionTest());
@@ -265,10 +300,13 @@ public class BedrockTest inherits QUnit::Test {
         ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
             push events, e;
         });
-        assertEq(1, events.size(), "the response is delivered as one event");
-        assertEq("Hello from Bedrock", events[0].delta);
-        assertTrue(events[0].done);
-        assertEq("end_turn", events[0].raw.stopReason);
+        assertEq(7, events.size(), "native events and one final completion are delivered");
+        assertEq("Hel", events[1].delta);
+        assertEq("lo from Bedrock", events[2].delta);
+        assertEq(1, (select events, $1.done).size());
+        assertTrue(events[-1].done);
+        assertEq("end_turn", events[4].raw.messageStop.stopReason);
+        assertTrue(handler.last_path =~ /\/converse-stream$/);
 
         # stream consumers read the stop reason and usage from the event
         QoreLlmUtils::LlmBackend backend = newBackend();
@@ -353,6 +391,35 @@ public class BedrockTest inherits QUnit::Test {
         # scope must include the bedrock service
         assertTrue(handler.last_authorization =~ /\/bedrock\/aws4_request/,
             "Authorization scope must mention 'bedrock' service");
+        assertSignature();
+    }
+
+    #! Recomputes SigV4 from the actual wire request, independently of the client signer
+    private assertSignature(string secret = "test-secret") {
+        assertEq(MimeTypeJson, handler.last_headers."content-type",
+            "Bedrock model endpoints receive the exact application/json media type");
+        assertEq(MimeTypeJson, handler.last_headers.accept,
+            "Bedrock model endpoints receive a single JSON Accept media type");
+        list<string> signature_parts = handler.last_authorization.split("SignedHeaders=")[1]
+            .split(", Signature=");
+        string signed_headers = signature_parts[0];
+        string headers = "";
+        foreach string name in (signed_headers.split(";")) {
+            headers += name + ":" + regex_subst(trim(handler.last_headers{name}), " +", " ", RE_Global) + "\n";
+        }
+        string canonical = "POST\n" + encode_url(handler.last_path, False) + "\n\n" + headers + "\n"
+            + signed_headers + "\n" + digest(CRYPTO_DIGEST_SHA256, handler.last_raw_body).toHex();
+        string timestamp = handler.last_headers."x-amz-date";
+        string day = substr(timestamp, 0, 8);
+        string scope = day + "/us-east-1/bedrock/aws4_request";
+        string to_sign = "AWS4-HMAC-SHA256\n" + timestamp + "\n" + scope + "\n"
+            + digest(CRYPTO_DIGEST_SHA256, canonical).toHex();
+        binary key = hmac(CRYPTO_DIGEST_SHA256, day, "AWS4" + secret);
+        foreach string component in ("us-east-1", "bedrock", "aws4_request") {
+            key = hmac(CRYPTO_DIGEST_SHA256, component, key);
+        }
+        assertEq(hmac(CRYPTO_DIGEST_SHA256, to_sign, key).toHex(), signature_parts[1],
+            "SigV4 matches the encoded model ID and JSON bytes sent on the wire");
     }
 
     private missingRegionTest() {
@@ -398,6 +465,7 @@ public class BedrockTest inherits QUnit::Test {
         assertEq(4, emb.getDimension());
         # request body: Titan-shaped
         assertEq("hello world", handler.last_body.inputText);
+        assertSignature("s");
     }
 
     private connectionTest() {

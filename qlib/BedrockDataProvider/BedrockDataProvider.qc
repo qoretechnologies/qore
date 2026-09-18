@@ -37,44 +37,48 @@ public class BedrockDataProvider inherits BedrockDataProviderCommon {
         };
     }
 
-    private {
-        #! Child data providers
-        const ChildMap = {
-            "converse": Class::forName("BedrockDataProvider::BedrockConverseDataProvider"),
-            "embed": Class::forName("BedrockDataProvider::BedrockEmbedDataProvider"),
-        };
-    }
-
     #! Creates the object from a pre-built AwsRestClientIo
+    /** @param rest AWS client whose credentials and connection manager are retained
+
+        @throw AWSRESTCLIENT-ERROR if a routing client cannot be constructed from the supplied options
+    */
     constructor(AwsRestClient::AwsRestClientIo rest) : BedrockDataProviderCommon(rest) {
     }
 
     #! Creates the object from constructor options
+    /** @param options provider and AWS authentication options
+
+        @throw CONSTRUCTOR-ERROR if the options are invalid or omit both `aws_region` and `restclient`
+        @throw AWSRESTCLIENT-ERROR if the AWS client options are invalid
+    */
     constructor(*hash<auto> options) : BedrockDataProviderCommon(options) {
     }
 
     #! Returns the data provider name
+    /** @return `bedrock` */
     string getName() {
         return ProviderInfo.name;
     }
 
-    #! Return data provider summary info
-    *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
-    }
-
     #! Returns a list of child data provider names, if any
     private *list<string> getChildProviderNamesImpl() {
-        return keys ChildMap;
+        list<string> names = ("embed",);
+        foreach RestSchemaActionSet actions in (BedrockSchema::getActionSets()) {
+            names += actions.getActionNames();
+        }
+        return names;
     }
 
     #! Returns the given child provider or @ref nothing if the given child is unknown
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        *Class cls = ChildMap{name};
-        if (!cls) {
+        if (name == "embed") {
+            return new BedrockEmbedDataProvider(rest);
+        }
+        *RestSchemaActionSet actions = BedrockSchema::findActionSet(name);
+        if (!actions) {
             return;
         }
-        return cls.newObject(rest);
+        return new RestSchemaActionDataProvider(actions, actions.getOperationEx(name), rest);
     }
 
     #! Returns data provider static info

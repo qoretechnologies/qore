@@ -38,6 +38,7 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
+%requires AwsEventStream >= 1.1
 
 module AwsRestClient {
     version = "1.4";
@@ -94,8 +95,13 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_4 AwsRestClient v1.4
+    - added incremental signed event-stream sessions with response validation, cancellation, and timeouts
+    - supports full-duplex uploads with chained SigV4 event signatures and signed terminal envelopes
     - added signed raw-body requests to @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" so schema-driven
       AWS integrations can serialize requests once without bypassing AWS Signature Version 4 authentication
+    - added @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest()
+      "AwsRestClientIo::restDoEncodedRawRequest()" for schema-driven requests whose URI path variables are
+      already percent-encoded, preserving the exact encoded path in AWS Signature Version 4 canonical requests
     - preserved AWS configuration in @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies
       of @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo"
 
@@ -370,6 +376,29 @@ public class AwsRestClientBase {
                 params{$1} === True ? "" : encode_url(params{$1}.toString(), True)),
             sort(keys params)
         )) ?? "";
+    }
+
+    #! Returns the canonical URI used by AWS Signature Version 4
+    /** @param path request path, optionally including a query string
+        @param s3 if @ref True, apply S3's single-encoding contract
+        @param path_is_encoded if @ref True, the non-S3 path variables are already percent-encoded for the wire
+
+        @return the canonical URI
+
+        AWS canonicalizes the percent sign in an encoded wire path. Schema-driven clients encode each path
+        variable before transport, so those paths need one canonical encoding rather than the two encodings used
+        when a caller supplies an unencoded path.
+
+        @since AwsRestClient 1.4
+    */
+    static string getCanonicalUri(string path, bool s3, bool path_is_encoded = False) {
+        string uri = parse_uri_query(path).method ?? "/";
+        if (s3) {
+            return uri;
+        }
+        uri = normalize_dir_unix(uri, "/");
+        uri = encode_url(uri, False);
+        return path_is_encoded ? uri : encode_url(uri, False);
     }
 
     static private string trimall(string str) {
@@ -1203,9 +1232,6 @@ AwsRestClient rest({
         # make canonical URI
         hash<UriQueryInfo> uri_info = parse_uri_query(path);
 
-        # 2: canonical URI parameter
-        string uri = uri_info.method ?? "/";
-
         # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here.
         #
         # S3 URI-encodes the canonical path once, every other service twice
@@ -1218,11 +1244,8 @@ AwsRestClient rest({
         #
         # Other services keep the previous behavior exactly: their callers pass unencoded paths, which are
         # normalized and then encoded twice.
-        if (!aws_s3) {
-            uri = normalize_dir_unix(uri, "/");
-            uri = encode_url(uri, False);
-            uri = encode_url(uri, False);
-        }
+        # 2: canonical URI parameter
+        string uri = AwsRestClientBase::getCanonicalUri(path, aws_s3);
         # add to canonical string
         cstr += uri + "\n";
 
@@ -1601,6 +1624,71 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return restDoRequestIntern(method, path, body, hdr, NOTHING, True);
     }
 
+    #! Sends a signed raw request whose path variables are already percent-encoded
+    /** This is the schema-driven counterpart of @ref restDoRawRequest(). A schema request has already escaped
+        each path variable for transport; SigV4 must therefore encode the percent sign once when building its
+        canonical URI instead of applying the normal two-pass encoding for an unencoded caller path.
+
+        @param method the HTTP method
+        @param path the request path with encoded path variables
+        @param body the pre-serialized request body, if any
+        @param hdr any additional request headers
+
+        @return the deserialized REST response
+
+        @since AwsRestClient 1.4
+    */
+    hash<RestClient::RestResponseInfo> restDoEncodedRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True);
+    }
+
+    #! Opens a SigV4-authenticated AWS event stream without buffering the response
+    /** @param method HTTP method
+        @param path request path with already percent-encoded path variables
+        @param body pre-serialized one-shot request body; must be omitted for bidirectional streams
+        @param hdr additional request headers
+        @param bidirectional keep the upload open and sign every uploaded event
+        @return an independently owned stream; close it when finished or abandoning a response
+        @throw AWS-EVENT-STREAM-ERROR an initial body was supplied for a bidirectional stream
+        @note No request is replayed after any response event or uploaded event has been delivered.
+        @since AwsRestClient 1.4
+    */
+    AwsSignedEventStream startEncodedEventStream(string method, string path, *data body,
+            *hash<auto> hdr, bool bidirectional = False) {
+        if (bidirectional && exists body) {
+            throw "AWS-EVENT-STREAM-ERROR", "bidirectional uploads must use sendEvent()";
+        }
+        hash<auto> prepared = prepareRawRequest(method, \path, body, \hdr);
+        # Transparent content decompression is not performed by a raw stream reader.
+        hdr."accept-encoding" = "identity";
+        if (bidirectional) {
+            remove hdr."content-length";
+            hdr."content-type" = "application/vnd.amazon.eventstream";
+        }
+        string seed = signRequest(method, path, prepared.serialized_body, \hdr, True,
+            bidirectional ? "STREAMING-AWS4-HMAC-SHA256-EVENTS" : NOTHING);
+        HttpClientIo::HttpClientStreamHandle stream = getConnectionManager().acquireAndStartStreaming(
+            getUrl(), method, path, hdr, bidirectional, prepared.serialized_body);
+        return new AwsSignedEventStream(self, stream, bidirectional ? seed : NOTHING,
+            bidirectional ? \signEventPayload() : NOTHING);
+    }
+
+    #! Signs an event envelope using its current UTC date and the preceding signature
+    private binary signEventPayload(binary payload, string prior_signature, date timestamp) {
+        string day = timestamp.format("YYYYMMDD");
+        binary key = hmac(AwsRestClientBase::QoreDigest, day, "AWS4" + aws_secret);
+        key = hmac(AwsRestClientBase::QoreDigest, aws_region, key);
+        key = hmac(AwsRestClientBase::QoreDigest, aws_service, key);
+        key = hmac(AwsRestClientBase::QoreDigest, AwsRestClientBase::AwsTermination, key);
+        string to_sign = "AWS4-HMAC-SHA256-PAYLOAD\n" + timestamp.format("YYYYMMDDTHHmmSS") + "Z\n"
+            + day + "/" + credential_scope_suffix + "\n" + prior_signature + "\n"
+            + digest(AwsRestClientBase::QoreDigest,
+                AwsEventStream::AwsEventStreamEncoder::encodeHeaders({":date": timestamp})).toHex() + "\n"
+            + digest(AwsRestClientBase::QoreDigest, payload).toHex();
+        return hmac(AwsRestClientBase::QoreDigest, to_sign, key);
+    }
+
     #! Sends a signed REST request, assuming an XML response body when the server sends no content type
     /** S3 answers \c CreateMultipartUpload and \c CompleteMultipartUpload with an XML document and no
         \c Content-Type header at all.  Without one the REST client has nothing to deserialize against and
@@ -1662,18 +1750,19 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param assume_content_type the content type to attribute to a response that arrives without one; the
         header is only supplied when the server sent none, so a typed response is never reinterpreted
         @param raw_body if @ref True, a body is already serialized and must be sent unchanged
+        @param path_is_encoded if @ref True, path variables are already percent-encoded for transport
 
         @return the deserialized @ref RestClient::RestResponseInfo hash
     */
     private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
-            *hash<auto> hdr, *string assume_content_type, *bool raw_body) {
+            *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded) {
         # Prepare request (serialize ordinary bodies; preserve already serialized raw bodies)
         hash<auto> prepared = raw_body
             ? prepareRawRequest(method, \path, body, \hdr)
             : prepareRequest(method, \path, body, \hdr);
 
         # Sign the request
-        signRequest(method, path, prepared.serialized_body, \hdr);
+        signRequest(method, path, prepared.serialized_body, \hdr, path_is_encoded);
 
         # Make HTTP request via multiplexed connection manager
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
@@ -1691,7 +1780,8 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
     }
 
     #! Internal: adds AWS Signature V4 to the request headers
-    private signRequest(string method, string path, *data body, reference<*hash<auto>> hdr) {
+    private string signRequest(string method, string path, *data body, reference<*hash<auto>> hdr,
+            *bool path_is_encoded, *string payload_hash) {
         date gmtime = Qore::gmtime();
         string scope = sprintf("%s/%s", gmtime.format("YYYYMMDD"), credential_scope_suffix);
         string signed_headers;
@@ -1714,9 +1804,12 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         if (aws_s3) {
             hdr."x-amz-content-sha256" = digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
         }
+        if (exists payload_hash) {
+            hdr."x-amz-content-sha256" = payload_hash;
+        }
 
         # Build canonical signature
-        string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers);
+        string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers, path_is_encoded, payload_hash);
 
         string msg = AwsRestClientBase::AwsSignatureAlgorithm + "\n"
             + aws_date + "\n"
@@ -1734,26 +1827,22 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
 
         hdr.authorization = sprintf("%s Credential=%s/%s, SignedHeaders=%s, Signature=%s",
             AwsRestClientBase::AwsSignatureAlgorithm, aws_keyid, scope, signed_headers, sig);
+        return sig;
     }
 
     #! Internal: builds canonical signature for AWS Signature V4
     private string getCanonicalSignature(string http_method, string path, hash<auto> hdr, *data body,
-            reference<string> signed_headers) {
+            reference<string> signed_headers, *bool path_is_encoded, *string payload_hash) {
         string cstr = http_method + "\n";
 
         hash<UriQueryInfo> uri_info = parse_uri_query(path);
-        string uri = uri_info.method ?? "/";
 
         # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here; see the same
         # decision in AwsRestClient::getCanonicalSignature().  An S3 caller builds an already-encoded path,
         # and encoding it again would sign "%2520" where the wire carried "%20", which AWS reports as
         # SignatureDoesNotMatch.  Other services keep the previous behavior: their callers pass unencoded
         # paths, which are normalized and then encoded twice
-        if (!aws_s3) {
-            uri = normalize_dir_unix(uri, "/");
-            uri = encode_url(uri, False);
-            uri = encode_url(uri, False);
-        }
+        string uri = AwsRestClientBase::getCanonicalUri(path, aws_s3, path_is_encoded ?? False);
         cstr += uri + "\n";
 
         if (uri_info.params) {
@@ -1783,9 +1872,209 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         signed_headers = (foldl $1 + ";" + $2, keys hdr);
         cstr += signed_headers + "\n";
 
-        cstr += digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
+        cstr += payload_hash ?? digest(AwsRestClientBase::QoreDigest, body ?? "").toHex();
 
         return digest(AwsRestClientBase::QoreDigest, cstr).toHex();
+    }
+}
+
+#! Incremental, authenticated AWS event-stream session
+/** Created by @ref AwsRestClientIo::startEncodedEventStream(). A reader and a writer may run concurrently.
+    Reads and writes are independently serialized; @ref close() cancels blocked reads without taking the
+    reader lock. The originating client is retained, so releasing it cannot shut down this stream's manager.
+
+    @par Example
+    Read frames without accumulating the complete HTTP response:
+    @code{.py}
+AwsSignedEventStream stream = client.startEncodedEventStream("POST", path, body, headers);
+on_exit stream.close();
+while (*hash<AwsEventStream::AwsEventStreamFrame> frame = stream.readFrame()) {
+    process_frame(frame);
+}
+    @endcode
+*/
+public class AwsSignedEventStream {
+    private {
+        AwsRestClientIo owner;
+        HttpClientIo::HttpClientStreamHandle stream;
+        AwsEventStream::AwsEventStreamDecoder decoder();
+        *string prior_signature;
+        *code<binary(binary, string, date)> signer;
+        Mutex read_lock();
+        Mutex write_lock();
+        Mutex state_lock();
+        bool closed = False;
+        bool finished = False;
+        bool writes_done = False;
+        bool checked_response = False;
+    }
+
+    #! Internal constructor used by the AWS client
+    /** @param owner client retaining the shared manager
+        @param stream submitted HTTP stream
+        @param prior_signature initial request signature for bidirectional uploads
+        @param signer bound event-signing callback; omitted for response-only streams
+    */
+    constructor(AwsRestClientIo owner, HttpClientIo::HttpClientStreamHandle stream,
+            *string prior_signature, *code<binary(binary, string, date)> signer) {
+        self.owner = owner;
+        self.stream = stream;
+        self.prior_signature = prior_signature;
+        self.signer = signer;
+    }
+
+    destructor() {
+        close();
+    }
+
+    #! Returns the next validated frame, or nothing after a clean end of stream
+    /** @param timeout_ms idle timeout; omitted to use the HTTP client's configured timeout
+        @return the next event frame or @ref nothing at EOF
+        @throw AWS-EVENT-STREAM-TIMEOUT no response data arrived before the timeout
+        @throw AWS-EVENT-STREAM-HTTP-ERROR unsuccessful HTTP status or wrong response media type
+        @throw AWS-EVENT-STREAM-FORMAT-ERROR malformed or truncated event data
+        @throw AWS-EVENT-STREAM-CLOSED this session was explicitly closed
+        @note A decoding, transport, or timeout error closes the stream; requests are not replayed.
+    */
+    *hash<AwsEventStream::AwsEventStreamFrame> readFrame(*timeout timeout_ms) {
+        AutoLock al(read_lock);
+        try {
+            while (True) {
+                {
+                    AutoLock sl(state_lock);
+                    if (finished) {
+                        return NOTHING;
+                    }
+                    if (closed) {
+                        throw "AWS-EVENT-STREAM-CLOSED", "event stream was closed";
+                    }
+                }
+                *hash<AwsEventStream::AwsEventStreamFrame> frame = decoder.nextFrame();
+                if (frame) {
+                    return frame;
+                }
+                auto item = stream.readData(timeout_ms);
+                if (!exists item) {
+                    throw "AWS-EVENT-STREAM-TIMEOUT", "timed out waiting for AWS event-stream data";
+                }
+                if (item.typeCode() == NT_HASH && item.error) {
+                    throw item.error.err ?? "AWS-EVENT-STREAM-ERROR", item.error.desc ?? "HTTP stream failed";
+                }
+                if (!checked_response) {
+                    hash<auto> response = stream.getResponse() ?? {};
+                    if (exists response.status_code) {
+                        if (response.status_code < 200 || response.status_code >= 300) {
+                            throw "AWS-EVENT-STREAM-HTTP-ERROR", sprintf("AWS event stream returned HTTP %d",
+                                response.status_code), response - "body";
+                        }
+                        string content_type = (response.headers."content-type" ?? "").split(";")[0].lwr();
+                        if (trim(content_type) != "application/vnd.amazon.eventstream") {
+                            throw "AWS-EVENT-STREAM-HTTP-ERROR", "expected application/vnd.amazon.eventstream; got "
+                                + content_type;
+                        }
+                        checked_response = True;
+                    }
+                }
+                if (item.typeCode() == NT_BINARY || item.typeCode() == NT_STRING) {
+                    if (!checked_response) {
+                        throw "AWS-EVENT-STREAM-HTTP-ERROR", "event data arrived without response headers";
+                    }
+                    decoder.feed(binary(item));
+                } else if (item.typeCode() == NT_HASH && item.end_stream) {
+                    if (!checked_response) {
+                        throw "AWS-EVENT-STREAM-HTTP-ERROR", "stream ended without response headers";
+                    }
+                    decoder.finish();
+                    AutoLock sl(state_lock);
+                    finished = True;
+                    return NOTHING;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            close();
+            rethrow;
+        }
+    }
+
+    #! Sends one signed event on a bidirectional upload
+    /** @param headers inner event headers
+        @param payload inner event payload
+        @throw AWS-EVENT-STREAM-CLOSED the upload is closed or this is a response-only stream
+        @throw AWS-EVENT-STREAM-FORMAT-ERROR invalid event encoding
+    */
+    sendEvent(hash<string, auto> headers, binary payload) {
+        AutoLock al(write_lock);
+        checkWritable();
+        sendSignedPayload(AwsEventStream::AwsEventStreamEncoder::encode(headers, payload));
+    }
+
+    #! Sends the signed terminal envelope and half-closes the upload
+    /** Responses remain readable. Repeated calls are harmless.
+        @throw AWS-EVENT-STREAM-CLOSED the session is closed or response-only
+    */
+    writesDone() {
+        AutoLock al(write_lock);
+        if (writes_done) {
+            return;
+        }
+        checkWritable();
+        sendSignedPayload(binary());
+        try {
+            stream.writesDone();
+        } catch (hash<ExceptionInfo> ex) {
+            close();
+            rethrow;
+        }
+        writes_done = True;
+    }
+
+    #! Returns HTTP response metadata without retaining response body chunks
+    /** @return status, headers, and transport metadata available so far */
+    hash<auto> getResponseInfo() {
+        return (stream.getResponse() ?? {}) - "body";
+    }
+
+    #! Returns the negotiated transport protocol
+    /** @return the protocol identifier, for example `h2` */
+    string getProtocol() {
+        return stream.getConnection().getProtocol();
+    }
+
+    #! Cancels the stream and wakes any blocked reader; safe to call repeatedly
+    close() {
+        {
+            AutoLock al(state_lock);
+            if (closed) {
+                return;
+            }
+            closed = True;
+        }
+        # Cancellation is best-effort during cleanup; preserve the originating request/callback exception.
+        try { stream.cancel(); } catch () {}
+    }
+
+    #! Checks upload state while the write lock is held
+    private checkWritable() {
+        AutoLock al(state_lock);
+        if (closed || finished || writes_done || !signer) {
+            throw "AWS-EVENT-STREAM-CLOSED", "event-stream upload is not writable";
+        }
+    }
+
+    #! Signs a complete inner frame, or an empty terminal envelope
+    private sendSignedPayload(binary payload) {
+        date timestamp = Qore::gmtime();
+        binary signature = signer(payload, prior_signature, timestamp);
+        binary frame = AwsEventStream::AwsEventStreamEncoder::encode({
+            ":date": timestamp, ":chunk-signature": signature,
+        }, payload);
+        try {
+            stream.sendData(frame);
+            prior_signature = signature.toHex();
+        } catch (hash<ExceptionInfo> ex) {
+            close();
+            rethrow;
+        }
     }
 }
 

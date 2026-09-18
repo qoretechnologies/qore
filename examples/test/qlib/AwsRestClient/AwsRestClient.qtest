@@ -553,6 +553,17 @@ class AwsTest inherits QUnit::Test {
         assertEq(200, response.status_code, "the copied client completes a raw request");
         assertRegex("^AWS4-HMAC-SHA256 ", HeaderCaptureHandler::last_hdr.authorization,
             "the copied client retains the AWS credentials and signing behavior");
+
+        assertEq("/model/amazon.nova-micro-v1%253A0/converse",
+            AwsRestClientBase::getCanonicalUri(
+                "/model/amazon.nova-micro-v1%3A0/converse", False, True),
+            "an encoded schema path is canonicalized exactly once");
+        remove HeaderCaptureHandler::last_hdr;
+        response = rest.restDoEncodedRawRequest("POST", "/model/amazon.nova-micro-v1%3A0/converse", "{}",
+            {"Content-Type": "application/json"});
+        assertEq(200, response.status_code, "the encoded raw request completes");
+        assertRegex("^AWS4-HMAC-SHA256 ", HeaderCaptureHandler::last_hdr.authorization,
+            "the encoded raw request carries a SigV4 authorization header");
     }
 }
 

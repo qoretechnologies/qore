@@ -1,0 +1,360 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires BedrockRestClient
+%requires AwsEventStream
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires json
+%exec-class BedrockStreamingTest
+
+#! One-request wire fixture; its gate proves delivery before the rest of the response exists
+class BedrockStreamWireFixture {
+    public {
+        int port;
+        Queue requests();
+        Queue gate();
+    }
+    private {
+        Socket listener();
+        Counter running();
+        list<binary> chunks;
+        int gate_after;
+        int status;
+        string content_type;
+    }
+    constructor(list<binary> chunks, int gate_after = -1, int status = 200,
+            string content_type = "application/vnd.amazon.eventstream") {
+        self.chunks = chunks;
+        self.gate_after = gate_after;
+        self.status = status;
+        self.content_type = content_type;
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background serve();
+    }
+    stop() {
+        gate.push(True);
+        try {
+            Socket wake();
+            wake.connect("127.0.0.1:" + port, 1s);
+            wake.close();
+        } catch () {}
+        running.waitForZero();
+        listener.close();
+    }
+    private serve() {
+        on_exit running.dec();
+        try {
+            Socket conn = listener.accept(5s);
+            on_exit conn.close();
+            hash<auto> hdr = conn.readHTTPHeader(5s);
+            binary body = binary();
+            if (hdr."content-length") {
+                body = binary(conn.recv(hdr."content-length".toInt(), 5s));
+            } else if (hdr."transfer-encoding" =~ /chunked/i) {
+                body = binary(conn.readHTTPChunkedBody(5s).body);
+            }
+            requests.push({"hdr": hdr, "body": body});
+            conn.send(sprintf("HTTP/1.1 %d Test\r\nContent-Type: %s\r\n"
+                "x-amzn-requestid: stream-fixture\r\nConnection: close\r\n\r\n", status, content_type));
+            int index = 0;
+            foreach binary chunk in (chunks) {
+                conn.send(chunk);
+                if (index++ == gate_after) {
+                    gate.get(5s);
+                }
+            }
+        } catch () {
+            # A cancelled or failed client is allowed to close the fixture socket.
+        }
+    }
+}
+
+class BedrockStreamingTest inherits QUnit::Test {
+    constructor() : Test("Bedrock native event streaming", "1.0", \ARGV) {
+        addTestCase("fragmented frames, decoded bytes, and clean EOF", \fragmentedTest());
+        addTestCase("text is delivered before response completion", \incrementalTest());
+        addTestCase("streaming request signature matches the actual wire", \signatureTest());
+        addTestCase("HTTP errors and non-event response bodies fail", \httpErrorTest());
+        addTestCase("service exception events fail", \serviceErrorTest());
+        addTestCase("CRC, truncation, and malformed event failures", \malformedTest());
+        addTestCase("idle timeout never emits successful completion", \timeoutTest());
+        addTestCase("close wakes a blocked event reader", \cancelTest());
+        addTestCase("Converse requires messageStop before EOF", \missingStopTest());
+        addTestCase("callback failures retain their original exception", \callbackFailureTest());
+        addTestCase("service failure after messageStop is not successful completion", \lateFailureTest());
+        # Opt-in: these calls use real AWS credentials and may incur inference charges.
+        if (ENV.BEDROCK_STREAM_LIVE) {
+            addTestCase("live ConverseStream", \liveConverseTest());
+            addTestCase("live InvokeModelWithResponseStream", \liveInvokeTest());
+            addTestCase("live Nova Sonic bidirectional session", \liveBidirectionalTest());
+        }
+        set_return_value(main());
+    }
+
+    private static binary event(string name, hash<auto> body, string type = "event") {
+        return AwsEventStreamEncoder::encode({":message-type": type,
+            (type == "exception" ? ":exception-type" : ":event-type"): name,
+            ":content-type": "application/json"}, binary(make_json(body)));
+    }
+
+    private hash<auto> options(int port) {
+        return {"url": "http://127.0.0.1:" + port, "aws_region": "us-east-1",
+            "aws_keyid": "test-key", "aws_secret": "test-secret", "aws_imds_disabled": True};
+    }
+
+    private BedrockRestClientIo client(int port) {
+        return new BedrockRestClientIo(options(port));
+    }
+
+    private BedrockLlmProvider provider(int port) {
+        return new BedrockLlmProvider(<LlmBackendConfig>{"mode": "bedrock", "model": "test:model:0",
+            "url": options(port).url, "provider_options": options(port), "max_retries": 0,
+            "timeout_ms": 2000});
+    }
+
+    private list<hash<ChatMessage>> messages() {
+        return (<ChatMessage>{"role": "user", "content": "hi"},);
+    }
+
+    private fragmentedTest() {
+        binary bytes = binary("日本語") + <00FF>;
+        binary frame = event("chunk", {"bytes": bytes.toBase64()});
+        BedrockStreamWireFixture server((frame[0..2], frame[3..16], frame[17..]
+            + event("chunk", {"bytes": ""})));
+        on_exit server.stop();
+        BedrockEventStream stream = client(server.port).openInvokeModelWithResponseStream("test:model:0", "{}");
+        on_exit stream.close();
+        assertEq(bytes, stream.readEvent().chunk.bytes);
+        assertEq(binary(), stream.readEvent().chunk.bytes);
+        assertEq(NOTHING, stream.readEvent());
+        assertEq(NOTHING, stream.readEvent());
+        assertEq("stream-fixture", stream.getResponseInfo().headers."x-amzn-requestid");
+        hash<auto> request = server.requests.get(2s);
+        assertTrue(request.hdr.path =~ /\/model\/test%3[Aa]model%3[Aa]0\/invoke-with-response-stream$/);
+        assertEq("application/json", request.hdr."x-amzn-bedrock-accept");
+    }
+
+    private incrementalTest() {
+        BedrockStreamWireFixture server((event("messageStart", {"role": "assistant"})
+            + event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "Hello "}}),
+            event("contentBlockDelta", {"contentBlockIndex": 0, "delta": {"text": "world"}})
+            + event("messageStop", {"stopReason": "end_turn"})
+            + event("metadata", {"usage": {"inputTokens": 2, "outputTokens": 3, "totalTokens": 5}})), 0);
+        on_exit server.stop();
+        list<hash<ChatStreamEvent>> events = ();
+        provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {
+            events += event;
+            if (event.delta == "Hello ") {
+                server.gate.push(True);
+            }
+        });
+        assertEq("Hello world", (map $1.delta ?? "", events).join(""));
+        assertEq(1, (select events, $1.done).size());
+        assertTrue(events[-1].done);
+        assertFalse(events[1].done);
+        assertEq("stream-fixture", events[0].raw.requestId);
+    }
+
+    private signatureTest() {
+        BedrockStreamWireFixture server((event("messageStop", {"stopReason": "end_turn"}),));
+        on_exit server.stop();
+        BedrockEventStream stream = client(server.port).openConverseStream("arn:aws:bedrock/test+ü", {});
+        on_exit stream.close();
+        stream.readEvent();
+        hash<auto> request = server.requests.get(2s);
+        hash<auto> headers = request.hdr;
+        headers."content-type" = headers."_qore_orig_content_type" ?? headers."content-type";
+        list<string> parts = headers.authorization.split("SignedHeaders=")[1].split(", Signature=");
+        string header_lines = "";
+        foreach string name in (parts[0].split(";")) {
+            header_lines += name + ":" + trim(headers{name}) + "\n";
+        }
+        string canonical = "POST\n" + encode_url(headers.path, False) + "\n\n" + header_lines + "\n"
+            + parts[0] + "\n" + digest("sha256", request.body).toHex();
+        string timestamp = headers."x-amz-date";
+        string day = timestamp.substr(0, 8);
+        binary key = hmac("sha256", day, "AWS4test-secret");
+        foreach string part in ("us-east-1", "bedrock", "aws4_request") {
+            key = hmac("sha256", part, key);
+        }
+        string signed_text = "AWS4-HMAC-SHA256\n" + timestamp + "\n" + day
+            + "/us-east-1/bedrock/aws4_request\n" + digest("sha256", canonical).toHex();
+        assertEq(hmac("sha256", signed_text, key).toHex(), parts[1]);
+        assertEq("application/json", headers."content-type");
+    }
+
+    private httpErrorTest() {
+        foreach int status in (403, 429, 200) {
+            BedrockStreamWireFixture server((binary("{}"),), -1, status, "application/json");
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            assertThrows("AWS-EVENT-STREAM-HTTP-ERROR", \stream.readEvent());
+        }
+    }
+
+    private serviceErrorTest() {
+        BedrockStreamWireFixture server((event("throttlingException", {"message": "slow down"}, "exception"),));
+        on_exit server.stop();
+        BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+        assertThrows("BEDROCK-STREAM-EXCEPTION", "throttlingException: slow down", \stream.readEvent());
+    }
+
+    private malformedTest() {
+        binary valid = event("messageStop", {"stopReason": "end_turn"});
+        foreach hash<auto> fixture in ((
+            {"body": valid[0..valid.size() - 2] + <00>, "error": "AWS-EVENT-STREAM-CRC-ERROR"},
+            {"body": valid[0..10], "error": "AWS-EVENT-STREAM-FORMAT-ERROR"},
+            {"body": AwsEventStreamEncoder::encode({":message-type": "event", ":event-type": "messageStop"},
+                binary("{")), "error": "BEDROCK-STREAM-FORMAT-ERROR"},
+            {"body": event("chunk", {"bytes": 1}), "error": "BEDROCK-STREAM-FORMAT-ERROR"}
+        )) {
+            BedrockStreamWireFixture server((fixture.body,));
+            on_exit server.stop();
+            BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+            assertThrows(fixture.error, \stream.readEvent());
+        }
+    }
+
+    private timeoutTest() {
+        BedrockStreamWireFixture server((event("messageStart", {"role": "assistant"}),), 0);
+        on_exit server.stop();
+        int completed = 0;
+        assertThrows("LLM-ERROR", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {
+                completed += int(event.done);
+            }, NOTHING, <LlmRequestOptions>{"timeout_ms": 100});
+        });
+        assertEq(0, completed);
+    }
+
+    private cancelTest() {
+        BedrockStreamWireFixture server((event("messageStart", {"role": "assistant"}),), 0);
+        on_exit server.stop();
+        BedrockEventStream stream = client(server.port).openConverseStream("test", {});
+        stream.readEvent();
+        Queue outcome();
+        background readCancelled(stream, outcome);
+        stream.close();
+        assertTrue(outcome.get(2s), "closing the stream wakes its reader");
+        stream.close();
+    }
+
+    private readCancelled(BedrockEventStream stream, Queue outcome) {
+        try { stream.readEvent(5s); outcome.push(False); }
+        catch () { outcome.push(True); }
+    }
+
+    private missingStopTest() {
+        BedrockStreamWireFixture server((event("messageStart", {"role": "assistant"}),));
+        on_exit server.stop();
+        assertThrows("LLM-ERROR", "ended without messageStop", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {});
+        });
+    }
+
+    private callbackFailureTest() {
+        BedrockStreamWireFixture server((event("messageStart", {"role": "assistant"}),), 0);
+        on_exit server.stop();
+        int calls = 0;
+        assertThrows("CALLBACK-FAILURE", "caller cancelled", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {
+                ++calls;
+                throw "CALLBACK-FAILURE", "caller cancelled";
+            });
+        });
+        assertEq(1, calls);
+    }
+
+    private lateFailureTest() {
+        BedrockStreamWireFixture server((event("messageStop", {"stopReason": "end_turn"})
+            + event("internalServerException", {"message": "late failure"}, "exception"),));
+        on_exit server.stop();
+        int completed = 0;
+        assertThrows("LLM-ERROR", "late failure", sub () {
+            provider(server.port).chatStream(messages(), sub (hash<ChatStreamEvent> event) {
+                completed += int(event.done);
+            });
+        });
+        assertEq(0, completed);
+    }
+
+    private BedrockRestClientIo liveClient() {
+        string region = ENV.AWS_REGION ?? ENV.AWS_DEFAULT_REGION ?? "us-east-1";
+        return new BedrockRestClientIo({"url": "https://bedrock-runtime." + region + ".amazonaws.com",
+            "aws_region": region, "http_version": "2.0"});
+    }
+
+    private hash<auto> liveBody() {
+        return {"messages": ({"role": "user", "content": ({"text": "Say hello."},)},),
+            "inferenceConfig": {"maxTokens": 8}};
+    }
+
+    private liveConverseTest() {
+        BedrockEventStream stream = liveClient().openConverseStream("amazon.nova-micro-v1:0", liveBody());
+        on_exit stream.close();
+        bool stopped = False;
+        string answer = "";
+        while (*hash<auto> event = stream.readEvent(20s)) {
+            stopped = stopped || exists event.messageStop;
+            answer += event.contentBlockDelta.delta.text ?? "";
+        }
+        assertTrue(stopped);
+        assertTrue(answer.size() > 0);
+    }
+
+    private liveInvokeTest() {
+        BedrockEventStream stream = liveClient().openInvokeModelWithResponseStream("amazon.nova-micro-v1:0",
+            make_json(liveBody() + {"schemaVersion": "messages-v1"}));
+        on_exit stream.close();
+        int chunks = 0;
+        while (*hash<auto> event = stream.readEvent(20s)) {
+            assertTrue(event.chunk.bytes instanceof binary);
+            hash<auto> model_event = parse_json(event.chunk.bytes.toString("UTF-8"));
+            assertTrue(model_event.size() > 0);
+            ++chunks;
+        }
+        assertTrue(chunks > 0);
+    }
+
+    private liveBidirectionalTest() {
+        BedrockEventStream stream = liveClient().openInvokeModelWithBidirectionalStream("amazon.nova-sonic-v1:0");
+        on_exit stream.close();
+        string prompt = "qore-stream-smoke";
+        list<hash<auto>> events = (
+            {"sessionStart": {"inferenceConfiguration": {"maxTokens": 8, "topP": 0.9, "temperature": 0.7}}},
+            {"promptStart": {"promptName": prompt, "textOutputConfiguration": {"mediaType": "text/plain"},
+                "audioOutputConfiguration": {"mediaType": "audio/lpcm", "sampleRateHertz": 24000,
+                    "sampleSizeBits": 16, "channelCount": 1, "voiceId": "matthew", "encoding": "base64",
+                    "audioType": "SPEECH"}}},
+            {"contentStart": {"promptName": prompt, "contentName": "system", "type": "TEXT",
+                "interactive": False, "role": "SYSTEM", "textInputConfiguration": {"mediaType": "text/plain"}}},
+            {"textInput": {"promptName": prompt, "contentName": "system", "content": "Be concise."}},
+            {"contentEnd": {"promptName": prompt, "contentName": "system"}},
+            {"contentStart": {"promptName": prompt, "contentName": "audio", "type": "AUDIO", "interactive": True,
+                "role": "USER", "audioInputConfiguration": {"mediaType": "audio/lpcm", "sampleRateHertz": 16000,
+                    "sampleSizeBits": 16, "channelCount": 1, "audioType": "SPEECH", "encoding": "base64"}}},
+            {"audioInput": {"promptName": prompt, "contentName": "audio",
+                "content": binary(strmul(chr(0), 1024)).toBase64()}},
+            {"contentEnd": {"promptName": prompt, "contentName": "audio"}},
+            {"promptEnd": {"promptName": prompt}},
+            {"sessionEnd": {}}
+        );
+        foreach hash<auto> event in (events) stream.send(make_json({"event": event}));
+        stream.writesDone();
+        bool usage = False;
+        while (*hash<auto> event = stream.readEvent(20s)) {
+            hash<auto> model_event = parse_json(event.chunk.bytes.toString("UTF-8"));
+            if (model_event.event.usageEvent) {
+                usage = True;
+                assertTrue(model_event.event.usageEvent.totalInputTokens > 0);
+            }
+        }
+        assertTrue(usage, "the silent audio session ends cleanly with accounted input");
+    }
+}

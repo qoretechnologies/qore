@@ -200,6 +200,13 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "token budgets", \geminiOpenAiAbstractTokenBudgetFacadeTest());
         addTestCase("LlmBackend OpenAI provider maps reasoning-model "
             "completion budgets", \openAiReasoningModelTokenBudgetTest());
+        addTestCase("OpenAI strict schemas restore root-recursive optional fields", \openAiStrictSchemaRecursiveTest());
+        addTestCase("OpenAI strict schemas relocate local references", \openAiStrictSchemaReferenceTest());
+        addTestCase("OpenAI strict schemas retain incomplete and refused output", \openAiStrictSchemaIncompleteTest());
+        addTestCase("OpenAI strict schemas preserve optional-field semantics", \openAiStrictSchemaRoundTripTest());
+        addTestCase("OpenAI strict JSON streams restore optional fields", \openAiStrictSchemaStreamTest());
+        addTestCase("OpenAI strict tool arguments restore optional fields", \openAiStrictToolSchemaTest());
+        addTestCase("OpenAI unsupported schemas fail before HTTP", \openAiStrictSchemaFailureTest());
         addTestCase("LlmBackend OpenAI streaming preserves tool-call-only deltas",
             \openAiStreamingToolCallOnlyDeltasTest());
         addTestCase("LlmBackend OpenAI chat facade normalizes forced JSON "
@@ -2308,6 +2315,340 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "OpenAI reasoning models receive max_completion_tokens");
         assertFalse(body.hasKey("max_tokens"),
             "OpenAI reasoning models must not receive max_tokens");
+        assertFalse(body.hasKey("temperature"),
+            "reasoning models reject the generic default temperature");
+
+        foreach string model in (("gpt-5.6-luna", "gpt-5.6-terra",
+                "gpt-6-astra")) {
+            llm.chatCompletions({
+                "model": model,
+                "messages": ({"role": "user", "content": "fixture"},),
+                "reasoning_effort": "medium",
+                "temperature": 0.2,
+                "max_completion_tokens": 2048,
+                "parallel_tool_calls": False,
+                "service_tier": "default",
+                "response_format": {"type": "json_object"},
+                "tools": ({"type": "function", "function": {
+                    "name": "fixture", "strict": True,
+                    "parameters": {"type": "object", "properties": {},
+                        "additionalProperties": False, "required": ()},
+                }},),
+            });
+            body = gemini_handler.requests[-1].body;
+            assertEq(model, body.model);
+            assertEq("medium", body.reasoning_effort);
+            assertFalse(body.hasKey("temperature"));
+            assertEq(2048, body.max_completion_tokens);
+            assertFalse(body.parallel_tool_calls);
+            assertTrue(body.hasKey("parallel_tool_calls"));
+            assertEq("default", body.service_tier);
+            assertEq("json_object", body.response_format.type);
+            assertTrue(body.tools[0].function.strict);
+        }
+
+        llm.chatCompletions({
+            "model": "gpt-5.6-terra",
+            "messages": ({"role": "user", "content": "fixture"},),
+            "reasoning_effort": "none", "temperature": 0.3,
+            "tools": ({"type": "function", "function": {
+                "name": "fixture", "strict": False,
+                "parameters": {"type": "object", "properties": {}},
+            }},),
+        });
+        body = gemini_handler.requests[-1].body;
+        assertEq("none", body.reasoning_effort);
+        assertEq(0.3, body.temperature,
+            "non-reasoning requests preserve the requested temperature");
+        assertTrue(body.tools[0].function.hasKey("strict"));
+        assertFalse(body.tools[0].function.strict);
+    }
+
+    private static hash<auto> strictOptionalSchema() {
+        return {"type": "object", "additionalProperties": False,
+            "$defs": {"address": {"type": "object",
+                "properties": {"street": {"type": "string"},
+                    "city": {"type": "string"}}, "required": ("street",)}},
+            "properties": {
+                "id": {"type": "integer"},
+                "subject": {"type": "string"},
+                "priority": {"type": "string", "enum": ("low", "high")},
+                "nullable": {"type": ("string", "null")},
+                "required_nullable": {"type": ("string", "null")},
+                "legacy_nullable": {"type": "string", "nullable": True},
+                "address": {"$ref": "#/$defs/address"},
+                "rows": {"type": "array", "items": {"$ref": "#/$defs/address"}},
+                "contact": {"anyOf": ({"type": "string"},
+                    {"type": "object", "properties": {
+                        "email": {"type": "string"}, "label": {"type": "string"}},
+                        "required": ("email",)})},
+                "flag": {"type": "boolean"},
+                "empty": {"type": "string"},
+            }, "required": ("id", "required_nullable")};
+    }
+
+    private static hash<auto> strictOptionalResponse() {
+        return {"id": 0, "subject": NOTHING, "priority": NOTHING, "nullable": NOTHING,
+            "required_nullable": NOTHING, "legacy_nullable": NOTHING,
+            "address": {"street": "Main", "city": NOTHING},
+            "rows": ({"street": "Second", "city": NOTHING},),
+            "contact": {"email": "synthetic@example.invalid", "label": NOTHING},
+            "flag": False, "empty": ""};
+    }
+
+    private static hash<auto> restoredOptionalResponse() {
+        return {"id": 0, "nullable": NOTHING, "required_nullable": NOTHING,
+            "legacy_nullable": NOTHING, "address": {"street": "Main"},
+            "rows": ({"street": "Second"},),
+            "contact": {"email": "synthetic@example.invalid"},
+            "flag": False, "empty": ""};
+    }
+
+    private assertStrictSchema(hash<auto> schema) {
+        if (schema.type == "object") {
+            assertEq(False, schema.additionalProperties);
+            assertEq(schema.properties.size(), schema.required.size());
+            foreach string key in (keys schema.properties) {
+                assertTrue(inlist(key, schema.required));
+            }
+        }
+        foreach string key in (("properties", "$defs", "definitions")) {
+            if (schema{key}.typeCode() == NT_HASH) {
+                foreach hash<auto> child in (schema{key}.iterator()) {
+                    assertStrictSchema(child);
+                }
+            }
+        }
+        if (schema.items.typeCode() == NT_HASH) {
+            assertStrictSchema(schema.items);
+        }
+        foreach hash<auto> branch in (schema.anyOf ?? ()) {
+            assertStrictSchema(branch);
+        }
+    }
+
+    private LlmBackend strictSchemaBackend() {
+        return new LlmBackend(<LlmBackendConfig>{"mode": "http",
+            "url": "http://localhost:" + port, "model": "test-model"});
+    }
+
+    openAiStrictSchemaRoundTripTest() {
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "content": make_json(strictOptionalResponse())}},),
+                "usage": {"total_tokens": 42}}}});
+        LlmBackend llm = strictSchemaBackend();
+        hash<auto> schema = strictOptionalSchema();
+        hash<LlmCompletionResult> complete_rv = llm.complete("extract", "fixture",
+            schema);
+        assertEq(restoredOptionalResponse(), parse_json(complete_rv.content));
+        assertEq(42, complete_rv.usage.total_tokens);
+        assertEq(strictOptionalSchema(), schema, "caller schema is immutable");
+        hash<auto> wire = gemini_handler.requests[-1].body.response_format.json_schema.schema;
+        assertStrictSchema(wire);
+        assertTrue(new JsonSchema(wire).validate(strictOptionalResponse()),
+            "nullable enum values remain legal on the wire");
+
+        hash<ChatResponse> native = llm.chat((
+            <ChatMessage>{"role": "user", "content": "fixture"},), NOTHING,
+            <LlmRequestOptions>{"output_schema": schema});
+        assertEq(restoredOptionalResponse(), parse_json(native.content));
+        hash<auto> facade = llm.chatCompletions({
+            "messages": ({"role": "user", "content": "fixture"},),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "fixture", "strict": True, "schema": schema}}});
+        assertEq(restoredOptionalResponse(),
+            parse_json(facade.choices[0].message.content));
+        assertEq(strictOptionalSchema(), schema);
+    }
+
+    openAiStrictSchemaStreamTest() {
+        string content = make_json(strictOptionalResponse());
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "sse": (
+                {"id": "schema-stream", "service_tier": "priority", "choices": ({"delta": {
+                    "content": content.substr(0, 17)}},)},
+                {"choices": ({"delta": {"content": content.substr(17)},
+                    "finish_reason": "stop"},)},
+                {"choices": (), "usage": {"total_tokens": 42}},
+            )}});
+        LlmBackend llm = strictSchemaBackend();
+        list<hash<auto>> chunks = ();
+        hash<auto> rv = llm.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "fixture"},),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "fixture", "strict": True,
+                "schema": strictOptionalSchema()}}}, sub (hash<auto> chunk) {
+                    chunks += chunk;
+                });
+        assertEq(2, chunks.size());
+        assertEq(restoredOptionalResponse(),
+            parse_json(chunks[0].choices[0].delta.content));
+        assertEq({}, chunks[1].choices[0].delta);
+        assertEq("stop", chunks[1].choices[0].finish_reason);
+        assertEq(42, chunks[1].usage.total_tokens);
+        assertEq(restoredOptionalResponse(), parse_json(rv.choices[0].message.content));
+        assertEq("schema-stream", rv.id);
+        assertEq("priority", rv.service_tier,
+            "buffered schema restoration preserves the provider's served tier");
+        assertEq("priority", chunks[-1].service_tier);
+        assertStrictSchema(gemini_handler.requests[0].body.response_format.json_schema.schema);
+    }
+
+    openAiStrictToolSchemaTest() {
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "tool_calls", "message": {
+                "tool_calls": ({"id": "call-1", "type": "function", "function": {
+                    "name": "fixture", "arguments": make_json(strictOptionalResponse())}},)}},)}}});
+        LlmBackend llm = strictSchemaBackend();
+        hash<auto> request = {"messages": ({"role": "user", "content": "fixture"},),
+            "tools": ({"type": "function", "function": {"name": "fixture",
+                "strict": True, "parameters": strictOptionalSchema()}},)};
+        hash<auto> rv = llm.chatCompletions(request);
+        assertEq(restoredOptionalResponse(), parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments));
+        assertStrictSchema(gemini_handler.requests[0].body.tools[0].function.parameters);
+        assertEq(strictOptionalSchema(), request.tools[0].function.parameters);
+
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "sse": (
+                {"choices": ({"delta": {"tool_calls": ({"index": 0,
+                    "id": "call-1", "type": "function", "function": {
+                        "name": "fixture", "arguments": "{"}},)}},)},
+                {"choices": ({"delta": {"tool_calls": ({"index": 0,
+                    "function": {"arguments": make_json(strictOptionalResponse()).substr(1)}},)},
+                    "finish_reason": "tool_calls"},)},
+                {"choices": (), "usage": {"total_tokens": 42}},
+            )}});
+        list<hash<auto>> chunks = ();
+        rv = llm.chatCompletionsStream(request, sub (hash<auto> chunk) {chunks += chunk;});
+        assertEq(2, chunks.size());
+        assertEq(restoredOptionalResponse(), parse_json(
+            chunks[0].choices[0].delta.tool_calls[0].function.arguments));
+        assertEq(restoredOptionalResponse(), parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments));
+        assertEq("tool_calls", rv.choices[0].finish_reason);
+        assertEq(42, rv.usage.total_tokens);
+    }
+
+    openAiStrictSchemaFailureTest() {
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "content": "{\"id\":null,\"subject\":null}"}},)}}});
+        LlmBackend llm = strictSchemaBackend();
+        foreach hash<auto> bad in ((
+                {"type": "object", "additionalProperties": {"type": "string"}},
+                {"type": "object", "allOf": ({"type": "object"},)},
+                {"type": "object", "$id": "https://example.invalid/schema"},
+                {"type": "object", "properties": {"x": {
+                    "type": "object", "anyOf": ({"type": "object"},)}}},
+                {"type": "object", "properties": {"x": {"$ref": "#/$defs/missing"}}},
+                {"type": "object", "properties": {"x": {"properties": {"y": {"type": "string"}}}}},
+                {"type": "object", "properties": {"x": {"$ref": "https://example.invalid/schema"}}}
+                )) {
+            assertThrows("OPENAI-STRICT-SCHEMA-ERROR", sub () {
+                llm.complete("extract", "fixture", bad);
+            });
+        }
+        assertEq(0, gemini_handler.requests.size(), "unsupported schemas fail before HTTP");
+        hash<auto> schema = {"type": "object", "properties": {
+            "id": {"type": "integer"}, "subject": {"type": "string"}},
+            "required": ("id",)};
+        assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", sub () {
+            llm.complete("extract", "fixture", schema);
+        });
+        # A caller explicitly disabling strict mode gets unmodified output.
+        hash<auto> rv = llm.chatCompletions({"messages": (),
+            "response_format": {"type": "json_schema", "json_schema": {
+                "name": "fixture", "strict": False, "schema": schema}}});
+        assertEq({"id": NOTHING, "subject": NOTHING}, parse_json(rv.choices[0].message.content));
+        assertEq(schema, gemini_handler.requests[-1].body.response_format.json_schema.schema);
+    }
+
+    openAiStrictSchemaRecursiveTest() {
+        hash<auto> schema = {"type": "object", "properties": {
+            "value": {"type": "integer"}, "next": {"$ref": "#"}},
+            "required": ("value",)};
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "content": "{\"value\":1,\"next\":{\"value\":2,\"next\":null}}"}},)}}});
+        LlmBackend llm = strictSchemaBackend();
+        hash<LlmCompletionResult> rv = llm.complete("extract", "fixture", schema);
+        assertEq({"value": 1, "next": {"value": 2}}, parse_json(rv.content));
+    }
+
+    openAiStrictSchemaReferenceTest() {
+        hash<auto> object_schema = {"type": "object",
+            "properties": {"label": {"type": "string"}}};
+        hash<auto> schema = {"type": "object",
+            "$defs": {"envelope": {"type": "object", "nullable": True,
+                "properties": {"child": object_schema}}},
+            "properties": {
+                "template/~ a%": {"anyOf": ({"type": "integer"}, object_schema)},
+                "record": {"$ref": "#/properties/template~1~0%20a%25"},
+                "branch": {"$ref": "#/properties/template~1~0%20a%25/anyOf/1"},
+                "definition_child": {"$ref": "#/$defs/envelope/properties/child"},
+                "nullable_definition": {"$ref": "#/$defs/envelope"},
+            }, "required": ("record", "branch", "definition_child")};
+        hash<auto> value = {"template/~ a%": NOTHING,
+            "record": {"label": NOTHING}, "branch": {"label": NOTHING},
+            "definition_child": {"label": NOTHING}, "nullable_definition": NOTHING};
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "content": make_json(value)}},)}}});
+        LlmBackend llm = strictSchemaBackend();
+        hash<LlmCompletionResult> rv = llm.complete("extract", "fixture", schema);
+        assertEq({"record": {}, "branch": {}, "definition_child": {},
+            "nullable_definition": NOTHING}, parse_json(rv.content));
+        hash<auto> wire = gemini_handler.requests[-1].body.response_format.json_schema.schema;
+        assertStrictSchema(wire);
+        JsonSchema validator(wire);
+        assertTrue(validator.validate(value));
+        foreach string key in (("record", "branch", "definition_child")) {
+            hash<auto> invalid = value;
+            invalid{key} = NOTHING;
+            assertFalse(validator.validate(invalid),
+                "a reference to an optional property's schema must not inherit absence nullability");
+        }
+    }
+
+    openAiStrictSchemaIncompleteTest() {
+        hash<auto> schema = {"type": "object", "properties": {
+            "subject": {"type": "string"}}};
+        string partial = "{\"subject\":n";
+        LlmBackend llm = strictSchemaBackend();
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "length", "message": {
+                "content": partial}},)}}});
+        hash<ChatResponse> chat = llm.chat((<ChatMessage>{"role": "user",
+            "content": "fixture"},), NOTHING, <LlmRequestOptions>{"output_schema": schema});
+        assertEq(partial, chat.content);
+        assertEq("max_tokens", chat.stop_reason);
+
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "body": {"choices": ({"finish_reason": "stop", "message": {
+                "refusal": "fixture refusal", "content": NOTHING}},)}}});
+        chat = llm.chat((<ChatMessage>{"role": "user", "content": "fixture"},),
+            NOTHING, <LlmRequestOptions>{"output_schema": schema});
+        assertEq("fixture refusal", chat.raw.choices[0].message.refusal);
+
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "sse": ({"choices": ({"delta": {"content": partial},
+                "finish_reason": "length"},)},)}});
+        list<hash<auto>> chunks = ();
+        hash<auto> request = {"messages": (), "response_format": {
+            "type": "json_schema", "json_schema": {"name": "fixture",
+                "strict": True, "schema": schema}}};
+        hash<auto> rv = llm.chatCompletionsStream(request,
+            sub (hash<auto> chunk) {chunks += chunk;});
+        assertEq(partial, rv.choices[0].message.content);
+        assertEq("length", chunks[-1].choices[0].finish_reason);
+
+        installGeminiHandler({"/v1/chat/completions": {"code": 200,
+            "sse": ({"choices": ({"delta": {"content": partial}},)},)}});
+        assertThrows("OPENAI-STRUCTURED-OUTPUT-ERROR", sub () {
+            llm.chatCompletionsStream(request, sub (hash<auto> chunk) {});
+        });
     }
 
     openAiStreamingToolCallOnlyDeltasTest() {
@@ -2379,19 +2720,15 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                                             },
                                         },),
                                     },
-                                    "finish_reason": NOTHING,
+                                    "finish_reason": "tool_calls",
                                 },),
                             },
                             {
                                 "id": "openai-stream-tool-1",
-                                "object": "chat.completion.chunk",
                                 "model": "test-model",
-                                "choices": ({
-                                    "index": 0,
-                                    "delta": {},
-                                    "finish_reason": "tool_calls",
-                                },),
-                                "usage": {"total_tokens": 5},
+                                "choices": (),
+                                "usage": {"prompt_tokens": 3,
+                                    "completion_tokens": 2, "total_tokens": 5},
                             },
                         ),
                     },
@@ -2429,6 +2766,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "a transient streaming HTTP response is retried before deltas");
         assertEq(True, gemini_handler.requests[1].body.stream,
             "the retried HTTP provider request remains streaming");
+        assertTrue(gemini_handler.requests[1].body.stream_options.include_usage,
+            "streaming requests ask OpenAI for billed usage");
         assertEq("call_fixture",
             chunks[0].choices[0].delta.tool_calls[0].id,
             "the first streamed tool-call fragment is preserved");
@@ -2443,6 +2782,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "the second streamed arguments fragment is preserved");
         assertEq("tool_calls", chunks[2].choices[0].finish_reason,
             "the terminal tool-call reason is preserved");
+        assertEq(3, chunks.size(),
+            "final tool delta and usage produce exactly one terminal chunk");
+        assertEq({}, chunks[2].choices[0].delta,
+            "the terminal chunk does not replay the final tool delta");
         assertEq("list_records",
             rv.choices[0].message.tool_calls[0]."function".name,
             "the accumulated response preserves the streamed tool identity");
@@ -2452,7 +2795,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         assertEq("tool_calls", rv.choices[0].finish_reason,
             "the accumulated response preserves the terminal reason");
         assertEq(5, rv.usage.total_tokens,
-            "the accumulated response preserves terminal usage");
+            "the accumulated response preserves usage after finish_reason");
     }
 
     geminiOpenAiForcedToolJsonTextTest() {

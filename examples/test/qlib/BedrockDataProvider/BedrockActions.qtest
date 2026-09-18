@@ -1,0 +1,498 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/BedrockDataProvider
+%requires ../../../../qlib/RestSchemaActions
+%exec-class BedrockActionsTest
+
+class BedrockActionFixtureClient inherits RestClientIo::RestClientIo {
+    public {
+        string method;
+        string path;
+        *data raw;
+        *hash<auto> last_headers;
+        auto response = {};
+        int requests = 0;
+    }
+
+    constructor() : RestClientIo({"url": "https://bedrock-runtime.us-east-1.amazonaws.com",
+            "data_type": "auto", "headers": {"accept": "application/json"}}) {
+    }
+
+    RestClient::AbstractRestClient copyWithUrl(string url) {
+        return self;
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        self.method = method;
+        self.path = path;
+        raw = body;
+        last_headers = hdr;
+        ++requests;
+        return <RestClient::RestResponseInfo>{"status_code": 200, "body": response};
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        self.method = method;
+        self.path = path;
+        last_headers = hdr;
+        ++requests;
+        return <RestClient::RestResponseInfo>{"status_code": 200, "body": response};
+    }
+}
+
+class BedrockActionsTest inherits QUnit::Test {
+    public {
+        #! Independent reviewed inventory: 108 control, 8 completed runtime, embed, and generic API call
+        const ExpectedActions = (
+            "apply-guardrail",
+            "batch-delete-advanced-prompt-optimization-job",
+            "batch-delete-evaluation-job",
+            "cancel-automated-reasoning-policy-build-workflow",
+            "converse",
+            "count-tokens",
+            "create-advanced-prompt-optimization-job",
+            "create-automated-reasoning-policy",
+            "create-automated-reasoning-policy-test-case",
+            "create-automated-reasoning-policy-version",
+            "create-custom-model",
+            "create-custom-model-deployment",
+            "create-evaluation-job",
+            "create-foundation-model-agreement",
+            "create-guardrail",
+            "create-guardrail-version",
+            "create-inference-profile",
+            "create-marketplace-model-endpoint",
+            "create-model-copy-job",
+            "create-model-customization-job",
+            "create-model-import-job",
+            "create-model-invocation-job",
+            "create-prompt-router",
+            "create-provisioned-model-throughput",
+            "delete-automated-reasoning-policy",
+            "delete-automated-reasoning-policy-build-workflow",
+            "delete-automated-reasoning-policy-test-case",
+            "delete-custom-model",
+            "delete-custom-model-deployment",
+            "delete-enforced-guardrail-configuration",
+            "delete-foundation-model-agreement",
+            "delete-guardrail",
+            "delete-imported-model",
+            "delete-inference-profile",
+            "delete-marketplace-model-endpoint",
+            "delete-model-invocation-logging-configuration",
+            "delete-prompt-router",
+            "delete-provisioned-model-throughput",
+            "delete-resource-policy",
+            "deregister-marketplace-model-endpoint",
+            "embed",
+            "export-automated-reasoning-policy-version",
+            "get-account-data-retention",
+            "get-advanced-prompt-optimization-job",
+            "get-async-invoke",
+            "get-automated-reasoning-policy",
+            "get-automated-reasoning-policy-annotations",
+            "get-automated-reasoning-policy-build-workflow",
+            "get-automated-reasoning-policy-build-workflow-result-assets",
+            "get-automated-reasoning-policy-next-scenario",
+            "get-automated-reasoning-policy-test-case",
+            "get-automated-reasoning-policy-test-result",
+            "get-custom-model",
+            "get-custom-model-deployment",
+            "get-evaluation-job",
+            "get-foundation-model",
+            "get-foundation-model-availability",
+            "get-guardrail",
+            "get-imported-model",
+            "get-inference-profile",
+            "get-marketplace-model-endpoint",
+            "get-model-copy-job",
+            "get-model-customization-job",
+            "get-model-import-job",
+            "get-model-invocation-job",
+            "get-model-invocation-logging-configuration",
+            "get-prompt-router",
+            "get-provisioned-model-throughput",
+            "get-resource-policy",
+            "get-use-case-for-model-access",
+            "invoke-guardrail-checks",
+            "invoke-model",
+            "list-advanced-prompt-optimization-jobs",
+            "list-async-invokes",
+            "list-automated-reasoning-policies",
+            "list-automated-reasoning-policy-build-workflows",
+            "list-automated-reasoning-policy-test-cases",
+            "list-automated-reasoning-policy-test-results",
+            "list-custom-model-deployments",
+            "list-custom-models",
+            "list-enforced-guardrails-configuration",
+            "list-evaluation-jobs",
+            "list-foundation-model-agreement-offers",
+            "list-foundation-models",
+            "list-guardrails",
+            "list-imported-models",
+            "list-inference-profiles",
+            "list-marketplace-model-endpoints",
+            "list-model-copy-jobs",
+            "list-model-customization-jobs",
+            "list-model-import-jobs",
+            "list-model-invocation-jobs",
+            "list-prompt-routers",
+            "list-provisioned-model-throughputs",
+            "list-tags-for-resource",
+            "make-api-call",
+            "put-account-data-retention",
+            "put-enforced-guardrail-configuration",
+            "put-model-invocation-logging-configuration",
+            "put-resource-policy",
+            "put-use-case-for-model-access",
+            "register-marketplace-model-endpoint",
+            "start-async-invoke",
+            "start-automated-reasoning-policy-build-workflow",
+            "start-automated-reasoning-policy-test-workflow",
+            "stop-advanced-prompt-optimization-job",
+            "stop-evaluation-job",
+            "stop-model-customization-job",
+            "stop-model-invocation-job",
+            "tag-resource",
+            "untag-resource",
+            "update-automated-reasoning-policy",
+            "update-automated-reasoning-policy-annotations",
+            "update-automated-reasoning-policy-test-case",
+            "update-custom-model-deployment",
+            "update-guardrail",
+            "update-marketplace-model-endpoint",
+            "update-provisioned-model-throughput",
+        );
+    }
+
+    constructor() : Test("AWS Bedrock schema actions", "1.0", \ARGV) {
+        addTestCase("exact independent inventory and complete metadata", \inventoryTest());
+        addTestCase("deferred registration and qualification remain complete", \deferredTest());
+        addTestCase("pinned service models agree with every manifest entry", \schemaTest());
+        addTestCase("all schema action paths resolve to request providers", \pathTest());
+        addTestCase("nested unions, choices, values, and serialization survive", \nestedTypeTest());
+        addTestCase("AWS document shapes preserve arbitrary JSON", \documentTest());
+        addTestCase("missing, null, empty, false, and zero remain distinct", \valueSemanticsTest());
+        addTestCase("generic JSON InvokeModel bodies survive transport", \invokeModelTest());
+        addTestCase("control-plane reference data supplies stable model IDs", \referenceTest());
+        addTestCase("normalized AWS URI templates retain public option names", \normalizedPathTest());
+        addTestCase("presentation catalogs are fresh, complete, and localized", \translationTest());
+        set_return_value(main());
+    }
+
+    private inventoryTest() {
+        assertEq(118, ExpectedActions.size());
+        foreach int pass in (0..1) {
+            if (pass) {
+                BedrockActions::registerActions();
+            }
+            list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActionsEx(AppName);
+            assertEq(sort(ExpectedActions), sort(map $1.action, actions));
+            assertEq((), DataProviderActionCatalog::getInitializationFailures((AppName,)));
+            hash<string, hash<DataProviderActionInfo>> action_map = {};
+            foreach hash<DataProviderActionInfo> action in (actions) {
+                action_map{action.action} = action;
+            }
+            foreach string action in ("apply-guardrail", "converse", "count-tokens",
+                    "get-async-invoke", "invoke-guardrail-checks", "invoke-model",
+                    "list-async-invokes", "list-tags-for-resource") {
+                assertFalse(action_map{action}.mutates_state, action + ": read-only POST metadata");
+            }
+            assertTrue(action_map."start-async-invoke".mutates_state,
+                "starting asynchronous inference mutates service state");
+            foreach hash<DataProviderActionInfo> action in (actions) {
+                assertTrue(action.display_name.val(), action.action);
+                assertTrue(action.short_desc.val() && action.short_desc.size() < 80, action.action);
+                assertTrue(action.desc.val(), action.action);
+                assertEq(NT_BOOLEAN, action.mutates_state.typeCode(), action.action);
+                if (action.action == AbstractDataProvider::GenericApiCallActionName) {
+                    continue;
+                }
+                assertTrue(exists action.output_type, action.action + ": output type");
+                if (action.action == "embed") {
+                    assertTrue(action.options.size() > 0, "embed options");
+                    continue;
+                }
+                RestSchemaActionOperation op = BedrockSchema::getOperationEx(action.action);
+                assertEq(sort(keys op.getRequestFields()), sort(keys action.options), action.action);
+                assertTrue(exists op.getResponseType(), action.action + ": schema response type");
+            }
+        }
+    }
+
+    private deferredTest() {
+        string alias = "AWSBedrock-DeferredFixture";
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(AppName);
+        app.name = alias;
+        app.dynamic = True;
+        DataProviderActionCatalog::registerPendingApp(alias, sub () {
+            DataProviderActionCatalog::registerApp(app);
+            foreach hash<DataProviderActionInfo> action in (BedrockActions::getActionInfoList(alias)) {
+                hash<DataProviderActionInfo> deferred = action;
+                DataProviderActionCatalog::registerPendingAppAction(alias, action.action, sub () {
+                    DataProviderActionCatalog::registerAction(deferred);
+                });
+            }
+        });
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(alias);
+        DataProviderActionCatalog::getApp(alias);
+        assertEq(sort(ExpectedActions), sort(map $1.action, DataProviderActionCatalog::getActions(alias)));
+        assertEq((), DataProviderActionCatalog::getInitializationFailures((alias,)));
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected
+            = map <DataProviderDiscoveryExpectedIdentityInfo>{"app": alias, "action": $1}, ExpectedActions;
+        DataProviderDiscoverySession session = DataProviderActionCatalog::beginDiscovery(expected, (alias,));
+        DataProviderActionCatalog::collectDiscoveryExpectedInventory(session);
+        DataProviderQualifiedDiscovery result = DataProviderActionCatalog::sealDiscovery(session);
+        assertTrue(result.getReport().complete);
+        assertEq((), result.getReport().failures);
+    }
+
+    private schemaTest() {
+        assertEq("04d4c189b371a8973af54dc1d2ff2446f93efee8", BedrockSchema::BotocoreRevision);
+        assertEq(108, BedrockSchema::ControlProvenance.source_operations);
+        assertEq(907, BedrockSchema::ControlProvenance.source_shapes);
+        assertEq(650374, BedrockSchema::ControlProvenance.source_size);
+        assertRegex("^[a-f0-9]{64}$", BedrockSchema::ControlProvenance.source_sha256);
+        assertEq(11, BedrockSchema::RuntimeProvenance.source_operations);
+        assertEq(393, BedrockSchema::RuntimeProvenance.source_shapes);
+        assertEq(220823, BedrockSchema::RuntimeProvenance.source_size);
+        assertEq(("ConverseStream", "InvokeModelWithBidirectionalStream",
+            "InvokeModelWithResponseStream"), BedrockSchema::RuntimeProvenance.excluded_streaming_operations);
+        list<RestSchemaActionSet> sets = BedrockSchema::getActionSets();
+        assertEq(2, sets.size());
+        assertEq(108, sets[0].getActionNames().size());
+        assertEq(8, sets[1].getActionNames().size());
+        assertEq((), RestSchemaDrift::compare(sets[0], BedrockSchema::getControlSchema()));
+        assertEq((), RestSchemaDrift::compare(sets[1], BedrockSchema::getRuntimeSchema()));
+        assertThrows("BEDROCK-ACTION-ERROR", sub () { BedrockSchema::getOperationEx("unknown"); });
+    }
+
+    private pathTest() {
+        AwsRestClient::AwsRestClientIo client({
+            "url": "https://bedrock-runtime.us-east-1.amazonaws.com",
+            "aws_region": "us-east-1", "aws_service": "bedrock",
+            "aws_keyid": "AKIA-TEST", "aws_secret": "test-secret", "aws_imds_disabled": True,
+        });
+        BedrockDataProvider::BedrockDataProvider root(client);
+        foreach RestSchemaActionSet set in (BedrockSchema::getActionSets()) {
+            set.validateActionPaths(root);
+        }
+        assertEq(118, root.getChildProviderNames().size());
+    }
+
+    private nestedTypeTest() {
+        AbstractDataProviderType original = BedrockSchema::getOperationEx("converse").getRequestType();
+        hash<string, AbstractDataField> fields = original.getFields();
+        AbstractDataProviderType message = fields.messages.getType().getElementType();
+        assertEq(("assistant", "system", "user"), sort(map $1.value,
+            message.getFields().role.getAllowedValues()));
+        AbstractDataProviderType content = message.getFields().content.getType().getElementType();
+        assertTrue(content instanceof QoreUnionDataType);
+        hash<string, bool> union_fields = {};
+        foreach AbstractDataProviderType branch in (
+                cast<QoreUnionDataType>(content).getUnionTypes()) {
+            map union_fields{$1} = True, keys branch.getFields();
+        }
+        foreach string branch in ("text", "image", "document", "toolUse", "toolResult") {
+            assertTrue(union_fields{branch}, branch + ": union branch");
+        }
+        hash<auto> request = {
+            "modelId": "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "messages": ({"role": "user", "content": ({"text": ""},)},),
+            "inferenceConfig": {"temperature": 0.0, "stopSequences": ()},
+            "toolConfig": {"tools": ({"toolSpec": {"name": "lookup",
+                "inputSchema": {"json": {}}, "strict": False}},)},
+            "additionalModelRequestFields": {},
+        };
+        foreach AbstractDataProviderType type in (original, Serializable::deserialize(original.serialize())) {
+            auto accepted = type.acceptsValue(request);
+            assertEq("", accepted.messages[0].content[0].text);
+            assertTrue(accepted.inferenceConfig.temperature == 0);
+            assertEq((), accepted.inferenceConfig.stopSequences);
+            assertEq({}, accepted.toolConfig.tools[0].toolSpec.inputSchema.json);
+            assertEq(False, accepted.toolConfig.tools[0].toolSpec.strict);
+            assertEq({}, accepted.additionalModelRequestFields);
+        }
+
+        AbstractDataProviderType tags = BedrockSchema::getOperationEx("tag-resource").getRequestType();
+        hash<auto> tagged = tags.acceptsValue({"resourceARN": "arn:aws:bedrock:us-east-1:123:model/x",
+            "tags": ({"key": "environment", "value": "test"},)});
+        assertEq("test", tagged.tags[0].value, "ordinary objects named value stay ordinary objects");
+        auto restored = Serializable::deserialize(tags.serialize()).acceptsValue(tagged);
+        assertEq("test", restored.tags[0].value);
+    }
+
+    private documentTest() {
+        foreach OpenApi3::OpenApi3Schema schema in (
+                BedrockSchema::getControlSchema(), BedrockSchema::getRuntimeSchema()) {
+            foreach string name in (schema == BedrockSchema::getControlSchema()
+                    ? ("AdditionalModelRequestFieldsValue", "FilterValue")
+                    : ("Document", "ModelInputPayload")) {
+                AbstractDataProviderType original = schema.components.schemas{name}.getDataType();
+                foreach AbstractDataProviderType type in (
+                        original, Serializable::deserialize(original.serialize())) {
+                    foreach auto value in ("filter", 0, False, (), {}, {"value": "ordinary"},
+                            ("nested", False), NOTHING) {
+                        assertEq(value, type.acceptsValue(value), name + ": arbitrary JSON document");
+                    }
+                }
+            }
+        }
+        BedrockActionFixtureClient fake();
+        foreach auto value in ("result", 0, False, (), {}, {"value": "ordinary"}) {
+            actionProvider("converse", fake).doRequest({
+                "modelId": "test-model",
+                "messages": ({"role": "user", "content": ({"toolResult": {
+                    "toolUseId": "tool-1", "content": ({"json": value},),
+                }},)},),
+            });
+            assertEq(value, parse_json(fake.raw.toString()).messages[0].content[0].toolResult.content[0].json,
+                "tool-result documents retain their JSON type on the wire");
+        }
+    }
+
+    private valueSemanticsTest() {
+        AbstractDataProviderType type = BedrockSchema::getOperationEx("converse").getRequestType();
+        assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({}); });
+        assertThrows("MISSING-VALUE-ERROR", sub () { type.acceptsValue({"modelId": NOTHING}); });
+        BedrockActionFixtureClient fake();
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            actionProvider("converse", fake).doRequest({"modelId": ""});
+        });
+        assertEq(0, fake.requests, "invalid values fail before transport");
+        auto empty = type.acceptsValue({"modelId": "prompt-arn", "messages": (),
+            "additionalModelRequestFields": {}, "inferenceConfig": {"temperature": 0.0}});
+        assertEq((), empty.messages);
+        assertEq({}, empty.additionalModelRequestFields);
+        assertTrue(empty.inferenceConfig.temperature == 0);
+        assertFalse(exists empty.system, "missing remains missing");
+        auto nulled = type.acceptsValue({"modelId": "prompt-arn", "messages": NOTHING});
+        assertNothing(nulled.messages, "optional null remains null at the typed boundary");
+        hash<auto> null_wire = BedrockSchema::getOperationEx("converse").unflatten(nulled);
+        assertFalse(exists null_wire.req.body.messages, "optional null is omitted from the AWS document");
+        hash<auto> empty_wire = BedrockSchema::getOperationEx("converse").unflatten(empty);
+        assertEq((), empty_wire.req.body.messages, "an empty list is sent and is not conflated with null");
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            actionProvider("converse", fake).doRequest({
+                "modelId": "prompt-arn", "inferenceConfig": {"maxTokens": 0}});
+        });
+        assertEq(0, fake.requests, "out-of-range values fail before transport");
+    }
+
+    private invokeModelTest() {
+        BedrockActionFixtureClient fake();
+        fake.response = {};
+        actionProvider("invoke-model", fake).doRequest({
+            "modelId": "amazon.titan-text-lite-v1",
+            "body": {},
+            "contentType": "application/json",
+            "accept": "application/json",
+        });
+        assertEq(1, fake.requests);
+        assertEq("POST", fake.method);
+        assertEq("/model/amazon.titan-text-lite-v1/invoke", fake.path);
+        assertEq({}, parse_json(fake.raw.toString()));
+        assertEq("application/json", fake.last_headers."Content-Type");
+        int sent = fake.requests;
+        assertThrows("INVALID-REQUEST", sub () {
+            actionProvider("invoke-model", fake).doRequest({"modelId": "amazon.titan-text-lite-v1"});
+        });
+        assertEq(sent, fake.requests);
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            actionProvider("invoke-model", fake).doRequest({
+                "modelId": "amazon.titan-text-lite-v1", "body": NOTHING});
+        });
+        assertEq(sent, fake.requests);
+    }
+
+    private referenceTest() {
+        BedrockActionFixtureClient fake();
+        fake.response = {"modelSummaries": ({
+            "modelArn": "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-text-lite-v1",
+            "modelId": "amazon.titan-text-lite-v1", "modelName": "Titan Text Lite",
+            "providerName": "Amazon", "inputModalities": ("TEXT",),
+            "outputModalities": ("TEXT",), "responseStreamingSupported": False,
+            "customizationsSupported": (), "inferenceTypesSupported": ("ON_DEMAND",),
+            "modelLifecycle": {"status": "ACTIVE"},
+        },)};
+        auto choices = actionProvider("converse", fake).getReferenceData("foundation-models");
+        assertEq(1, fake.requests);
+        assertEq("/foundation-models", fake.path);
+        assertEq("amazon.titan-text-lite-v1", choices[0].value);
+        assertEq("Titan Text Lite", choices[0].display_name);
+        hash<string, AbstractDataField> fields = BedrockSchema::getOperationEx("converse").getRequestFields();
+        assertEq("foundation-models", fields.modelId.getAttributes().ref_data);
+        assertTrue(fields.modelId.getAttributes().supports_custom_values);
+    }
+
+    private normalizedPathTest() {
+        RestSchemaActionOperation op = BedrockSchema::getOperationEx("register-marketplace-model-endpoint");
+        hash<auto> wire = op.unflatten({
+            "endpointIdentifier": "arn:aws:sagemaker:us-east-1:123:endpoint/example",
+            "modelSourceIdentifier": "arn:aws:sagemaker:us-east-1:123:model-package/example",
+        });
+        assertEq("arn:aws:sagemaker:us-east-1:123:endpoint/example", wire.path_vars.endpointArn);
+        assertFalse(exists wire.path_vars.endpointIdentifier);
+    }
+
+    private translationTest() {
+        string dir = get_script_dir()
+            + "/../../../../qlib/BedrockDataProvider/i18n/data-provider.QVdTQmVkcm9jaw/";
+        hash<auto> root = parse_json(File::readTextFile(dir + "root.json")).locales.root.messages;
+        hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(AppName);
+        hash<auto> generated = DataProviderPresentation::buildSourceCatalogs(app,
+            DataProviderActionCatalog::getActions(AppName));
+        assertEq(generated{DataProviderPresentation::appCatalogDomain(app)}.locales.root.messages, root,
+            "the committed root catalog exactly covers the registered recursive presentation");
+        list<string> translated_labels = (
+            DataProviderPresentation::appMessageId(AppName, "short_desc"),
+            DataProviderPresentation::actionMessageId(AppName, "list-foundation-models", "display_name"),
+            DataProviderPresentation::optionMessageId(AppName, "create-guardrail", "name", "display_name")
+        );
+        foreach string locale in (DataProviderPresentation::StandardTranslationLocales) {
+            hash<auto> messages = parse_json(File::readTextFile(dir + locale + ".json"))
+                .locales{locale}.messages;
+            assertEq(sort(keys root), sort(keys messages), locale + ": exact root message IDs");
+            list<string> invalid = ();
+            foreach hash<auto> entry in (messages.pairIterator()) {
+                if (entry.value.source != root{entry.key}.source || !trim(entry.value.message)) {
+                    push invalid, entry.key;
+                }
+            }
+            assertEq((), invalid, locale + ": exact source text and nonempty translations");
+            assertTrue(messages{DataProviderPresentation::appMessageId(AppName, "desc")}.message
+                =~ /\*\*AWS Bedrock\*\*/, locale + ": the product name is not translated");
+            hash<string, string> invalid_inference_terms = {
+                "cs": "(?i)\\bindukc",
+                "pl": "(?i)\\b(?:infekc|indukc)",
+                "sk": "(?i)\\bindukc",
+                "uk": "(?i)\\bіндукц",
+            };
+            if (exists invalid_inference_terms{locale}) {
+                list<hash<auto>> mistranslated = select messages.pairIterator(),
+                    $1.value.source =~ /inference/i
+                    && regex($1.value.message, invalid_inference_terms{locale});
+                assertEq((), mistranslated,
+                    locale + ": inference must not be translated as infection or induction");
+            }
+            if (locale == "ja") {
+                foreach string id in (translated_labels) {
+                    assertNeq(root{id}.source, messages{id}.message,
+                        "Japanese user-facing label is meaningfully localized: " + id);
+                }
+            }
+        }
+    }
+
+    private AbstractDataProvider actionProvider(string action, BedrockActionFixtureClient fake) {
+        RestSchemaActionSet set = BedrockSchema::findActionSet(action);
+        return new RestSchemaActionDataProvider(set, set.getOperationEx(action), fake);
+    }
+}

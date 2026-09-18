@@ -340,6 +340,8 @@ public hashdecl ToolDefinition {
     *string description;
     #! JSON Schema describing the tool's parameters
     *hash<auto> parameters;
+    #! Whether the provider must enforce the function parameter schema
+    *bool strict;
     #! Provider-specific cache-control metadata for providers that support it
     *hash<auto> cache_control;
 }
@@ -1012,6 +1014,18 @@ public class AbstractLlmProvider {
         if (exists choice) {
             body_options.tool_choice = choice;
         }
+    }
+
+    #! OpenAI-facade hook for additional provider-specific request controls
+    /** Providers with an OpenAI-compatible wire format override this hook.
+        Other providers must translate supported controls explicitly instead
+        of receiving arbitrary OpenAI fields.
+
+        @param body_options provider-specific body options to update
+        @param request the incoming OpenAI-compatible request
+    */
+    applyOpenAiRequestControls(reference<hash<auto!>> body_options,
+            hash<auto> request) {
     }
 
     #! OpenAI-facade hook: routes an OpenAI response_format to provider-native form

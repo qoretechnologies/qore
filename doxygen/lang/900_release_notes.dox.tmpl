@@ -1572,6 +1572,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - schema-driven AWS integrations can send pre-serialized request bodies through
         @ref AwsRestClient::AwsRestClientIo::restDoRawRequest() "AwsRestClientIo::restDoRawRequest()" without
         bypassing AWS Signature Version 4 authentication
+      - schema-driven requests with already percent-encoded URI variables can use
+        @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest()
+        "AwsRestClientIo::restDoEncodedRawRequest()" so AWS Signature Version 4 canonical paths match the
+        transported path
       - @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies retain AWS credentials and
         signing configuration
 
@@ -1786,6 +1790,16 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
+      - strict LLM output and tool schemas transparently adapt optional fields for OpenAI and
+        restore omitted-field semantics in completed responses; explicit nullable values are preserved
+      - adapted structured streams deliver complete normalized JSON before their terminal event;
+        unsupported schema constraints fail locally before sending a request
+      - OpenAI-compatible requests preserve reasoning effort, strict tool schemas, JSON output formats,
+        parallel-tool controls, and service-tier selection through the generic LLM facade
+      - GPT-5 and GPT-6 reasoning requests use the supported output-token field and omit unsupported
+        sampling defaults; explicitly disabled reasoning is preserved
+      - streaming completions request and retain provider token usage, including usage delivered after
+        the final content or tool-call chunk
       - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is now formally the
         OpenAI-compatible base for any backend that speaks the OpenAI chat-completions
         wire shape (xAI Grok, Perplexity, Azure OpenAI, etc.)
@@ -2165,7 +2179,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         counterpart of the \c GrpcTypeHelper class in the \c GrpcDataProvider module
 
     - @ref awseventstreamintro "AwsEventStream" module
-      - new module decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
+      - new module encoding and decoding the AWS event-stream binary framing format used by Bedrock streaming, Kinesis, S3 Select, and Transcribe streaming
+      - validates CRCs, protocol size limits, typed header bounds, and truncated frames at EOF
 
     - @ref awss3dataproviderintro "AwsS3DataProvider" module
       - new module providing a data provider API for <a href="https://aws.amazon.com/s3/">Amazon S3</a> object
@@ -2206,12 +2221,22 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
 
     - @ref bedrockdataproviderintro "BedrockDataProvider" module
-      - new module providing a data provider API for AWS Bedrock
+      - provides 118 actions: all 108 control-plane operations, all eight completed-response runtime operations,
+        curated embedding, and a generic API call; streaming sessions are exposed by the native client
+      - adds recursive typed options and outputs, enum choices, reference data, explicit mutation metadata, an exact
+        pre-materialization discovery inventory, and complete presentation catalogs in all twelve standard locales
+      - preserves missing, null, empty, union, list, document, and wire-choice values and routes each operation to
+        the correct regional endpoint with shared AWS Signature Version 4 credentials
 
     - @ref bedrockrestclientintro "BedrockRestClient" module
       - new module providing a REST client and \c LlmProvider for <a href="https://aws.amazon.com/bedrock/">AWS Bedrock</a>
       - Bedrock connections now use region-derived persistent endpoints, identify the data provider app,
         return the Bedrock provider, and verify credentials with an inference-free control-plane request
+      - Converse and embedding calls sign encoded model identifiers correctly and send the exact JSON
+        request and response media types required by model endpoints
+      - supports native Converse and model-response event streams plus HTTP/2 bidirectional inference with
+        chained SigV4 event signatures, upload half-close, timeouts, and cancellation
+      - delivers incremental LLM text and tool-call arguments with final usage and stop metadata
 
     - @ref bfldataproviderintro "BflDataProvider" module
       - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
@@ -2747,6 +2772,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - validates declared object properties even when the schema also permits arbitrary additional properties
       - preserves composed field types and supports multipart file-or-URL inputs, including named file arrays
       - derives response types from every declared media representation and validates the selected Content-Type
       - required read-only and write-only properties respect request/response direction
