@@ -662,6 +662,22 @@ public class LlmBackend {
     private {
         #! Minimum visible-output budget for a schema-constrained forced-tool retry
         const ForcedToolJsonRetryMinOutputTokens = 2048;
+        #! Errors meaning a forced-tool JSON repair was not satisfied by the provider
+        /** The repair asks for raw arguments under a synthesized strict output
+            schema that the caller never requested.  A provider that answers it
+            with prose or with a differently-shaped object has simply failed to
+            satisfy the repair; reporting that as a fatal error would abandon a
+            turn the caller can still recover with the structural retry.
+        */
+        const ForcedToolJsonRetryUnsatisfiedErrors = {
+            # the repair response is not an instance of the requested schema
+            "OPENAI-STRUCTURED-OUTPUT-ERROR": True,
+            # the repair response is not JSON at all (ordinary prose)
+            "JSON-PARSE-ERROR": True,
+            # the forced tool's parameters cannot be expressed as a strict
+            # output schema, so this repair cannot be made at all
+            "OPENAI-STRICT-SCHEMA-ERROR": True,
+        };
         #! The backend mode string (matches @ref LlmBackendConfig::mode)
         string mode;
         #! Backend configuration, retained for telemetry observer defaults
@@ -1057,6 +1073,14 @@ if (resp.stop_reason == "tool_use") {
             facade extension. It is consumed as a per-call transport retry
             override and is never forwarded in the provider-native wire body.
 
+        @note A request that forces a tool but receives no tool call is
+            repaired with a bounded retry sequence, reported in the response
+            under \c provider_diagnostics.forced_tool_retry. A repair that the
+            provider cannot satisfy — for example a tools-free JSON repair
+            answered by a provider that can only emit native tool calls — is
+            treated as "no repair" and followed by the next repair in the
+            sequence; it is not an error.
+
         @return OpenAI-compatible chat-completions response
 
         @throw LLM-ERROR the backend call failed
@@ -1114,6 +1138,14 @@ if (resp.stop_reason == "tool_use") {
 
         @param body OpenAI-compatible chat-completions request
         @param delta_cb callback receiving OpenAI-compatible stream chunks
+
+        @note A request that forces a tool but receives no tool call is
+            repaired with a bounded retry sequence, reported in the response
+            under \c provider_diagnostics.forced_tool_retry. A repair that the
+            provider cannot satisfy — for example a tools-free JSON repair
+            answered by a provider that can only emit native tool calls — is
+            treated as "no repair" and followed by the next repair in the
+            sequence; it is not an error.
 
         @return accumulated OpenAI-compatible final response
 
@@ -1706,8 +1738,18 @@ if (resp.stop_reason == "tool_use") {
         hash<LlmRequestOptions> retry_options =
             makeForcedToolJsonRetryOptions(options, forced_tool.parameters);
 
-        hash<ChatResponse> retry_response = chat(retry_messages, NOTHING,
-            retry_options);
+        hash<ChatResponse> retry_response;
+        try {
+            retry_response = chat(retry_messages, NOTHING, retry_options);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!ForcedToolJsonRetryUnsatisfiedErrors{ex.err}) {
+                rethrow;
+            }
+            # An unsatisfied repair is information, not a failure: report it as
+            # "no repair" so every caller can fall through to the repair that a
+            # native-tool-calling provider can actually answer.
+            return NOTHING;
+        }
         return synthesizeOpenAiForcedToolCall(chatResponseToOpenAi(
             retry_response, retry_options.model ?? provider.getModel(), tools),
             forced_tool_name, tools);

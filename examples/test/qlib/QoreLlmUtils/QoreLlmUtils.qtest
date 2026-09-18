@@ -229,6 +229,11 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend falls back to a tool retry when the forced "
             "JSON repair returns no tool call",
             \callbackRequiredToolJsonRepairFallsBackToToolRetryTest());
+        addTestCase("LlmBackend falls back to a tool retry when the forced "
+            "JSON repair violates its strict schema",
+            \openAiRequiredToolJsonRepairSchemaMismatchFallsBackTest());
+        addTestCase("LlmBackend reports transport failures in the forced "
+            "JSON repair", \openAiRequiredToolJsonRepairTransportErrorTest());
         addTestCase("LlmBackend OpenAI streaming facade rejects truncated "
             "malformed forced-tool retry content",
             \callbackOpenAiStreamMalformedForcedToolRetryContentTest());
@@ -3759,6 +3764,195 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             rv.choices[0].message.tool_calls[0].function.arguments);
         assertEq("revise", args.operation,
             "the recovered response preserves the tool arguments");
+    }
+
+    #! A JSON repair answered outside its strict schema stays repairable
+    /** The repair asks for raw arguments under a strict output schema the
+        caller never requested, so a provider that answers it with a
+        differently-shaped object has simply not satisfied the repair; that
+        must not abandon a turn the structural retry can still recover.
+    */
+    openAiRequiredToolJsonRepairSchemaMismatchFallsBackTest() {
+        installGeminiHandler({
+            "/v1/chat/completions": {
+                "sequence": (
+                    # required tool, but neither content nor a tool call
+                    {
+                        "code": 200,
+                        "body": {
+                            "id": "openai-required-empty-1",
+                            "object": "chat.completion",
+                            "model": "gpt-4o",
+                            "choices": ({
+                                "index": 0,
+                                "message": {"role": "assistant"},
+                                "finish_reason": "stop",
+                            },),
+                            "usage": {"prompt_tokens": 10,
+                                "completion_tokens": 0, "total_tokens": 10},
+                        },
+                    },
+                    # the tools-free JSON repair: valid JSON, but not an
+                    # instance of the strict raw-arguments schema
+                    {
+                        "code": 200,
+                        "body": {
+                            "id": "openai-json-repair-mismatch-1",
+                            "object": "chat.completion",
+                            "model": "gpt-4o",
+                            "choices": ({
+                                "index": 0,
+                                "message": {
+                                    "role": "assistant",
+                                    "content": make_json({
+                                        "protocol": "native_tool_calls_only",
+                                    }),
+                                },
+                                "finish_reason": "stop",
+                            },),
+                            "usage": {"prompt_tokens": 12,
+                                "completion_tokens": 6, "total_tokens": 18},
+                        },
+                    },
+                    # the structural retry resends the tools, which this
+                    # provider can answer natively
+                    {
+                        "code": 200,
+                        "body": {
+                            "id": "openai-tool-retry-1",
+                            "object": "chat.completion",
+                            "model": "gpt-4o",
+                            "choices": ({
+                                "index": 0,
+                                "message": {
+                                    "role": "assistant",
+                                    "tool_calls": ({
+                                        "id": "call-1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "select_action",
+                                            "arguments": make_json({
+                                                "operation": "revise",
+                                                "reason": "structural retry",
+                                            }),
+                                        },
+                                    },),
+                                },
+                                "finish_reason": "tool_calls",
+                            },),
+                            "usage": {"prompt_tokens": 14,
+                                "completion_tokens": 7, "total_tokens": 21},
+                        },
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "gpt-4o",
+        });
+        hash<auto> rv = llm.chatCompletions(requiredToolJsonRepairRequest());
+
+        assertEq(3, gemini_handler.requests.size(),
+            "a schema-violating JSON repair is followed by the tool retry");
+        assertEq(1, gemini_handler.requests[0].body.tools.size(),
+            "the initial request offers the single required tool");
+        assertNothing(gemini_handler.requests[1].body.tools,
+            "the JSON repair deliberately carries no tools");
+        assertEq("json_schema",
+            gemini_handler.requests[1].body.response_format.type,
+            "the JSON repair requests the raw arguments schema");
+        assertEq(1, gemini_handler.requests[2].body.tools.size(),
+            "the structural retry resends the tools");
+        assertNothing(gemini_handler.requests[2].body.response_format,
+            "the structural retry drops the repair output schema");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "the recovered response reports a tool call");
+        assertEq("select_action",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "the recovered response preserves the tool identity");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("revise", args.operation,
+            "the recovered response preserves the tool arguments");
+        assertEq("structural retry", args.reason,
+            "the recovered response preserves optional tool arguments");
+        assertEq("required_tool_no_output",
+            rv.provider_diagnostics.forced_tool_retry.reason,
+            "diagnostics record why the repair sequence ran");
+        assertTrue(rv.provider_diagnostics.forced_tool_retry
+            .recovered_tool_call,
+            "diagnostics record the recovered tool call");
+    }
+
+    #! An unsatisfied repair is information, but a failed request is a failure
+    openAiRequiredToolJsonRepairTransportErrorTest() {
+        installGeminiHandler({
+            "/v1/chat/completions": {
+                "sequence": (
+                    {
+                        "code": 200,
+                        "body": {
+                            "id": "openai-required-empty-2",
+                            "object": "chat.completion",
+                            "model": "gpt-4o",
+                            "choices": ({
+                                "index": 0,
+                                "message": {"role": "assistant"},
+                                "finish_reason": "stop",
+                            },),
+                            "usage": {"prompt_tokens": 10,
+                                "completion_tokens": 0, "total_tokens": 10},
+                        },
+                    },
+                    {
+                        "code": 500,
+                        "body": {"error": {"message": "backend on fire"}},
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "gpt-4o",
+            "max_retries": 0,
+        });
+        assertThrows("LLM-ERROR", "chat request failed",
+            sub () {
+                llm.chatCompletions(requiredToolJsonRepairRequest());
+            });
+        assertEq(2, gemini_handler.requests.size(),
+            "a failed repair request is not retried structurally");
+    }
+
+    private hash<auto> requiredToolJsonRepairRequest() {
+        return {
+            "model": "gpt-4o",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        };
     }
 
     callbackOpenAiStreamSingleRequiredToolEmptyJsonRetryTest() {
