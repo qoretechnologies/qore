@@ -96,6 +96,9 @@ printf("%Y\n", ans.body);
     @subsection awsrestclientv1_4 AwsRestClient v1.4
     - added signed raw-body requests to @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" so schema-driven
       AWS integrations can serialize requests once without bypassing AWS Signature Version 4 authentication
+    - added @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest()
+      "AwsRestClientIo::restDoEncodedRawRequest()" for schema-driven requests whose URI path variables are
+      already percent-encoded, preserving the exact encoded path in AWS Signature Version 4 canonical requests
     - preserved AWS configuration in @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies
       of @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo"
 
@@ -370,6 +373,29 @@ public class AwsRestClientBase {
                 params{$1} === True ? "" : encode_url(params{$1}.toString(), True)),
             sort(keys params)
         )) ?? "";
+    }
+
+    #! Returns the canonical URI used by AWS Signature Version 4
+    /** @param path request path, optionally including a query string
+        @param s3 if @ref True, apply S3's single-encoding contract
+        @param path_is_encoded if @ref True, the non-S3 path variables are already percent-encoded for the wire
+
+        @return the canonical URI
+
+        AWS canonicalizes the percent sign in an encoded wire path. Schema-driven clients encode each path
+        variable before transport, so those paths need one canonical encoding rather than the two encodings used
+        when a caller supplies an unencoded path.
+
+        @since AwsRestClient 1.4
+    */
+    static string getCanonicalUri(string path, bool s3, bool path_is_encoded = False) {
+        string uri = parse_uri_query(path).method ?? "/";
+        if (s3) {
+            return uri;
+        }
+        uri = normalize_dir_unix(uri, "/");
+        uri = encode_url(uri, False);
+        return path_is_encoded ? uri : encode_url(uri, False);
     }
 
     static private string trimall(string str) {
@@ -1203,9 +1229,6 @@ AwsRestClient rest({
         # make canonical URI
         hash<UriQueryInfo> uri_info = parse_uri_query(path);
 
-        # 2: canonical URI parameter
-        string uri = uri_info.method ?? "/";
-
         # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here.
         #
         # S3 URI-encodes the canonical path once, every other service twice
@@ -1218,11 +1241,8 @@ AwsRestClient rest({
         #
         # Other services keep the previous behavior exactly: their callers pass unencoded paths, which are
         # normalized and then encoded twice.
-        if (!aws_s3) {
-            uri = normalize_dir_unix(uri, "/");
-            uri = encode_url(uri, False);
-            uri = encode_url(uri, False);
-        }
+        # 2: canonical URI parameter
+        string uri = AwsRestClientBase::getCanonicalUri(path, aws_s3);
         # add to canonical string
         cstr += uri + "\n";
 
@@ -1601,6 +1621,25 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return restDoRequestIntern(method, path, body, hdr, NOTHING, True);
     }
 
+    #! Sends a signed raw request whose path variables are already percent-encoded
+    /** This is the schema-driven counterpart of @ref restDoRawRequest(). A schema request has already escaped
+        each path variable for transport; SigV4 must therefore encode the percent sign once when building its
+        canonical URI instead of applying the normal two-pass encoding for an unencoded caller path.
+
+        @param method the HTTP method
+        @param path the request path with encoded path variables
+        @param body the pre-serialized request body, if any
+        @param hdr any additional request headers
+
+        @return the deserialized REST response
+
+        @since AwsRestClient 1.4
+    */
+    hash<RestClient::RestResponseInfo> restDoEncodedRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr, NOTHING, True, True);
+    }
+
     #! Sends a signed REST request, assuming an XML response body when the server sends no content type
     /** S3 answers \c CreateMultipartUpload and \c CompleteMultipartUpload with an XML document and no
         \c Content-Type header at all.  Without one the REST client has nothing to deserialize against and
@@ -1662,18 +1701,19 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param assume_content_type the content type to attribute to a response that arrives without one; the
         header is only supplied when the server sent none, so a typed response is never reinterpreted
         @param raw_body if @ref True, a body is already serialized and must be sent unchanged
+        @param path_is_encoded if @ref True, path variables are already percent-encoded for transport
 
         @return the deserialized @ref RestClient::RestResponseInfo hash
     */
     private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
-            *hash<auto> hdr, *string assume_content_type, *bool raw_body) {
+            *hash<auto> hdr, *string assume_content_type, *bool raw_body, *bool path_is_encoded) {
         # Prepare request (serialize ordinary bodies; preserve already serialized raw bodies)
         hash<auto> prepared = raw_body
             ? prepareRawRequest(method, \path, body, \hdr)
             : prepareRequest(method, \path, body, \hdr);
 
         # Sign the request
-        signRequest(method, path, prepared.serialized_body, \hdr);
+        signRequest(method, path, prepared.serialized_body, \hdr, path_is_encoded);
 
         # Make HTTP request via multiplexed connection manager
         hash<auto> raw = getConnectionManager().request(getUrl(), method, path, hdr,
@@ -1691,7 +1731,8 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
     }
 
     #! Internal: adds AWS Signature V4 to the request headers
-    private signRequest(string method, string path, *data body, reference<*hash<auto>> hdr) {
+    private signRequest(string method, string path, *data body, reference<*hash<auto>> hdr,
+            *bool path_is_encoded) {
         date gmtime = Qore::gmtime();
         string scope = sprintf("%s/%s", gmtime.format("YYYYMMDD"), credential_scope_suffix);
         string signed_headers;
@@ -1716,7 +1757,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         }
 
         # Build canonical signature
-        string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers);
+        string csig = getCanonicalSignature(method, path, hdr, body, \signed_headers, path_is_encoded);
 
         string msg = AwsRestClientBase::AwsSignatureAlgorithm + "\n"
             + aws_date + "\n"
@@ -1738,22 +1779,17 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
 
     #! Internal: builds canonical signature for AWS Signature V4
     private string getCanonicalSignature(string http_method, string path, hash<auto> hdr, *data body,
-            reference<string> signed_headers) {
+            reference<string> signed_headers, *bool path_is_encoded) {
         string cstr = http_method + "\n";
 
         hash<UriQueryInfo> uri_info = parse_uri_query(path);
-        string uri = uri_info.method ?? "/";
 
         # NOTE: an S3 path is used exactly as given, and is deliberately not encoded here; see the same
         # decision in AwsRestClient::getCanonicalSignature().  An S3 caller builds an already-encoded path,
         # and encoding it again would sign "%2520" where the wire carried "%20", which AWS reports as
         # SignatureDoesNotMatch.  Other services keep the previous behavior: their callers pass unencoded
         # paths, which are normalized and then encoded twice
-        if (!aws_s3) {
-            uri = normalize_dir_unix(uri, "/");
-            uri = encode_url(uri, False);
-            uri = encode_url(uri, False);
-        }
+        string uri = AwsRestClientBase::getCanonicalUri(path, aws_s3, path_is_encoded ?? False);
         cstr += uri + "\n";
 
         if (uri_info.params) {
