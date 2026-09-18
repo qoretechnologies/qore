@@ -202,6 +202,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Gemini: the streaming path is derived from the request path", \streamPathTest());
         addTestCase("OpenAI: text in the final chunk is kept", \openAiFinalChunkContentTest());
         addTestCase("OpenAI: a stalled stream times out", \openAiStallTest());
+        addTestCase("OpenAI incomplete streams fail without replay", \openAiIncompleteStreamTest());
         addTestCase("OpenAI: split tool calls are collected", \openAiSplitToolCallTest());
         addTestCase("OpenAI: usage sent after the finish chunk is collected", \openAiUsageChunkTest());
         addTestCase("Azure OpenAI: streaming uses the Azure credentials", \azureOpenAiStreamAuthTest());
@@ -494,6 +495,24 @@ public class LlmStreamingTest inherits QUnit::Test {
             }));
         assertEq(1, events.size());
         assertFalse(events[0].done);
+    }
+
+    openAiIncompleteStreamTest() {
+        foreach bool with_done in ((False, True)) {
+            list<string> chunks = (sseData({"choices": ({"index": 0,
+                "delta": {"content": "partial"}},)}),);
+            if (with_done) { chunks += "data: [DONE]\n\n"; }
+            server.script(<FakeReply>{"chunks": chunks});
+            LlmBackend llm = openAiBackend();
+            int before = server.requests.size();
+            list<hash<ChatStreamEvent>> events;
+            assertThrows("LLM-ERROR", "ended without a terminal frame", \llm.chatStream(),
+                (userMessage("hi"), sub (hash<ChatStreamEvent> event) { events += event; }));
+            assertEq(before + 1, server.requests.size(), "partial requests are never replayed");
+            assertEq(1, events.size());
+            assertEq("partial", events[0].delta);
+            assertFalse(events[0].done);
+        }
     }
 
     openAiSplitToolCallTest() {

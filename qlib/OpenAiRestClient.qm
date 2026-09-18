@@ -122,6 +122,9 @@ stream.close();
     @section OpenAiRestClientRelnotes Release Notes
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
+
+    - Interrupted chat streams without a completion frame now raise an error
+      instead of returning a successful partial answer.
     - strict LLM output and tool schemas automatically adapt optional fields to
       OpenAI's required nullable representation; returned JSON and tool arguments
       restore the caller's original optional-field semantics
@@ -1363,6 +1366,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (parsed.service_tier.typeCode() == NT_STRING) {
                 served_service_tier = parsed.service_tier;
             }
+            if (parsed.choices[0].finish_reason.val()) {
+                terminal = parsed;
+            }
 
             if (strict_context.project) {
                 # JSON member deletion cannot be expressed as an append-only
@@ -1380,9 +1386,6 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 }
                 if (parsed.choices[0].delta.refusal.val()) {
                     structured_state.refusal += parsed.choices[0].delta.refusal;
-                }
-                if (parsed.choices[0].finish_reason.val()) {
-                    terminal = parsed;
                 }
                 continue;
             }
@@ -1412,6 +1415,10 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }
         }
         if (!strict_context.project) {
+            if (!terminal) {
+                throw "LLM-ERROR",
+                    "streaming chat response ended without a terminal frame";
+            }
             callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
             return;
         }
