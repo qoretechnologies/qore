@@ -1,0 +1,552 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRTypedForeachExceptionStateTest
+
+#! Regression coverage for loop state across an in-frame exception branch in the IR interpreter.
+/** A typed foreach keeps its list, index and limit in IR value slots that are read again by the
+    TypedForeachNext* on every back edge.  Several opcodes that raise an exception and branch to
+    a landing pad in the same function first ran the full cleanupValues() drain of the frame's
+    cleanup stack, which destroyed the loop's owned list slot along with the dead statement
+    temps.  The next TypedForeachNext* then called size() on a null list and the process crashed,
+    so a caught throw or rethrow - or a failing context initializer, context row reference or
+    find expression - anywhere inside a typed foreach body killed the loop after its first
+    iteration.
+
+    Exceptions raised by a call never hit this: the Invoke opcodes already drain only to the
+    throwing statement's temp scope.  Those opcodes now record the same temp scope and drain the
+    same way, leaving enclosing-scope temps - the loop's list among them - alive for the handler
+    and for the code that resumes after it.  See design/ir-exception-branch-temp-scope.md.
+
+    The assertions below compare full program output across every execution tier against the AST
+    tier, so they check the loop's values and the exception identity and not merely that the
+    process survives.
+*/
+class IRTypedForeachExceptionStateTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! every execution tier must agree with the AST interpreter
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! expected program output, verified independently against the AST tier
+        const Expected = "abc:3c:FIRST/inner;SECOND/inner;:d1/deep;d2/deep;:123:4.0:2:12:21:"
+            + "a1[ainner-2]b1[binner-2]:13:12:200:x:UNCAUGHTx:2:p:p:"
+            + "m-err=m/0;n-err=n/1;:123:!ss!tt:uvw3:k1k2:"
+            + "f1=CONTEXT-EXCEPTION;f2=CONTEXT-EXCEPTION;:"
+            + "c1=CONTEXT-EXCEPTION;c2=CONTEXT-EXCEPTION;:"
+            + "w1=CONTEXT-EXCEPTION;w1s=CONTEXT-EXCEPTION;w2=CONTEXT-EXCEPTION;w2s=CONTEXT-EXCEPTION;:"
+            + "g11g12g21g22:h120h220:gh:12:T1T2:456:3\n";
+    }
+
+    constructor() : QUnit::Test("IRTypedForeachExceptionStateTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("loop state survives an in-frame exception branch in every tier", \testTiers());
+        addTestCase("loop state survives an in-frame exception branch under AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string runMode(string script_path, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            libqore_dir, qore_bin, mode, script_path));
+    }
+
+    #! The program under test; every case raises an exception inside a loop body.
+    private string scriptCode() {
+        return "%modern
+
+# --- direct throw caught inside the loop body -------------------------------------------
+
+#! the loop must continue after the handler, and the iterated list must be unharmed
+string sub stringCaughtThrow() {
+    list<string> values = (\"a\", \"b\", \"c\");
+    string result;
+    foreach string value in (values) {
+        try {
+            throw value, \"direct\";
+        } catch (hash<ExceptionInfo> ex) {
+            result += ex.err;
+        }
+    }
+    return result + \":\" + string(values.size()) + values[2];
+}
+
+#! issue #5411: inner catch rethrows, outer catch is in the same loop body
+string sub stringRethrow() {
+    string result;
+    foreach string value in ((\"FIRST\", \"SECOND\")) {
+        try {
+            try {
+                throw value, \"inner\";
+            } catch (hash<ExceptionInfo> ex) {
+                rethrow;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += ex.err + \"/\" + ex.desc + \";\";
+        }
+    }
+    return result;
+}
+
+#! exception identity must survive two rethrows
+string sub doubleRethrow() {
+    string result;
+    foreach string value in ((\"d1\", \"d2\")) {
+        try {
+            try {
+                try {
+                    throw value, \"deep\";
+                } catch (hash<ExceptionInfo> ex) {
+                    rethrow;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                rethrow;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += ex.err + \"/\" + ex.desc + \";\";
+        }
+    }
+    return result;
+}
+
+int sub intCaughtThrow() {
+    int total = 0;
+    foreach int value in ((1, 2, 3)) {
+        try {
+            throw \"E\", \"x\";
+        } catch (hash<ExceptionInfo> ex) {
+            total = total * 10 + value;
+        }
+    }
+    return total;
+}
+
+float sub floatCaughtThrow() {
+    float total = 0.0;
+    foreach float value in ((1.5, 2.5)) {
+        try {
+            throw \"E\", \"x\";
+        } catch (hash<ExceptionInfo> ex) {
+            total += value;
+        }
+    }
+    return total;
+}
+
+int sub boolCaughtThrow() {
+    int total = 0;
+    foreach bool value in ((True, False, True)) {
+        try {
+            throw \"E\", \"x\";
+        } catch (hash<ExceptionInfo> ex) {
+            if (value) {
+                ++total;
+            }
+        }
+    }
+    return total;
+}
+
+#! the implicit element index must still advance correctly after a caught throw
+int sub implicitElementAfterCatch() {
+    int result = 0;
+    foreach string value in ((\"a\", \"b\", \"c\")) {
+        try {
+            throw \"E\", value;
+        } catch (hash<ExceptionInfo> ex) {
+            result = result * 10 + $#;
+        }
+    }
+    return result;
+}
+
+# --- nested loops -----------------------------------------------------------------------
+
+int sub nestedInnerCatch() {
+    int result = 0;
+    foreach int left in ((1, 2)) {
+        foreach int right in ((3, 4)) {
+            try {
+                throw \"E\", \"x\";
+            } catch (hash<ExceptionInfo> ex) {
+                result += left * right;
+            }
+        }
+    }
+    return result;
+}
+
+#! the branch to the outer landing pad leaves an inner typed loop mid-iteration
+string sub throwAcrossInnerLoop() {
+    string result;
+    foreach string outer in ((\"a\", \"b\")) {
+        try {
+            foreach int inner in ((1, 2, 3)) {
+                if (inner == 2) {
+                    throw outer, \"inner-\" + string(inner);
+                }
+                result += outer + string(inner);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += \"[\" + ex.err + ex.desc + \"]\";
+        }
+    }
+    return result;
+}
+
+# --- control flow out of the handler ------------------------------------------------------
+
+int sub catchContinue() {
+    int total = 0;
+    foreach int value in ((1, 2, 3, 4)) {
+        try {
+            if (value % 2 == 0) {
+                throw \"E\", \"even\";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            continue;
+        }
+        total = total * 10 + value;
+    }
+    return total;
+}
+
+int sub catchBreak() {
+    int total = 0;
+    foreach int value in ((1, 2, 3, 4)) {
+        try {
+            if (value == 3) {
+                throw \"E\", \"stop\";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            break;
+        }
+        total = total * 10 + value;
+    }
+    return total;
+}
+
+int sub catchReturn() {
+    foreach int value in ((1, 2, 3)) {
+        try {
+            if (value == 2) {
+                throw \"E\", \"ret\";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return value * 100;
+        }
+    }
+    return -1;
+}
+
+# --- exceptions that leave the loop --------------------------------------------------------
+
+string sub uncaughtFromLoop() {
+    list<string> values = (\"x\", \"y\");
+    string result;
+    try {
+        foreach string value in (values) {
+            result += value;
+            throw \"UNCAUGHT\", value;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        result += \":\" + ex.err + ex.desc;
+    }
+    return result + \":\" + string(values.size());
+}
+
+string sub rethrowOutOfLoop() {
+    string result;
+    try {
+        foreach string value in ((\"p\", \"q\")) {
+            try {
+                throw value, \"d\";
+            } catch (hash<ExceptionInfo> ex) {
+                result += value;
+                rethrow;
+            }
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        result += \":\" + ex.err;
+    }
+    return result;
+}
+
+# --- temps and scope depth ------------------------------------------------------------------
+
+#! the throw arguments allocate temps derived from the loop variable
+string sub throwWithTempArgs() {
+    string result;
+    foreach string value in ((\"m\", \"n\")) {
+        try {
+            throw value + \"-err\", sprintf(\"%s/%d\", value, $#);
+        } catch (hash<ExceptionInfo> ex) {
+            result += ex.err + \"=\" + ex.desc + \";\";
+        }
+    }
+    return result;
+}
+
+#! the throw sits several statement scopes below the try
+int sub deeplyNestedThrow() {
+    int total = 0;
+    foreach int value in ((1, 2, 3)) {
+        try {
+            if (value) {
+                int n = 0;
+                while (n < 2) {
+                    if (n == 1) {
+                        throw \"E\", \"deep\";
+                    }
+                    ++n;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            total = total * 10 + value;
+        }
+    }
+    return total;
+}
+
+string sub onErrorInLoop() {
+    string result;
+    foreach string value in ((\"s\", \"t\")) {
+        try {
+            {
+                on_error result += \"!\" + value;
+                throw value, \"oe\";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += ex.err;
+        }
+    }
+    return result;
+}
+
+#! the iterated list must still be usable after the loop
+string sub listIntactAfterCatch() {
+    list<string> values = (\"u\", \"v\", \"w\");
+    foreach string value in (values) {
+        try {
+            throw \"E\", value;
+        } catch (hash<ExceptionInfo> ex) {
+        }
+    }
+    string result;
+    foreach string value in (values) {
+        result += value;
+    }
+    return result + string(values.size());
+}
+
+#! a typed foreach over a temporary list expression
+string sub hashKeyForeachThrow() {
+    hash<auto> h = {\"k1\": 1, \"k2\": 2};
+    string result;
+    foreach string k in (keys h) {
+        try {
+            throw \"E\", \"h\";
+        } catch (hash<ExceptionInfo> ex) {
+            result += k;
+        }
+    }
+    return result;
+}
+
+# --- exceptions raised by non-Invoke opcodes that branch to an in-frame landing pad ---------
+
+#! a failing find must not corrupt the enclosing typed foreach
+string sub findErrorInLoop() {
+    string result;
+    foreach string value in ((\"f1\", \"f2\")) {
+        try {
+            hash<auto> h = {\"a\": (1, 2)};
+            auto r = find %nosuch in h where (%a > 0);
+            result += sprintf(\"%y\", r);
+        } catch (hash<ExceptionInfo> ex) {
+            result += value + \"=\" + ex.err + \";\";
+        }
+    }
+    return result;
+}
+
+#! a failing context row reference must not corrupt the enclosing typed foreach
+string sub contextRefErrorInLoop() {
+    string result;
+    foreach string value in ((\"c1\", \"c2\")) {
+        try {
+            hash<auto> h = {\"a\": (1, 2)};
+            context (h) {
+                result += sprintf(\"%y\", %nosuch);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += value + \"=\" + ex.err + \";\";
+        }
+    }
+    return result;
+}
+
+#! a failing context initializer (where/sortBy) must not corrupt the enclosing typed foreach
+string sub contextInitErrorInLoop() {
+    string result;
+    foreach string value in ((\"w1\", \"w2\")) {
+        try {
+            hash<auto> h = {\"a\": (1, 2)};
+            context (h) where (%nosuch > 0) {
+                result += \"unreachable\";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += value + \"=\" + ex.err + \";\";
+        }
+        try {
+            hash<auto> h = {\"a\": (1, 2)};
+            context (h) sortBy (%nosuch) {
+                result += \"unreachable\";
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += value + \"s=\" + ex.err + \";\";
+        }
+    }
+    return result;
+}
+
+#! a context statement that succeeds inside a typed foreach still works
+string sub contextInLoop() {
+    string result;
+    foreach string value in ((\"g1\", \"g2\")) {
+        hash<auto> h = {\"a\": (1, 2)};
+        context (h) {
+            result += value + string(%a);
+        }
+    }
+    return result;
+}
+
+#! a find that succeeds inside a typed foreach still works
+string sub findInLoop() {
+    string result;
+    foreach string value in ((\"h1\", \"h2\")) {
+        hash<auto> h = {\"a\": (1, 2), \"b\": (10, 20)};
+        auto r = find %b in h where (%a == 2);
+        result += value + sprintf(\"%y\", r);
+    }
+    return result;
+}
+
+# --- loops that do not use the typed foreach lowering --------------------------------------
+
+string sub autoForeachRethrow() {
+    string result;
+    foreach auto value in ((\"g\", \"h\")) {
+        try {
+            try {
+                throw value, \"a\";
+            } catch (hash<ExceptionInfo> ex) {
+                rethrow;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            result += ex.err;
+        }
+    }
+    return result;
+}
+
+int sub whileLoopThrow() {
+    int total = 0;
+    int i = 0;
+    while (i < 3) {
+        try {
+            throw \"E\", \"w\";
+        } catch (hash<ExceptionInfo> ex) {
+            total = total * 10 + i;
+        }
+        ++i;
+    }
+    return total;
+}
+
+# --- top-level code (lowered separately from functions) -------------------------------------
+
+string top_result;
+foreach string tv in ((\"T1\", \"T2\")) {
+    try {
+        try {
+            throw tv, \"top\";
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        top_result += ex.err;
+    }
+}
+
+list<int> top_values = (4, 5, 6);
+int top_int = 0;
+foreach int tv2 in (top_values) {
+    try {
+        throw \"E\", \"t\";
+    } catch (hash<ExceptionInfo> ex) {
+        top_int = top_int * 10 + tv2;
+    }
+}
+
+printf(\"%s:%s:%s:%d:%.1f:%d:%d:%d:%s:%d:%d:%d:%s:%s:%s:%d:%s:%s:%s:%s:%s:%s:%s:%s:%s:%d:%s:%d:%d\\n\",
+    stringCaughtThrow(), stringRethrow(), doubleRethrow(), intCaughtThrow(),
+    floatCaughtThrow(), boolCaughtThrow(), implicitElementAfterCatch(), nestedInnerCatch(),
+    throwAcrossInnerLoop(), catchContinue(), catchBreak(), catchReturn(),
+    uncaughtFromLoop(), rethrowOutOfLoop(), throwWithTempArgs(), deeplyNestedThrow(),
+    onErrorInLoop(), listIntactAfterCatch(), hashKeyForeachThrow(),
+    findErrorInLoop(), contextRefErrorInLoop(), contextInitErrorInLoop(),
+    contextInLoop(), findInLoop(),
+    autoForeachRethrow(), whileLoopThrow(), top_result, top_int, top_values.size());
+";
+    }
+
+    testTiers() {
+        TmpDir tmp("qore-ir-typed-foreach-exception-state-");
+        string script_path = tmp.path + "/foreach-exception-state.qr";
+        write(script_path, scriptCode());
+
+        foreach string mode in (Modes) {
+            assertEq(Expected, runMode(script_path, mode), sprintf("exec-mode=%s output", mode));
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-typed-foreach-exception-state-aot-");
+        string script_path = tmp.path + "/foreach-exception-state.qr";
+        string exe = tmp.path + "/foreach-exception-state";
+        write(script_path, scriptCode());
+
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            libqore_dir, qcc_bin, exe, script_path));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)),
+            "AOT output");
+    }
+}

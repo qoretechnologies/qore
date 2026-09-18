@@ -5364,14 +5364,23 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return builder.createCreateCallRef(expr, loc)->result;
     }
     if (auto* ctx_ref = dynamic_cast<const ContextrefNode*>(node)) {
-        return builder.createContextRef(ctx_ref->str, 0, ctx_ref->loc)->result;
+        // An unknown key raises CONTEXT-EXCEPTION at runtime, so the instruction needs the
+        // active handler: without it the interpreter returns from the frame and the exception
+        // escapes an enclosing try/catch in the same function (AST mode catches it).
+        auto* inst = builder.createContextRef(ctx_ref->str, 0, ctx_ref->loc);
+        inst->exception_target = getCurrentExceptionTarget();
+        return inst->result;
     }
     if (auto* complex_ctx_ref = dynamic_cast<const ComplexContextrefNode*>(node)) {
-        return builder.createContextRef(complex_ctx_ref->member,
-            complex_ctx_ref->stack_offset, complex_ctx_ref->loc)->result;
+        auto* inst = builder.createContextRef(complex_ctx_ref->member,
+            complex_ctx_ref->stack_offset, complex_ctx_ref->loc);
+        inst->exception_target = getCurrentExceptionTarget();
+        return inst->result;
     }
     if (auto* ctx_row = dynamic_cast<const ContextRowNode*>(node)) {
-        return builder.createContextRow(ctx_row->loc)->result;
+        auto* inst = builder.createContextRow(ctx_row->loc);
+        inst->exception_target = getCurrentExceptionTarget();
+        return inst->result;
     }
     if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
         if (!exception_stack.empty()) {

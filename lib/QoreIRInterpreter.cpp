@@ -11212,7 +11212,9 @@ load_local_done:
                     context_inst->sort_type, xsink);
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11233,7 +11235,9 @@ load_local_done:
                     cri->key.c_str(), cri->stack_offset, xsink));
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11254,7 +11258,9 @@ load_local_done:
                 QoreValue result = fromBits(qore_rt_context_row(xsink));
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11302,7 +11308,9 @@ load_local_done:
                 QoreValue result = str ? QoreValue(str) : QoreValue();
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11325,7 +11333,9 @@ load_local_done:
                     toBits(find_inst->find_exp), toBits(find_inst->where), find_inst->mode, xsink));
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11507,7 +11517,9 @@ load_local_done:
                 uint64_t state = qore_rt_ref_foreach_init(toBits(ref_init->expr), xsink);
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11538,7 +11550,9 @@ load_local_done:
                     index_val.getAsBigInt(), xsink);
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        // in-frame landing pad: drain by scope so enclosing-scope temps
+                        // survive; see design/ir-exception-branch-temp-scope.md
+                        cleanupToTempScope(inst->temp_scope_id, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -15299,8 +15313,17 @@ load_local_done:
                 if (debug_active && xsink && *xsink) {
                     tlpd->dbgException(getDebugStatement(inst), xsink);
                 }
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 if (throw_inst->exception_target) {
+                    // The landing pad is in this frame, so only the throwing statement's own
+                    // temps are dead here.  Drain to the statement's temp mark instead of the
+                    // whole cleanup stack (which cleanupValues() would do): enclosing-scope
+                    // temps stay live for the handler and for the code that resumes after it.
+                    // The most visible casualty of a full drain is a typed foreach's list temp,
+                    // whose slot is read again by the next TypedForeachNext* on the back edge.
+                    // Whatever this scoped drain leaves behind is released by the DiscardTemps
+                    // of the enclosing statement (try.merge), or by the full drain in
+                    // returnAfterUnhandledException() if the exception leaves the frame.
+                    cleanupToTempScope(throw_inst->temp_scope_id, true);
                     prev_block = block;
                     block = throw_inst->exception_target;
                     ip = 0;
@@ -15309,6 +15332,7 @@ load_local_done:
                 // No exception target: fire all scope exits after raising the exception.
                 // The exception is now on xsink, so on_error handlers can access it
                 // via CatchExceptionHelper for rethrow support.
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 return returnAfterUnhandledException(true);
             }
             case QoreIROpcode::Rethrow: {
@@ -15362,7 +15386,10 @@ load_local_done:
                 }
                 // Branch to outer landing pad if inside nested try/catch
                 if (rethrow_inst->exception_target) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    // Scoped drain, for the same reason as Throw above: the outer landing pad
+                    // is in this frame, so enclosing-scope temps (e.g. an enclosing typed
+                    // foreach's list) must survive the branch.
+                    cleanupToTempScope(rethrow_inst->temp_scope_id, true);
                     prev_block = block;
                     block = rethrow_inst->exception_target;
                     ip = 0;

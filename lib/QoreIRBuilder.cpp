@@ -1411,6 +1411,12 @@ QoreIRThrowInstruction* QoreIRBuilder::createThrow(QoreIRValue value, QoreIRBasi
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->exception_target = exception_target;
+    // Record the innermost open temp scope so that a branch to an in-frame landing pad drains
+    // only this statement's temps, exactly as the Invoke opcodes do.  Draining the whole frame
+    // would destroy enclosing-scope temps that must survive the handler - most importantly a
+    // typed foreach's list slot, which is read again on the loop back edge.
+    // See design/ir-exception-branch-temp-scope.md.
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1419,6 +1425,8 @@ QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception
     auto inst = block->appendInstruction<QoreIRThrowInstruction>(QoreIROpcode::Rethrow);
     inst->exception_target = exception_target;
     inst->loc = loc;
+    // See createThrow(): a scoped drain preserves enclosing-scope temps across the handler.
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1634,6 +1642,8 @@ QoreIRRefForeachInitInstruction* QoreIRBuilder::createRefForeachInit(const QoreV
     auto inst = block->appendInstruction<QoreIRRefForeachInitInstruction>(parse_ref_expr);
     inst->loc = loc;
     inst->result = func->createValue();
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1652,6 +1662,8 @@ QoreIRInstruction* QoreIRBuilder::createRefForeachGetEntry(QoreIRValue state, Qo
     inst->result = func->createValue();
     inst->operands.push_back(state);
     inst->operands.push_back(index);
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1707,6 +1719,8 @@ QoreIRContextInstruction* QoreIRBuilder::createContext(const std::string& name, 
         sort_type);
     inst->result = func->createValue();
     inst->loc = loc;
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1741,6 +1755,8 @@ QoreIRBackquoteInstruction* QoreIRBuilder::createBackquote(const char* command,
     auto inst = block->appendInstruction<QoreIRBackquoteInstruction>(command ? command : "");
     inst->loc = loc;
     inst->result = func->createValue();
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1749,6 +1765,8 @@ QoreIRContextRefInstruction* QoreIRBuilder::createContextRef(const char* key, in
     auto inst = block->appendInstruction<QoreIRContextRefInstruction>(key ? key : "", stack_offset);
     inst->loc = loc;
     inst->result = func->createValue();
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1756,6 +1774,8 @@ QoreIRInstruction* QoreIRBuilder::createContextRow(const QoreProgramLocation* lo
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextRow);
     inst->loc = loc;
     inst->result = func->createValue();
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
@@ -1765,6 +1785,8 @@ QoreIRFindInstruction* QoreIRBuilder::createFind(const QoreValue& exp,
     auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where, mode);
     inst->loc = loc;
     inst->result = func->createValue();
+    // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
+    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
