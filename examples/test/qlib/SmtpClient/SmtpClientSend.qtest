@@ -5,13 +5,13 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/Mime.qm
-%requires ../../../../qlib/MailMessage.qm
-%requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/ConnectionProvider
-%requires ../../../../qlib/SmtpClient.qm
-%requires ../../../../qlib/QUnit.qm
+%requires Logger
+%requires Mime
+%requires MailMessage
+%requires DataProvider
+%requires ConnectionProvider
+%requires SmtpClient
+%requires QUnit
 %try-module process
 %define NoProcess
 %endtry

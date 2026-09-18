@@ -728,6 +728,13 @@ Current usages to migrate:
 
 - New modules must have tests under:
   - `examples/test/qlib/<ModuleName>/`
+- Pin in-repo modules with `%prepend-module-path "${SCRIPT_DIR}/<relpath>/qlib"` followed by plain
+  `%requires <ModuleName>` — **not** a relative path such as `%requires ../../../../qlib/Foo.qm`.
+  The prepended directory is consulted ahead of `QORE_MODULE_DIR` and the compiled-in defaults
+  (see [Module Search Path](#module-search-path)), so the local development version wins while the
+  test still exercises the normal resolution order, including the `.qmod` preference. A relative
+  path bypasses that resolution and loads the `.qm` source directly, so the test covers a different
+  loading path than the rest of the suite.
 - Use `%try-module` patterns in tests to allow skipping when optional modules are not available.
 - Modules delivered with Qore itself are always available and should use hard `%requires` — they
   do not need the `%try-module` pattern. That covers the user modules under `qlib/`
@@ -753,6 +760,7 @@ Current usages to migrate:
 - [ ] QPP `ns=` attribute matches the full namespace path
 - [ ] all scripts have the execute bit set
 - [ ] all tests and scripts use `%modern`
+- [ ] tests pin in-repo modules with `%prepend-module-path` + plain `%requires <ModuleName>`, not relative `.qm` paths
 - [ ] module mainpage has `@section <lowercasemodname>intro` as first section
 - [ ] documentation section IDs use `<modname>` prefix (not underscored variants)
 - [ ] all doxygen `@code` blocks containing Qore source use `@code{.py}` (never `@code{.qore}` or bare `@code`)
