@@ -345,13 +345,21 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
 public class SmtpClientSendTest inherits QUnit::Test {
     private {
-        string verification_cert;
+        #! Reported when no fresh TLS certificate could be generated for the verification tests
+        const CertSkipMsg = "the process module and the openssl executable are required to generate a fresh "
+            "TLS certificate";
+
+        #! Freshly-generated CA certificate for the TLS verification tests
+        /** left unassigned when no certificate can be generated; the tests needing it are skipped
+        */
+        *string verification_cert;
     }
 
     globalSetUp() {
-%ifdef NoProcess
-        throw "TEST-DEPENDENCY-ERROR", "the process module is required to generate a fresh TLS certificate";
-%else
+%ifndef NoProcess
+        if (!Process::commandExists("openssl")) {
+            return;
+        }
         # A trusted certificate must be fresh; the legacy static fixture expires in 2026.
         string dir = sprintf("%s/qore-smtp-cert-%d", ENV.TMPDIR ?? "/tmp", getpid());
         mkdir(dir, 0700);
@@ -674,6 +682,9 @@ public class SmtpClientSendTest inherits QUnit::Test {
     }
 
     testUntrustedTls() {
+        if (!exists verification_cert) {
+            testSkip(CertSkipMsg);
+        }
         foreach string mode in (("connect", "send", "ping", "async-send")) {
             tlsExchange(mode, False);
             tlsExchange(mode, False, False, True);
@@ -681,6 +692,9 @@ public class SmtpClientSendTest inherits QUnit::Test {
     }
 
     testTrustedTls() {
+        if (!exists verification_cert) {
+            testSkip(CertSkipMsg);
+        }
         string path = sprintf("%s/qore-smtp-test-ca-%d.pem", ENV.TMPDIR ?? "/tmp", getpid());
         File ca();
         ca.open2(path, O_CREAT | O_EXCL | O_WRONLY, 0600);

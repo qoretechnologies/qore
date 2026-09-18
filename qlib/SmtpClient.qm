@@ -716,6 +716,7 @@ SmtpClient smtp("esmtptls://smtp.gmail.com", {
         - \c pass: any password for the connection
         - \c token: any OAuth2 bearer token for the connection (@since %SmtpClient 2.2)
         - \c auth_mechanism: the configured SASL mechanism (@since %SmtpClient 2.2)
+        - \c ssl_verify_cert: the TLS certificate verification flag (@since %SmtpClient 2.2)
     */
     hash<auto> getInfo() {
         return {
