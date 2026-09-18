@@ -27,6 +27,8 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
         string last_path = "";
         *hash<auto> last_body;
         string last_authorization = "";
+        hash<auto> last_headers;
+        string last_raw_body;
         # default canned response for /model/.../converse
         hash<auto> converse_response = {
             "output": {
@@ -52,9 +54,12 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
     hash handleRequest(hash cx, hash hdr, *data body) {
         last_path = cx.raw_path;
         last_authorization = hdr."authorization" ?? "";
+        last_headers = hdr;
+        last_headers."content-type" = hdr."_qore_orig_content_type" ?? hdr."content-type";
         string body_str = body
             ? (body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body)
             : "";
+        last_raw_body = body_str;
         try {
             last_body = parse_json(body_str);
         } catch () {
@@ -353,6 +358,35 @@ public class BedrockTest inherits QUnit::Test {
         # scope must include the bedrock service
         assertTrue(handler.last_authorization =~ /\/bedrock\/aws4_request/,
             "Authorization scope must mention 'bedrock' service");
+        assertSignature();
+    }
+
+    #! Recomputes SigV4 from the actual wire request, independently of the client signer
+    private assertSignature(string secret = "test-secret") {
+        assertEq(MimeTypeJson, handler.last_headers."content-type",
+            "Bedrock model endpoints receive the exact application/json media type");
+        assertEq(MimeTypeJson, handler.last_headers.accept,
+            "Bedrock model endpoints receive a single JSON Accept media type");
+        list<string> signature_parts = handler.last_authorization.split("SignedHeaders=")[1]
+            .split(", Signature=");
+        string signed_headers = signature_parts[0];
+        string headers = "";
+        foreach string name in (signed_headers.split(";")) {
+            headers += name + ":" + regex_subst(trim(handler.last_headers{name}), " +", " ", RE_Global) + "\n";
+        }
+        string canonical = "POST\n" + encode_url(handler.last_path, False) + "\n\n" + headers + "\n"
+            + signed_headers + "\n" + digest(CRYPTO_DIGEST_SHA256, handler.last_raw_body).toHex();
+        string timestamp = handler.last_headers."x-amz-date";
+        string day = substr(timestamp, 0, 8);
+        string scope = day + "/us-east-1/bedrock/aws4_request";
+        string to_sign = "AWS4-HMAC-SHA256\n" + timestamp + "\n" + scope + "\n"
+            + digest(CRYPTO_DIGEST_SHA256, canonical).toHex();
+        binary key = hmac(CRYPTO_DIGEST_SHA256, day, "AWS4" + secret);
+        foreach string component in ("us-east-1", "bedrock", "aws4_request") {
+            key = hmac(CRYPTO_DIGEST_SHA256, component, key);
+        }
+        assertEq(hmac(CRYPTO_DIGEST_SHA256, to_sign, key).toHex(), signature_parts[1],
+            "SigV4 matches the encoded model ID and JSON bytes sent on the wire");
     }
 
     private missingRegionTest() {
@@ -398,6 +432,7 @@ public class BedrockTest inherits QUnit::Test {
         assertEq(4, emb.getDimension());
         # request body: Titan-shaped
         assertEq("hello world", handler.last_body.inputText);
+        assertSignature("s");
     }
 
     private connectionTest() {

@@ -38,7 +38,7 @@
 module BedrockRestClient {
     version = "1.1";
     desc = "REST client and LLM provider for AWS Bedrock — speaks the unified "
-        "Converse / ConverseStream API across Anthropic, Llama, Mistral, "
+        "Converse API across Anthropic, Llama, Mistral, "
         "Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -62,7 +62,7 @@ module BedrockRestClient {
     The %BedrockRestClient module wraps AWS Bedrock for use with the
     <a href="../../QoreLlmUtils/html/index.html">QoreLlmUtils</a> agent stack and the
     <a href="../../QoreRagUtils/html/index.html">QoreRagUtils</a> RAG pipeline.  Both the unified
-    Converse API (chat + streaming + tool use, covering the Anthropic /
+    Converse API (chat + tool use, covering the Anthropic /
     Llama / Mistral / Cohere / AI21 / Titan / DeepSeek model families) and
     Titan / Cohere embeddings are supported.
 
@@ -120,6 +120,7 @@ hash<ChatResponse> r = p.chat((
     - associates Bedrock connections with the AWS Bedrock data provider app
     - derives persistent runtime endpoints from the configured AWS region
     - verifies credentials without inference by listing foundation models
+    - signs the encoded model identifiers in Converse and embedding requests without extra URI escaping
 
     @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
     - initial release: BedrockRestConnection + BedrockRestClient(Io),
@@ -677,7 +678,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             encode_url(getBedrockModelId(opts), True));
         try {
             return withRetry(hash<auto> sub () {
-                return rest_client.restPost(path, body);
+                return rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
+                    {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
@@ -918,7 +920,8 @@ public class BedrockEmbedder inherits QoreRagUtils::AbstractEmbedder {
             encode_url(config.model, True));
         hash<auto> resp;
         try {
-            resp = rest_client.restPost(path, body);
+            resp = rest_client.restDoEncodedRawRequest("POST", path, binary(make_json(body)),
+                {"Content-Type": MimeTypeJson, "Accept": MimeTypeJson});
         } catch (hash<ExceptionInfo> ex) {
             throw "EMBEDDER-ERROR",
                 sprintf("Bedrock InvokeModel embed request for %y failed: %s",

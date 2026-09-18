@@ -26,9 +26,15 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
     public {
         string last_path = "";
         *hash<auto> last_body;
+        string last_content_type;
+        string last_accept;
+        int requests = 0;
     }
     hash handleRequest(hash cx, hash hdr, *data body) {
         last_path = cx.raw_path;
+        last_content_type = hdr."_qore_orig_content_type" ?? hdr."content-type" ?? "";
+        last_accept = hdr.accept ?? "";
+        ++requests;
         string body_str = body ? (body.typeCode() == NT_BINARY
             ? body.toString("UTF-8") : body) : "";
         try { last_body = parse_json(body_str); } catch () {}
@@ -45,6 +51,26 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
                 "embedding": (0.1, 0.2, 0.3, 0.4),
                 "inputTextTokenCount": 3,
             }));
+        }
+        if (last_path == "/foundation-models") {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+                "modelSummaries": ({
+                    "modelArn": "arn:aws:bedrock:us-east-1::foundation-model/amazon.titan-text-lite-v1",
+                    "modelId": "amazon.titan-text-lite-v1",
+                    "modelName": "Titan Text Lite",
+                    "providerName": "Amazon",
+                    "inputModalities": ("TEXT",),
+                    "outputModalities": ("TEXT",),
+                    "responseStreamingSupported": False,
+                    "customizationsSupported": (),
+                    "inferenceTypesSupported": ("ON_DEMAND",),
+                    "modelLifecycle": {"status": "ACTIVE"},
+                },),
+            }));
+        }
+        if (last_path =~ /^\/async-invoke(?:\?|$)/) {
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json({"asyncInvokeSummaries": ()}));
         }
         return makeResponse(404, "unknown bedrock path: " + last_path);
     }
@@ -63,6 +89,9 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         HttpServer http;
         int port;
         FakeBedrockHandler handler;
+        HttpServer control_http;
+        int control_port;
+        FakeBedrockHandler control_handler;
         *string conn_name;
     }
 
@@ -75,6 +104,9 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         addTestCase("Converse action end-to-end",         \converseTest());
         addTestCase("Embed action end-to-end",            \embedTest());
         addTestCase("child providers discoverable",       \childrenTest());
+        addTestCase("control and runtime endpoint routing", \routingTest());
+        addTestCase("temporary source client remains alive", \clientLifetimeTest());
+        addTestCase("child action outlives its root provider", \childLifetimeTest());
 
         try { setupFakeServer(); }
         catch (hash<ExceptionInfo> ex) {
@@ -134,9 +166,15 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         handler = new FakeBedrockHandler();
         http.setDefaultHandler("bedrock", handler);
         port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        control_http = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        control_handler = new FakeBedrockHandler();
+        control_http.setDefaultHandler("bedrock-control", control_handler);
+        control_port = control_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
     globalTearDown() {
+        delete control_http;
         delete http;
     }
 
@@ -217,6 +255,10 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         assertEq((0.1, 0.2, 0.3, 0.4), resp.embedding);
         # Titan body shape
         assertEq("hello world", handler.last_body.inputText);
+        assertEq(MimeTypeJson, handler.last_content_type,
+            "the embedding endpoint requires application/json without a charset parameter");
+        assertEq(MimeTypeJson, handler.last_accept,
+            "the embedding endpoint requires a single JSON Accept media type");
     }
 
     private childrenTest() {
@@ -231,6 +273,91 @@ public class BedrockDataProviderTest inherits QUnit::Test {
         assertTrue(inlist("embed", names));
         AbstractDataProvider conv = root.getChildProviderEx("converse");
         assertEq("converse", conv.getName());
+    }
+
+    private routingTest() {
+        BedrockDataProviderTest::checkJson(self);
+        if (!http || !control_http) {
+            testSkip("no fake servers");
+        }
+        BedrockEndpointRestClientIo rest(buildRestOpts() + {
+            "bedrock_control_url": "http://localhost:" + control_port,
+        });
+        BedrockDataProvider::BedrockDataProvider root(rest);
+        int runtime_requests = handler.requests;
+        int control_requests = control_handler.requests;
+        auto models = root.getChildProviderEx("list-foundation-models").doRequest({});
+        assertEq("amazon.titan-text-lite-v1", models.modelSummaries[0].modelId);
+        assertEq(control_requests + 1, control_handler.requests,
+            "control action uses the control-plane endpoint");
+        assertEq(runtime_requests, handler.requests,
+            "control action does not use the runtime endpoint");
+
+        root.getChildProviderEx("converse").doRequest({
+            "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+            "messages": ({"role": "user", "content": ({"text": "hi"},)},),
+        });
+        assertEq(runtime_requests + 1, handler.requests,
+            "runtime action uses the runtime endpoint");
+        assertEq(control_requests + 1, control_handler.requests,
+            "runtime action does not use the control-plane endpoint");
+
+        auto invocations = root.getChildProviderEx("list-async-invokes").doRequest({"maxResults": 5});
+        assertEq((), invocations.asyncInvokeSummaries);
+        assertEq(runtime_requests + 2, handler.requests,
+            "runtime list action keeps its endpoint when query parameters are present");
+        assertEq(control_requests + 1, control_handler.requests,
+            "runtime query parameters do not select the control-plane endpoint");
+        auto direct = rest.restGet("/async-invoke?maxResults=5");
+        assertEq((), direct.body.asyncInvokeSummaries);
+        assertEq(runtime_requests + 3, handler.requests,
+            "ordinary requests also route runtime paths with query parameters");
+        assertEq(control_requests + 1, control_handler.requests);
+    }
+
+    private clientLifetimeTest() {
+        BedrockDataProviderTest::checkJson(self);
+        if (!http) {
+            testSkip("no fake server");
+        }
+        AbstractDataProvider root = providerFromTemporaryClient();
+        int requests = handler.requests;
+        auto response = root.getChildProviderEx("converse").doRequest({
+            "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+            "messages": ({"role": "user", "content": ({"text": "hi"},)},),
+        });
+        assertEq("Hello from Bedrock DP", response.output.message.content[0].text);
+        assertEq(requests + 1, handler.requests,
+            "the routing wrapper retains the source client's shared manager");
+    }
+
+    private AbstractDataProvider providerFromTemporaryClient() {
+        AwsRestClient::AwsRestClientIo client(buildRestOpts());
+        return new BedrockDataProvider::BedrockDataProvider(client);
+    }
+
+    private childLifetimeTest() {
+        foreach bool copied in (False, True) {
+            AbstractDataProvider child = childFromTemporaryProvider(copied);
+            int requests = handler.requests;
+            auto response = child.doRequest({
+                "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                "messages": ({"role": "user", "content": ({"text": "hi"},)},),
+            });
+            assertEq("Hello from Bedrock DP", response.output.message.content[0].text);
+            assertEq(requests + 1, handler.requests,
+                "the child retains the source client's manager after the root is released");
+        }
+    }
+
+    private AbstractDataProvider childFromTemporaryProvider(bool copied) {
+        BedrockDataProvider::BedrockDataProvider root = providerFromTemporaryClient();
+        if (copied) {
+            AwsRestClient::AwsRestClientIo client = cast<AwsRestClient::AwsRestClientIo>(
+                root.getRestClient().copyWithUrl("http://localhost:" + port));
+            root = new BedrockDataProvider::BedrockDataProvider(client);
+        }
+        return root.getChildProviderEx("converse");
     }
 
     private hash<auto> buildRestOpts() {

@@ -1572,6 +1572,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - schema-driven AWS integrations can send pre-serialized request bodies through
         @ref AwsRestClient::AwsRestClientIo::restDoRawRequest() "AwsRestClientIo::restDoRawRequest()" without
         bypassing AWS Signature Version 4 authentication
+      - schema-driven requests with already percent-encoded URI variables can use
+        @ref AwsRestClient::AwsRestClientIo::restDoEncodedRawRequest()
+        "AwsRestClientIo::restDoEncodedRawRequest()" so AWS Signature Version 4 canonical paths match the
+        transported path
       - @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies retain AWS credentials and
         signing configuration
 
@@ -2216,12 +2220,19 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client for <a href="https://baselinker.com/">BaseLinker</a>'s multichannel e-commerce API
 
     - @ref bedrockdataproviderintro "BedrockDataProvider" module
-      - new module providing a data provider API for AWS Bedrock
+      - provides 118 actions: all 108 control-plane operations, all eight completed-response runtime operations,
+        curated embedding, and a generic API call; native event streaming is not implemented
+      - adds recursive typed options and outputs, enum choices, reference data, explicit mutation metadata, an exact
+        pre-materialization discovery inventory, and complete presentation catalogs in all twelve standard locales
+      - preserves missing, null, empty, union, list, document, and wire-choice values and routes each operation to
+        the correct regional endpoint with shared AWS Signature Version 4 credentials
 
     - @ref bedrockrestclientintro "BedrockRestClient" module
       - new module providing a REST client and \c LlmProvider for <a href="https://aws.amazon.com/bedrock/">AWS Bedrock</a>
       - Bedrock connections now use region-derived persistent endpoints, identify the data provider app,
         return the Bedrock provider, and verify credentials with an inference-free control-plane request
+      - Converse and embedding calls sign encoded model identifiers correctly and send the exact JSON
+        request and response media types required by model endpoints
 
     - @ref bfldataproviderintro "BflDataProvider" module
       - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
