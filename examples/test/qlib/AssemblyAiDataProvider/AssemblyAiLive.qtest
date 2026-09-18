@@ -38,7 +38,9 @@ class AssemblyAiLiveTest inherits QUnit::Test {
             addTestCase("named connection: authenticated ping and typed listing", \connectionTest());
         }
         if (!ENV.ASSEMBLYAI_APIKEY && !connection_name) {
-            printf("SKIP: set ASSEMBLYAI_APIKEY or --connection for live API checks\n");
+            addTestCase("live API credentials", nothing sub () {
+                testSkip("set ASSEMBLYAI_APIKEY or --connection for live API checks");
+            });
         }
         set_return_value(main());
     }

@@ -3148,6 +3148,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed Base64 conversion of an empty binary leaving an unterminated string buffer, which could expose
+      uninitialized bytes during JSON serialization
     - Fixed @ref Qore::Serializable "Serializable" deserialization losing a reference to a container that is
       deserialized after the value referring to it; assigning the untyped placeholder of such a container to a
       typed member or inserting it in a typed container converted it, which copied it, so filling the original

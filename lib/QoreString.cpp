@@ -1739,6 +1739,7 @@ QoreString::QoreString(const DateTime *d) : QoreString() {
 QoreString::QoreString(const BinaryNode *b) : priv(new qore_string_private) {
     priv->allocated = b->size() + (b->size() * 4) / 10 + 10; // estimate for base64 encoding
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->buf[0] = '\0';
     priv->len = 0;
     priv->encoding = QCS_DEFAULT;
     concatBase64(b, -1);
@@ -1747,6 +1748,7 @@ QoreString::QoreString(const BinaryNode *b) : priv(new qore_string_private) {
 QoreString::QoreString(const BinaryNode *b, size_t maxlinelen) : priv(new qore_string_private) {
     priv->allocated = b->size() + (b->size() * 4) / 10 + 10; // estimate for base64 encoding
     priv->buf = (char*)malloc(sizeof(char) * priv->allocated);
+    priv->buf[0] = '\0';
     priv->len = 0;
     priv->encoding = QCS_DEFAULT;
     concatBase64(b, maxlinelen);
