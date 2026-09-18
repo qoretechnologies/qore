@@ -5,8 +5,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/Mime.qm
+%requires QUnit
+%requires Mime
 
 %exec-class MimeTest
 
@@ -51,6 +51,14 @@ aωb\r
 -----------------------------735323031399963166993862150--\r
 ";
 
+        #! a multipart body whose opening delimiter starts at byte zero
+        const DelimiterBody = "--edge\r\nContent-Type: text/plain\r\n\r\none\r\n"
+            "--edge\r\nContent-Type: text/plain\r\n\r\ntwo\r\n--edge--\r\n";
+
+        #! a multipart body with a base64-encoded binary part
+        const BinaryPartBody = "--edge\r\nContent-Type: application/octet-stream\r\n"
+            "Content-Transfer-Encoding: base64\r\n\r\nAP8=\r\n--edge--\r\n";
+
         const MimeEncodingTestValues = (
             "testing-!@#$%^&*()+={}|[]:\"';,./<>?",
             "hi - hellö",
@@ -84,6 +92,12 @@ aωb\r
         addTestCase("MultiPartEncryptedMessage", \multiPartEncryptedTest());
         addTestCase("MultiPartMessageMessage", \multiPartMessageTest());
         addTestCase("yaml MIME types", \yamlMimeTypesTest());
+        addTestCase("RFC 2046 delimiter lines", \parseBodyDelimiterTest());
+        addTestCase("multipart part headers", \parseBodyHeaderTest());
+        addTestCase("nested multipart bodies", \parseBodyNestedTest());
+        addTestCase("part header case variants", \partHeaderCaseTest());
+        addTestCase("MIME parameter value quoting", \quoteParameterValueTest());
+        addTestCase("RFC 2387 multipart/related header", \multiPartRelatedHeaderTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -662,6 +676,278 @@ aωb\r
         # Verify content types
         assertTrue(parsed.part[0].hdr."content-type" =~ /message\/rfc822/);
         assertTrue(parsed.part[1].hdr."content-type" =~ /message\/rfc822/);
+    }
+
+    #! RFC 2046 section 5.1.1 delimiter lines must be recognized as complete lines
+    /** Transport padding (spaces and tabs) is legal between the boundary and the end of the
+        delimiter line, the opening delimiter may start at byte zero, and text in a part that
+        only looks like a delimiter line must be returned unchanged.
+    */
+    parseBodyDelimiterTest() {
+        # the opening delimiter starts at byte zero: there is no preamble and no leading CRLF
+        hash<MessageInfo> h = MultiPartMessage::parseBody("edge", DelimiterBody, False);
+        assertEq(2, h.part.size());
+        assertEq("", h.body);
+        assertEq("one", h.part[0].body.toString());
+        assertEq("two", h.part[1].body.toString());
+
+        # a preamble before the opening delimiter is returned as the message body
+        h = MultiPartMessage::parseBody("edge", "preamble text\r\n" + DelimiterBody, False);
+        assertEq(2, h.part.size());
+        assertEq("preamble text", h.body);
+
+        # a body starting with CRLF has an empty preamble
+        h = MultiPartMessage::parseBody("edge", "\r\n" + DelimiterBody, False);
+        assertEq(2, h.part.size());
+        assertEq("", h.body);
+
+        # transport padding is legal on the opening, middle, and closing delimiter lines
+        h = MultiPartMessage::parseBody("edge", replace(DelimiterBody, "--edge\r\n", "--edge \t\r\n"), False);
+        assertEq(2, h.part.size());
+        assertEq("one", h.part[0].body.toString());
+        assertEq("two", h.part[1].body.toString());
+        h = MultiPartMessage::parseBody("edge", replace(DelimiterBody, "--edge--", "--edge--  \t"), False);
+        assertEq(2, h.part.size());
+        assertEq("two", h.part[1].body.toString());
+
+        # the closing delimiter may be terminated by the end of the body instead of CRLF
+        h = MultiPartMessage::parseBody("edge", trim(DelimiterBody), False);
+        assertEq(2, h.part.size());
+        assertEq("two", h.part[1].body.toString());
+        h = MultiPartMessage::parseBody("edge", trim(DelimiterBody) + " \t", False);
+        assertEq(2, h.part.size());
+
+        # anything after the closing delimiter is an epilogue and is returned with the body
+        h = MultiPartMessage::parseBody("edge", DelimiterBody + "epilogue text\r\n", False);
+        assertEq(2, h.part.size());
+        assertEq("epilogue text\r\n", h.body);
+
+        # a preamble and an epilogue are both returned with the body
+        h = MultiPartMessage::parseBody("edge", "pre\r\n" + DelimiterBody + "post", False);
+        assertEq(2, h.part.size());
+        assertEq("prepost", h.body);
+
+        # a delimiter-like line in the epilogue does not extend the message
+        h = MultiPartMessage::parseBody("edge", DelimiterBody + "\r\n--edge--\r\n", False);
+        assertEq(2, h.part.size());
+        assertEq("\r\n--edge--\r\n", h.body);
+
+        # data that only looks like a delimiter must be returned unchanged
+        string body = "--edge\r\nContent-Type: text/plain\r\n\r\nnot--edge\r\n--edgemore\r\ntext\r\n--edge--\r\n";
+        h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(1, h.part.size());
+        assertEq("not--edge\r\n--edgemore\r\ntext", h.part[0].body.toString());
+
+        # a string body and the identical binary body must be parsed identically
+        assertEq(MultiPartMessage::parseBody("edge", DelimiterBody, False),
+            MultiPartMessage::parseBody("edge", binary(DelimiterBody), False));
+
+        # with decode = False the raw part bytes must be returned unchanged
+        h = MultiPartMessage::parseBody("edge", BinaryPartBody, False);
+        assertEq(1, h.part.size());
+        assertEq(binary("AP8="), h.part[0].body);
+        # with decode = True the base64 transfer encoding is decoded
+        h = MultiPartMessage::parseBody("edge", BinaryPartBody, True);
+        assertEq(<00ff>, h.part[0].body);
+
+        # no delimiter line at all
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "cannot find boundary",
+            \MultiPartMessage::parseBody(), ("edge", "no delimiters here\r\n", False));
+        # a dash-boundary that is not a complete delimiter line is not a delimiter
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "cannot find boundary",
+            \MultiPartMessage::parseBody(), ("edge", "--edgemore\r\nX: y\r\n\r\none\r\n--edge--\r\n", False));
+        # a delimiter line that does not start a line is not a delimiter
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "cannot find boundary",
+            \MultiPartMessage::parseBody(), ("edge", "text--edge\r\nX: y\r\n\r\none\r\n--edge--\r\n", False));
+        # a closing delimiter before any part
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "closing delimiter",
+            \MultiPartMessage::parseBody(), ("edge", "\r\n--edge--\r\n", False));
+        # no closing delimiter
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "cannot find closing boundary",
+            \MultiPartMessage::parseBody(), ("edge", "--edge\r\nX: y\r\n\r\none\r\n", False));
+        # an invalid closing delimiter line must not be accepted as a closing delimiter
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "cannot find closing boundary", \MultiPartMessage::parseBody(),
+            ("edge", "--edge\r\nX: y\r\n\r\none\r\n--edge--not-a-delimiter\r\n", False));
+        # a part with no header / body separator
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "could not find content boundary",
+            \MultiPartMessage::parseBody(), ("edge", "--edge\r\nX: y\r\n--edge--\r\n", False));
+    }
+
+    #! part headers are returned with lower-case keys; repeated fields are returned as lists
+    parseBodyHeaderTest() {
+        # header field names are case-insensitive and are returned in lower case; long header
+        # fields folded as per RFC 2822 section 2.2.3 are unfolded
+        string body = "--edge\r\nCONTENT-type: text/plain\r\nX-Long: first\r\n \tsecond\r\n"
+            "content-DESCRIPTION: desc\r\n\r\none\r\n--edge--\r\n";
+        hash<MessageInfo> h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(1, h.part.size());
+        assertEq("text/plain", h.part[0].hdr."content-type");
+        assertEq("first second", h.part[0].hdr."x-long");
+        assertEq("desc", h.part[0].hdr."content-description");
+
+        # a repeated Content-ID must not be silently overwritten; both values are returned in the
+        # order received so that ambiguous attachment identity can be detected
+        body = "--edge\r\nContent-Type: text/plain\r\nContent-ID: <a>\r\nContent-ID: <b>\r\n\r\none\r\n--edge--\r\n";
+        h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(("<a>", "<b>"), h.part[0].hdr."content-id");
+        # identical repeated values must also be preserved
+        body = "--edge\r\nContent-Type: text/plain\r\nContent-ID: <a>\r\nContent-ID: <a>\r\n\r\none\r\n--edge--\r\n";
+        h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(("<a>", "<a>"), h.part[0].hdr."content-id");
+        # a repeated Content-ID does not make the part impossible to decode
+        h = MultiPartMessage::parseBody("edge", body, True);
+        assertEq(("<a>", "<a>"), h.part[0].hdr."content-id");
+        assertEq("one", h.part[0].body);
+
+        # repeated Content-Type and Content-Transfer-Encoding headers are also preserved
+        body = "--edge\r\nContent-Type: text/plain\r\nContent-Type: text/plain\r\n\r\none\r\n--edge--\r\n";
+        h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(("text/plain", "text/plain"), h.part[0].hdr."content-type");
+        # ... but make the part impossible to decode unambiguously
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "content-type", \MultiPartMessage::parseBody(),
+            ("edge", body, True));
+
+        body = "--edge\r\nContent-Transfer-Encoding: base64\r\nContent-Transfer-Encoding: base64\r\n\r\nAP8=\r\n"
+            "--edge--\r\n";
+        h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(("base64", "base64"), h.part[0].hdr."content-transfer-encoding");
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "content-transfer-encoding", \MultiPartMessage::parseBody(),
+            ("edge", body, True));
+
+        # an unparseable header line is an error
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "header line", \MultiPartMessage::parseBody(),
+            ("edge", "--edge\r\nnot a header\r\n\r\none\r\n--edge--\r\n", False));
+
+        # a repeated Content-Disposition header in a form-data part is rejected
+        body = "--edge\r\nContent-Disposition: form-data; name=\"a\"\r\nContent-Disposition: form-data; "
+            "name=\"b\"\r\n\r\none\r\n--edge--\r\n";
+        assertThrows("MULTIPART-FORMDATA-MESSAGE-ERROR", "at most one occurrence",
+            \MultiPartFormDataMessage::parseMessage(), ("multipart/form-data; boundary=edge", body));
+    }
+
+    #! a part that is itself a multipart message is parsed recursively when decoding
+    parseBodyNestedTest() {
+        string inner = "--inner\r\nContent-Type: text/plain\r\n\r\ninner one\r\n"
+            "--inner\r\nContent-Type: text/plain\r\n\r\ninner two\r\n--inner--\r\n";
+        string outer = "--outer\r\nContent-Type: multipart/mixed; boundary=\"inner\"\r\n\r\n" + inner
+            + "\r\n--outer\r\nContent-Type: text/plain\r\n\r\nlast\r\n--outer--\r\n";
+
+        # the inner boundary must not affect the outer message
+        hash<MessageInfo> h = MultiPartMessage::parseBody("outer", outer, False);
+        assertEq(2, h.part.size());
+        assertEq(0, h.part[0].part.size());
+        assertEq(inner, h.part[0].body.toString());
+
+        # with decoding enabled, the nested parts are parsed recursively
+        h = MultiPartMessage::parseBody("outer", outer, True);
+        assertEq(2, h.part.size());
+        assertEq(2, h.part[0].part.size());
+        assertEq("inner one", h.part[0].part[0].body);
+        assertEq("inner two", h.part[0].part[1].body);
+        assertEq("last", h.part[1].body);
+
+        # a nested multipart part with no boundary parameter is an error
+        outer = "--outer\r\nContent-Type: multipart/mixed\r\n\r\n" + inner + "\r\n--outer--\r\n";
+        assertThrows("MULTIPART-PARSEBODY-ERROR", "could not find message boundary",
+            \MultiPartMessage::parseBody(), ("outer", outer, True));
+    }
+
+    #! MIME header field names are case-insensitive, so a part header must be serialized only once
+    partHeaderCaseTest() {
+        MultiPartMixedMessage msg("edge");
+        # the lower-case headers here are what MultiPartMessage::parseBody() returns
+        msg.addPart("text", MimeTypeText, "inline", {
+            "content-type": "text/html",
+            "content-disposition": "attachment",
+            "content-transfer-encoding": "7bit",
+        });
+        string body = msg.serializeBody().toString();
+        assertEq(1, (body =~ x/(content-type)/gi).size());
+        assertEq(1, (body =~ x/(content-disposition)/gi).size());
+        assertEq(1, (body =~ x/(content-transfer-encoding)/gi).size());
+        # the value generated for the part wins over the value given in another case
+        hash<MessageInfo> h = MultiPartMessage::parseBody("edge", body, False);
+        assertEq(MimeTypeText + "; charset=UTF-8", h.part[0].hdr."content-type");
+        assertEq("inline", h.part[0].hdr."content-disposition");
+        # a value that is not generated for the part is retained
+        assertEq("7bit", h.part[0].hdr."content-transfer-encoding");
+
+        # a form-data message parsed and reserialized must not repeat Content-Disposition
+        hash<string, hash<FormDataMessageInfo>> parts = MultiPartFormDataMessage::parseMessage(
+            "multipart/form-data; boundary=" + FormDataBoundary, FormDataBody);
+        body = MultiPartFormDataMessage::makeMessage(parts).serializeBody().toString();
+        assertEq(5, (body =~ x/(content-disposition)/gi).size());
+
+        # the Content-Length header is generated for each part and may not be given by the caller
+        # in any case
+        assertThrows("HTTP-MULTIPART-ERROR", "Content-Length", \msg.addPart(),
+            ("text", MimeTypeText, "inline", {"Content-Length": 4}));
+        assertThrows("HTTP-MULTIPART-ERROR", "Content-Length", \msg.addPart(),
+            ("text", MimeTypeText, "inline", {"content-length": 4}));
+    }
+
+    #! RFC 2045 section 5.1: parameter values that are not tokens must be quoted
+    quoteParameterValueTest() {
+        # tokens are returned unchanged
+        assertEq("token", mime_quote_parameter_value("token"));
+        assertEq("7bit", mime_quote_parameter_value("7bit"));
+        assertEq("a-b_c.d+e", mime_quote_parameter_value("a-b_c.d+e"));
+        # values containing tspecials must be quoted
+        assertEq("\"text/xml\"", mime_quote_parameter_value("text/xml"));
+        assertEq("\"<root@example.test>\"", mime_quote_parameter_value("<root@example.test>"));
+        assertEq("\"a;b\"", mime_quote_parameter_value("a;b"));
+        # spaces, empty values, and non-ASCII characters must be quoted
+        assertEq("\"a b\"", mime_quote_parameter_value("a b"));
+        assertEq("\"\"", mime_quote_parameter_value(""));
+        assertEq("\"hellö\"", mime_quote_parameter_value("hellö"));
+        # quotes and backslashes must be escaped in quoted-strings
+        assertEq("\"a\\\"b\"", mime_quote_parameter_value("a\"b"));
+        assertEq("\"a\\\\b\"", mime_quote_parameter_value("a\\b"));
+    }
+
+    #! RFC 2387: multipart/related requires a "type" parameter and quoted parameter values
+    multiPartRelatedHeaderTest() {
+        MultiPartRelatedMessage msg("test-boundary");
+        msg.addPart("<root/>", "<root@example.test>", "text/xml; charset=UTF-8");
+        msg.addPart(<89504e470d0a1a0a>, "<image@example.test>", MimeTypePng);
+
+        # the type parameter gives the media type of the root part with no parameters, and both
+        # parameter values are quoted because they contain tspecials
+        hash<MessageInfo> mh = msg.getMsgAndHeaders();
+        assertEq("multipart/related; boundary=\"test-boundary\"; type=\"text/xml\"; "
+            "start=\"<root@example.test>\"", mh.hdr."Content-Type");
+
+        # the root part retains its own charset parameter
+        hash<MessageInfo> parsed = MultiPartMessage::parseBody("test-boundary", mh.body, False);
+        assertEq(2, parsed.part.size());
+        assertEq("text/xml; charset=UTF-8", parsed.part[0].hdr."content-type");
+        assertEq("<root@example.test>", parsed.part[0].hdr."content-id");
+        assertEq(MimeTypePng, parsed.part[1].hdr."content-type");
+
+        # the first part added is the root part
+        MultiPartRelatedMessage msg2("test-boundary");
+        msg2.addPart("<root/>", "first", MimeTypeXml);
+        msg2.addPart("<other/>", "second", MimeTypeHtml);
+        assertEq("multipart/related; boundary=\"test-boundary\"; type=\"text/xml\"; start=first",
+            msg2.getMsgAndHeaders().hdr."Content-Type");
+
+        # a spliced part replaces the root part and its type
+        msg2.splicePart(<0102>, "<spliced@example.test>", MimeTypeOctetStream);
+        mh = msg2.getMsgAndHeaders();
+        assertEq("multipart/related; boundary=\"test-boundary\"; type=\"application/octet-stream\"; "
+            "start=\"<spliced@example.test>\"", mh.hdr."Content-Type");
+        # the spliced part is the first part in the message
+        parsed = MultiPartMessage::parseBody("test-boundary", mh.body, True);
+        assertEq(3, parsed.part.size());
+        assertEq("<spliced@example.test>", parsed.part[0].hdr."content-id");
+        assertEq(<0102>, parsed.part[0].body);
+        assertEq("first", parsed.part[1].hdr."content-id");
+
+        # a message with no parts cannot be serialized
+        MultiPartRelatedMessage msg3("test-boundary");
+        assertThrows("HTTP-MULTIPART-ERROR", "no parts", \msg3.getMsgAndHeaders());
+        # the Content-ID is required for every part
+        assertThrows("MULTIPART-RELATED-ERROR", \msg3.splicePart(), ("<root/>", "", MimeTypeXml));
     }
 
     yamlMimeTypesTest() {
