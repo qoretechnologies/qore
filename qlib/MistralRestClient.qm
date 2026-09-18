@@ -84,6 +84,8 @@ printf("%Y\n", ans.body);
     @section MistralRestClientRelnotes Release Notes
 
     @subsection MistralRestClientv1_1 MistralRestClient v1.1
+    - support reasoning responses and streams, preserving reasoning across tool and conversation turns
+    - preserve sampling options and supply the compatible default for zero-temperature requests
     - associate connections with the Mistral AI app and correct automatically generated URLs
     - expose the supported API versions and verify authentication with the model listing
 
@@ -301,6 +303,81 @@ public class MistralLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
 
     string getMode() {
         return "mistral";
+    }
+
+    #! @copydoc QoreLlmUtils::AbstractLlmProvider::updateOpenAiStreamStateFromRaw()
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state, *hash<auto> raw) {
+        OpenAiRestClient::OpenAiLlmProvider::updateOpenAiStreamStateFromRaw(\state, raw);
+        if (raw.choices[0].delta.content.typeCode() == NT_LIST) {
+            foreach auto block in (raw.choices[0].delta.content) {
+                if (block.typeCode() != NT_HASH || block.type != "thinking"
+                        || block.thinking.typeCode() != NT_LIST) {
+                    continue;
+                }
+                foreach auto part in (block.thinking) {
+                    if (part.typeCode() == NT_HASH && part.type == "text"
+                            && part.text.typeCode() == NT_STRING) {
+                        if (!exists state.mistral_thinking) {
+                            state.mistral_thinking = "";
+                        }
+                        state.mistral_thinking += part.text;
+                    }
+                }
+            }
+        }
+        if (raw.choices[0].finish_reason.val() && state.mistral_thinking.val()) {
+            state.reasoning_blocks = ({"type": "thinking", "thinking": (
+                {"type": "text", "text": state.mistral_thinking},)},);
+        }
+    }
+
+    #! Keep Mistral's native reasoning separately from visible response text
+    private hash<QoreLlmUtils::ChatResponse> parseOpenAiChatResponse(hash<auto> response) {
+        hash<QoreLlmUtils::ChatResponse> rv =
+            OpenAiRestClient::OpenAiLlmProvider::parseOpenAiChatResponse(response);
+        if (response.choices[0].message.content.typeCode() == NT_LIST) {
+            list<auto> blocks = ();
+            foreach auto block in (response.choices[0].message.content) {
+                if (block.typeCode() == NT_HASH && block.type == "thinking") {
+                    push blocks, block;
+                }
+            }
+            if (blocks) {
+                rv.reasoning_blocks = blocks;
+            }
+        }
+        return rv;
+    }
+
+    #! Replay reasoning on assistant turns, including tool-call-only turns
+    private hash<auto> buildOpenAiChatBody(
+            list<hash<QoreLlmUtils::ChatMessage>> messages,
+            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        hash<auto> body = OpenAiRestClient::OpenAiLlmProvider::buildOpenAiChatBody(messages, tools, opts);
+        for (int i = 0; i < messages.size(); ++i) {
+            if (messages[i].role != "assistant" || !messages[i].reasoning_blocks) {
+                continue;
+            }
+            list<auto> content = messages[i].reasoning_blocks;
+            if (body.messages[i].content.typeCode() == NT_LIST) {
+                content += body.messages[i].content;
+            } else if (body.messages[i].content.val()) {
+                push content, {"type": "text", "text": body.messages[i].content};
+            }
+            body.messages[i].content = content;
+        }
+        return body;
+    }
+
+    #! A zero temperature requires top_p=1, including Medium's reasoning mode
+    private hash<auto> finalizeOpenAiRequestBody(hash<auto> body,
+            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        body = OpenAiRestClient::OpenAiLlmProvider::finalizeOpenAiRequestBody(body, opts);
+        if (body.temperature == 0 && !exists body.top_p) {
+            body.top_p = 1.0;
+        }
+        return body;
     }
 }
 

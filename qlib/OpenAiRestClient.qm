@@ -1213,7 +1213,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     applyOpenAiRequestControls(reference<hash<auto!>> body_options,
             hash<auto> request) {
         foreach string key in (("parallel_tool_calls", "service_tier",
-                "stream_options", "response_format")) {
+                "stream_options", "response_format", "top_p")) {
             if (exists request{key}) {
                 body_options{key} = request{key};
             }
@@ -1264,7 +1264,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         hash<auto> response = restoreStrictResponse(resp.body, strict_context);
         return <QoreLlmUtils::LlmCompletionResult>{
-            "content": response.choices[0].message.content ?? "",
+            "content": openAiContentText(response.choices[0].message.content) ?? "",
             "usage": resp.body.usage ?? {},
         };
     }
@@ -1382,7 +1382,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 updateOpenAiStreamStateFromRaw(\structured_state, parsed);
                 getOpenAiToolCallDeltas(\structured_state, parsed);
                 if (parsed.choices[0].delta.content.val()) {
-                    structured_state.content += parsed.choices[0].delta.content;
+                    structured_state.content += openAiContentText(parsed.choices[0].delta.content) ?? "";
                 }
                 if (parsed.choices[0].delta.refusal.val()) {
                     structured_state.refusal += parsed.choices[0].delta.refusal;
@@ -1392,7 +1392,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
             *string delta;
             if (parsed.choices[0].delta.content.val()) {
-                delta = parsed.choices[0].delta.content;
+                delta = openAiContentText(parsed.choices[0].delta.content);
             }
             bool has_tool_call_delta =
                 parsed.choices[0].delta.tool_calls.typeCode() == NT_LIST
@@ -1405,6 +1405,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             # chunk with the finish reason, so the stream ends with "[DONE]" or
             # with the end of the response, not with the finish reason.
             if (delta.val() || has_tool_call_delta
+                    || parsed.choices[0].delta.content.typeCode() == NT_LIST
                     || parsed.choices[0].finish_reason.val()
                     || parsed.usage.typeCode() == NT_HASH) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
@@ -1758,8 +1759,26 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return False;
     }
 
+    #! Extracts visible text without rendering provider reasoning or other content blocks
+    private static *string openAiContentText(auto content) {
+        if (content.typeCode() == NT_STRING) {
+            return content;
+        }
+        if (content.typeCode() != NT_LIST) {
+            return NOTHING;
+        }
+        string text;
+        foreach auto part in (content) {
+            if (part.typeCode() == NT_HASH && part.type == "text"
+                    && part.text.typeCode() == NT_STRING) {
+                text += part.text;
+            }
+        }
+        return text.val() ? text : NOTHING;
+    }
+
     #! Parses an OpenAI-shaped chat-completions response into a @ref QoreLlmUtils::ChatResponse
-    private static hash<QoreLlmUtils::ChatResponse> parseOpenAiChatResponse(
+    private hash<QoreLlmUtils::ChatResponse> parseOpenAiChatResponse(
             hash<auto> response_data) {
         hash<auto> choice = response_data.choices[0];
         hash<auto> msg = choice.message;
@@ -1803,7 +1822,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "id": response_data.id,
             "model": response_data.model,
             "stop_reason": stop_reason,
-            "content": msg.content,
+            "content": openAiContentText(msg.content),
             "tool_calls": parsed_tool_calls,
             "usage": response_data.usage ?? {},
             "raw": response_data,

@@ -2731,6 +2731,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a data provider API for <a href="https://mistral.ai">Mistral AI</a> chat, embeddings, and document OCR
 
     - @ref mistralrestclientintro "MistralRestClient" module
+      - supports reasoning responses and streams, retaining reasoning across conversation turns
+      - supplies compatible sampling defaults for zero-temperature reasoning requests
       - new module providing a REST client for <a href="https://mistral.ai">Mistral AI</a>'s OpenAI-compatible API
       - correct automatic connection URLs and app association; verify valid and invalid API keys with authenticated pings
 

@@ -14,6 +14,7 @@
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires OpenAiRestClient
+%requires MistralRestClient
 %requires AzureOpenAiRestClient
 %requires GeminiBodyShape
 %requires GeminiRestClient
@@ -213,6 +214,8 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("Callback: fallback streaming delivers tool calls", \callbackFallbackToolCallsTest());
         addTestCase("Agent: a streamed Gemini tool call is run and replayed", \agentGeminiToolCallTest());
         addTestCase("Agent: Anthropic reasoning blocks are replayed", \agentAnthropicReasoningTest());
+        addTestCase("Mistral: reasoning responses and history", \mistralReasoningResponseTest());
+        addTestCase("Mistral: mixed reasoning and text streams", \mistralReasoningStreamTest());
         set_return_value(main());
     }
 
@@ -885,6 +888,108 @@ public class LlmStreamingTest inherits QUnit::Test {
             config.telemetry_observer = observer;
         }
         return new LlmBackend(config);
+    }
+
+    mistralReasoningResponseTest() {
+        hash<auto> thinking = {"type": "thinking", "thinking": (
+            {"type": "text", "text": "private reasoning"},)};
+        hash<auto> raw = {"id": "mistral-reasoning", "model": "mistral-medium-3-5",
+            "choices": ({"message": {"role": "assistant", "content": (
+                thinking, {"type": "text", "text": "39"},
+                {"type": "text", "text": "1"}, {"type": "other", "text": "ignored"},)},
+                "finish_reason": "stop"},),
+            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}};
+        hash<FakeReply> reply = errorReply(200, make_json(raw));
+        server.script((reply, reply, reply, reply));
+        LlmBackend llm = mistralBackend();
+        hash<auto> body = {"messages": ({"role": "user", "content": "multiply"},),
+            "reasoning_effort": "high", "temperature": 0};
+        hash<auto> response = llm.chatCompletions(body);
+        assertEq("391", response.choices[0].message.content);
+        assertEq((thinking,), response.choices[0].message.reasoning_blocks);
+        assertEq(30, response.usage.total_tokens);
+        assertEq(1, server.requests[0].body.top_p);
+        assertEq("high", server.requests[0].body.reasoning_effort);
+        body = parse_json(make_json(body));
+        push body.messages, response.choices[0].message;
+        push body.messages, {"role": "user", "content": "again"};
+        body.temperature = 0.7;
+        body.top_p = 0.9;
+        llm.chatCompletions(body);
+        assertEq(0.9, server.requests[1].body.top_p, "explicit sampling survives facade");
+        assertEq((thinking, {"type": "text", "text": "391"}), server.requests[1].body.messages[1].content);
+        # Native multipart assistant history also survives the facade conversion.
+        body.messages[1] = raw.choices[0].message;
+        llm.chatCompletions(body);
+        assertEq(thinking, server.requests[2].body.messages[1].content[0]);
+        assertEq("391", llm.complete("extract", "multiply").content);
+        LlmBackend gateway(<LlmBackendConfig>{"mode": "callback",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> request) {
+                assertEq((thinking,), request.messages[1].reasoning_blocks);
+                return response;
+            }});
+        hash<auto> replay = {"messages": body.messages};
+        replay.messages[1] = response.choices[0].message;
+        hash<auto> forwarded = gateway.chatCompletions(replay);
+        assertEq((thinking,), forwarded.choices[0].message.reasoning_blocks);
+        list<hash<ChatMessage>> history = userMessage("multiply");
+        push history, <ChatMessage>{"role": "assistant", "content": "391",
+            "reasoning_blocks": (thinking,)};
+        hash<ChatResponse> collected = gateway.chatStreamCollect(history);
+        assertEq("391", collected.content);
+        assertEq((thinking,), collected.reasoning_blocks);
+
+    }
+
+    mistralReasoningStreamTest() {
+        hash<auto> thinking = {"type": "thinking", "thinking": (
+            {"type": "text", "text": "private reasoning"},)};
+        hash<FakeReply> reply = openAiReply((
+            {"choices": ({"delta": {"content": ({"type": "thinking", "thinking": (
+                {"type": "text", "text": "private "},), "closed": False},)}},)},
+            {"choices": ({"delta": {"content": (
+                {"type": "thinking", "thinking": ({"type": "text", "text": "reasoning"},)},
+                {"type": "text", "text": "39"})}},)},
+            {"choices": ({"delta": {"content": "1"}, "finish_reason": "stop"},)},
+            {"choices": (), "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30}},
+        ));
+        server.script((reply, reply));
+        LlmBackend llm = mistralBackend();
+        list<hash<auto>> chunks = ();
+        hash<auto> response = llm.chatCompletionsStream(
+            {"messages": ({"role": "user", "content": "multiply"},)},
+            sub (hash<auto> chunk) { push chunks, chunk; });
+        assertEq("391", response.choices[0].message.content);
+        assertEq((thinking,), response.choices[0].message.reasoning_blocks);
+        assertEq(30, response.usage.total_tokens, "usage after terminal preserved");
+        assertEq((thinking,), chunks[-1].reasoning_blocks);
+        assertEq(("39", "1", NOTHING), map $1.choices[0].delta.content, chunks);
+        hash<ChatResponse> collected = llm.chatStreamCollect(userMessage("multiply"));
+        assertEq("391", collected.content);
+        assertEq((thinking,), collected.reasoning_blocks);
+        # An intervening callback gateway must retain terminal reasoning metadata.
+        LlmBackend gateway(<LlmBackendConfig>{"mode": "callback",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                return llm.chatCompletions(body);
+            },
+            "api_stream_callback": sub (string method, string path, hash<auto> body,
+                    code<nothing(hash<auto>)> cb) {
+                foreach hash<auto> chunk in (chunks) {
+                    cb(chunk);
+                }
+            }});
+        response = gateway.chatCompletionsStream(
+            {"messages": ({"role": "user", "content": "multiply"},)},
+            sub (hash<auto> chunk) {});
+        assertEq("391", response.choices[0].message.content);
+        assertEq((thinking,), response.choices[0].message.reasoning_blocks);
+        assertEq(30, response.usage.total_tokens);
+    }
+
+    private LlmBackend mistralBackend() {
+        return new LlmBackend(<LlmBackendConfig>{"mode": "mistral",
+            "url": "http://localhost:" + port, "protocol": "h1",
+            "api_key": "test-key", "model": "mistral-medium-3-5", "max_retries": 0});
     }
 
     private LlmBackend openAiBackend(*int timeout_ms) {

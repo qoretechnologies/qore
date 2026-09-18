@@ -213,6 +213,9 @@ backend.chatStream(history,
             if (resp.usage) {
                 terminal_raw.usage = resp.usage;
             }
+            if (resp.reasoning_blocks) {
+                terminal_raw.reasoning_blocks = resp.reasoning_blocks;
+            }
             if (resp.provider_diagnostics.typeCode() == NT_HASH) {
                 terminal_raw.provider_diagnostics =
                     resp.provider_diagnostics;
@@ -292,6 +295,9 @@ backend.chatStream(history,
         }
         if (raw.choices[0].finish_reason.val()) {
             state.finish_reason = raw.choices[0].finish_reason;
+        }
+        if (raw.reasoning_blocks.typeCode() == NT_LIST) {
+            state.reasoning_blocks = raw.reasoning_blocks;
         }
         if (raw.provider_diagnostics.typeCode() == NT_HASH) {
             state.provider_diagnostics = raw.provider_diagnostics;
@@ -378,6 +384,9 @@ backend.chatStream(history,
             }
             if (msg.name.val() && msg.role == "tool") {
                 api_msg.name = msg.name;
+            }
+            if (msg.reasoning_blocks) {
+                api_msg.reasoning_blocks = msg.reasoning_blocks;
             }
             push api_messages, api_msg;
         }
@@ -468,6 +477,7 @@ backend.chatStream(history,
             "model": resp.model,
             "stop_reason": stop_reason,
             "content": msg.content,
+            "reasoning_blocks": msg.reasoning_blocks,
             "tool_calls": parsed_tool_calls,
             "usage": resp.usage ?? {},
             "raw": resp,

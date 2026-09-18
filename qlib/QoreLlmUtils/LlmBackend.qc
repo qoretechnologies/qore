@@ -1325,6 +1325,11 @@ if (resp.stop_reason == "tool_use") {
                             cp.cache_control = part.cache_control;
                         }
                         push parts, cp;
+                    } else if (part.type == "thinking") {
+                        if (!out_h.reasoning_blocks) {
+                            out_h.reasoning_blocks = ();
+                        }
+                        push out_h.reasoning_blocks, part;
                     } else if (part.type == "image_url") {
                         *hash<ContentPart> cp =
                             dataUrlToContentPart(part.image_url.url, "image",
@@ -2065,6 +2070,9 @@ if (resp.stop_reason == "tool_use") {
         if (state.service_tier.typeCode() == NT_STRING) {
             rv.service_tier = state.service_tier;
         }
+        if (finish_reason.val() && state.reasoning_blocks) {
+            rv.reasoning_blocks = state.reasoning_blocks;
+        }
         # Terminal chunks carry provider diagnostics; callback gateways
         # otherwise cannot return final metadata through their streaming
         # callback's nothing return type.  Telemetry consumers must apply
@@ -2164,6 +2172,9 @@ if (resp.stop_reason == "tool_use") {
         };
         if (state.tool_calls) {
             message.tool_calls = state.tool_calls;
+        }
+        if (state.reasoning_blocks) {
+            message.reasoning_blocks = state.reasoning_blocks;
         }
         hash<auto!> rv = {
             "object": "chat.completion",
