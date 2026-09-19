@@ -243,6 +243,49 @@ foreach hash<HttpRedirectInfo> hop in (info.redirects) {
     @since %Qore 3.0 redirects are resolved according to RFC 3986 and are followed by poll operations, and the
     request information hash reports \c effective-url and \c redirects
 
+    @section httpclient_request_url Request Target URLs
+
+    @ref sendUrl() sends one request to the target named by a URL instead of to the client's own URL.  It is
+    equivalent to @ref send() in every other respect, and it changes nothing on the client: the URL, the
+    credentials, the default headers, the event and warning queues, the HTTP version and protocol settings, the
+    TLS verification settings, the timeouts, and the connection manager are all untouched, so requests to
+    different targets can be made at the same time on one client and a failed request leaves nothing behind.
+
+    This is what a caller needs when a target is named by the data it processes — a WSDL port address with an
+    operation reference, a service document that names its own endpoints — rather than configured up front.
+    Note that @ref send() takes a request target and not a URL: an absolute URL passed to @ref send() is sent as
+    the request target to the client's own origin, as a request through a proxy does (RFC 9112 section 3.2.2).
+
+    |!Aspect|!Behavior
+    |Target|the URL is any RFC 3986 URI reference and is resolved against the client's URL according to section 5.2 (see @ref Qore::resolve_url() "resolve_url()"): an absolute URL selects its own origin, a network-path reference (\c "//host/path") changes the authority, and a relative reference, an empty reference, or a query-only reference addresses the client's own origin
+    |Encoding|a URI reference is already percent-encoded, so only octets that cannot appear in a URI are encoded and everything else is sent as received, including percent-encoded octets and an empty query; the \c pre_encoded_urls option therefore does not apply, while @ref send() percent-encodes its request target unless that option is set
+    |Fragment|any fragment is dropped, as a request target has none
+    |Credentials|the credentials configured on the client belong to the origin of the client's URL: when the URL selects another origin, no \c Authorization built from the client's URL and no default \c Authorization, \c Cookie, or \c Host header is sent there, and an authentication challenge from it is not answered; headers passed to the call are for the target named there and are always sent
+    |User information|user information in the URL is never used as credentials
+    |Proxies|explicit proxy credentials keep their proxy scope, and a proxy authentication challenge is answered as for any other request
+    |Target host|a URL whose host contains controls, spaces, malformed percent-encoded octets, or characters that cannot appear in a URI raises \c HTTP-CLIENT-URL-ERROR
+    |UNIX domain sockets|a request can only select a UNIX domain socket target (\c http://socket=...) if the client is itself on a UNIX domain socket
+    |Transport|the target decides its own transport: a plaintext target never uses HTTP/3 or ALPN, so a client configured for TLS sends to it with HTTP/1; see @ref httpclient_http3
+    |Redirects|a redirect is followed from the target that was named, and its origin is the one that receives the request's own origin-bound headers; see @ref httpclient_redirects
+    |Client|the client's URL and configuration are never changed
+
+    @par Example
+    @code{.py}
+HTTPClient httpclient({"url": "http://127.0.0.1:8080/base/"});
+hash<auto> info;
+# an absolute URL selects its own origin
+hash<auto> resp = httpclient.sendUrl(body, "POST", "http://other.example.com/send", NOTHING, False, \info);
+printf("%s\n", info."effective-url");    # http://other.example.com/send
+# a reference with an absolute path addresses the client's origin, replacing the base path
+resp = httpclient.sendUrl(body, "POST", "/send", NOTHING, False, \info);
+printf("%s\n", info."effective-url");    # http://127.0.0.1:8080/send
+# a relative reference is resolved against the base path
+resp = httpclient.sendUrl(body, "POST", "send", NOTHING, False, \info);
+printf("%s\n", info."effective-url");    # http://127.0.0.1:8080/base/send
+    @endcode
+
+    @since %Qore 3.0
+
     @section httpclient_http2 HTTP/2 Support
 
     The %Qore HTTPClient class supports HTTP/2 over TLS via ALPN (Application-Layer Protocol Negotiation)
@@ -288,8 +331,8 @@ foreach hash<HttpRedirectInfo> hop in (info.redirects) {
 
     @note
     - HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3.  A request target is not always the
-      client's URL — a redirect can name a plaintext origin — so the transport is decided per target: in
-      \c "auto" mode a plaintext target uses HTTP/1, and in \c "required" mode it raises
+      client's URL — a redirect or @ref sendUrl() can name a plaintext origin — so the transport is decided per
+      target: in \c "auto" mode a plaintext target uses HTTP/1, and in \c "required" mode it raises
       \c HTTPCLIENT-HTTP3-SSL-REQUIRED rather than attempting QUIC against a TCP port
     - An active HTTP/2 connection takes priority over an HTTP/3 upgrade attempt; HTTP/3 upgrade
       is only attempted for new connections that are not yet using HTTP/2
@@ -1529,6 +1572,145 @@ hash<auto> HTTPClient::send(*binary body, string method, *string path, *hash<aut
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<QoreHashNode> rv(client->send(method->c_str(), path && !path->empty() ? path->c_str() : nullptr,
         headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, xsink), xsink);
+    return *xsink ? QoreValue() : rv.release();
+}
+
+//! Sends an HTTP request with the specified method to the target named by a URL and returns the response
+/** The request is sent to the origin named by \a url instead of the client's own; the client's URL and
+    configuration are not changed, so requests to different targets can be made at the same time on one client.
+    In every other respect this method behaves exactly like @ref send(); see @ref httpclient_request_url.
+
+    If a connection has not already been established, an internal call to HTTPClient::connect() will be made
+    before sending the message.
+
+    @par Example:
+    @code{.py}
+# the operation URL of a service description is resolved against the client's URL and sent to the target it names
+hash<auto> info;
+hash<auto> msg = httpclient.sendUrl(body, "POST", operation_url, {"Content-Type": "text/xml"}, False, \info);
+printf("sent to %s\n", info."effective-url");
+    @endcode
+
+    @param body The message body to send; note that sending an HTTP message body with a \c GET request is not
+    standards compliant; see @ref httpclient_get_with_body for more information
+    @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE",
+    \c "TRACE", \c "CONNECT", or \c "PATCH"). Additional methods can be added in the constructor with the a
+    \c additional_methods option.
+    @param url The URL of the request target: any RFC 3986 URI reference, resolved against the client's URL
+    @param headers An optional hash of headers to include in the message; these headers are for the target named
+    here and are always sent; values are converted to strings; a list is converted to a string of comma-separated
+    values; headers that differ only in case will be overwritten by the last header in the hash with a matching
+    name with a case-insensitive search
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even
+    if no \c "Content-Length" header is present in the response. Use this only with broken servers that send message
+    bodies without a \c "Content-Length" header.
+    @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request
+    headers and other information about the HTTP request; the keys are the same as for @ref send(), and
+    \c effective-url gives the absolute URL of the last request sent, which is the target resolved from \a url
+    after any redirects
+
+    @return The headers received from the HTTP server with all key names converted to lower-case. The message body
+    (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
+    \c "status_code" key.
+
+    @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
+    client is not itself on one
+    @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme that is not supported
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+    @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+    @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
+    (status code < 100 or > 299); in case of a status error the \c "arg" key of the exception hash will be set to a
+    hash equal to the normal return value of this method including a \c "status_code" key (giving the status code) and
+    a \c "body" key (giving the message body returned by the server); note that this error is not raised for HTTP
+    status codes indicating an error if the \c error_passthru option is set to @ref True "True"; see the
+    \c error_passthru option in @ref HTTPClient::constructor()
+    @throw ENCODING-CONVERSION-ERROR the given string could not be converted to the socket's character encoding
+    @throw SOCKET-SEND-ERROR There was an error sending the data
+    @throw SOCKET-CLOSED The remote end closed the connection
+    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout
+    period
+    @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+    @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+    @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
+    Socket::connectSSL() for secure connections)
+
+    @see
+    - @ref httpclient_request_url
+    - @ref send()
+
+    @since %Qore 3.0
+ */
+hash<auto> HTTPClient::sendUrl(string body, string method, string url, *hash<auto> headers,
+        softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    OptHashRefHelper ohrh(info, xsink);
+    ReferenceHolder<QoreHashNode> rv(client->sendUrl(method->c_str(), *url, headers, *body, read_response_body,
+        *ohrh, xsink), xsink);
+    return *xsink ? QoreValue() : rv.release();
+}
+
+//! Sends an HTTP request with the specified method to the target named by a URL and returns the response
+/** The request is sent to the origin named by \a url instead of the client's own; the client's URL and
+    configuration are not changed, so requests to different targets can be made at the same time on one client.
+    In every other respect this method behaves exactly like @ref send(); see @ref httpclient_request_url.
+
+    If a connection has not already been established, an internal call to HTTPClient::connect() will be made
+    before sending the message.
+
+    @par Example:
+    @code{.py}
+hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path");
+    @endcode
+
+    @param body The message body to send; pass @ref nothing (no value) to send no body
+    @param method The name of the HTTP method (\c "GET", \c "POST", \c "HEAD", \c "OPTIONS", \c "PUT", \c "DELETE",
+    \c "TRACE", \c "CONNECT", or \c "PATCH"). Additional methods can be added in the constructor with the a
+    \c additional_methods option.
+    @param url The URL of the request target: any RFC 3986 URI reference, resolved against the client's URL
+    @param headers An optional hash of headers to include in the message; these headers are for the target named
+    here and are always sent
+    @param read_response_body If this argument is @ref True, then the object will try to receive a message body even
+    if no \c "Content-Length" header is present in the response
+    @param info An optional reference to an lvalue that will be used as an output variable giving a hash of request
+    headers and other information about the HTTP request; the keys are the same as for @ref send()
+
+    @return The headers received from the HTTP server with all key names converted to lower-case. The message body
+    (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
+    \c "status_code" key.
+
+    @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
+    client is not itself on one
+    @throw HTTP-CLIENT-UNKNOWN-PROTOCOL the URL has a scheme that is not supported
+    @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
+    @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
+    @throw HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED maximum redirect count exceeded
+    @throw HTTP-CLIENT-RECEIVE-ERROR unknown content encoding received or status error communicating with HTTP server
+    (status code < 100 or > 299); note that this error is not raised for HTTP status codes indicating an error if the
+    \c error_passthru option is set to @ref True "True"
+    @throw SOCKET-SEND-ERROR There was an error sending the data
+    @throw SOCKET-CLOSED The remote end closed the connection
+    @throw SOCKET-RECV-ERROR There was an error receiving the data
+    @throw SOCKET-TIMEOUT Data transmission or reception for a single send() or recv() action exceeded the timeout
+    period
+    @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+    @throw SOCKET-HTTP-ERROR Invalid HTTP data was received
+
+    @note For possible exceptions when implicitly establishing a connection, see the Socket::connect() method (or
+    Socket::connectSSL() for secure connections)
+
+    @see
+    - @ref httpclient_request_url
+    - @ref send()
+
+    @since %Qore 3.0
+ */
+hash<auto> HTTPClient::sendUrl(*binary body, string method, string url, *hash<auto> headers,
+        softbool read_response_body = False, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+    OptHashRefHelper ohrh(info, xsink);
+    ReferenceHolder<QoreHashNode> rv(client->sendUrl(method->c_str(), *url, headers,
+        body ? body->getPtr() : nullptr, body ? body->size() : 0, read_response_body, *ohrh, xsink), xsink);
     return *xsink ? QoreValue() : rv.release();
 }
 

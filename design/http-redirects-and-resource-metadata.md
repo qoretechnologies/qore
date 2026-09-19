@@ -79,6 +79,46 @@ with `resolve_url()`.
 The client's own URL is never changed by a redirect; the chain works on a copy of the connection
 information.
 
+## Request target URLs
+
+A consumer whose targets come from the data it processes — a WSDL port address with an operation
+reference, a service document that names its own endpoints — needs to send one request to a URL without
+reconfiguring its client. `HTTPClient::send()` cannot serve that: its `path` argument is a *request
+target*, so an absolute URL passed to it is sent as an absolute-form request target to the client's own
+origin, which is what a request through a proxy does (RFC 9112 section 3.2.2). Reconfiguring around the
+call is not a substitute either — `setURL()` / `send()` / `setURL()` is not atomic against concurrent
+calls on the same client and leaves the wrong URL behind after a failure, and rebuilding a client from
+`getHttpConfig()` does not carry event and warning queues, HTTP/2 settings, connection-manager state, or
+callbacks.
+
+`HTTPClient::sendUrl()` sends one request to the target a URL names, for string and binary bodies, with
+the response, request information, and errors of `send()`. Nothing on the client changes, so requests to
+different targets run concurrently on one client and a failure leaves nothing behind.
+
+`qore_httpclient_priv::resolveRequestTargetUnlocked()` (`lib/QoreHttpClientObject.cpp`) resolves the
+reference and is shared with `prepareRedirect()`, so a redirect and a request target URL reach the same
+target for the same reference and cannot drift apart. It produces a `con_info` and a percent-encoded
+request target, which `send_internal()` passes down as an `HttpRequestTarget`; from there the request
+follows the ordinary path, including the redirect chain.
+
+| Aspect | Rule |
+|---|---|
+| Target | any RFC 3986 URI reference, resolved against the client's URL (section 5.2): an absolute URL selects its own origin, a network-path reference (`//host/path`) changes the authority, and a relative, empty, or query-only reference addresses the client's own origin |
+| Base | the client's URL, whose path is the one a request without a path is sent to (`connection.path`, else `default_path`, else `/`); the base authority is left empty, because a reference with no scheme and no authority keeps the connection |
+| Encoding | octets only: percent-encoded octets and an empty query are sent as received, and only octets that cannot appear in a URI are encoded (`appendEncoded()`), so `pre_encoded_urls` — which governs the encoder `send()` applies to its request target — does not apply |
+| Fragment | dropped; a request target has none |
+| Credentials | the client's configured credentials belong to the origin of its URL: `HttpRedirectChain` carries that origin separately as `credential_origin`, which `canAuthenticate()` uses, and `getRequestHeaders()` leaves out the `Authorization` built from the client's URL and any origin-bound default header when the target is another origin; headers passed to the call are for the target named there and are always sent |
+| User information | never used as credentials, as for a redirect location |
+| Proxies | proxy credentials keep their proxy scope: a 407 is answered from `proxy_connection` regardless of the target |
+| Host | built from the target by the connection that serves it, so it always names the target |
+| UNIX domain sockets | a `socket=` target is only accepted from a client that is itself on a UNIX domain socket, the same rule a redirect follows, because a request target can be built from a document retrieved from a network server |
+| Transport | per target, as for a redirect; see the `Transport` row above |
+| Client | the URL, credentials, default headers, queues, protocol and TLS settings, timeouts, and connection manager are unchanged |
+
+Errors raise `HTTP-CLIENT-URL-ERROR` (no host, an invalid host, or a UNIX domain socket target from a
+network client) or `HTTP-CLIENT-UNKNOWN-PROTOCOL` (a scheme the client does not speak), before anything
+is sent.
+
 ## Redirect metadata
 
 Each followed redirect produces a `Qore::HttpRedirectInfo` hash (declared in `lib/QC_HTTPClient.qpp`):
