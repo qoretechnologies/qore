@@ -279,7 +279,8 @@ accepted
     |top-level \c webhooks|parsed as @ref OpenApi3::OpenApi3Schema::webhooks "OpenApi3Schema::webhooks"
     |\c info.summary, SPDX \c license.identifier, \c jsonSchemaDialect|parsed
     |\c mutualTLS security schemes|parsed
-    |\c prefixItems, \c unevaluatedProperties, \c const|accepted; not modeled in the %Qore type system
+    |\c prefixItems, \c const|validated and preserved in serialized data types
+    |\c unevaluatedProperties|accepted; not modeled in the %Qore type system
 
     @note OpenAPI 3.x states that the property named by a \c discriminator object \a SHOULD be listed in the schema's
     \c required list; no exception is thrown when it is not.  The Swagger 2.0 string form, where the specification
@@ -302,6 +303,8 @@ excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObje
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
     @subsection openapi3_1_0 OpenApi3 v1.0
+    - retain OpenAPI 3.1 positional `prefixItems` and boolean `items` constraints through native type serialization
+    - preserve positional array response direction and bound recursive schema type construction
     - keep schema validation context alive for independently serialized composition types and repeated round trips
     - preserve raw binary request bodies, including empty uploads, and honor binary multipart media types
     - validate declared object properties even when `additionalProperties: true` also permits unknown keys
@@ -4678,6 +4681,9 @@ public class OpenApi3HashDataType inherits HashDataType {
         } else if (type instanceof ListDataType) {
             result = type.copy();
             copy_ctx.copies{id} = result;
+            if (result instanceof OpenApi3TupleDataType) {
+                cast<OpenApi3TupleDataType>(result).setResponseDirection();
+            }
             if (*AbstractDataProviderType element = type.getElementType()) {
                 cast<ListDataType>(result).updateElementType(copyResponse(element, copy_ctx));
             }
@@ -5017,6 +5023,43 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
         }
         return new OpenApi3DiscriminatorDataType(discriminator,
             map {$1.key: $1.value.getMandatoryType()}, alternatives.pairIterator());
+    }
+}
+
+#! A typed array that preserves positional JSON Schema constraints
+/** The list element type describes all possible positions for presentation. The original schema
+    validates each actual position, bounds, and remaining items, including after serialization.
+*/
+public class OpenApi3TupleDataType inherits ListDataType {
+    private {
+        SchemaObject schema;
+        *OpenApi3Schema document;
+        bool for_request = True;
+    }
+    #! Creates a positional array type
+    /** @param schema original array declaration
+        @param element_type union of declared position types
+        @param or_nothing whether absence is accepted
+    */
+    constructor(SchemaObject schema, AbstractDataProviderType element_type, bool or_nothing)
+            : ListDataType(element_type, or_nothing) { self.schema = schema; }
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"schema": schema, "document": schema.getDocument(), "for_request": for_request};
+    }
+    #! Marks an independent snapshot for response validation
+    /** Called by OpenApi3HashDataType::forResponse(); never call on a cached request type. */
+    setResponseDirection() { for_request = False; }
+    #! Validates array positions without coercing an image into a timestamp or vice versa
+    /** @param value positional array
+        @return validated array
+        @throw RUNTIME-TYPE-ERROR the value is not an array accepted by the declared positions
+    */
+    auto acceptsValue(auto value) {
+        if (!exists value && isOrNothingType()) { return value; }
+        if (value.typeCode() != NT_LIST) { throw "RUNTIME-TYPE-ERROR", "expected a positional array"; }
+        try { schema.check(False, for_request, "/", "POST", schema.name, \value); }
+        catch (hash<ExceptionInfo> ex) { rethrow "RUNTIME-TYPE-ERROR", ex.desc; }
+        return value;
     }
 }
 
@@ -5381,6 +5424,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
         #! The JSON value required by the const keyword; immutable after construction
         auto const_value;
+
+        #! Positional item schemas from JSON Schema 2020-12; immutable after parsing
+        *list<SchemaObject> prefix_items;
+        #! Whether an items:false declaration forbids elements after the prefix
+        bool additional_items = True;
     }
 
     #! Returns the document required for schema reference and type resolution
@@ -5470,8 +5518,18 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                     "expected string or list", name, oh.type.type());
             }
 
-            if (type == "array" && (require_items || exists oh.items)) {
-                items = newSchemaObject("items", oh.items ?? {"type": "object"}, openapi3);
+            if (type == "array") {
+                if (oh.hasKey("prefixItems")) {
+                    if (!openapi3.is31OrLater() || oh.prefixItems.typeCode() != NT_LIST) {
+                        throw "INVALID-FIELD-FORMAT", "prefixItems requires an OpenAPI 3.1 schema array";
+                    }
+                    prefix_items = map newSchemaObject("prefixItems", $1, openapi3), oh.prefixItems;
+                }
+                if (oh.items.typeCode() == NT_BOOLEAN && openapi3.is31OrLater()) {
+                    additional_items = oh.items;
+                } else if (require_items || exists oh.items) {
+                    items = newSchemaObject("items", oh.items ?? {}, openapi3);
+                }
             }
 
             if (oh.hasKey("default")) {
@@ -5919,6 +5977,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     #! Returns the data type for the schema
     AbstractDataProviderType getDataType(bool required = True, *object rest) {
         required = required && !nullable;
+        if (prefix_items || !additional_items) {
+            if (!dataType) {
+                if (buildingComposition()) { return AbstractDataProviderTypeMap."auto"; }
+                push CompositionStack, self;
+                on_exit pop CompositionStack;
+                list<AbstractDataProviderType> types = map $1.getDataType(True, rest), prefix_items ?? ();
+                if (additional_items && (!exists maxItems || maxItems > (prefix_items ?? ()).size())) {
+                    push types, items ? cast<SchemaObject>(items).getDataType(True, rest) : AbstractDataProviderTypeMap."auto";
+                }
+                AbstractDataProviderType element_type = types.size() == 1 ? types[0]
+                    : types ? new QoreUnionDataType(types) : AbstractDataProviderTypeMap."auto";
+                dataType = new OpenApi3TupleDataType(self, element_type, False);
+            }
+            if (required) { return dataType; }
+            if (!orNothingDataType) { orNothingDataType = dataType.getOrNothingType(); }
+            return orNothingDataType;
+        }
         if (discriminatorMapping && !oneOf && !anyOf) {
             if (!dataType) {
                 # Mapped children may refer back to the base through nested properties. Use the same
@@ -6398,7 +6473,23 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (!wire_format && value.typeCode() == NT_BINARY && (allOf || oneOf || anyOf)) {
             wire_format = "binary";
         }
-        SchemaBase::check(serialize, request, type, wire_format, items, path, method, name, \value);
+        if (type == "array" && value.typeCode() == NT_LIST && (prefix_items || !additional_items)) {
+            if (!additional_items && value.size() > (prefix_items ?? ()).size()) {
+                throw "SCHEMA-VALIDATION-ERROR", "array has elements forbidden by items:false";
+            }
+            for (int i = 0; i < value.size(); ++i) {
+                *SchemaObject item = i < (prefix_items ?? ()).size() ? prefix_items[i] : cast<*SchemaObject>(items);
+                if (item) {
+                    if (!SchemaObject::matchesScalarBranch(item, value[i])) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("array position %d has the wrong type", i);
+                    }
+                    item.check(serialize, request, path, method, name, \value[i]);
+                }
+            }
+            SchemaBase::check(serialize, request, type, wire_format, NOTHING, path, method, name, \value);
+        } else {
+            SchemaBase::check(serialize, request, type, wire_format, items, path, method, name, \value);
+        }
     }
 
     #! Selects a composition branch before the ordinary single-type validator can coerce its input

@@ -1,0 +1,40 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestSchemaActions
+%requires json
+%exec-class Base64OrUrlTest
+
+class Base64OrUrlTest inherits QUnit::Test {
+    constructor() : Test("REST schema base64 media codec", "1.0") {
+        addTestCase("binary files strings and null survive typed serialization", \roundtripTest());
+        set_return_value(main());
+    }
+    private roundtripTest() {
+        hash<auto> body = {"type": "object", "properties": {"media": {"type": ("string", "null")}}};
+        hash<auto> endpoint = {"requestBody": {"content": {"application/json": {"schema": body}}},
+            "responses": {"200": {"description": "Converted", "content": {"application/json": {"schema": {"type": "object"}}}}}};
+        auto schema = OpenApi3Loader::fromString(make_json({"openapi": "3.1.0", "info": {"title": "Media", "version": "1"},
+            "paths": {"/convert": {"post": endpoint}}}), True);
+        RestSchemaActionOperation operation(schema, <RestSchemaActionInfo>{"action": "convert", "method": "POST", "path": "/convert",
+            "display_name": "Convert", "short_desc": "Convert media", "desc": "Convert media to a service string.",
+            "fields": {"media": <RestSchemaFieldOverlayInfo>{"codec": RestSchemaActionCodecs::Base64OrUrl}}});
+        auto type = operation.getRequestType();
+        for (int pass = 0; pass < 3; ++pass) {
+            type = Serializable::deserialize(type.serialize());
+            foreach auto value in ((<000102>, "AAEC", {"name": "input.bin", "mime_type": "application/octet-stream", "content": <000102>},
+                    {"name": "input.bin", "mime_type": "application/octet-stream", "content": "AAEC"})) {
+                assertEq("AAEC", operation.unflatten(type.acceptsValue({"media": value})).req.body.media);
+            }
+            assertEq("https://example.test/input", operation.unflatten(type.acceptsValue({"media": "https://example.test/input"})).req.body.media);
+            assertEq({}, type.acceptsValue({}));
+            assertTrue(operation.unflatten(type.acceptsValue({"media": NULL})).req.body.hasKey("media"));
+        }
+        auto codec = RestSchemaActionCodecs::getCodecEx(RestSchemaActionCodecs::Base64OrUrl);
+        assertEq("AAEC", codec.from_wire("AAEC"));
+        assertNothing(codec.to_wire(NOTHING));
+        assertThrows("REST-SCHEMA-CODEC-ERROR", sub () { codec.to_wire(False); });
+    }
+}

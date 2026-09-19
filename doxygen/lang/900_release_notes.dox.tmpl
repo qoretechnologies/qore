@@ -2267,9 +2267,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref bfldataproviderintro "BflDataProvider" module
       - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
+      - expose 37 typed service operations, five generation/job helpers, and generic API access from pinned contracts
+      - include FLUX.2, FLUX 3 video, image/video editing tools, LoRA beta inference, credit reads, and licensed usage reports
 
     - @ref bflrestclientintro "BflRestClient" module
       - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with `x-key` header authentication
+      - authenticate credit ping, preserve regional routes, and validate per-job deadlines and credential-free media downloads
+      - retire the unsupported `flux-1.1-pro-video` alias; select the current `flux-3-video` model explicitly
 
     - @ref bgem3fastapidataproviderintro "BgeM3FastApiDataProvider" module
       - new module providing a data provider API for the BGE-M3 FastAPI embedding sidecar
@@ -2811,6 +2815,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - preserve positional arrays, boolean item constraints, response direction, and native serialization
       - retains enumeration labels and descriptions through schema adaptation and serialization,
         while preserving typed wire values and keeping code-generation symbols out of forms
       - independent response type snapshots retain read-only/write-only direction through nested types and serialization
@@ -2912,6 +2917,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         so applications can account for priority requests downgraded to standard processing
 
     - @ref qoremediautilsintro "QoreMediaUtils" module
+      - validate MP4 container metadata including dimensions, duration, sample count, frame rate, and audio presence
       - new module providing a provider-neutral abstraction layer for generative media (image + video)
       - validates media signatures and MIME types, reads image dimensions and WAV/MP3 duration,
         and supports Stability AI multipart generation through the media backend
@@ -2962,6 +2968,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
 
     - @ref restschemaactionsintro "RestSchemaActions" module
+      - encode binary/file/base64/URL media inputs as JSON strings while preserving explicit null
       - optional typed response envelopes preserve HTTP status and headers, including bodyless accepted jobs
       - actions can select a declared response media schema and send its Accept header while retaining typed codecs
       - imports partition operations by declared fixed servers and support checked schema value repairs
@@ -3561,6 +3568,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - unconstrained arrays retain size bounds and compare uniqueness using typed structural values
       - opaque PDF responses retain their original bytes on synchronous and asynchronous transports
       - boolean enumerations reject undeclared values and retain false in generated examples
       - fixed validating a request or response value holding @ref NULL "NULL", which failed to dispatch at

@@ -1,0 +1,4 @@
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+# Preserve the exact pinned upstream bytes, including terminal blank lines.
+bfl-vendor-comfy.txt whitespace=-blank-at-eof
+bfl-vendor-lora.txt whitespace=-blank-at-eof

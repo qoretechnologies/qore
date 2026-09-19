@@ -1,0 +1,671 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file BflRestClient.qm Qore user module for calling Black Forest Labs (FLUX) REST services
+
+/*  BflRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreAsyncJobUtils
+%requires QoreMediaUtils
+%requires json
+%requires(reexport) RestSchemaActions
+
+module BflRestClient {
+    version = "1.1";
+    desc = "user module for calling Black Forest Labs (FLUX) REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("bfl",
+            BflRestConnection::ConnectionScheme);
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new BflImageGeneratorFactory());
+        QoreMediaUtils::MediaProviderRegistry::registerVideoGeneratorFactory(
+            new BflVideoGeneratorFactory());
+    };
+}
+
+/** @mainpage BflRestClient Module
+
+    @tableofcontents
+
+    @section bflrestclientintro BflRestClient Introduction
+
+    The %BflRestClient module provides a REST client for
+    [Black Forest Labs](https://bfl.ai) — the company behind the FLUX
+    image and video generation models.
+
+    BFL's API is asynchronous: every submit returns a `polling_url`
+    that must be polled until the result is ready.  This module wraps
+    the lifecycle via @ref qoreasyncjobutilsintro "QoreAsyncJobUtils"
+    so callers see a synchronous request/response shape.
+
+    Two QoreMediaUtils backends are auto-registered on module load:
+    - `bfl` image generator (FLUX models)
+    - `bfl` video generator (FLUX video models)
+
+    @section BflRestClientRelnotes Release Notes
+
+    @subsection BflRestClientv1_1 BflRestClient v1.1
+    - add the pinned image, video, tool, fine-tune, job, credit, and licensing contracts
+    - validate the authenticated credit response for connection ping, including a zero balance
+    - preserve regional endpoints and route each independent wait through the returned polling URL
+    - bound setup, submission, validation, polling, and downloads by one overall timeout
+    - verify image/video MIME, size, and container metadata with credential-free delivery downloads
+    - replace the unsupported `flux-1.1-pro-video` alias with explicit `flux-3-video` selection
+
+    @par Example: Create a product image and retain its bytes
+    @code{.py}
+BflRestClientIo client({"apikey": ENV.BFL_APIKEY});
+hash<auto> job = BflApi::generateMedia(client, "flux-2-klein-4b",
+    {"prompt": "A blue ceramic mug on a plain studio background.", "seed": 0,
+        "output_format": "png", "job_timeout": 5m});
+binary image = job.media.data;
+    @endcode
+
+    @note Generation consumes credits. Check the account balance and current pricing first.
+    URLs supplied as input references are fetched by BFL; local content preflight applies to supplied
+    bytes/files/base64, while remote content is validated by the service. Local inputs are limited to
+    50 MiB. Container metadata checks do not replace decoding. Fragmented MP4 and multiple video tracks
+    require an external media demuxer. Signed delivery URLs are temporary and must not be logged.
+    The current schema retains deprecated legacy fine-tune operations; account availability is unverified.
+    LoRA beta base variants expose only the common fields documented by BFL. Pinned source hashes,
+    normalization details, and source/license attribution are installed in `bfl-provenance.json`.
+
+    @subsection BflRestClientv1_0 BflRestClient v1.0
+    - the initial version of the %BflRestClient module
+*/
+
+#! contains all public symbols of the BflRestClient module
+public namespace BflRestClient {
+#! Default BFL REST API URL
+public const DefaultUrl = "https://api.bfl.ai";
+
+#! Default polling interval (ms) for async-job lifecycle
+public const DefaultPollInterval = 2000ms;
+
+#! Default overall timeout for async-job lifecycle
+public const DefaultJobTimeout = 5m;
+
+#! BFL terminal statuses
+public const StatusReady = "Ready";
+
+#! BFL error statuses
+public const ErrorStatuses = ("Error", "Failed", "Request Moderated", "Content Moderated");
+
+#! Image-generation endpoint paths by model
+public const ImageModelPathMap = {
+    "flux-pro-1.1":       "/v1/flux-pro-1.1",
+    "flux-pro-1.1-ultra": "/v1/flux-pro-1.1-ultra",
+    "flux-pro":           "/v1/flux-pro",
+    "flux-dev":           "/v1/flux-dev",
+    "flux-kontext-pro":   "/v1/flux-kontext-pro",
+    "flux-kontext-max":   "/v1/flux-kontext-max",
+    "flux-2-pro":         "/v1/flux-2-pro",
+    "flux-2-pro-preview": "/v1/flux-2-pro-preview",
+    "flux-2-max":         "/v1/flux-2-max",
+    "flux-2-flex":        "/v1/flux-2-flex",
+    "flux-2-klein-4b":    "/v1/flux-2-klein-4b",
+    "flux-2-klein-9b":    "/v1/flux-2-klein-9b",
+    "flux-2-klein-9b-preview": "/v1/flux-2-klein-9b-preview",
+};
+
+#! Default image model
+public const DefaultImageModel = "flux-pro-1.1";
+
+#! Video-generation endpoint paths by model
+public const VideoModelPathMap = {
+    "flux-3-video":       "/v1/flux-3-video",
+};
+
+#! Default video model
+public const DefaultVideoModel = "flux-3-video";
+
+#! Common base class
+public class BflRestClientBase {
+    public {
+        const DefaultOptions = {
+            "url":  DefaultUrl,
+            "data": "json",
+            "timeout": 120s,
+            "connect_timeout": 10s,
+            "ssl_verify_cert": True,
+        };
+    }
+
+    private {
+        # Immutable after construction. Copies retain this credential and routing scope.
+        string api_secret;
+        string credential_origin;
+    }
+
+    #! Retains the selected credential without exposing it in connection information
+    /** @param opts BFL API key and endpoint options
+        @throw BFL-CONFIG-ERROR invalid credentials or endpoint
+    */
+    constructor(hash<auto> opts) {
+        hash<auto> normalized = getOptions(opts);
+        api_secret = normalized.token;
+        credential_origin = normalized.url;
+    }
+
+    #! Maps the API key to the shared client's sensitive token mechanism
+    /** @param opts client options; an explicitly supplied `apikey` always takes precedence
+        @return idempotently normalized options using the `x-key` header
+        @throw BFL-CONFIG-ERROR missing, empty, or invalid credentials or endpoint
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (rv.hasKey("apikey")) {
+            rv.token = rv.apikey;
+        } else if (rv.token_api_key_header != "x-key") {
+            throw "BFL-CONFIG-ERROR", "a nonempty apikey is required";
+        }
+        if (rv.token.typeCode() != NT_STRING || rv.token !~ /^\S+$/) {
+            throw "BFL-CONFIG-ERROR", "apikey must be a nonempty string without whitespace";
+        }
+        rv.url = normalizeEndpoint(rv.url);
+        rv.token_api_key_header = "x-key";
+        rv.max_redirects = 0;
+        rv.redirect_passthru = False;
+        rv.error_passthru = False;
+        rv.allow_any_response = False;
+        if (rv.url =~ /^https:/) {
+            rv.ssl_verify_cert = True;
+            rv.ssl_verify_mode = SSL_VERIFY_PEER;
+            rv.accept_all_certs = False;
+        }
+        foreach string option in (keys rv) {
+            if (option =~ /^(oauth2_|custom_token_|negotiate_|rest_body_auth_)/) {
+                delete rv{option};
+            }
+        }
+        rv.headers = map {$1.key: $1.value}, rv.headers.pairIterator(),
+            !inlist($1.key.lwr(), ("authorization", "x-key"));
+        rv -= ("apikey", "username", "password", "token_type");
+        return rv;
+    }
+
+    #! Validates an API origin, including documented regional routing hosts
+    /** @param endpoint BFL HTTPS origin or an explicit HTTP loopback fixture origin
+        @return origin without a trailing slash
+        @throw BFL-CONFIG-ERROR unsafe scheme, authority, port, or path
+    */
+    static string normalizeEndpoint(string endpoint) {
+        hash<auto> parsed;
+        try { parsed = parse_url(endpoint); }
+        catch () { throw "BFL-CONFIG-ERROR", "invalid BFL endpoint"; }
+        bool loopback = parsed.protocol == "http"
+            && inlist(parsed.host, ("127.0.0.1", "localhost", "::1"));
+        if (!parsed.host.val() || parsed.username.val() || parsed.password.val()
+                || endpoint =~ /[?#@\r\n\\]/ || (parsed.path.val() && parsed.path != "/")
+                || (!loopback && (parsed.protocol != "https"
+                    || parsed.host !~ /^api(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.bfl\.ai$/
+                    || (parsed.port && parsed.port != 443)))) {
+            throw "BFL-CONFIG-ERROR", "use a BFL HTTPS API origin or an explicit HTTP loopback fixture";
+        }
+        endpoint =~ s/\/$//;
+        return endpoint;
+    }
+
+    #! Validates the destination before adding authentication
+    private hash<auto> authenticate(string endpoint, *string path, *hash<auto> hdr) {
+        if (normalizeEndpoint(endpoint) != credential_origin
+                || path =~ /^\/?[a-zA-Z][-a-zA-Z0-9+.]*:/ || path =~ /^\/\//
+                || path =~ /[#\r\n\\]/ || path =~ /(^|\/)\.\.(\/|\?|$)/) {
+            throw "BFL-CONFIG-ERROR", "authenticated paths must remain relative to the selected API origin";
+        }
+        hdr = map {$1.key: $1.value}, hdr.pairIterator(),
+            !inlist($1.key.lwr(), ("authorization", "x-key"));
+        hdr."x-key" = api_secret;
+        return hdr;
+    }
+
+    #! Allows regional API copies without granting access to delivery or arbitrary hosts
+    private string checkedCopyUrl(string endpoint) {
+        endpoint = normalizeEndpoint(endpoint);
+        if (endpoint != credential_origin
+                && (endpoint =~ /^http:/ || credential_origin =~ /^http:/)) {
+            throw "BFL-CONFIG-ERROR", "loopback client copies must remain on their configured origin";
+        }
+        return endpoint;
+    }
+
+    #! Retains the canonical credential across shared client reconstruction
+    private hash<auto> scopedCopyOptions(hash<auto> opts) {
+        opts.apikey = api_secret;
+        return opts;
+    }
+}
+
+#! Sync REST client for BFL
+public class BflRestClient inherits RestClient::RestClient, BflRestClientBase {
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : BflRestClientBase(opts), RestClient(BflRestClientBase::getOptions(opts), do_not_connect) {
+    }
+
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        hdr = authenticate(getURL(), path, hdr);
+    }
+
+    private nothing preparePath(reference<string> path) {
+        authenticate(getURL(), path, NOTHING);
+        RestClient::preparePath(\path);
+    }
+
+    #! Copies the client to a validated BFL API origin
+    /** @param new_url BFL API origin, or the same loopback fixture origin
+        @return independent authenticated client
+        @throw BFL-CONFIG-ERROR unsafe destination
+    */
+    AbstractRestClient copyWithUrl(string new_url) {
+        return RestClient::copyWithUrl(checkedCopyUrl(new_url));
+    }
+
+    private AbstractRestClient copySelf(hash<auto> opts) {
+        return RestClient::copySelf(scopedCopyOptions(opts));
+    }
+}
+
+#! Async REST client for BFL
+/** Each job owns an independent @ref QoreAsyncJobUtils::AsyncJobPoller "AsyncJobPoller"
+    and a deadline that includes submission and setup.
+*/
+public class BflRestClientIo inherits RestClientIo::RestClientIo, BflRestClientBase {
+    private {
+        Mutex sleeper_lock();
+        *code<nothing(timeout)> sleeper;
+    }
+
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : BflRestClientBase(opts), RestClientIo(BflRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        authenticate(getUrl(), path, hdr);
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+        hdr = authenticate(getUrl(), path, hdr);
+        return rv;
+    }
+
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        authenticate(getUrl(), path, hdr);
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        hdr = authenticate(getUrl(), path, hdr);
+        return rv;
+    }
+
+    #! Copies the client to a validated BFL API origin
+    /** @param new_url BFL API origin, or the same loopback fixture origin
+        @return independent authenticated client
+        @throw BFL-CONFIG-ERROR unsafe destination
+    */
+    AbstractRestClient copyWithUrl(string new_url) {
+        return RestClientIo::copyWithUrl(checkedCopyUrl(new_url));
+    }
+
+    private AbstractRestClient copySelf(hash<auto> opts) {
+        return RestClientIo::copySelf(scopedCopyOptions(opts));
+    }
+
+    #! Sets the sleeper captured by subsequently started waits
+    /** @param s test sleeper; production defaults to a cancelable millisecond delay */
+    setSleeper(code<nothing(timeout)> s) {
+        AutoLock lock(sleeper_lock);
+        sleeper = s;
+    }
+
+    #! Waits for an existing job using its original routed identity
+    /** @param job original id and polling_url
+        @param options job_timeout and poll_interval controls
+        @return Ready result with the routed identity
+        @throw BFL-JOB-ERROR invalid identity, response, or terminal failure
+        @throw BFL-JOB-TIMEOUT deadline expired; the existing job can be retrieved later
+    */
+    hash<auto> waitForResult(hash<auto> job, *hash<auto> options) {
+        BflJobs::validateControls(self, options ?? {});
+        *code<nothing(timeout)> snapshot;
+        { AutoLock lock(sleeper_lock); snapshot = sleeper; }
+        return BflJobs::wait(self, job, options.job_timeout ?? DefaultJobTimeout,
+            options.poll_interval ?? DefaultPollInterval, snapshot);
+    }
+
+    #! Submits a generation request and waits for the result
+    /** @param path submit endpoint path (e.g. \c "/v1/flux-pro-1.1")
+        @param body submit body (model-specific)
+        @param options optional polling-control fields: \c poll_interval
+            (defaults to 2s), \c job_timeout (defaults to 5m)
+
+        @return the completed job hash with \c result.sample (image URL),
+            \c status, etc.
+
+        @throw BFL-INPUT-ERROR invalid model options or callback delivery selected
+        @throw BFL-JOB-ERROR invalid identity or non-Ready terminal state
+        @throw BFL-JOB-TIMEOUT overall deadline expired; retain the returned job identity
+    */
+    hash<auto> submitAndWait(string path, hash<auto> body, *hash<auto> options) {
+        date start = now_us();
+        BflJobs::validateControls(self, options ?? {});
+        timeout overall_to = options.job_timeout ?? DefaultJobTimeout;
+        timeout interval = options.poll_interval ?? DefaultPollInterval;
+        BflJobs::validateTiming(self, overall_to, interval);
+        if (exists body.webhook_url && body.webhook_url.typeCode() != NT_NULL) {
+            throw "BFL-INPUT-ERROR", "synchronous generation cannot use webhook delivery; use a start action";
+        }
+        BflRestClientIo client = cast<BflRestClientIo>(copyWithUrl(getUrl()));
+        BflOperation operation(BflApi::actionForPath(path), client, start, overall_to);
+        int remaining = int(overall_to) - get_duration_milliseconds(now_us() - start);
+        if (remaining <= 0) { throw "BFL-JOB-TIMEOUT", "deadline expired before submission; no job was submitted"; }
+        client.setTimeout(min(getTimeout(), remaining));
+        client.setConnectTimeout(min(getConnectTimeout(), remaining));
+        hash<auto> job = operation.doRequest(body);
+        remaining = int(overall_to) - get_duration_milliseconds(now_us() - start);
+        if (remaining <= 0) { BflJobs::timedOut(job); }
+        return waitForResult(job, {"job_timeout": remaining, "poll_interval": interval});
+    }
+}
+
+#! Connection class for BFL
+public class BflRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "bfl://api.bfl.ai";
+        const DefaultConnectionUrl = DefaultUrl;
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Black Forest Labs Connection",
+            "short_desc": "A connection to Black Forest Labs (FLUX models)",
+            "desc": "A connection to [Black Forest Labs](https://bfl.ai) — "
+                "the company behind FLUX image and video generation models.\n\n"
+                "Requires an API key sent via the `x-key` header.  Get your "
+                "API key from the [BFL portal](https://api.bfl.ai).",
+            "cls": Class::forName("BflRestConnection"),
+            "auto_url": False,
+            "schemes": {"bfl": True},
+            "base_scheme_map": {"https": "bfl"},
+            "options": (map {$1.key: $1.value}, RestConnection::ConnectionScheme.options.pairIterator(),
+                $1.key !~ /^(oauth2_|custom_token_|negotiate_|rest_body_auth_|token)/
+                    && !inlist($1.key, ("username", "password"))) + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "BFL API key (sent as x-key header)",
+                    "type": "string",
+                    "desc": "The BFL API key — sent as the `x-key` header.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(BflRestConnection::getConfig({
+                "name": name, "desc": description, "url": url, "opts": options,
+            }), attributes) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(BflRestConnection::getConfig(config), attr) {
+    }
+
+    #! Preserves regional endpoints and migrates historical auto-URL placeholders
+    private static hash<auto> getConfig(hash<auto> config) {
+        string target = config.url ?? DefaultUrl;
+        if (inlist(target, ("bfl://x", "bfl://localhost"))) { target = DefaultUrl; }
+        BflRestClientBase::normalizeEndpoint(regex_subst(target, "^bfl://", "https://"));
+        target =~ s/^https:\/\//bfl:\/\//;
+        hash<auto> options = config.opts ?? {};
+        options.ping_method = "GET";
+        options.ping_path = "/v1/credits";
+        options -= ("ping_body", "ping_headers");
+        return config + {"url": target, "opts": options};
+    }
+
+    string getType() { return "bfl"; }
+    *string getAppName() { return "BlackForestLabs"; }
+
+    #! Validates the authenticated credit balance, including zero
+    /** @param body decoded response or JSON text
+        @throw REST-PING-ERROR malformed or unsuccessful credit response
+    */
+    validatePingResponse(auto body) {
+        if (body.typeCode() == NT_STRING || body.typeCode() == NT_BINARY) {
+            try { body = parse_json(body.toString("UTF-8")); }
+            catch () { throw "REST-PING-ERROR", "BFL ping returned invalid JSON"; }
+        }
+        if (body.typeCode() != NT_HASH || body.hasKey("error")
+                || !inlist(body.credits.typeCode(), (NT_INT, NT_FLOAT, NT_NUMBER)) || body.credits < 0) {
+            throw "REST-PING-ERROR", "BFL ping did not return a valid credit balance";
+        }
+    }
+    bool hasDataProvider() { return True; }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("BflDataProvider");
+        return create_object("BflDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private BflRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BflRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new BflRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        return BflRestClientBase::getOptions(rv);
+    }
+
+    #! Preserves the selected endpoint and authenticated ping after option updates
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            hash<auto> normalized = getConfig({"url": url, "opts": opts});
+            if (url != normalized.url) { update.url = normalized.url; }
+            foreach string key in ("ping_method", "ping_path") {
+                if (opts{key} != normalized.opts{key}) { update{key} = normalized.opts{key}; }
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+}
+
+#! Fetches a URL as raw bytes (used to download generated image / video assets)
+/** @param url temporary BFL delivery URL
+    @return verified image or video bytes
+    @throw BFL-DOWNLOAD-ERROR invalid destination, transfer, or media
+    @throw BFL-DOWNLOAD-TIMEOUT download deadline expired
+*/
+public binary sub fetchBytes(string url) {
+    return downloadMedia(url).data;
+}
+
+#! @ref QoreMediaUtils::AbstractImageGenerator implementation backed by BFL FLUX models
+public class BflImageGenerator inherits QoreMediaUtils::AbstractImageGenerator {
+    private {
+        BflRestClientIo rest;
+        string model;
+        hash<auto> defaults;
+    }
+
+    constructor(hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        if (!config.api_key.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "ImageGeneratorConfig.api_key is required for the BFL backend";
+        }
+        rest = new BflRestClientIo({
+            "apikey": config.api_key,
+            "url":    config.url ?? BflRestClient::DefaultUrl,
+        });
+        model = config.model ?? BflRestClient::DefaultImageModel;
+        defaults = config.provider_options ?? {};
+        if (exists config.aspect_ratio) { defaults.aspect_ratio = config.aspect_ratio; }
+        if (exists config.output_format) { defaults.output_format = config.output_format; }
+        if (!BflRestClient::ImageModelPathMap{model}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("BFL image model %y is unknown; known models: %y",
+                    model, keys BflRestClient::ImageModelPathMap);
+        }
+    }
+
+    string getMode() { return "bfl"; }
+    *string getModel() { return model; }
+
+    #! Generates an image through the selected model's actual contract
+    /** @param prompt image description
+        @param opts per-call model options overriding configured defaults
+        @return verified bytes, actual MIME, seed, and service/container metadata
+        @throw BFL-INPUT-ERROR unsupported options or invalid input
+        @throw BFL-JOB-ERROR unsuccessful service job
+        @throw BFL-JOB-TIMEOUT overall deadline expired
+        @throw BFL-DOWNLOAD-ERROR invalid media response
+    */
+    hash<QoreMediaUtils::ImageResult> generateImage(string prompt, *hash<auto> opts) {
+        string m = opts.model ?? model;
+        if (!ImageModelPathMap.hasKey(m)) { throw "MEDIA-CONFIG-ERROR", "unsupported BFL image model"; }
+        hash<auto> final_status = BflApi::generateMedia(rest, m, (defaults + opts - "model") + {"prompt": prompt});
+        return <QoreMediaUtils::ImageResult>{
+            "image":        final_status.media.data,
+            "content_type": final_status.media.content_type,
+            "seed":         final_status.result.seed,
+            "model":        m,
+            "metadata":     (final_status - "media") + (final_status.media - "data"),
+        };
+    }
+}
+
+#! Factory for @ref BflImageGenerator
+public class BflImageGeneratorFactory inherits QoreMediaUtils::AbstractImageGeneratorFactory {
+    string getMode() {
+        return "bfl";
+    }
+    string getDisplayName() {
+        return "Black Forest Labs (FLUX) text-to-image";
+    }
+    QoreMediaUtils::AbstractImageGenerator create(
+            hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        return new BflImageGenerator(config);
+    }
+}
+
+#! @ref QoreMediaUtils::AbstractVideoGenerator implementation backed by BFL FLUX video models
+public class BflVideoGenerator inherits QoreMediaUtils::AbstractVideoGenerator {
+    private {
+        BflRestClientIo rest;
+        string video_model;
+        hash<auto> defaults;
+    }
+
+    constructor(hash<QoreMediaUtils::VideoGeneratorConfig> config) {
+        if (!config.api_key.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "VideoGeneratorConfig.api_key is required for the BFL backend";
+        }
+        hash<auto> rest_opts = {
+            "apikey": config.api_key,
+            "url":    config.url ?? BflRestClient::DefaultUrl,
+        };
+        rest = new BflRestClientIo(rest_opts);
+        video_model = config.model ?? BflRestClient::DefaultVideoModel;
+        defaults = {"mode": "t2v"} + config.provider_options;
+        if (exists config.duration_seconds) { defaults.duration = config.duration_seconds; }
+        if (exists config.aspect_ratio) { defaults.aspect_ratio = config.aspect_ratio; }
+        if (exists config.fps) {
+            throw "MEDIA-CONFIG-ERROR", "FLUX 3 controls frame rate on the server; fps is not a request option";
+        }
+        if (!BflRestClient::VideoModelPathMap{video_model}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("BFL video model %y is unknown; known models: %y",
+                    video_model, keys BflRestClient::VideoModelPathMap);
+        }
+    }
+
+    string getMode() { return "bfl"; }
+    *string getModel() { return video_model; }
+
+    #! Generates or continues a video through the current FLUX 3 contract
+    /** @param prompt video description; omitted for draft enhancement
+        @param opts per-call options; duration_seconds overrides configured duration
+        @return verified MP4 bytes, original delivery URL, duration, and service/container metadata
+        @throw MEDIA-CONFIG-ERROR unsupported model or conflicting duration options
+        @throw BFL-INPUT-ERROR invalid model options or media
+        @throw BFL-JOB-ERROR unsuccessful service job
+        @throw BFL-JOB-TIMEOUT overall deadline expired
+        @throw BFL-DOWNLOAD-ERROR invalid media response
+    */
+    hash<QoreMediaUtils::VideoResult> generateVideo(string prompt, *hash<auto> opts) {
+        string m = opts.model ?? video_model;
+        if (!VideoModelPathMap.hasKey(m)) { throw "MEDIA-CONFIG-ERROR", "unsupported BFL video model; select flux-3-video"; }
+        if (opts.hasKey("duration_seconds")) {
+            if (opts.hasKey("duration")) { throw "MEDIA-CONFIG-ERROR", "supply duration or duration_seconds, not both"; }
+            opts.duration = remove opts.duration_seconds;
+        }
+        hash<auto> body = defaults + opts - "model";
+        if (body.mode != "draft_enhance") { body.prompt = prompt; }
+        hash<auto> done_status = BflApi::generateMedia(rest, m, body);
+        return <QoreMediaUtils::VideoResult>{
+            "video":        done_status.media.data,
+            "video_url":    done_status.result.sample,
+            "content_type": done_status.media.content_type,
+            "duration_seconds": done_status.media.duration_seconds,
+            "model":        m,
+            "metadata":     (done_status - "media") + (done_status.media - "data"),
+        };
+    }
+}
+
+#! Factory for @ref BflVideoGenerator
+public class BflVideoGeneratorFactory inherits QoreMediaUtils::AbstractVideoGeneratorFactory {
+    string getMode() {
+        return "bfl";
+    }
+    string getDisplayName() {
+        return "Black Forest Labs (FLUX) text-to-video";
+    }
+    QoreMediaUtils::AbstractVideoGenerator create(
+            hash<QoreMediaUtils::VideoGeneratorConfig> config) {
+        return new BflVideoGenerator(config);
+    }
+}
+}

@@ -1,0 +1,428 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires BflRestClient
+%requires BflDataProvider
+%requires QoreMediaUtils
+%requires HttpServer
+%requires HttpServerUtil
+%requires json
+%exec-class BflWireTest
+
+# Original 64 by 64 fixture image, decoded by the independent live harness as well.
+const Png = parse_base64_string("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmElEQVR4nO3QMREAIBDAsJeDHPwfXkBGBjpk73XWPvdnowO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAeup0yLMxMyo0AAAAASUVORK5CYII=");
+
+const Video = parse_base64_string(File::readTextFile(get_script_dir() + "/../QoreMediaUtils/fixtures/one-second-blue-mp4.base64"));
+
+class BflWireHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex mutex();
+        list<hash<auto>> calls = ();
+        string origin;
+        auto result_override;
+        list<string> statuses = ("Pending", "Reasoning", "Generating", "Ready");
+        int poll_index = 0;
+        int download_status = 200;
+        data download = Png;
+        hash<auto> download_headers = {"Content-Type": "image/png"};
+        timeout delay = 0ms;
+        *Counter entered;
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        { AutoLock lock(mutex); push calls, {"path": cx.raw_path, "method": hdr.method, "headers": hdr, "body": body}; }
+        if (cx.raw_path =~ /^\/asset/) {
+            if (delay) { usleep(int(delay) * 1000); }
+            return makeResponse(download_headers, download_status, download);
+        }
+        if (hdr."x-key" != "wire-fixture-key") { return makeResponse({}, 401, "missing fixture credential"); }
+        if (cx.raw_path == "/v1/credits") {
+            return makeResponse({"Content-Type": "application/json"}, 200, make_json({"credits": 0}));
+        }
+        if (cx.raw_path == "/v1/my_finetunes") {
+            return makeResponse({"Content-Type": "application/json"}, 200,
+                make_json({"finetunes": ("owned-lora", {"finetune_id": "org/shared", "name": "Shared Model"})}));
+        }
+        if (cx.raw_path =~ /^\/v1\/finetune_details\?/) {
+            return makeResponse({"Content-Type": "application/json"}, 200,
+                make_json({"finetune_details": {"value": {"value": "ordinary"}, "name": "owned-lora"}}));
+        }
+        if (cx.raw_path =~ /^\/v1\/get_result\?/) {
+            { AutoLock lock(mutex); if (entered) { entered.dec(); entered = NOTHING; } }
+            if (delay) { usleep(int(delay) * 1000); }
+            auto response;
+            { AutoLock lock(mutex);
+                response = exists result_override ? result_override : {"id": "wire-job", "status": statuses[min(poll_index++, statuses.size() - 1)],
+                    "cost": 0, "progress": 0, "details": {"value": {"value": "ordinary"}, "zero": 0},
+                    "result": {"sample": origin + "/asset?signature=fixture-signed-secret", "seed": 0}};
+            }
+            return makeResponse({"Content-Type": "application/json", "Retry-After": "0"}, 200, make_json(response));
+        }
+        hash<auto> request = body.val() ? parse_json(body) : {};
+        if (cx.raw_path == "/v1/delete_finetune") {
+            return makeResponse({"Content-Type": "application/json"}, 200, make_json({"status": "success",
+                "message": "Fixture only", "deleted_finetune_id": request.finetune_id, "timestamp": "2026-09-19T00:00:00Z"}));
+        }
+        if (cx.raw_path =~ /^\/v1\/licenses\//) {
+            return makeResponse({"Content-Type": "application/json"}, 200, make_json({"message": "Fixture usage recorded"}));
+        }
+        hash<auto> response = {"id": "wire-job", "polling_url": origin + "/v1/get_result?id=wire-job", "cost": 0};
+        if (request.webhook_url) {
+            response = {"id": "wire-job", "status": "Pending", "webhook_url": request.webhook_url};
+        }
+        return makeResponse({"Content-Type": "application/json"}, 200, make_json(response));
+    }
+}
+
+class BflWireTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        BflWireHandler handler();
+        string endpoint;
+        BflRestClientIo client;
+    }
+    constructor() : Test("BFL HTTP contracts and routed jobs", "1.1") {
+        addTestCase("model-specific JSON preserves false zero null and empty values", \requestTest());
+        addTestCase("binary named-file base64 and URL inputs reach the JSON wire", \inputTest());
+        addTestCase("video modes and nested keyframe pairs preserve their structure", \videoTest());
+        addTestCase("all documented generation and tool families use their declared paths", \familiesTest());
+        addTestCase("account model references deletion and licensing remain typed", \accountTest());
+        addTestCase("invalid options fail before billable transport", \invalidTest());
+        addTestCase("submit wait and download use distinct credential policies", \jobTest());
+        addTestCase("provider helpers generic actions and both media facades use real transport", \facadeTest());
+        addTestCase("all terminal and malformed result states finish deterministically", \statusTest());
+        addTestCase("server-issued polling identities are scoped and checked", \routeTest());
+        addTestCase("asset headers signatures size expiry and redirects are checked", \downloadTest());
+        addTestCase("setup request and concurrent waits have independent deadlines", \deadlineTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5423-wire", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        handler.origin = endpoint;
+        client = new BflRestClientIo({"url": endpoint, "apikey": "wire-fixture-key", "timeout": 5s, "connect_timeout": 1s});
+        set_return_value(main());
+    }
+    globalTearDown() { delete server; }
+    private hash<auto> last() { return handler.calls[-1]; }
+    private hash<auto> job() { return {"id": "wire-job", "polling_url": endpoint + "/v1/get_result?id=wire-job"}; }
+    private hash<auto> send(string action, hash<auto> req) {
+        BflOperation operation(action, client);
+        hash<auto> result = operation.doRequest(req);
+        assertEq("wire-fixture-key", last().headers."x-key");
+        assertNothing(last().headers.authorization);
+        assertEq("POST", last().method);
+        assertTrue(last().headers."content-type" =~ /^application\/json/);
+        assertEq("wire-job", result.id);
+        return parse_json(last().body);
+    }
+    private requestTest() {
+        auto field = BflApi::getActionSet().getOperationEx("start-flux-pro-1-1").getRequestFields().output_format;
+        auto choices = field.getAllowedValues();
+        choices[0].display_name = "Changed label";
+        field.setAllowedValues(choices);
+        auto sent = send("start-flux-pro-1-1", {"prompt": "", "seed": 0, "prompt_upsampling": False,
+            "safety_tolerance": 0, "output_format": "png"});
+        assertEq("/v1/flux-pro-1.1", last().path);
+        assertEq("", sent.prompt);
+        assertEq(0, sent.seed);
+        assertEq(False, sent.prompt_upsampling);
+        assertEq("png", sent.output_format);
+        assertEq(0, sent.safety_tolerance);
+        sent = send("start-flux-2-pro", {"prompt": "mug", "disable_pup": False, "seed": 0});
+        assertEq(False, sent.disable_pup);
+        assertFalse(sent.hasKey("width"));
+        sent = send("start-flux-2-pro", {"prompt": "mug", "width": NULL});
+        assertTrue(sent.hasKey("width"));
+        assertNothing(sent.width);
+        sent = send("start-flux-2-pro", {"prompt": "mug", "input_image": NULL});
+        assertTrue(sent.hasKey("input_image"));
+        assertNothing(sent.input_image);
+        sent = send("start-flux-2-flex", {"prompt": "mug", "guidance": 1.5, "steps": 1});
+        assertEq(1.5, sent.guidance);
+        sent = send("start-flux-kontext-pro", {"prompt": "mug", "aspect_ratio": "1.37:1"});
+        assertEq("1.37:1", sent.aspect_ratio);
+    }
+    private inputTest() {
+        foreach auto input in ((Png, make_base64_string(Png),
+                {"name": "original.png", "mime_type": "image/png", "content": Png},
+                {"name": "original.png", "mime_type": "image/png", "content": make_base64_string(Png)})) {
+            auto sent = send("start-erase", {"image": input, "mask": Png, "dilate_pixels": 0});
+            assertEq(make_base64_string(Png), sent.image);
+            assertEq(make_base64_string(Png), sent.mask);
+            assertEq(0, sent.dilate_pixels);
+        }
+        auto sent = send("start-flux-2-klein-4b", {"prompt": "make the mug red", "input_image": "https://example.test/mug.png"});
+        assertEq("https://example.test/mug.png", sent.input_image);
+        sent = send("start-outpaint", {"input_image": Png, "width": 128, "height": 128, "reference_offset_x": 0,
+            "reference_offset_y": -32, "auto_crop": True, "prompt": ""});
+        assertEq(-32, sent.reference_offset_y);
+        assertEq(True, sent.auto_crop);
+    }
+    private videoTest() {
+        auto sent = send("start-video", {"mode": "t2v", "prompt": "a slowly rotating mug", "duration": 5,
+            "draft": True, "generate_audio": False, "resolution": "hd"});
+        assertEq("t2v", sent.mode);
+        assertEq(False, sent.generate_audio);
+        assertEq(5, sent.duration);
+        auto pairs = ((0, make_base64_string(Png)), (5, make_base64_string(Png)));
+        sent = send("start-video", {"mode": "i2v", "prompt": "the mug turns", "keyframes": pairs, "duration": 5});
+        assertEq(pairs, sent.keyframes);
+        sent = send("start-video", {"mode": "draft_enhance", "draft_cache": <010203>});
+        assertEq("AQID", sent.draft_cache);
+        assertFalse(sent.hasKey("prompt"));
+    }
+    private invalidTest() {
+        foreach hash<auto> entry in (({"action": "start-flux-pro-1-1", "req": {"prompt": "x", "seed": 1.5}},
+                {"action": "start-flux-pro-1-1", "req": {"prompt": "x", "seed": False}},
+                {"action": "start-flux-pro-1-1", "req": {"prompt": "x", "negative_prompt": ""}},
+                {"action": "start-flux-pro-1-1", "req": {"prompt": "x", "image_prompt": "https://example.test/image.png"}},
+                {"action": "start-flux-2-pro", "req": {"prompt": "x", "prompt_upsampling": False}},
+                {"action": "start-flux-2-pro", "req": {"prompt": "x", "width": 0}},
+                {"action": "start-outpaint", "req": {"input_image": Png, "width": 128, "height": 128,
+                    "reference_offset_y": -32, "auto_crop": False}},
+                {"action": "start-outpaint", "req": {"input_image": Png, "width": 4096, "height": 4096}},
+                {"action": "start-video", "req": {"mode": "t2v", "prompt": "x", "seed": 0}},
+                {"action": "start-video", "req": {"mode": "i2v", "prompt": "x", "keyframes": ((5, "x"), (0, "x"))}},
+                {"action": "start-deblur", "req": {"image": <00>}},
+                {"action": "start-deblur", "req": {"image": Png, "prompt": "not supported"}})) {
+            int before = handler.calls.size();
+            bool failed = False;
+            try { new BflOperation(entry.action, client).doRequest(entry.req); }
+            catch () { failed = True; }
+            assertTrue(failed, entry.action);
+            assertEq(before, handler.calls.size());
+        }
+        int before = handler.calls.size();
+        assertThrows("BFL-INPUT-ERROR", sub () { client.submitAndWait("/v1/flux-pro-1.1", {"prompt": "x",
+            "webhook_url": "https://example.test/callback"}); });
+        assertEq(before, handler.calls.size());
+        auto result = new BflOperation("start-flux-pro-1-1", client).doRequest({"prompt": "x",
+            "webhook_url": "https://example.test/callback", "webhook_secret": "callback-secret"});
+        assertEq("wire-job", result.id);
+        assertEq("https://example.test/callback", result.webhook_url);
+    }
+    private familiesTest() {
+        # Independent expectations; never derive fixture paths from the production manifest.
+        hash<auto> cases = {
+            "start-flux-pro": ("/v1/flux-pro", {"prompt": "mug", "seed": 0}),
+            "start-flux-dev": ("/v1/flux-dev", {"prompt": "mug"}),
+            "start-flux-pro-1-1-ultra": ("/v1/flux-pro-1.1-ultra", {"prompt": "mug", "raw": False}),
+            "start-fill": ("/v1/flux-pro-1.0-fill", {"image": Png, "mask": Png, "prompt": ""}),
+            "start-expand": ("/v1/flux-pro-1.0-expand", {"image": Png, "left": 64}),
+            "start-finetuned-fill": ("/v1/flux-pro-1.0-fill-finetuned", {"image": Png, "finetune_id": "fixture"}),
+            "start-finetuned-ultra": ("/v1/flux-pro-1.1-ultra-finetuned", {"finetune_id": "fixture"}),
+            "start-flux-2-klein-9b": ("/v1/flux-2-klein-9b", {"prompt": "mug"}),
+            "start-flux-2-klein-9b-preview": ("/v1/flux-2-klein-9b-preview", {"prompt": "mug"}),
+            "start-flux-2-max": ("/v1/flux-2-max", {"prompt": "mug"}),
+            "start-flux-2-pro-preview": ("/v1/flux-2-pro-preview", {"prompt": "mug"}),
+            "start-flux-kontext-max": ("/v1/flux-kontext-max", {"prompt": "mug", "input_image": Png}),
+            "start-try-on-v1": ("/v1/flux-tools/vto-v1", {"prompt": "put on this shirt", "person": Png, "garment": Png}),
+            "start-try-on-v2": ("/v1/flux-tools/vto-v2", {"prompt": "put on this shirt", "person": Png, "garment": Png}),
+            "start-deblur": ("/v1/flux-tools/deblur-v1", {"image": Png}),
+            "start-video-upscale": ("/v1/flux-tools/video-upscale-v1", {"input_video": Video, "creativity": 0, "prompt": ""}),
+            "start-video-edit": ("/v1/flux-tools/video-edit-v1", {"video": Video, "prompt": "make the mug red"}),
+            "start-lora-4b": ("/v1/flux-2-klein-4b-finetuned", {"prompt": "mug", "finetune_id": "owned-lora", "finetune_strength": 0}),
+            "start-lora-9b": ("/v1/flux-2-klein-9b-finetuned", {"prompt": "mug", "finetune_id": "owned-lora"}),
+            "start-lora-9b-kv": ("/v1/flux-2-klein-9b-kv-finetuned", {"prompt": "mug", "finetune_id": "owned-lora"}),
+            "start-lora-9b-kv-bf16": ("/v1/flux-2-klein-9b-kv-bf16-finetuned", {"prompt": "mug", "finetune_id": "owned-lora"}),
+            "start-lora-base-4b": ("/v1/flux-2-klein-base-4b-finetuned", {"prompt": "mug", "finetune_id": "owned-lora"}),
+            "start-lora-base-9b": ("/v1/flux-2-klein-base-9b-finetuned", {"prompt": "mug", "finetune_id": "owned-lora"}),
+        };
+        foreach hash<auto> entry in (cases.pairIterator()) {
+            auto sent = send(entry.key, entry.value[1]);
+            assertEq(entry.value[0], last().path);
+            if (entry.key == "start-video-upscale") { assertEq(0, sent.creativity); assertEq("", sent.prompt); }
+        }
+    }
+    private accountTest() {
+        auto credits = new BflOperation("get-credits", client).doRequest({});
+        assertEq(0, credits.credits);
+        auto details = new BflOperation("get-finetune", client).doRequest({"finetune_id": "org/shared"});
+        assertEq("/v1/finetune_details?finetune_id=org%2Fshared", last().path);
+        assertEq({"value": "ordinary"}, details.finetune_details.value);
+        auto choices = new BflOperation("start-lora-4b", client).getReferenceData("finetunes");
+        assertEq("owned-lora", choices[0].value);
+        assertEq("org/shared", choices[1].value);
+        assertEq("Shared Model", choices[1].display_name);
+        auto deleted = new BflOperation("delete-finetune", client).doRequest({"finetune_id": "fixture-only"});
+        assertEq("fixture-only", deleted.deleted_finetune_id);
+        auto usage = new BflOperation("report-license-usage", client).doRequest({"model_slug": "fixture-model", "number_of_generations": 1});
+        assertEq("/v1/licenses/models/fixture-model/usage", last().path);
+        assertEq("Fixture usage recorded", usage.message);
+    }
+    private jobTest() {
+        handler.poll_index = 0;
+        auto result = BflApi::generateMedia(client, "flux-pro-1.1", {"prompt": "mug", "seed": 0,
+            "poll_interval": 1ms, "job_timeout": 2s});
+        assertEq("Ready", result.status);
+        assertEq(job().polling_url, result.polling_url);
+        assertEq(0, result.result.seed);
+        assertEq(Png, result.media.data);
+        assertEq("image/png", result.media.content_type);
+        assertEq(64, result.media.width);
+        assertNothing(last().headers."x-key");
+        assertNothing(last().headers.authorization);
+        assertEq({"value": {"value": "ordinary"}, "zero": 0}, result.details);
+    }
+    private facadeTest() {
+        on_exit { handler.download = Png; handler.download_headers = {"Content-Type": "image/png"};
+            handler.result_override = NOTHING; }
+        BflDataProvider::BflDataProvider root({"restclient": client});
+        auto generator = root.getChildProvider("generate-image");
+        auto done = generator.doRequest({"prompt": "blue mug", "seed": 0, "prompt_upsampling": False,
+            "poll_interval": 1ms, "job_timeout": 2s});
+        assertEq(Png, done.media.data);
+        auto type = generator.getResponseType();
+        for (int pass = 0; pass < 3; ++pass) {
+            type = Serializable::deserialize(type.serialize());
+            auto restored = type.acceptsValue(done);
+            assertEq(done.media, restored.media);
+            assertEq(done.result, restored.result);
+            assertEq(done.id, restored.id);
+            assertEq(number(0), restored.cost);
+        }
+        assertEq("Ready", root.getChildProvider("get-routed-result").doRequest(job()).status);
+        assertEq("Ready", root.getChildProvider("wait-for-result").doRequest(job()).status);
+        assertEq(Png, root.getChildProvider("download-result").doRequest(job()).data);
+        auto generic = root.getChildProvider(AbstractDataProvider::GenericApiCallChildName);
+        auto raw = generic.doRequest({"method": "GET", "path": "/v1/credits"});
+        assertEq(0, raw.body.credits);
+        assertEq("wire-fixture-key", last().headers."x-key");
+        auto image = QoreMediaUtils::MediaProviderRegistry::createImageGenerator(<QoreMediaUtils::ImageGeneratorConfig>{
+            "backend": "bfl", "api_key": "wire-fixture-key", "url": endpoint, "model": "flux-pro-1.1",
+            "provider_options": {"poll_interval": 1ms, "job_timeout": 2s}}).generateImage("blue mug",
+            {"seed": 0, "prompt_upsampling": False, "output_format": "png"});
+        assertEq(Png, image.image);
+        assertEq("image/png", image.content_type);
+        assertEq(0, image.seed);
+        assertEq(64, image.metadata.width);
+        handler.download = Video;
+        handler.download_headers = {"Content-Type": "video/mp4"};
+        done = root.getChildProvider("generate-video").doRequest({"mode": "t2v", "prompt": "blue mug",
+            "duration": 5, "generate_audio": False, "poll_interval": 1ms, "job_timeout": 2s});
+        assertEq(Video, done.media.data);
+        assertEq(24, done.media.frame_count);
+        auto video = QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(<QoreMediaUtils::VideoGeneratorConfig>{
+            "backend": "bfl", "api_key": "wire-fixture-key", "url": endpoint, "duration_seconds": 10,
+            "provider_options": {"generate_audio": False, "poll_interval": 1ms, "job_timeout": 2s}}).generateVideo("blue mug",
+            {"duration_seconds": 5});
+        assertEq(Video, video.video);
+        assertEq("video/mp4", video.content_type);
+        assertEq(1.0, video.duration_seconds);
+        assertEq(24, video.metadata.frame_count);
+        assertEq(False, video.metadata.has_audio);
+        assertNothing(last().headers."x-key");
+        video = QoreMediaUtils::MediaProviderRegistry::createVideoGenerator(<QoreMediaUtils::VideoGeneratorConfig>{
+            "backend": "bfl", "api_key": "wire-fixture-key", "url": endpoint, "model": "flux-3-video",
+            "duration_seconds": 5, "aspect_ratio": "16:9", "provider_options": {"mode": "t2v",
+                "resolution": "hd", "draft": True, "generate_audio": False,
+                "poll_interval": 1ms, "job_timeout": 2s}}).generateVideo("blue mug", {});
+        assertEq(Video, video.video);
+        assertEq(24, video.metadata.frame_count);
+        handler.download = <01020304>;
+        handler.download_headers = {"Content-Type": "application/octet-stream"};
+        auto direct_bundle = downloadMedia(endpoint + "/asset", 1s, 1000, endpoint, True);
+        assertEq(<01020304>, direct_bundle.data);
+        handler.result_override = {"id": "wire-job", "status": "Ready", "result": {
+            "sample": endpoint + "/asset", "draft_cache": endpoint + "/asset?signature=fixture-draft"}};
+        auto bundle_provider = root.getChildProvider("download-result");
+        auto bundle = bundle_provider.doRequest(job() + {"asset": "draft_cache"});
+        assertEq(<01020304>, bundle.data);
+        assertEq("application/octet-stream", bundle.content_type);
+        assertEq(bundle, Serializable::deserialize(bundle_provider.getResponseType().serialize()).acceptsValue(bundle));
+        assertNothing(last().headers."x-key");
+        int before = handler.calls.size();
+        foreach auto limit in ((0, -1, 1.5, "1000", 536870913)) {
+            assertThrows("BFL-INPUT-ERROR", sub () { generator.doRequest({"prompt": "mug", "max_bytes": limit}); });
+        }
+        assertEq(before, handler.calls.size());
+    }
+    private statusTest() {
+        on_exit handler.result_override = NOTHING;
+        foreach string status in (("Task not found", "Error", "Failed", "Request Moderated", "Content Moderated")) {
+            handler.result_override = {"id": "wire-job", "status": status};
+            assertThrows("BFL-JOB-ERROR", sub () { client.waitForResult(job()); });
+        }
+        foreach auto response in (({}, {"id": "wrong", "status": "Pending"}, {"id": "wire-job", "status": "Mystery"},
+                {"id": "wire-job", "status": "Ready"}, {"id": "wire-job", "status": "Ready", "result": {"sample": ""}})) {
+            handler.result_override = response;
+            assertThrows("BFL-JOB-ERROR", sub () { BflJobs::get(client, job()); });
+        }
+    }
+    private routeTest() {
+        int before = handler.calls.size();
+        foreach string url in (("https://untrusted.example/v1/get_result?id=wire-job", endpoint + "/v1/credits?id=wire-job",
+                endpoint + "/v1/get_result?id=other", endpoint + "/v1/get_result?id=wire-job&extra=1",
+                endpoint + "/v1/get_result?id=wire-job#fragment", "https://delivery.eu1.bfl.ai/v1/get_result?id=wire-job",
+                "https://user:password@api.bfl.ai/v1/get_result?id=wire-job")) {
+            bool rejected = False;
+            try { BflJobs::get(client, {"id": "wire-job", "polling_url": url}); }
+            catch () { rejected = True; }
+            assertTrue(rejected);
+        }
+        assertEq(before, handler.calls.size());
+        BflRestClientIo regional({"apikey": "offline-only", "url": "https://api.eu.bfl.ai"});
+        assertEq("https://api.us1.bfl.ai", BflJobs::route(regional,
+            {"id": "wire-job", "polling_url": "https://api.us1.bfl.ai/v1/get_result?id=wire%2Djob"}).origin);
+    }
+    private downloadTest() {
+        on_exit { handler.download_status = 200; handler.download = Png; handler.download_headers = {"Content-Type": "image/png"}; }
+        string url = endpoint + "/asset?signature=fixture-signed-secret";
+        foreach int code in ((302, 403, 404, 500)) {
+            handler.download_status = code;
+            handler.download_headers = {"Content-Type": "image/png", "Location": endpoint + "/must-not-follow"};
+            int before = handler.calls.size();
+            bool failed = False;
+            try { downloadMedia(url, 1s, 1000, endpoint); }
+            catch (hash<ExceptionInfo> ex) {
+                failed = True;
+                assertEq(-1, make_json(ex).find("fixture-signed-secret"));
+            }
+            assertTrue(failed);
+            assertEq(before + 1, handler.calls.size());
+        }
+        handler.download_status = 200;
+        handler.download_headers = {"Content-Type": "image/jpeg"};
+        assertThrows("BFL-DOWNLOAD-ERROR", sub () { downloadMedia(url, 1s, 1000, endpoint); });
+        handler.download_headers = {"Content-Type": "image/png"};
+        assertThrows("BFL-DOWNLOAD-ERROR", sub () { downloadMedia(url, 1s, 10, endpoint); });
+        handler.download = "not an image";
+        assertThrows("BFL-DOWNLOAD-ERROR", sub () { downloadMedia(url, 1s, 1000, endpoint); });
+        foreach string target in (("https://api.bfl.ai/asset", "https://delivery.eu.bfl.ai.evil.test/asset",
+                "http://delivery.eu.bfl.ai/asset", "http://127.0.0.1:1/asset", "https://delivery.eu.bfl.ai:444/asset")) {
+            assertThrows("BFL-DOWNLOAD-ERROR", sub () { downloadMedia(target); });
+        }
+    }
+    private deadlineTest() {
+        on_exit { handler.delay = 0ms; handler.entered = NOTHING; handler.result_override = NOTHING; }
+        handler.result_override = {"id": "wire-job", "status": "Pending"};
+        bool timed_out = False;
+        try { client.waitForResult(job(), {"job_timeout": 30ms, "poll_interval": 5ms}); }
+        catch (hash<ExceptionInfo> ex) {
+            timed_out = True;
+            assertEq("BFL-JOB-TIMEOUT", ex.err);
+            assertEq("wire-job", ex.arg.job_id);
+            assertEq(job().polling_url, ex.arg.polling_url);
+        }
+        assertTrue(timed_out);
+        handler.result_override = {"id": "wire-job", "status": "Ready", "result": {"sample": endpoint + "/asset"}};
+        handler.delay = 150ms;
+        Counter entered(1);
+        Counter finished(1);
+        handler.entered = entered;
+        hash<auto> long_result;
+        background sub () {
+            try { long_result = client.waitForResult(job(), {"job_timeout": 2s}); }
+            catch (hash<ExceptionInfo> ex) { long_result = {"error": ex.err}; }
+            finished.dec();
+        }();
+        entered.waitForZero();
+        assertThrows("BFL-JOB-TIMEOUT", sub () { client.waitForResult(job(), {"job_timeout": 20ms}); });
+        finished.waitForZero();
+        assertEq("Ready", long_result.status);
+        assertEq(5000, client.getTimeout());
+        assertThrows("BFL-DOWNLOAD-TIMEOUT", sub () {
+            downloadMedia(endpoint + "/asset?signature=fixture-signed-secret", 20ms, 1000, endpoint);
+        });
+    }
+}

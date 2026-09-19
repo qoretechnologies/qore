@@ -1,174 +1,99 @@
 #!/usr/bin/env qore
-# -*- mode: qore; indent-tabs-mode: nil -*-
-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 %modern
-%allow-injection
-
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
 %requires QUnit
-%requires Logger
-%requires ConnectionProvider
-%requires DataProvider
-%requires QoreAsyncJobUtils
-%requires QoreMediaUtils
-%requires BflRestClient
 %requires BflDataProvider
+%requires json
+%exec-class BflCatalogTest
 
-%exec-class BflDataProviderTest
-
-class FakeBflClient inherits BflRestClient::BflRestClientIo {
+class BflCatalogTest inherits QUnit::Test {
     public {
-        list<hash<auto>> calls = ();
+        # Independent reviewed inventory, including the framework generic action.
+        const Actions = ("generate-image", "generate-video", "get-routed-result", "wait-for-result",
+            "download-result", "make-api-call", "get-finetune", "list-finetunes", "delete-finetune", "get-credits",
+            "get-result", "start-flux-pro-1-1", "start-flux-dev", "start-flux-pro-1-1-ultra", "start-fill",
+            "start-expand", "start-finetuned-fill", "start-finetuned-ultra", "start-flux-2-flex",
+            "start-flux-2-klein-9b", "start-flux-2-klein-9b-preview", "start-flux-2-klein-4b", "start-flux-2-max",
+            "start-flux-2-pro-preview", "start-flux-2-pro", "start-video", "start-video-upscale", "start-video-edit",
+            "start-outpaint", "start-try-on-v1", "start-try-on-v2", "start-erase", "start-deblur",
+            "start-flux-kontext-max", "start-flux-kontext-pro", "report-license-usage", "start-flux-pro",
+            "start-lora-4b", "start-lora-9b", "start-lora-9b-kv", "start-lora-9b-kv-bf16",
+            "start-lora-base-4b", "start-lora-base-9b");
     }
-    constructor() : BflRestClient::BflRestClientIo(
-            {"apikey": "k", "url": "https://api.bfl.ai"}) {
-        setSleeper(nothing sub (timeout t) {});
-    }
-    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
-        push calls, {"method": "POST", "path": path, "body": body};
-        return <RestClient::RestResponseInfo>{
-            "body": {"id": "job-1", "polling_url": "/v1/get_result?id=job-1"},
-        };
-    }
-    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
-        push calls, {"method": "GET", "path": path};
-        return <RestClient::RestResponseInfo>{
-            "body": {
-                "id":     "job-1",
-                "status": "Ready",
-                "result": {"sample": "https://cdn.bfl.ai/job-1.jpeg", "seed": 99},
-            },
-        };
-    }
-    string getSafeUrl() { return "https://api.bfl.ai"; }
-}
-
-public class BflDataProviderTest inherits QUnit::Test {
-    public {
-        const MyOpts = Opts + {
-            "conn": "c,connection=s",
-        };
-
-        const OptionColumn = 22;
-    }
-
-    private {
-        *string conn_name;
-    }
-
-    constructor() : Test("BflDataProvider Test", "1.0", \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.BFL_CONNECTION;
-
-        addTestCase("factory + app + action registered", \registrationTest());
-        addTestCase("generate-image submits to the right endpoint",
-            \endpointTest());
-        addTestCase("response surfaces Ready status + sample URL",
-            \responseTest());
-        addTestCase("unknown model raises BFL-CONFIG-ERROR",
-            \unknownModelTest());
-        addTestCase("app declares DesignCreative AppGroup",
-            \designCreativeTest());
-
-        # Live test requires a real BFL connection.
-        # Cost: ~$0.025 per image on `flux-dev` (the cheapest model).
-        if (conn_name) {
-            addTestCase("live: ping + generate-image (flux-dev)",
-                \liveBflTest());
-        }
+    constructor() : Test("Black Forest Labs independent catalog", "1.0") {
+        addTestCase("complete registration and reachable typed actions", \inventoryTest());
+        addTestCase("recursive static presentation and repeated type serialization", \presentationTest());
+        addTestCase("qualified discovery rejects a missing action even with no diagnostics", \qualificationTest());
         set_return_value(main());
     }
-
-    private usageIntern() {
-        TestReporter::usageIntern(OptionColumn);
-        printOption("-c,--connection=ARG",
-            "set the Black Forest Labs connection name; without it (and "
-            "without the BFL_CONNECTION env var) the live test is skipped",
-            OptionColumn);
+    private inventoryTest() {
+        BflRestClientIo client({"apikey": "offline-catalog", "url": "http://127.0.0.1:1"});
+        BflDataProvider::BflDataProvider root({"restclient": client});
+        auto generator = root.getChildProvider("generate-image");
+        auto legacy = generator.getRequestTypeWithOptions({"model": "flux-pro-1.1"}).getFields();
+        auto klein = generator.getRequestTypeWithOptions({"model": "flux-2-klein-4b"}).getFields();
+        assertTrue(legacy.hasKey("image_prompt"));
+        assertFalse(legacy.hasKey("input_image"));
+        assertTrue(klein.hasKey("input_image"));
+        assertFalse(klein.hasKey("image_prompt"));
+        assertFalse(klein.hasKey("webhook_url"));
+        assertEq(64, klein.width.getType().acceptsValue(64));
+        for (int pass = 0; pass < 2; ++pass) {
+            auto actions = DataProviderActionCatalog::getActionsEx("BlackForestLabs");
+            assertEq(sort(Actions), sort(map $1.action, actions));
+            assertEq(0, DataProviderActionCatalog::getInitializationFailures(("BlackForestLabs",)).size());
+            foreach hash<auto> action in (actions) {
+                assertTrue(action.display_name.val().toBool(), action.action);
+                assertTrue(action.short_desc.val().toBool() && action.short_desc.size() < 80, action.action);
+                assertTrue(action.desc.val().toBool(), action.action);
+                assertNothing(action.cls);
+                assertTrue(action.output_type instanceof AbstractDataProviderType);
+                assertTrue(action.path.val().toBool());
+                auto provider = root.getChildProvider(action.path.substr(1));
+                assertTrue(provider instanceof AbstractDataProvider, action.path);
+                assertTrue(provider.getResponseType() instanceof AbstractDataProviderType);
+                assertTrue(action.options.val().toBool() || inlist(action.action, ("get-credits", "list-finetunes")));
+            }
+        }
     }
-
-    private registrationTest() {
-        DataProvider::AbstractDataProviderFactory f =
-            DataProvider::DataProvider::getFactory("bfl");
-        assertEq("bfl", f.getInfo().name);
-
-        hash<DataProviderAppInfo> app =
-            DataProvider::DataProviderActionCatalog::getApp("BlackForestLabs");
-        assertEq("BlackForestLabs", app.name);
-        assertEq("bfl", app.scheme);
-
-        # filter out the framework-injected make-api-call action (covered by
-        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
-        list<hash<DataProviderActionInfo>> actions = select
-            DataProvider::DataProviderActionCatalog::getActions("BlackForestLabs"),
-            $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(1, actions.size());
-        assertEq("generate-image", actions[0].action);
+    private presentationTest() {
+        auto app = DataProviderActionCatalog::getApp("BlackForestLabs");
+        auto actions = DataProviderActionCatalog::getActionsEx("BlackForestLabs");
+        auto first = DataProviderPresentation::buildSourceCatalogs(app, actions);
+        assertTrue(first{"data-provider.QmxhY2tGb3Jlc3RMYWJz"}.locales.root.messages.size() > 1000);
+        assertEq(first, DataProviderPresentation::buildSourceCatalogs(app, actions));
+        foreach hash<auto> action in (actions) {
+            foreach AbstractDataProviderType original in ((action.output_type,) + (map $1.type, action.options.iterator())) {
+                AbstractDataProviderType type = original;
+                for (int pass = 0; pass < 3; ++pass) {
+                    type = Serializable::deserialize(type.serialize());
+                    assertEq(sort(keys original.getFields()), sort(keys type.getFields()));
+                }
+            }
+        }
+        auto type = BflApi::getActionSet().getOperationEx("get-finetune").getResponseType().getFields().finetune_details.getType();
+        auto object = {"value": {"value": "literal"}, "enabled": False, "count": 0};
+        assertEq(object, type.acceptsValue(object));
+        type = Serializable::deserialize(type.serialize());
+        assertEq(object, type.acceptsValue(object));
+        auto keyframes = BflApi::getActionSet().getOperationEx("start-video").getRequestFields().keyframes.getType();
+        for (int pass = 0; pass < 3; ++pass) {
+            keyframes = Serializable::deserialize(keyframes.serialize());
+            assertEq((0.0, "https://example.org/image.png"), keyframes.acceptsValue((0.0, "https://example.org/image.png")));
+        }
     }
-
-    private endpointTest() {
-        FakeBflClient fake();
-        BflDataProvider::BflGenerateImageDataProvider prov(fake);
-        prov.doRequest({"prompt": "a sunset", "model": "flux-pro-1.1-ultra"});
-        # Submit goes to the ultra endpoint
-        hash<auto> submit = fake.calls[0];
-        assertEq("/v1/flux-pro-1.1-ultra", submit.path);
-        assertEq("a sunset", submit.body.prompt);
-        # model is stripped from body (used to select endpoint)
-        assertEq(NOTHING, submit.body.model);
-    }
-
-    private responseTest() {
-        FakeBflClient fake();
-        BflDataProvider::BflGenerateImageDataProvider prov(fake);
-        auto r = prov.doRequest({"prompt": "x"});
-        assertEq("Ready", r.status);
-        assertEq("https://cdn.bfl.ai/job-1.jpeg", r.result.sample);
-    }
-
-    private unknownModelTest() {
-        # The DataProvider framework rejects unknown models via the
-        # allowed_values constraint on the model field before doRequest()
-        # runs, so the user sees a typed RUNTIME-TYPE-ERROR rather than
-        # the deeper BFL-CONFIG-ERROR.  Both shapes indicate the same
-        # thing — bad model identifier.
-        FakeBflClient fake();
-        BflDataProvider::BflGenerateImageDataProvider prov(fake);
-        assertThrows("RUNTIME-TYPE-ERROR", sub () {
-            prov.doRequest({"prompt": "x", "model": "not-a-real-model-xyz"});
-        });
-    }
-
-    private designCreativeTest() {
-        hash<DataProviderAppInfo> app =
-            DataProvider::DataProviderActionCatalog::getApp("BlackForestLabs");
-        assertTrue(inlist(DataProvider::AppGroup::AiLlm,          app.groups));
-        assertTrue(inlist(DataProvider::AppGroup::DesignCreative, app.groups));
-    }
-
-    #! Exercises BFL's live `/v1/flux-dev` submit-then-poll lifecycle
-    /** Verifies the actual wire format against BFL's production endpoint —
-        including the polling_url header parsing, async poll until `Ready`,
-        and CDN-URL response shape.  Cost: ~$0.025 per image on `flux-dev`
-        (BFL's cheapest model).
-    */
-    private liveBflTest() {
-        AbstractConnection conn = get_connection(conn_name);
-        hash<auto> ping = conn.ping(True);
-        assertTrue(ping.ok, sprintf("BFL connection ping failed: %s",
-            ping.info ?? "no info"));
-
-        AbstractDataProvider prov = conn.getDataProvider();
-        AbstractDataProvider gi = prov.getChildProvider("generate-image");
-        auto result = gi.doRequest({
-            "prompt":      "a single red apple on a white background",
-            "model":       "flux-dev",   # cheapest tier
-            "aspect_ratio": "1:1",
-        });
-        assertEq("Ready", result.status,
-            "BFL job reached Ready status");
-        assertTrue(result.result.sample.val()
-                && result.result.sample =~ /^https?:\/\//,
-            "BFL returned a CDN URL");
+    private qualificationTest() {
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected = (<DataProviderDiscoveryExpectedIdentityInfo>{"app": "BlackForestLabs"},)
+            + (map <DataProviderDiscoveryExpectedIdentityInfo>{"app": "BlackForestLabs", "action": $1}, Actions);
+        auto session = DataProviderActionCatalog::beginDiscovery(expected, ("BlackForestLabs",));
+        DataProviderActionCatalog::collectDiscoveryExpectedInventory(session);
+        auto qualified = DataProviderActionCatalog::sealDiscovery(session);
+        assertTrue(qualified.getReport().complete);
+        assertEq(0, qualified.getReport().failures.size());
+        DataProviderActionCatalog::discardQualifiedDiscovery(qualified);
+        session = DataProviderActionCatalog::beginDiscovery(expected + <DataProviderDiscoveryExpectedIdentityInfo>{
+            "app": "BlackForestLabs", "action": "deliberately-missing"}, ("BlackForestLabs",));
+        assertThrows("DATA-PROVIDER-DISCOVERY-ERROR", sub () { DataProviderActionCatalog::sealDiscovery(session); });
     }
 }

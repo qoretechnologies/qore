@@ -78,6 +78,8 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - accept unconstrained array elements when `items` is absent while retaining bounds and uniqueness
+    - compare unique JSON array values with structural typed keys instead of loose equality
     - preserve decimal numeric boundaries so exact fractional endpoints validate consistently
       (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
     - accept opaque GLB model responses as binary media
@@ -891,7 +893,7 @@ public namespace RestSchemaValidator {
         }
 
         #! Validates the value against the schema definition
-        private checkArrayParam(bool serialize, bool request, AbstractSchemaObject items, string path, string method,
+        private checkArrayParam(bool serialize, bool request, *AbstractSchemaObject items, string path, string method,
                 string name, reference<list<auto>> value) {
             string pl = getPathLabel();
             string ml = getMethodLabel();
@@ -910,33 +912,37 @@ public namespace RestSchemaValidator {
                 return;
             }
 
-            # check array element types
-            if (!uniqueItems || items.type != "array") {
-                # hash for checking uniqueness if uniqueItems is true
-                hash<string, bool> h;
-                foreach auto v in (\value) {
-                    items.check(serialize, request, path, method, name, \v);
-                    if (uniqueItems) {
-                        if (h{v}) {
-                            throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter value %y is duplicated in "
-                                "the array", method, path, v);
-                        }
-                        h{v} = True;
+            hash<string, bool> seen;
+            foreach auto val in (\value) {
+                if (items) { items.check(serialize, request, path, method, name, \val); }
+                if (uniqueItems) {
+                    string key = AbstractSchemaBaseValidator::uniqueValueKey(val);
+                    if (seen{key}) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: Array parameter %y does not have unique items",
+                            method, path, name);
                     }
-                }
-            } else {
-                # perform slow array uniqueness check
-                list<auto> unique_items = ();
-                foreach auto val in (\value) {
-                    items.check(serialize, request, path, method, name, \val);
-                    if (unique_items.contains(val)) {
-                        throw "SCHEMA-VALIDATION-ERROR",
-                            sprintf("%s %s: Array parameter %y does not have unique items",
-                                method, path, name);
-                    }
-                    unique_items += val;
+                    seen{key} = True;
                 }
             }
+        }
+
+        #! Canonical typed key for JSON equality without scalar coercion or quadratic list scans
+        private static string uniqueValueKey(auto value, int depth = 0) {
+            if (depth > 128) { throw "SCHEMA-VALIDATION-ERROR", "array element exceeds the supported nesting depth"; }
+            int tc = value.typeCode();
+            if (inlist(tc, (NT_INT, NT_FLOAT, NT_NUMBER))) { return "number:" + number(value).toString(); }
+            if (tc == NT_NULL || tc == NT_NOTHING) { return "null"; }
+            if (tc == NT_LIST) {
+                return "list:" + make_json(map AbstractSchemaBaseValidator::uniqueValueKey($1, depth + 1), value);
+            }
+            if (tc == NT_HASH) {
+                hash<string, string> sorted = {};
+                foreach string key in (sort(keys value)) {
+                    sorted{key} = AbstractSchemaBaseValidator::uniqueValueKey(value{key}, depth + 1);
+                }
+                return "object:" + make_json(sorted);
+            }
+            return value.type() + ":" + make_json(value);
         }
 
         #! Throws an \c SCHEMA-VALIDATION-ERROR exception

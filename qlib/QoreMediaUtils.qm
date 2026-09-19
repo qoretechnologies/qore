@@ -87,7 +87,110 @@ f.write(r.image);
     - initial version
     - detect image/audio/GLB signatures and validate response MIME agreement
     - read PNG/JPEG/WebP dimensions and WAV/MP3 duration before uploading media
+    - read bounded MP4 dimensions, video duration, sample count, average frame rate, and audio-track presence
+    - reject truncated metadata, fragmented containers, and unsupported multi-video-track files explicitly
 */
+
+namespace Priv {
+    # Parses only the bounded box structure needed for upload validation; never decompresses content.
+    class Mp4MetadataReader {
+        private { binary content; }
+        constructor(binary content) { self.content = content; }
+        private int uint(int at, int count = 4) {
+            if (at < 0 || count < 1 || count > 8 || at + count > content.size()) {
+                throw "MEDIA-INPUT-ERROR", "truncated MP4 integer";
+            }
+            int result = make_hex_string(content[at..at + count - 1]).toInt(16);
+            if (result < 0) { throw "MEDIA-INPUT-ERROR", "MP4 integer exceeds supported range"; }
+            return result;
+        }
+        private list<hash<auto>> boxes(int first, int end) {
+            list<hash<auto>> result = ();
+            int at = first;
+            while (at < end) {
+                if (end - at < 8) { throw "MEDIA-INPUT-ERROR", "truncated MP4 box header"; }
+                int size = uint(at);
+                int header = 8;
+                if (size == 1) { size = uint(at + 8, 8); header = 16; }
+                else if (!size) { size = end - at; }
+                if (size < header || size > end - at) { throw "MEDIA-INPUT-ERROR", "invalid MP4 box extent"; }
+                push result, {"type": content[at + 4..at + 7].toString("ISO-8859-1"),
+                    "start": at + header, "end": at + size};
+                at += size;
+            }
+            return result;
+        }
+        private *hash<auto> child(hash<auto> parent, string name) {
+            foreach hash<auto> box in (boxes(parent.start, parent.end)) {
+                if (box.type == name) { return box; }
+            }
+        }
+        private requireSize(hash<auto> box, int size) {
+            if (box.end - box.start < size) { throw "MEDIA-INPUT-ERROR", "truncated MP4 metadata box"; }
+        }
+        hash<QoreMediaUtils::Mp4VideoInfo> read() {
+            list<hash<auto>> top = boxes(0, content.size());
+            *hash<auto> movie;
+            bool media = False;
+            foreach hash<auto> box in (top) {
+                if (box.type == "moof") { throw "MEDIA-INPUT-ERROR", "fragmented MP4 requires a media demuxer"; }
+                if (box.type == "moov") { movie = box; }
+                if (box.type == "mdat" && box.end > box.start) { media = True; }
+            }
+            if (!movie || !media) { throw "MEDIA-INPUT-ERROR", "MP4 has no complete movie and media data"; }
+            hash<QoreMediaUtils::Mp4VideoInfo> result = <QoreMediaUtils::Mp4VideoInfo>{};
+            bool video = False;
+            bool audio = False;
+            foreach hash<auto> track in (boxes(movie.start, movie.end)) {
+                if (track.type != "trak") { continue; }
+                *hash<auto> mdia = child(track, "mdia");
+                if (!mdia) { continue; }
+                *hash<auto> handler = child(mdia, "hdlr");
+                if (!handler) { continue; }
+                requireSize(handler, 12);
+                binary kind = content[handler.start + 8..handler.start + 11];
+                if (kind == <736f756e>) { audio = True; continue; }
+                if (kind != <76696465>) { continue; }
+                if (video) { throw "MEDIA-INPUT-ERROR", "multiple video tracks require a media demuxer"; }
+                *hash<auto> tkhd = child(track, "tkhd");
+                *hash<auto> mdhd = child(mdia, "mdhd");
+                *hash<auto> minf = child(mdia, "minf");
+                *hash<auto> stbl = minf ? child(minf, "stbl") : NOTHING;
+                *hash<auto> samples = stbl ? child(stbl, "stsz") ?? child(stbl, "stz2") : NOTHING;
+                if (!tkhd || !mdhd || !samples) { throw "MEDIA-INPUT-ERROR", "MP4 lacks video track metadata"; }
+                requireSize(tkhd, 4);
+                requireSize(mdhd, 4);
+                int tv = get_byte(content, tkhd.start);
+                int mv = get_byte(content, mdhd.start);
+                if (tv > 1 || mv > 1) { throw "MEDIA-INPUT-ERROR", "unsupported MP4 metadata version"; }
+                requireSize(tkhd, tv ? 96 : 84);
+                requireSize(mdhd, mv ? 32 : 20);
+                requireSize(samples, 12);
+                int scale = uint(mdhd.start + (mv ? 20 : 12));
+                int duration = uint(mdhd.start + (mv ? 24 : 16), mv ? 8 : 4);
+                result.width = uint(tkhd.start + (tv ? 88 : 76)) >> 16;
+                result.height = uint(tkhd.start + (tv ? 92 : 80)) >> 16;
+                result.frame_count = uint(samples.start + 8);
+                if (samples.type == "stsz" && !uint(samples.start + 4)) {
+                    requireSize(samples, 12 + result.frame_count * 4);
+                } else if (samples.type == "stz2") {
+                    int bits = get_byte(content, samples.start + 7);
+                    if (!inlist(bits, (4, 8, 16))) { throw "MEDIA-INPUT-ERROR", "invalid compact MP4 sample table"; }
+                    requireSize(samples, 12 + (result.frame_count * bits + 7) / 8);
+                }
+                if (!scale || !duration || !result.width || !result.height || !result.frame_count) {
+                    throw "MEDIA-INPUT-ERROR", "MP4 has empty or fragmented video metadata";
+                }
+                result.duration_seconds = float(duration) / scale;
+                result.frame_rate = float(result.frame_count) / result.duration_seconds;
+                video = True;
+            }
+            if (!video) { throw "MEDIA-INPUT-ERROR", "MP4 has no video track"; }
+            result.has_audio = audio;
+            return result;
+        }
+    }
+}
 
 #! contains all public symbols of the %QoreMediaUtils module
 public namespace QoreMediaUtils {
@@ -108,6 +211,9 @@ public *string sub identifyMediaContentType(binary content) {
     if (content.size() >= 4 && prefix =~ /^664c6143/) { return "audio/flac"; }
     if (content.size() >= 27 && prefix =~ /^4f676753/) { return "audio/ogg"; }
     if (content.size() >= 12 && prefix =~ /^676c544602000000/) { return "model/gltf-binary"; }
+    if (content.size() >= 16 && content[4..7] == <66747970>
+            && inlist(content[8..11], (<69736f6d>, <69736f32>, <69736f34>, <69736f35>, <69736f36>,
+                <6d703431>, <6d703432>, <61766331>, <64617368>))) { return "video/mp4"; }
     return NOTHING;
 }
 
@@ -255,6 +361,43 @@ public float sub getAudioDuration(binary content) {
     }
     if (duration <= 0.0) { throw "MEDIA-INPUT-ERROR", "unsupported or empty audio container"; }
     return duration;
+}
+
+#! Container metadata for a complete, non-fragmented MP4 video
+public hashdecl Mp4VideoInfo {
+    #! Display width in pixels from the video track header
+    int width;
+    #! Display height in pixels from the video track header
+    int height;
+    #! Duration in seconds from the video media time scale
+    float duration_seconds;
+    #! Encoded video sample count
+    int frame_count;
+    #! Average encoded frame rate
+    float frame_rate;
+    #! Whether the container declares an audio track
+    bool has_audio;
+}
+
+#! Reads MP4 track dimensions, duration, sample count, and audio presence without decoding frames
+/** @param content complete MP4 bytes
+    @return video track metadata
+    @throw MEDIA-INPUT-ERROR malformed, truncated, fragmented, or unsupported container
+    @note A frame decoder is still required to verify playable content. This helper reads ordinary
+        ISO base media boxes; fragmented streams require a demuxer and are rejected explicitly.
+    @par Example
+    Check a product clip before sending it to a service with a fifteen-second input limit:
+    @code{.py}
+    hash<Mp4VideoInfo> info = getMp4VideoInfo(clip);
+    if (info.duration_seconds > 15.0) { throw "CLIP-ERROR", "clip exceeds fifteen seconds"; }
+    @endcode
+*/
+public hash<Mp4VideoInfo> sub getMp4VideoInfo(binary content) {
+    if (identifyMediaContentType(content) != "video/mp4") {
+        throw "MEDIA-INPUT-ERROR", "expected an MP4 container";
+    }
+    Priv::Mp4MetadataReader reader(content);
+    return reader.read();
 }
 
 #! Configuration for an image-generator backend

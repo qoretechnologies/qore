@@ -3666,7 +3666,16 @@ if(QORE_BUILD_AOT_MODULES)
 endif()
 qore_user_module("qlib/StabilityAiRestClient" "stability-openapi.json;stability-provenance.json;stability-presentation.json")
 qore_user_module("qlib/StabilityAiDataProvider" "stability-ai-logo.svg")
-qore_user_module("qlib/BflRestClient.qm")
+qore_user_module("qlib/BflRestClient" "bfl-openapi.json;bfl-provenance.json;bfl-vendor-main.json;bfl-vendor-licenses.json;bfl-vendor-video-edit.json;bfl-vendor-lora.txt;bfl-vendor-comfy.txt;bfl-vendor-comfy-license.txt")
+# Preserve companion contract sources and their legal notice beside both installed representations.
+install(FILES qlib/BflRestClient/bfl-vendor-lora.txt qlib/BflRestClient/bfl-vendor-comfy.txt
+    qlib/BflRestClient/bfl-vendor-comfy-license.txt
+    DESTINATION ${QORE_USER_MODULES_DIR}/BflRestClient COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if(QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/BflRestClient/bfl-vendor-lora.txt qlib/BflRestClient/bfl-vendor-comfy.txt
+        qlib/BflRestClient/bfl-vendor-comfy-license.txt
+        DESTINATION ${QORE_AOT_MODULES_DIR}/BflRestClient COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/BflDataProvider" "bfl-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm")
 qore_user_module("qlib/GroqDataProvider" "groq-logo.svg")

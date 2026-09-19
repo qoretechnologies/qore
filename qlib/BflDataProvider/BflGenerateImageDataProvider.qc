@@ -1,209 +1,109 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore BflGenerateImageDataProvider class definition
-
-/** BflGenerateImageDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
-
-    Permission is hereby granted, free of charge, to any person obtaining a
-    copy of this software and associated documentation files (the "Software"),
-    to deal in the Software without restriction, including without limitation
-    the rights to use, copy, modify, merge, publish, distribute, sublicense,
-    and/or sell copies of the Software, and to permit persons to whom the
-    Software is furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in
-    all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-    DEALINGS IN THE SOFTWARE.
-*/
+#! Compatible image generation using the selected model's pinned contract
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 
 public namespace BflDataProvider {
+#! Compatible image form derived from the supported model contracts
 public class BflGenerateImageRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "prompt": {
-                "display_name": "Prompt",
-                "short_desc": "Text prompt describing the image",
-                "type": AbstractDataProviderTypeMap."string",
-                "desc": "Text prompt describing the desired image.",
-                "required": True,
-                "example_value": "a futuristic city skyline at dusk",
-            },
-            "model": {
-                "display_name": "Model",
-                "short_desc": "FLUX model identifier",
-                "type": AbstractDataProviderTypeMap."*string",
-                "desc": "FLUX model identifier — `flux-pro-1.1`, "
-                    "`flux-pro-1.1-ultra` (highest quality), `flux-pro`, "
-                    "`flux-dev`, `flux-kontext-pro` / `flux-kontext-max` "
-                    "(image-to-image edit).",
-                "default_value": "flux-pro-1.1",
-                "allowed_values": (
-                    <AllowedValueInfo>{"value": "flux-pro-1.1",       "display_name": "FLUX Pro 1.1"},
-                    <AllowedValueInfo>{"value": "flux-pro-1.1-ultra", "display_name": "FLUX Pro 1.1 Ultra"},
-                    <AllowedValueInfo>{"value": "flux-pro",           "display_name": "FLUX Pro"},
-                    <AllowedValueInfo>{"value": "flux-dev",           "display_name": "FLUX Dev"},
-                    <AllowedValueInfo>{"value": "flux-kontext-pro",   "display_name": "FLUX Kontext Pro (image edit)"},
-                    <AllowedValueInfo>{"value": "flux-kontext-max",   "display_name": "FLUX Kontext Max (image edit)"},
-                ),
-            },
-            "aspect_ratio": {
-                "display_name": "Aspect Ratio",
-                "short_desc": "Output aspect ratio",
-                "type": AbstractDataProviderTypeMap."*string",
-                "desc": "Output aspect ratio.",
-                "example_value": "16:9",
-            },
-            "width": {
-                "display_name": "Width",
-                "short_desc": "Output image width in pixels",
-                "type": AbstractDataProviderTypeMap."*softint",
-                "desc": "Output image width in pixels (model-specific limits).",
-            },
-            "height": {
-                "display_name": "Height",
-                "short_desc": "Output image height in pixels",
-                "type": AbstractDataProviderTypeMap."*softint",
-                "desc": "Output image height in pixels (model-specific limits).",
-            },
-            "seed": {
-                "display_name": "Seed",
-                "short_desc": "Random seed for reproducibility",
-                "type": AbstractDataProviderTypeMap."*softint",
-                "desc": "Random seed for reproducibility — same seed + prompt "
-                    "should produce the same image.",
-            },
-            "negative_prompt": {
-                "display_name": "Negative Prompt",
-                "short_desc": "What to avoid in the image",
-                "type": AbstractDataProviderTypeMap."*string",
-                "desc": "Text describing what to avoid in the image.",
-            },
-            "prompt_upsampling": {
-                "display_name": "Prompt Upsampling",
-                "short_desc": "Let BFL rewrite the prompt for better quality",
-                "type": AbstractDataProviderTypeMap."*softbool",
-                "desc": "When `True`, BFL rewrites the prompt server-side for "
-                    "improved quality.  Off by default.",
-            },
-            "input_image": {
-                "display_name": "Input Image (base64)",
-                "short_desc": "Base64-encoded input image (for flux-kontext-* models)",
-                "type": AbstractDataProviderTypeMap."*string",
-                "desc": "Base64-encoded input image, used by the "
-                    "`flux-kontext-pro` and `flux-kontext-max` models for "
-                    "image-to-image editing.",
-            },
+            "prompt": {"display_name": "Prompt", "short_desc": "Text prompt describing the image",
+                "type": AbstractDataProviderTypeMap."string", "required": True,
+                "desc": "Describe the subject, lighting, and composition. An empty prompt remains an explicit value.",
+                "example_value": "A blue ceramic mug on a plain studio background."},
+            "model": {"display_name": "Model", "short_desc": "FLUX model identifier",
+                "type": AbstractDataProviderTypeMap."*string", "default_value": DefaultImageModel,
+                "desc": "Select an image model. Only options supported by that model are accepted.",
+                "has_dependents": True, "structural_determinate": True, "on_change": ("refetch",)},
         };
     }
-    constructor() { addQoreFields(Fields); }
-}
-
-public class BflGenerateImageResponseDataType inherits HashDataType {
-    public {
-        const Fields = {
-            "id": {
-                "display_name": "Job ID",
-                "desc": "BFL job identifier.",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "status": {
-                "display_name": "Status",
-                "desc": "Final job status (always `Ready` when this response is "
-                    "returned; non-Ready statuses raise `BFL-ERROR`).",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "result": {
-                "display_name": "Result",
-                "desc": "Result object with the generated image URL.  The URL "
-                    "points at a temporary CDN location; download the image "
-                    "immediately to persist.",
-                "type": new BflGenerateImageResultDataType(),
-            },
-        };
+    #! Builds the form after the independent discovery inventory is registered
+    constructor() : HashDataType("BflGenerateImageRequest") {
+        addQoreFields(Fields);
+        getFields().model.setAllowedValues(map <AllowedValueInfo>{"value": $1,
+            "display_name": regex_subst(regex_subst(BflApi::Operations{
+                BflApi::actionForPath(ImageModelPathMap{$1})}[2], "^Start ", ""), " Image$", "")}, keys ImageModelPathMap);
+        hash<string, bool> added = {"prompt": True, "model": True};
+        foreach string model in (keys ImageModelPathMap) {
+            foreach AbstractDataField field in (BflApi::getActionSet().getOperationEx(
+                    BflApi::actionForPath(ImageModelPathMap{model})).getRequestFields().iterator()) {
+                string name = field.getName();
+                if (added{name} || inlist(name, ("webhook_url", "webhook_secret"))) { continue; }
+                hash<auto!> config = field.getConfigInfo() - "default_value";
+                config.type = field.getType().getOrNothingType();
+                config.attr.required = False;
+                config.attr.depends_on = ("model",);
+                addField(new QoreDataField(config));
+                added{name} = True;
+            }
+        }
+        addQoreFields(BflJobRequestDataType::Controls);
     }
-    constructor() { addQoreFields(Fields); }
 }
 
-#! Typed sub-hash for the `result` field of the generate-image response
-public class BflGenerateImageResultDataType inherits HashDataType {
-    public {
-        const Fields = {
-            "sample": {
-                "display_name": "Image URL",
-                "desc": "Temporary CDN URL of the generated image.  BFL "
-                    "CDN URLs expire; download the image immediately.",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "seed": {
-                "display_name": "Seed",
-                "desc": "Random seed used for this generation — pass the same "
-                    "seed + prompt + model to reproduce the image.",
-                "type": AbstractDataProviderTypeMap."*softint",
-            },
-            "prompt": {
-                "display_name": "Final Prompt",
-                "desc": "The actual prompt used by the model — BFL may rewrite "
-                    "the input prompt internally before generation.",
-                "type": AbstractDataProviderTypeMap."*string",
-            },
-            "start_time": {
-                "display_name": "Start Time",
-                "desc": "Unix timestamp of when generation started.",
-                "type": AbstractDataProviderTypeMap."*float",
-            },
-            "end_time": {
-                "display_name": "End Time",
-                "desc": "Unix timestamp of when generation completed.",
-                "type": AbstractDataProviderTypeMap."*float",
-            },
-        };
-    }
-    constructor() { addQoreFields(Fields); }
-}
-
+#! Preserves generate-image and returns a downloaded image as well as service metadata
 public class BflGenerateImageDataProvider inherits BflDataProviderCommon {
     public {
-        const ProviderInfo = <DataProviderInfo>{
-            "name": "generate-image",
-            "type": "BflGenerateImageDataProvider",
-            "constructor_options": ConstructorOptions,
-            "supports_request": True,
-        };
+        const ProviderInfo = <DataProviderInfo>{"name": "generate-image", "type": "BflGenerateImageDataProvider",
+            "constructor_options": ConstructorOptions, "supports_request": True};
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
-            AbstractDataProvider::DataProviderSummaryInfoKeys
-        });
-
-        static BflGenerateImageRequestDataType RequestType =
-            new BflGenerateImageRequestDataType();
-        static BflGenerateImageResponseDataType ResponseType =
-            new BflGenerateImageResponseDataType();
+            AbstractDataProvider::DataProviderSummaryInfoKeys});
+        static *BflGenerateImageRequestDataType RequestType;
+        const ResponseType = BflCompletedJob;
     }
-
-    constructor(BflRestClient::BflRestClientIo rest)
-            : BflDataProviderCommon(rest) {}
+    private { static Mutex type_mutex(); }
+    #! Initializes the immutable compatible form once
+    static initializeTypes() {
+        AutoLock lock(type_mutex);
+        if (!RequestType) { RequestType = new BflGenerateImageRequestDataType(); }
+    }
+    #! Creates the action using an existing authenticated client
+    constructor(BflRestClientIo rest) : BflDataProviderCommon(rest) {}
+    #! Creates the action from connection options
     constructor(*hash<auto> options) : BflDataProviderCommon(options) {}
-
+    #! Returns the preserved action identity
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
-    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private *AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
+    private *AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
+        string model = options.model ?? DefaultImageModel;
+        if (!ImageModelPathMap.hasKey(model)) { throw "BFL-INPUT-ERROR", "select a supported image model"; }
+        HashDataType type("BflSelectedImageRequest");
+        foreach string name in (("prompt", "model")) { type.addField(RequestType.getFields(){name}); }
+        foreach AbstractDataField field in (BflApi::getActionSet().getOperationEx(
+                BflApi::actionForPath(ImageModelPathMap{model})).getRequestFields().iterator()) {
+            if (!inlist(field.getName(), ("prompt", "webhook_url", "webhook_secret"))) { type.addField(field); }
+        }
+        type.addQoreFields(BflJobRequestDataType::Controls);
+        return type;
+    }
+    private *AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
+        return getRequestTypeWithOptionsImpl(req.typeCode() == NT_HASH ? req : NOTHING);
+    }
+    private *AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
+    #! Executes one validated image generation and download
+    /** @param req flat model options and overall timeout controls
+        @param request_options provider request options
+        @return completed job retaining result.sample, seed, cost, and verified media bytes
+        @throw BFL-INPUT-ERROR unknown or unsupported model options
+        @throw BFL-JOB-TIMEOUT overall deadline expired
+    */
+    auto doRequest(auto req, *hash<auto> request_options) {
+        # Preserve raw integer/null distinctions before model-specific schema validation.
+        checkRequest();
+        return doRequestImpl(req, validateRequestOptions(request_options));
+    }
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string model = req.model ?? BflRestClient::DefaultImageModel;
-        *string path = BflRestClient::ImageModelPathMap{model};
-        if (!path.val()) {
-            throw "BFL-CONFIG-ERROR",
-                sprintf("BFL image model %y is unknown; known models: %y",
-                    model, keys BflRestClient::ImageModelPathMap);
+        if (req.typeCode() != NT_HASH || req.prompt.typeCode() != NT_STRING) {
+            throw "BFL-INPUT-ERROR", "generate-image requires a string prompt";
         }
-        hash<auto> body = req - "model";
-        return rest.submitAndWait(path, body);
+        if (req.hasKey("model") && req.model.typeCode() != NT_STRING) {
+            throw "BFL-INPUT-ERROR", "model must be a string when supplied";
+        }
+        string model = req.model ?? DefaultImageModel;
+        if (!ImageModelPathMap.hasKey(model)) { throw "BFL-INPUT-ERROR", "select a supported image model"; }
+        return BflApi::generateMedia(rest, model, req - "model");
     }
 }
 }

@@ -31,7 +31,6 @@ public class BflDataProviderCommon inherits DataProvider::AbstractDataProvider {
                 "short_desc": "BFL API key (sent as x-key header)",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The BFL API key — sent as the `x-key` header.",
-                "required": True,
                 "sensitive": True,
             },
             "url": <DataProviderOptionInfo>{
@@ -66,13 +65,7 @@ public class BflDataProviderCommon inherits DataProvider::AbstractDataProvider {
             rest = copts.restclient;
         }
         if (!rest) {
-            if (!copts.apikey.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "missing required 'apikey' argument for BFL";
-            }
-            rest = new BflRestClient::BflRestClientIo({
-                "apikey": copts.apikey, "url": copts.url,
-            });
+            rest = new BflRestClient::BflRestClientIo(copts - "restclient");
         }
     }
 }

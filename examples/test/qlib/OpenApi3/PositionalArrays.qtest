@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires OpenApi3
+%exec-class PositionalArraysTest
+
+class PositionalArraysTest inherits QUnit::Test {
+    constructor() : Test("OpenAPI 3.1 positional arrays", "1.0") {
+        addTestCase("unconstrained arrays accept values and enforce bounds and uniqueness", \openArrayTest());
+        addTestCase("typed positions and closed tails survive native serialization", \tupleTest());
+        addTestCase("nested tuple alternatives retain timestamp and image positions", \nestedTest());
+        addTestCase("positional response direction and recursive presentation are bounded", \directionTest());
+        set_return_value(main());
+    }
+    private OpenApi3Schema document(hash<auto> schema) {
+        return new OpenApi3Schema("", {"openapi": "3.1.0", "info": {"title": "Array fixture", "version": "1"},
+            "paths": {}, "components": {"schemas": {"Value": schema}}});
+    }
+    private openArrayTest() {
+        auto doc = document({"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": True});
+        auto value = (0, {"value": False});
+        doc.components.schemas.Value.check(False, True, "/", "POST", "array", \value);
+        assertEq((0, {"value": False}), value);
+        foreach auto invalid in (((), (1, 2, 3), (1, 1.0), ({"a": 0, "b": False}, {"b": False, "a": 0}))) {
+            assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+                auto input = invalid;
+                doc.components.schemas.Value.check(False, True, "/", "POST", "array", \input);
+            });
+        }
+    }
+    private tupleTest() {
+        auto doc = document({"type": "array", "prefixItems": ({"type": "number", "minimum": 0},
+            {"type": "string", "minLength": 1}), "items": False, "minItems": 2});
+        AbstractDataProviderType type = doc.components.schemas.Value.getDataType();
+        for (int pass = 0; pass < 3; ++pass) {
+            assertTrue(type.getElementType() instanceof QoreUnionDataType);
+            assertEq((0.0, "image"), type.acceptsValue((0, "image")));
+            assertEq((1.5, "image"), type.acceptsValue((1.5, "image")));
+            foreach auto value in ((("0", "image"), (0, ""), (-1, "image"), (0, "image", "extra"), (0,), "image")) {
+                assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(value); });
+            }
+            assertNothing(type.getOrNothingType().acceptsValue(NOTHING));
+            assertEq((0.0, "image"), type.getSoftType().acceptsValue((0, "image")));
+            type = Serializable::deserialize(type.serialize());
+        }
+    }
+    private directionTest() {
+        auto doc = document({"type": "array", "prefixItems": ({"type": "object", "properties": {
+            "id": {"type": "string", "readOnly": True}, "secret": {"type": "string", "writeOnly": True}},
+            "required": ("id",)},), "items": False});
+        auto request = doc.components.schemas.Value.getDataType();
+        auto response = OpenApi3HashDataType::forResponse(request);
+        for (int pass = 0; pass < 3; ++pass) {
+            assertEq(({"id": "published"},), response.acceptsValue(({"id": "published"},)));
+            assertThrows("RUNTIME-TYPE-ERROR", sub () { request.acceptsValue(({"id": "published"},)); });
+            response = Serializable::deserialize(response.serialize());
+        }
+        auto recursive = document({"type": "array", "prefixItems": ({"$ref": "#/components/schemas/Value"},), "items": False});
+        auto type = recursive.components.schemas.Value.getDataType();
+        assertEq(((),), type.acceptsValue(((),)));
+    }
+    private nestedTest() {
+        auto pair = {"type": "array", "prefixItems": ({"type": "number"}, {"type": "string"}), "minItems": 2, "maxItems": 2};
+        auto doc = document({"anyOf": ({"type": "string"}, pair,
+            {"type": "array", "items": pair}, {"type": "array", "items": {"type": "string"}})});
+        AbstractDataProviderType type = doc.components.schemas.Value.getDataType();
+        for (int pass = 0; pass < 3; ++pass) {
+            auto pairs = ((0.0, "first"), (3.5, "last"));
+            assertEq(pairs, type.acceptsValue(pairs));
+            assertEq(("first", "last"), type.acceptsValue(("first", "last")));
+            assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue(((False, "image"),)); });
+            type = Serializable::deserialize(type.serialize());
+        }
+    }
+}

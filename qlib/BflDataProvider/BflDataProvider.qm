@@ -30,35 +30,41 @@
 %requires RestClientIo
 
 module BflDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "user module providing a data provider API for Black Forest Labs (FLUX)";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("BflDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                list<hash<DataProviderDiscoveryExpectedIdentityInfo>> result = (
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "generate-image"},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "make-api-call"},
+                );
+                foreach string action in ((keys BflApi::Operations) + (keys BflJobDataProvider::Helpers)) {
+                    push result, <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": action};
+                }
+                return result;
+            });
         DataProvider::registerFactory(new BflDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": BflDataProvider::AppName,
             "presentation_source_locale": "en",
             "display_name": "Black Forest Labs",
-            "short_desc": "Black Forest Labs FLUX text-to-image generation",
-            "desc": "Provides access to [Black Forest Labs](https://bfl.ai) — "
-                "the company behind the FLUX image generation models.\n\n"
-                "**Image models** (selectable via the `model` action option):\n"
-                "- `flux-pro-1.1` (default) — production text-to-image\n"
-                "- `flux-pro-1.1-ultra` — highest quality, 4MP output\n"
-                "- `flux-pro` — original FLUX Pro\n"
-                "- `flux-dev` — faster + cheaper development model\n"
-                "- `flux-kontext-pro` / `flux-kontext-max` — image-to-image "
-                "edit (needs an `input_image`)\n\n"
-                "**Video generation** is exposed only via the "
-                "@ref qoremediautilsintro \"QoreMediaUtils\" "
-                "`bfl` video-generator backend or the "
-                "@ref bflrestclientintro \"BflRestClient\" `submitAndWait()` "
-                "method directly — not as an action in this data provider.",
+            "short_desc": "Generate and edit images and videos with Black Forest Labs",
+            "desc": "Use [Black Forest Labs](https://bfl.ai) to create visual content for products, campaigns, and video.\n\n"
+                "- Generate images with FLUX.1, Kontext, or FLUX.2.\n"
+                "- Edit masks, extend borders, remove objects, restore detail, and try on garments.\n"
+                "- Generate, continue, edit, and upscale videos.\n"
+                "- Start jobs, resume regional polling, and download verified media.\n"
+                "- Read credits and fine-tune inventory; manage existing fine-tunes and licensed usage.\n\n"
+                "**Billing:** generation and transformations consume credits. Check **Get Credit Balance** and "
+                "[current pricing](https://docs.bfl.ai/quick_start/pricing) first. Usage reporting affects licensing charges.",
             "scheme": "bfl",
-            "logo": BflLogo,
+            "logo": Priv::BflLogoText,
             "logo_file_name": "bfl-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (
@@ -67,34 +73,48 @@ module BflDataProvider {
             ),
         });
 
+        BflGenerateImageDataProvider::initializeTypes();
+        foreach hash<DataProviderActionInfo> action in (BflApi::getActionSet().getActionInfoList(AppName)) {
+            DataProviderActionCatalog::registerAction(action);
+        }
+        foreach hash<auto> helper in (BflJobDataProvider::Helpers.pairIterator()) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": AppName, "action": helper.key, "path": "/" + helper.key,
+                "display_name": helper.value[0], "short_desc": helper.value[1],
+                "desc": helper.value[1] + (helper.key == "generate-video"
+                    ? "\n\nChoose the video mode and its required inputs. This action consumes credits. "
+                    : "\n\nUse the original job ID and regional polling URL. ")
+                    + "Timeout errors retain the identity needed to resume. Temporary media URLs expire; download promptly.",
+                "action_code": DPAT_API, "mutates_state": helper.key == "generate-video",
+                "options": DataProviderActionCatalog::getActionOptionFromFields(BflJobDataProvider::requestType(helper.key).getFields()),
+                "output_type": helper.key == "download-result" ? BflDownloadedAsset : BflCompletedJob,
+            });
+        }
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": BflDataProvider::AppName,
             "path": "/generate-image",
             "action": "generate-image",
             "display_name": "Generate Image",
             "short_desc": "Generate an image from a text prompt (async)",
-            "desc": "Generates an image from a text prompt via the BFL FLUX "
-                "API.  BFL is asynchronous: submit returns a `polling_url`, "
-                "and this action drives the polling loop via "
-                "@ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" until the "
-                "job reaches the `Ready` terminal state.\n\n"
-                "The response contains `result.sample` — a CDN URL of the "
-                "generated image.  Download the image promptly; BFL CDN URLs "
-                "are temporary.",
+            "desc": "Generates an image with the selected model, waits for completion, and downloads verified media. "
+                "The response retains `result.sample` and service metadata and adds `media.data` with the image bytes.\n\n"
+                "Only options supported by the selected model are accepted. `negative_prompt` is unsupported. "
+                "The overall timeout includes submission, polling, and download; errors retain an existing job's identity.",
             "action_code": DPAT_API,
+            "data_dependent_options": True,
             "groups": ("Image Generation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                BflGenerateImageRequestDataType::Fields{"prompt",}, {
+                BflGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
                     "preselected": True, "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                BflGenerateImageRequestDataType::Fields{
+                BflGenerateImageDataProvider::RequestType.getFields(){
                     "model", "aspect_ratio",
                 }, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                BflGenerateImageRequestDataType::Fields - (
+                BflGenerateImageDataProvider::RequestType.getFields() - (
                     "prompt", "model", "aspect_ratio",
                 )
             ),
@@ -113,18 +133,28 @@ module BflDataProvider {
     [Black Forest Labs](https://bfl.ai) — the company behind FLUX image
     and video models.
 
-    A single DPAT_API action is registered:
-    - `generate-image` — submit a text prompt + model + size, wait for
-      the async job to complete, and receive a result hash with the
-      generated image URL
+    The offline catalog contains 37 typed service operations, five generation/job helpers,
+    and generic API access. Forms use pinned OpenAPI 3.1 schemas and documented companion contracts.
 
-    Video generation is available via the
-    @ref bflrestclientintro "BflRestClient" module's
-    `BflVideoGenerator` (registered with @ref qoremediautilsintro
-    "QoreMediaUtils") — exposed as a `bfl` video-generator backend
-    in `MediaProviderRegistry`.
+    |!Family|!Capabilities
+    |Images|FLUX.1, Kontext, FLUX.2 Pro/Max/Flex/Klein, and documented Klein LoRA beta inference
+    |Image tools|Fill, expansion, outpainting, object erasure, deblurring, and virtual try-on
+    |Video|FLUX 3 text/image/video modes, draft enhancement, video editing, and upscaling
+    |Jobs|Nonblocking submissions, regional result retrieval, bounded waits, and verified downloads
+    |Account|Credits, fine-tune inventory/details/deletion, and licensed usage reporting
+
+    The compatible `generate-image` retains job/result metadata and adds downloaded media.
+    The historical `flux-1.1-pro-video` alias is retired; select `flux-3-video` explicitly.
+    Unsupported `negative_prompt` is rejected. Regional connection URLs are preserved.
+    Public beta and legacy fine-tune availability are described per action. Uploads, training,
+    and sharing are not invented API operations; use the documented Dashboard/local workflows.
 
     @section BflDataProviderRelnotes Release Notes
+
+    @subsection BflDataProviderv1_1 BflDataProvider v1.1
+    - complete the typed image/video/job/account action catalog
+    - authenticate connection ping, retain regional routing, and verify downloaded media
+    - preserve model-specific null, empty, false, zero, and structured video inputs
 
     @subsection BflDataProviderv1_0 BflDataProvider v1.0
     - the initial version of the %BflDataProvider module
@@ -136,5 +166,8 @@ public namespace BflDataProvider {
 public const AppName = "BlackForestLabs";
 }
 
-#! App logo loaded from file
-public const BflLogo = File::readTextFile(get_script_dir() + "/bfl-logo.svg");
+namespace Priv {
+    const BflLogoText = File::readTextFile(get_script_dir() + "/bfl-logo.svg");
+}
+#! Compatible logo alias; the immutable resource is loaded in Priv during module initialization
+public const BflLogo = Priv::BflLogoText;
