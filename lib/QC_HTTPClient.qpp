@@ -203,6 +203,27 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     |@ref EVENT_HTTP_CHUNKED_DATA_RECEIVED|Raised when a block of HTTP chunked data is received.
     |@ref EVENT_HTTP_CHUNK_SIZE|Raised when the next chunk size for HTTP chunked data is known.
 
+    @section httpclient_response_body Response Message Bodies
+
+    The media type of a response decides how its message body is delivered: a media type that carries text is
+    delivered as a string in the character encoding the message declares, and any other media type is delivered
+    as a @ref binary "binary" value, because its octets are not text and converting them would corrupt them.
+
+    |!Media type|!Body
+    |\c text/*, \c application/json, \c application/xml, \c application/javascript, \c application/x-www-form-urlencoded, \c application/x-yaml, \c application/yaml, and any \c +json or \c +xml structured syntax suffix|a string in the character encoding given by the \c charset parameter, or the assumed encoding if none is given
+    |any other media type, such as \c application/octet-stream, \c image/png, or \c application/pdf|a @ref binary "binary" value holding the octets as received
+    |none declared|a string, as this class has always delivered a response that declares no media type
+
+    A body that carries a \c Content-Encoding always arrives compressed, and the compressed octets are not the
+    body; decoding it produces the form its media type calls for, so a compressed text body decodes to a string
+    and a compressed binary body to a @ref binary "binary" value.  Set the \c encoding_passthru option to
+    receive the encoded octets instead, which are always @ref binary "binary".
+
+    The blocking methods and the poll operations returned by @ref startPollSendRecv() deliver the same body for
+    the same response.
+
+    @since %Qore 3.0
+
     @section httpclient_redirects HTTP Redirects
 
     Redirect responses with status codes 301, 302, 303, 307, and 308 are followed automatically (RFC 9110 section
@@ -1464,7 +1485,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if
     any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
-    \c "status_code" key.
+    \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
@@ -1541,7 +1562,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key.
+    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote
@@ -1611,7 +1632,7 @@ printf("sent to %s\n", info."effective-url");
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body
     (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
-    \c "status_code" key.
+    \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
     client is not itself on one
@@ -1678,7 +1699,7 @@ hash<auto> msg = httpclient.sendUrl(body, "POST", "http://other.example.com/path
 
     @return The headers received from the HTTP server with all key names converted to lower-case. The message body
     (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the
-    \c "status_code" key.
+    \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-URL-ERROR the URL has no host, has an invalid host, or names a UNIX domain socket when the
     client is not itself on one
@@ -1969,7 +1990,7 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key.
+    @return The headers received from the HTTP server with all key names converted to lower-case. The message body (if any) will be assigned to the value of the \c "body" key and the HTTP status will be assigned to the \c "status_code" key; see @ref httpclient_response_body for how the type of the body is decided.
 
     @throw HTTP-CLIENT-METHOD-ERROR invalid/unknown HTTP method passed
     @throw HTTP-CLIENT-REDIRECT-ERROR invalid redirect location given by remote

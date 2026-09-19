@@ -873,7 +873,7 @@ public:
     /**
          @param xsink if an error occurs, the Qore-language exception information will be added here
     */
-    DLLEXPORT virtual void deref(ExceptionSink* xsink);
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
 
     //! sets the connect timeout in ms
     /**

@@ -53,6 +53,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/ql_crypto.h"
 
@@ -395,8 +396,24 @@ static qore_uncompress_to_binary_t get_binary_decoder_for_content_encoding(const
     return nullptr;
 }
 
+//! Returns the message body of a response that arrived as binary, decoded according to its content encoding
+/** The connection decides how a body is delivered from its media type: a text type arrives as a string, and
+    any other type as binary, whose octets are not text.  A body that carries a content encoding always arrives
+    as binary, because the compressed octets are not the body; decoding it restores the type the media type
+    calls for.
+
+    @param bin the body as received
+    @param body_enc the character encoding for a text body
+    @param content_encoding the content encoding to decode, or nullptr if the body is not encoded
+    @param dec the decoder for @p content_encoding, if one was already selected
+    @param encoding_passthru true if an encoded body is returned encoded
+    @param is_text true if the media type of the body carries text
+    @param xsink exception sink
+
+    @return the body, or no value if there is nothing to change
+*/
 static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
-        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru,
+        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru, bool is_text,
         ExceptionSink* xsink) {
     if (!bin || !bin->size()) {
         return QoreValue();
@@ -405,6 +422,18 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
     if (content_encoding) {
         if (encoding_passthru) {
             return bin->refSelf();
+        }
+        if (!is_text) {
+            // the decoded octets are not text, so they are decoded to binary
+            qore_uncompress_to_binary_t bin_dec = get_binary_decoder_for_content_encoding(content_encoding, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (!bin_dec) {
+                // an encoding that is not a compression, such as "identity", leaves the body as it is
+                return QoreValue();
+            }
+            return bin_dec(bin, xsink);
         }
         if (!dec) {
             bool ignore_encoding = false;
@@ -420,6 +449,11 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
         }
         QoreStringNode* decoded = dec(bin, body_enc, xsink);
         return decoded;
+    }
+
+    if (!is_text) {
+        // the body is already the value to return: its octets are not text
+        return QoreValue();
     }
 
     return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
@@ -747,7 +781,7 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
 //
 // See LEGACY RESPONSE SHAPE ADAPTERS block above for the rationale and
 // the full list of callers — do not reuse this function for anything else.
-static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const BinaryNode* decoded_body,
+static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const SimpleValueQoreNode* decoded_body,
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     QoreValue sc = src->getKeyValue("status_code");
@@ -6241,10 +6275,28 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 return nullptr;
             }
 
+            // The media type decides whether the body is text; a response that declares no type keeps the
+            // string delivery this client has always given it.  processContentType() saved the value it read
+            // before it stripped any charset parameter.
+            bool is_text = true;
+            {
+                QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
+                if (ct.getType() != NT_STRING) {
+                    ct = ans->getKeyValue("content-type");
+                }
+                if (ct.getType() == NT_STRING) {
+                    QoreStringValueHelper ct_str(ct);
+                    std::string media_type = qore_http_media_type(ct_str->c_str());
+                    if (!media_type.empty()) {
+                        is_text = qore_http_media_type_is_text(media_type);
+                    }
+                }
+            }
+
             // Use default encoding from the HTTPClient
             const QoreEncoding* body_enc = enc ? enc : QCS_UTF8;
             QoreValue processed = process_binary_body(bin, body_enc, content_encoding, dec,
-                encoding_passthru, xsink);
+                encoding_passthru, is_text, xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -6726,8 +6778,13 @@ public:
         //! True if the content encoding of the response body is not decoded
         bool encoding_passthru = false;
 
+        //! The character encoding given to a decoded text body, as in the blocking API
+        const QoreEncoding* body_enc = QCS_UTF8;
+
         //! The response body with its content encoding decoded, if it had one; see decodeResponseBody()
-        SimpleRefHolder<BinaryNode> decoded_body;
+        /** A string when the media type of the body carries text, binary otherwise, as in the blocking API
+        */
+        SimpleRefHolder<SimpleValueQoreNode> decoded_body;
         //! The decoding state of the response body: 0 = not decoded yet, 1 = done, -1 = failed
         int decode_state = 0;
 
@@ -7049,7 +7106,7 @@ public:
     DLLLOCAL void initRequest(std::shared_ptr<HttpClientConnectionManagerBase> mgr, const con_info& origin,
             const char* target, const char* method, const char* http_version, QoreHashNode* headers,
             BinaryNode* body, bool follow, int max_redirects, bool streaming_response,
-            bool encoding_passthru, QoreProgram* pgm, ExceptionSink* xsink) {
+            bool encoding_passthru, const QoreEncoding* body_enc, QoreProgram* pgm, ExceptionSink* xsink) {
         assert(!request);
         request.reset(new RequestState(origin));
         request->headers = headers;
@@ -7062,6 +7119,7 @@ public:
         request->follow = follow && client_obj;
         request->streaming_response = streaming_response;
         request->encoding_passthru = encoding_passthru;
+        request->body_enc = body_enc ? body_enc : QCS_UTF8;
         if (request->follow) {
             request->chain.init(*headers, xsink);
             // a redirect that repeats the request sends the body again
@@ -7625,9 +7683,34 @@ public:
             request->decode_state = 1;
             return 0;
         }
-        qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
-        assert(dec);
-        SimpleRefHolder<BinaryNode> decoded(dec ? dec(bin, xsink) : nullptr);
+        // the decoded octets take the form the media type calls for: a text type is a string, and any other
+        // type stays binary; a body that declares no type keeps the string delivery of the blocking API
+        bool is_text = true;
+        {
+            SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink,
+                *hv.get<const QoreHashNode>(), "content-type"));
+            if (*xsink) {
+                request->decode_state = -1;
+                return -1;
+            }
+            if (ct) {
+                std::string media_type = qore_http_media_type(ct->c_str());
+                if (!media_type.empty()) {
+                    is_text = qore_http_media_type_is_text(media_type);
+                }
+            }
+        }
+
+        SimpleRefHolder<SimpleValueQoreNode> decoded;
+        if (is_text) {
+            qore_uncompress_to_string_t dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
+            assert(dec);
+            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8, xsink) : nullptr;
+        } else {
+            qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
+            assert(dec);
+            decoded = dec ? dec(bin, xsink) : nullptr;
+        }
         if (*xsink) {
             xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",
                 token.c_str(), (long long)bin->size());
@@ -8463,7 +8546,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // request sends the body again
     poller->initRequest(mgr_holder, this_connection, msgpath, method, http11 ? "1.1" : "1.0",
         request_headers.release(), redirect_passthru ? nullptr : body_node_ref(), !redirect_passthru, max_redirects,
-        streaming_response, encoding_passthru, getProgram(), xsink);
+        streaming_response, encoding_passthru, enc ? enc : QCS_UTF8, getProgram(), xsink);
     if (*xsink) {
         release_local_conn_ref();
         return nullptr;
