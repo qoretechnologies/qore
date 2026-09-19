@@ -2627,6 +2627,9 @@ const char* getBuiltinTypeName(qore_type_t type) {
     return "<unknown type>";
 }
 
+// decides whether the fold path can convert one container element into another; defined below
+static bool qore_container_value_may_convert_to(const QoreTypeInfo* target_ti, const QoreTypeInfo* source_ti);
+
 // only called for complex hashes and lists
 qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
         bool& may_not_match, bool& may_need_filter) {
@@ -2638,6 +2641,31 @@ qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo*
     // non-complex types
     // even if types are 100% compatible, if they are not equal, then we perform type folding
     if (res == QTI_IDENT && !may_need_filter && !QoreTypeInfo::equal(this_type, that_type)) {
+        may_need_filter = true;
+        res = QTI_AMBIGUOUS;
+    }
+    return res;
+}
+
+// Compares the element types of a source container against those of a target container the fold loops in
+// QoreTypeSpec::acceptInputComplexHash()/acceptInputComplexList() will convert element by element.
+//
+// An element type that the target does not accept may still be converted by those loops.  The conversion runs
+// for every container assignment, so rejecting the container here would make the parser refuse a value the
+// runtime goes on to accept: the same literal was a parse error where its type was known and folded silently
+// where it arrived through an 'auto' expression.  Such a pair is reported as a match that needs a runtime
+// filter and may fail, so the verdict is reached once, by the conversion, against the key or index that
+// actually failed.
+//
+// This is asked only where the source really is a container whose elements are folded one at a time.  A
+// softlist that wraps a single value into a one-element list matches that value against the element type
+// through match_type() instead: nothing folds it, so admitting it here would accept at parse time what
+// assignment then refuses.  See design/container-element-folding.md.
+qore_type_result_e match_container_element_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
+        bool& may_not_match, bool& may_need_filter) {
+    qore_type_result_e res = match_type(this_type, that_type, may_not_match, may_need_filter);
+    if (res == QTI_NOT_EQUAL && qore_container_value_may_convert_to(this_type, that_type)) {
+        may_not_match = true;
         may_need_filter = true;
         res = QTI_AMBIGUOUS;
     }
@@ -3533,6 +3561,12 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
+            // acceptInputComplexHash() below folds a value whose element type the fold path can convert, so a
+            // value this returned no match for would still be accepted once it was bound; report the same
+            // verdict here, as an inexact match, so that variant selection and binding cannot disagree
+            if (ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+                return QTI_AMBIGUOUS;
+            }
             // issue #2647: allow an empty hash with no specific type to be passed to any complex hash type
             // it will get folded at runtime into the desired type in any case
             // NOTE: if the hash has a specific type (ti with hasType), it must be compatible - checked above
@@ -3559,6 +3593,12 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 }
                 if (ti && QoreTypeInfo::hasType(ti) && QoreTypeInfo::parseAccepts(u.ti, ti)) {
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                // as in the complex hash case above: acceptInputComplexList() folds a value whose element type
+                // the fold path can convert, so reporting no match here would reject a value that binding
+                // accepts
+                if (ti && QoreTypeInfo::hasType(ti) && qore_container_value_may_convert_to(u.ti, ti)) {
+                    return QTI_AMBIGUOUS;
                 }
                 // issue #2647: allow an empty list with no specific type to be passed to any complex list type
                 // it will get folded at runtime into the desired type in any case

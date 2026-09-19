@@ -39,6 +39,11 @@
 DLLLOCAL qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
     bool& may_not_match, bool& may_need_filter);
 
+// Defined in QoreTypeInfo.cpp — match_type() plus the element types the fold loops can convert; used where
+// the source is a container whose elements are folded one at a time
+DLLLOCAL qore_type_result_e match_container_element_type(const QoreTypeInfo* this_type,
+    const QoreTypeInfo* that_type, bool& may_not_match, bool& may_need_filter);
+
 // Include all handler functions
 #include "QoreTypeSpecMatchHandlers.cpp"
 

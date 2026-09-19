@@ -147,7 +147,8 @@ static qore_type_result_e match_QTS_COMPLEXHASH(const QoreTypeSpec& self, QoreTy
         case QTS_COMPLEXHASH: {
             qore_type_result_e rv = qore_match_is_auto_vti(self.getComplexHash())
                 ? QTI_NEAR
-                : match_type(self.getComplexHash(), ctx.t.getComplexHash(), ctx.may_not_match, ctx.may_need_filter);
+                : match_container_element_type(self.getComplexHash(), ctx.t.getComplexHash(), ctx.may_not_match,
+                    ctx.may_need_filter);
             if (rv > QTI_NOT_EQUAL) {
                 ctx.max_result = QTI_IDENT;
             } else {
@@ -216,7 +217,8 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
         case QTS_COMPLEXLIST: {
             qore_type_result_e rv = qore_match_is_auto_vti(self.getComplexList())
                 ? QTI_NEAR
-                : match_type(self.getComplexList(), ctx.t.getComplexList(), ctx.may_not_match, ctx.may_need_filter);
+                : match_container_element_type(self.getComplexList(), ctx.t.getComplexList(), ctx.may_not_match,
+                    ctx.may_need_filter);
             if (rv > QTI_NOT_EQUAL) {
                 ctx.max_result = QTI_IDENT;
             } else {
