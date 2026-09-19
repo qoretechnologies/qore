@@ -1091,6 +1091,48 @@ struct qore_httpclient_priv {
         }
     }
 
+    //! Returns the protocol a connection manager for this client is created with
+    /** The protocol follows the client's configuration, so that one manager serves every request; a target that
+        cannot use it is resolved to one it can use when its connection is created, which is the only place the
+        target's transport is known (see HttpClientConnectionManagerBase::Options::protocol_required).
+
+        H2C_DIRECT is also an H2 protocol (over plain TCP, the client sends the HTTP/2 preface on connect).
+        REQUIRED with SSL negotiates h2 via ALPN; REQUIRED without SSL is equivalent to H2C_DIRECT.  AUTO over
+        SSL uses NEGOTIATE (per-connect ALPN via NegotiatingHttpClientConnection).  The global mode override is
+        checked here so that set_global_http2_mode("disabled") prevents H2 connections even for REQUIRED-mode
+        clients (matching legacy connect).
+
+        @param required output: true if the protocol is a requirement rather than a preference
+
+        @return the protocol for a new connection manager
+    */
+    DLLLOCAL HttpClientProtocol getConnMgrProtocol(bool& required) const {
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED || http2_mode == HTTP2_MODE_H2C_DIRECT)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        bool h3_required = http3_mode.load(std::memory_order_relaxed) == HTTP3_MODE_REQUIRED;
+
+        required = false;
+        if (connection.is_unix) {
+            return HttpClientProtocol::H1;
+        }
+        if (h3_required || (http3_active && connection.ssl)) {
+            // an HTTP/3 upgrade from an Alt-Svc advertisement is opportunistic; only the mode is a requirement
+            required = h3_required;
+            return HttpClientProtocol::H3;
+        }
+        if (h2_hard) {
+            return HttpClientProtocol::H2;
+        }
+        if (h2_auto_ssl) {
+            return HttpClientProtocol::NEGOTIATE;
+        }
+        return HttpClientProtocol::H1;
+    }
+
     DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> getConnMgr(ExceptionSink* xsink) {
         std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
         std::shared_ptr<HttpClientConnectionManagerBase> rv;
@@ -1103,34 +1145,11 @@ struct qore_httpclient_priv {
             if (conn_mgr) {
                 const auto& opts = conn_mgr->getOptions();
                 // Recompute the effective protocol
-                int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
-                bool ld = qore_check_option(QLO_DISABLE_HTTP2);
-                // H2C_DIRECT is also an H2 protocol (over plain TCP, client
-                // sends the HTTP/2 preface on connect).  REQUIRED with SSL
-                // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
-                // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
-                // ALPN via NegotiatingHttpClientConnection).
-                bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
-                        || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                    && gm != HTTP2_MODE_DISABLED && !ld;
-                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
-                    && gm != HTTP2_MODE_DISABLED && !ld;
-                HttpClientProtocol want_proto;
-                if (connection.is_unix) {
-                    want_proto = HttpClientProtocol::H1;
-                } else if (http3_mode.load(std::memory_order_relaxed)
-                        == HTTP3_MODE_REQUIRED
-                        || (http3_active && connection.ssl)) {
-                    want_proto = HttpClientProtocol::H3;
-                } else if (h2_hard) {
-                    want_proto = HttpClientProtocol::H2;
-                } else if (h2_auto_ssl) {
-                    want_proto = HttpClientProtocol::NEGOTIATE;
-                } else {
-                    want_proto = HttpClientProtocol::H1;
-                }
+                bool want_required;
+                HttpClientProtocol want_proto = getConnMgrProtocol(want_required);
                 std::string proxy_url = getConnMgrProxyUrl();
                 if (opts.protocol != want_proto
+                        || opts.protocol_required != want_required
                         || opts.proxy_url != proxy_url
                         || opts.connect_timeout_ms != connect_timeout_ms
                         || opts.request_timeout_ms != timeout
@@ -1149,37 +1168,8 @@ struct qore_httpclient_priv {
                 // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
                 // path does per-connect ALPN over TLS and adopts the result
                 // into a concrete H1/H2 connection (see
-                // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
-                // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
-                // everything else maps to H1.  The global mode override
-                // must be checked here so that set_global_http2_mode("disabled")
-                // prevents H2 connections even for REQUIRED-mode clients
-                // (matches legacy connect).
-                {
-                    int global_mode = qore_global_http2_mode.load(
-                        std::memory_order_relaxed);
-                    bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-                    bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
-                            || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-                    bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
-                        && connection.ssl
-                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-
-                    if (connection.is_unix) {
-                        opts.protocol = HttpClientProtocol::H1;
-                    } else if (http3_mode.load(std::memory_order_relaxed)
-                            == HTTP3_MODE_REQUIRED
-                            || (http3_active && connection.ssl)) {
-                        opts.protocol = HttpClientProtocol::H3;
-                    } else if (h2_hard) {
-                        opts.protocol = HttpClientProtocol::H2;
-                    } else if (h2_auto_ssl) {
-                        opts.protocol = HttpClientProtocol::NEGOTIATE;
-                    } else {
-                        opts.protocol = HttpClientProtocol::H1;
-                    }
-                }
+                // design/conn-mgr-alpn-negotiation.md).
+                opts.protocol = getConnMgrProtocol(opts.protocol_required);
                 opts.connect_timeout_ms = connect_timeout_ms;
                 opts.request_timeout_ms = timeout;
                 opts.idle_timeout_ms = 60000;

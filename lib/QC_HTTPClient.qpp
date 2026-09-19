@@ -287,7 +287,10 @@ foreach hash<HttpRedirectInfo> hop in (info.redirects) {
     Use @ref setHttp3Mode() to control the HTTP/3 mode, or set the \c http3_mode constructor option.
 
     @note
-    - HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3
+    - HTTP/3 requires TLS; non-TLS connections will never attempt HTTP/3.  A request target is not always the
+      client's URL — a redirect can name a plaintext origin — so the transport is decided per target: in
+      \c "auto" mode a plaintext target uses HTTP/1, and in \c "required" mode it raises
+      \c HTTPCLIENT-HTTP3-SSL-REQUIRED rather than attempting QUIC against a TCP port
     - An active HTTP/2 connection takes priority over an HTTP/3 upgrade attempt; HTTP/3 upgrade
       is only attempted for new connections that are not yet using HTTP/2
     - Streaming callbacks (send_callback, InputStream, trailer_callback) are supported with HTTP/2 and

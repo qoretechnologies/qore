@@ -526,7 +526,36 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // 2026-05-12, all in this code path with negative refcount and
     // INVALIDATED_BIT set in the priv).
     ReferenceHolder<HttpClientConnectionBase> conn(xsink);
-    switch (opts_.protocol) {
+
+    // The manager's protocol comes from the client's configuration, but each request names its own target, and
+    // the target's transport decides which protocols can serve it: ALPN runs only over TLS and HTTP/3 only over
+    // QUIC.  A redirect or a request-local target URL can name a plaintext origin on a manager created for a TLS
+    // one, so the protocol is resolved here, where the target's transport is known.  The pool is keyed by host,
+    // port, and SSL, so connections resolved differently never share a key.
+    HttpClientProtocol protocol = opts_.protocol;
+    if (!ssl_required) {
+        switch (protocol) {
+            case HttpClientProtocol::NEGOTIATE:
+                // NEGOTIATE means "HTTP/2 if the server offers it", and the offer is made with ALPN, which
+                // requires TLS; a plaintext target uses HTTP/1, as it does for a client configured for plaintext
+                protocol = HttpClientProtocol::H1;
+                break;
+            case HttpClientProtocol::H3:
+                if (opts_.protocol_required) {
+                    xsink->raiseException("HTTPCLIENT-HTTP3-SSL-REQUIRED", "HTTP/3 was required for this client, "
+                        "but it runs over QUIC, which requires TLS, and the request target 'http://%s:%d' is not "
+                        "a TLS target", host, port);
+                    return nullptr;
+                }
+                // an opportunistic HTTP/3 upgrade applies to the origin that advertised it, not to a plaintext one
+                protocol = HttpClientProtocol::H1;
+                break;
+            default:
+                break;
+        }
+    }
+
+    switch (protocol) {
         case HttpClientProtocol::H1: {
             Http1SslConfig ssl_cfg;
             ssl_cfg.verify_mode = opts_.ssl_verify_mode;
@@ -578,8 +607,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             //    SSL upgrade inside the tunnel.  After READY, reads ALPN;
             //    if h2, extracts the socket and adopts into H2.
             //
-            // NEGOTIATE requires SSL; plain-HTTP AUTO is always H1 at
-            // the HTTPClient level and never reaches this case.
+            // NEGOTIATE requires SSL; a plaintext target is resolved to H1 above, so this case is only
+            // reached for a TLS target or through the proxy path of H2, which is itself guarded by
+            // ssl_required.  The check is kept so the requirement holds for any future caller.
             if (!ssl_required) {
                 xsink->raiseException("HTTPCLIENT-NEGOTIATE-SSL-REQUIRED",
                     "HttpClientProtocol::NEGOTIATE requires SSL (ALPN "
