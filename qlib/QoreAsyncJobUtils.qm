@@ -79,6 +79,7 @@ hash<auto> final_status = poller.poll("job-123", 5m, 1500ms);
     @section qoreasyncjobutilsrelnotes Release Notes
 
     @subsection qoreasyncjobutils_1_0 QoreAsyncJobUtils v1.0
+    - convert polling intervals from milliseconds to microseconds for the default sleeper
     - initial version
 */
 
@@ -145,7 +146,7 @@ public class AsyncJobPoller {
         # return type, so the block is declared to return a closure and then falls off its end, and
         # every poll that needs to wait fails with "block missing return statement".  The member is
         # already typed, so the annotation adds nothing.
-        sleeper = sub (timeout to) { Qore::usleep(to); };
+        sleeper = sub (timeout to) { Qore::usleep(int(to) * 1000); };
     }
 
     #! Injects a custom sleeper closure (test seam)

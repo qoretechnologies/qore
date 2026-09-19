@@ -34,13 +34,13 @@
 %define NoYaml
 %endtry
 
-%requires(reexport) ProviderIndexUtil >= 1.1
+%requires(reexport) ProviderIndexUtil >= 1.2
 %requires DataProvider >= 3.8
 %requires ConnectionProvider
 %requires reflection
 
 module ProviderIndex {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for indexing data providers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -57,6 +57,11 @@ module ProviderIndex {
     on-demand initialization.
 
     @section providerindex_relnotes Release Notes
+
+    @subsection providerindex_v1_2 ProviderIndex v1.2
+    - preserve complete action input and output type graphs through index publication, including media, unions,
+      nested fields, and choices; serialization failures now block publication with structured action evidence
+    - indexes written by this version require ProviderIndexUtil 1.2 or later
 
     @subsection providerindex_v1_1 ProviderIndex v1.1
     - rebuilding an existing index now includes provider inventories introduced during deferred initialization,

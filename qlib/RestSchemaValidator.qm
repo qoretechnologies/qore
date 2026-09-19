@@ -78,6 +78,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - preserve decimal numeric boundaries so exact fractional endpoints validate consistently
+      (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
+    - accept opaque GLB model responses as binary media
     - retain supplied enumeration labels and descriptions in structured field choices
     - enforce boolean enumerations and preserve false values in generated enumeration examples
     - preserve opaque audio, image, and video response bytes in the null schema validator
@@ -335,16 +338,29 @@ public namespace RestSchemaValidator {
         Swagger 2.0 and OpenAPI 3.0 schema definitions.
     */
     public class AbstractSchemaBase inherits Qore::Serializable {
+        #! Keeps decimal schema bounds independent of binary floating point expansion
+        /** Parsers validate member types before calling this helper. JSON decimal literals and Qore
+            decimal values must compare identically at inclusive and exclusive boundaries.
+            @param source original schema properties
+        */
+        private normalizeNumericBounds(hash<auto> source) {
+            if (exists source.minimum) { minimum = decimalBound(source.minimum); }
+            if (exists source.maximum) { maximum = decimalBound(source.maximum); }
+        }
+
+        private static number decimalBound(auto value) {
+            return value.typeCode() == NT_FLOAT ? number(value.toString()) : number(value);
+        }
         public {
             #! Maximum value constraint
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2
             */
-            *softfloat maximum;
+            *softnumber maximum;
 
             #! Minimum value constraint
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3
             */
-            *softfloat minimum;
+            *softnumber minimum;
 
             #! Exclusive maximum flag
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2
@@ -415,12 +431,12 @@ public namespace RestSchemaValidator {
             #! Numeric exclusiveMaximum value (JSON Schema draft-07+ / OpenAPI 3.1)
             /** In JSON Schema draft-07+, exclusiveMaximum is a direct numeric value (not a boolean modifier)
             */
-            *softfloat exclusiveMaxValue;
+            *softnumber exclusiveMaxValue;
 
             #! Numeric exclusiveMinimum value (JSON Schema draft-07+ / OpenAPI 3.1)
             /** In JSON Schema draft-07+, exclusiveMinimum is a direct numeric value (not a boolean modifier)
             */
-            *softfloat exclusiveMinValue;
+            *softnumber exclusiveMinValue;
         }
 
         #! Returns the label for path/channel in error messages
@@ -662,6 +678,9 @@ public namespace RestSchemaValidator {
 
             string pl = getPathLabel();
             string ml = getMethodLabel();
+
+            # Compare the original decimal value, before the transport's final float conversion.
+            value = decimalBound(v);
 
             # Check maximum constraint (boolean exclusiveMax)
             if (exists maximum) {
@@ -2734,7 +2753,8 @@ public namespace RestSchemaValidator {
                 *hash<auto> dh = ct ? DataDeserializationSupport{ct} : NOTHING;
                 # Media responses have no structured deserializer: preserve their bytes as for
                 # application/octet-stream. This includes generated audio returned by inference APIs.
-                if (!dh && (ct =~ /^(audio|image|video)\// || ct == "application/pdf") && !is_mime_text(ct)) {
+                if (!dh && (ct =~ /^(audio|image|video)\// || inlist(ct,
+                        ("application/pdf", "model/gltf-binary"))) && !is_mime_text(ct)) {
                     dh = DataDeserializationSupport{MimeTypeOctetStream};
                 }
                 if (!dh) {

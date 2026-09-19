@@ -3664,7 +3664,7 @@ if(QORE_BUILD_AOT_MODULES)
         qlib/AzureDocumentIntelligenceDataProvider/microsoft-NOTICE.txt
         DESTINATION ${QORE_AOT_MODULES_DIR}/AzureDocumentIntelligenceDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
 endif()
-qore_user_module("qlib/StabilityAiRestClient.qm")
+qore_user_module("qlib/StabilityAiRestClient" "stability-openapi.json;stability-provenance.json;stability-presentation.json")
 qore_user_module("qlib/StabilityAiDataProvider" "stability-ai-logo.svg")
 qore_user_module("qlib/BflRestClient.qm")
 qore_user_module("qlib/BflDataProvider" "bfl-logo.svg")

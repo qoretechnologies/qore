@@ -2,8 +2,8 @@
 # Copyright 2026 Qore Technologies, s.r.o.
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/QUnit.qm
-%requires ../../../../qlib/RestSchemaValidator.qm
+%requires QUnit
+%requires RestSchemaValidator
 %exec-class MediaResponseTest
 
 class MediaResponseTest inherits QUnit::Test {
@@ -15,7 +15,8 @@ class MediaResponseTest inherits QUnit::Test {
 
     private mediaTest() {
         NullRestSchemaValidator validator();
-        foreach string mime in ("audio/wav", "audio/mpeg", "audio/ogg", "image/png", "video/mp4", "application/pdf") {
+        foreach string mime in ("audio/wav", "audio/mpeg", "audio/ogg", "image/png", "video/mp4", "application/pdf",
+                "model/gltf-binary") {
             foreach data body in (<00017fff52494646>, <00017fff52494646>.toString()) {
                 auto response = validator.parseResponse("POST", "/media", 200, body, {"content-type": mime});
                 assertEq(<00017fff52494646>, response.body, mime);

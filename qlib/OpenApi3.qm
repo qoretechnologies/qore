@@ -502,6 +502,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
     public constructor(string obj_type, hash<auto> oh) {
         optional_field(obj_type, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
         optional_field(obj_type, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
+        normalizeNumericBounds(oh);
 
         # Handle exclusiveMaximum - can be boolean (3.0) or numeric (3.1)
         if (oh.hasKey("exclusiveMaximum")) {
@@ -509,7 +510,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
             if (tc == NT_BOOLEAN) {
                 exclusiveMax = oh.exclusiveMaximum;
             } else if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
-                exclusiveMaxValue = oh.exclusiveMaximum;
+                exclusiveMaxValue = decimalBound(oh.exclusiveMaximum);
             } else {
                 throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'exclusiveMaximum' field has invalid type %y; "
                     "expected boolean or number", obj_type, oh.exclusiveMaximum.type());
@@ -522,7 +523,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
             if (tc == NT_BOOLEAN) {
                 exclusiveMin = oh.exclusiveMinimum;
             } else if (tc == NT_INT || tc == NT_FLOAT || tc == NT_NUMBER) {
-                exclusiveMinValue = oh.exclusiveMinimum;
+                exclusiveMinValue = decimalBound(oh.exclusiveMinimum);
             } else {
                 throw "INVALID-FIELD-TYPE", sprintf("%s Object: 'exclusiveMinimum' field has invalid type %y; "
                     "expected boolean or number", obj_type, oh.exclusiveMinimum.type());

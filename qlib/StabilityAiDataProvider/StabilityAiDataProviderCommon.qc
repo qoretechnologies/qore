@@ -31,8 +31,17 @@ public class StabilityAiDataProviderCommon inherits DataProvider::AbstractDataPr
                 "short_desc": "Stability AI API key (Bearer token)",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Stability AI API key.",
-                "required": True,
                 "sensitive": True,
+            },
+            "token": <DataProviderOptionInfo>{
+                "display_name": "Bearer Token", "short_desc": "API key alias when API Key is absent",
+                "type": AbstractDataProviderTypeMap."string", "sensitive": True,
+                "desc": "Alternative credential option. An explicitly supplied `apikey` takes precedence.",
+            },
+            "organization": <DataProviderOptionInfo>{
+                "display_name": "Organization", "short_desc": "Organization ID for credit and request scope",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Optional organization ID from Get Account. Omit to use the key's default organization.",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "Server URL",
@@ -66,13 +75,7 @@ public class StabilityAiDataProviderCommon inherits DataProvider::AbstractDataPr
             rest = copts.restclient;
         }
         if (!rest) {
-            if (!copts.apikey.val()) {
-                throw "CONSTRUCTOR-ERROR",
-                    "missing required 'apikey' argument for Stability AI";
-            }
-            rest = new StabilityAiRestClient::StabilityAiRestClientIo({
-                "apikey": copts.apikey, "url": copts.url,
-            });
+            rest = new StabilityAiRestClient::StabilityAiRestClientIo(copts - "restclient");
         }
     }
 }

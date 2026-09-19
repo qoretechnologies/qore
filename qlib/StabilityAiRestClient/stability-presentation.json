@@ -1,0 +1,3303 @@
+{
+  "POST /v2beta/3d/stable-fast-3d": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image to generate a 3D model from.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 4,194,304 pixels"
+    },
+    "body.texture_resolution": {
+      "display_name": "Texture Resolution",
+      "short_desc": "Texture Resolution",
+      "preselected": false,
+      "desc": "Determines the resolution of the textures used for both the albedo (color) map\nand the normal map. The resolution is specified in pixels, and a higher value\ncorresponds to a higher level of detail in the textures, allowing for more\nintricate and precise rendering of surfaces. However, increasing the resolution\nalso results in larger asset sizes, which may impact loading times and\nperformance. 1024 is a good default value and rarely requires changing.",
+      "allowed_values": [
+        {
+          "value": "512",
+          "display_name": "512"
+        },
+        {
+          "value": "1024",
+          "display_name": "1024"
+        },
+        {
+          "value": "2048",
+          "display_name": "2048"
+        }
+      ]
+    },
+    "body.foreground_ratio": {
+      "display_name": "Foreground Ratio",
+      "short_desc": "Foreground Ratio",
+      "preselected": false,
+      "desc": "**Usage**\n\n- Controls the amount of padding around the object to be processed within the frame.\nThis ratio determines the relative size of the object compared to the total frame\nsize. A higher ratio means less padding and a larger object, while a lower ratio\nincreases the padding, effectively reducing the object’s size within the frame. This\ncan be useful when a long and narrow object, such as a car or bus, is viewed from the\nfront (the narrow side). Here, lowering the foreground ratio might help prevent the\ngenerated 3D assets from appearing squished or distorted. The default value of 0.85\nis good for most objects."
+    },
+    "body.remesh": {
+      "display_name": "Mesh Faces",
+      "short_desc": "Mesh Faces",
+      "preselected": false,
+      "desc": "Controls the remeshing algorithm used to generate the 3D model. The remeshing\nalgorithm determines how the 3D model is constructed from the input image. The\ndefault value of \"none\" means that the model is generated without remeshing,\nwhich is suitable for most use cases. The \"triangle\" option generates a model\nwith triangular faces, while the \"quad\" option generates a model with quadrilateral\nfaces. The \"quad\" option is useful when the 3D model will be used in DCC tools such\nas Maya or Blender.",
+      "allowed_values": [
+        {
+          "value": "none",
+          "display_name": "No Remeshing"
+        },
+        {
+          "value": "triangle",
+          "display_name": "Triangular Faces"
+        },
+        {
+          "value": "quad",
+          "display_name": "Quadrilateral Faces"
+        }
+      ]
+    },
+    "body.vertex_count": {
+      "display_name": "Target Vertex Count",
+      "short_desc": "Target Vertex Count",
+      "preselected": false,
+      "desc": "If specified, the result will have approximately this many vertices (and consequently fewer faces) in the simplified mesh.\n\nSetting this value to -1 (the default value) means that a limit is not set."
+    }
+  },
+  "POST /v2beta/3d/stable-point-aware-3d": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image to generate a 3D model from.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 4,194,304 pixels"
+    },
+    "body.texture_resolution": {
+      "display_name": "Texture Resolution",
+      "short_desc": "Texture Resolution",
+      "preselected": false,
+      "desc": "Determines the resolution of the textures used for both the albedo (color) map and the\nnormal map. The resolution is specified in pixels, and a higher value corresponds to a\nhigher level of detail in the textures, allowing for more intricate and precise rendering\nof surfaces. However, increasing the resolution also results in larger asset sizes, which\nmay impact loading times and performance. `1024` is a good default value and rarely requires\nchanging.",
+      "allowed_values": [
+        {
+          "value": "512",
+          "display_name": "512"
+        },
+        {
+          "value": "1024",
+          "display_name": "1024"
+        },
+        {
+          "value": "2048",
+          "display_name": "2048"
+        }
+      ]
+    },
+    "body.foreground_ratio": {
+      "display_name": "Foreground Ratio",
+      "short_desc": "Foreground Ratio",
+      "preselected": false,
+      "desc": "**Usage**\n\n- Controls the amount of padding around the object to be processed within the frame. This\nratio determines the relative size of the object compared to the total frame size. A\nhigher ratio means less padding and a larger object, while a lower ratio increases the\npadding, effectively reducing the object’s size within the frame. This can be useful when\na long and narrow object, such as a car or bus, is viewed from the front (the narrow\nside). Here, lowering the foreground ratio might help prevent the generated 3D assets from\nappearing squished or distorted. The default value of `1.3` is good for most objects."
+    },
+    "body.remesh": {
+      "display_name": "Mesh Faces",
+      "short_desc": "Mesh Faces",
+      "preselected": false,
+      "desc": "Controls the remeshing algorithm used to generate the 3D model. The remeshing algorithm\ndetermines how the 3D model is constructed from the input image. The default value of\n\"none\" means that the model is generated without remeshing, which is suitable for most use\ncases. The \"triangle\" option generates a model with triangular faces, while the \"quad\"\noption generates a model with quadrilateral faces. The \"quad\" option is useful when the 3D\nmodel will be used in DCC tools such as Maya or Blender.",
+      "allowed_values": [
+        {
+          "value": "none",
+          "display_name": "No Remeshing"
+        },
+        {
+          "value": "triangle",
+          "display_name": "Triangular Faces"
+        },
+        {
+          "value": "quad",
+          "display_name": "Quadrilateral Faces"
+        }
+      ]
+    },
+    "body.target_type": {
+      "display_name": "Target Type",
+      "short_desc": "Target Type",
+      "preselected": false,
+      "desc": "If set to `vertex` or `face`, the result will have approximately `target_count` many vertices or\nfaces in the simplified mesh, respectively.",
+      "allowed_values": [
+        {
+          "value": "none",
+          "display_name": "No Remeshing"
+        },
+        {
+          "value": "vertex",
+          "display_name": "Vertex"
+        },
+        {
+          "value": "face",
+          "display_name": "Face"
+        }
+      ]
+    },
+    "body.target_count": {
+      "display_name": "Target Count",
+      "short_desc": "Target Count",
+      "preselected": false,
+      "desc": "This sets the target vertex or face count defined by `target_type`. Selecting extremely low\ncounts reduces the quality of the mesh severely and values of 1,000 - 10,000 are recommended."
+    },
+    "body.guidance_scale": {
+      "display_name": "Guidance Scale",
+      "short_desc": "Guidance Scale",
+      "preselected": false,
+      "desc": "This sets the guidance scaling of the point diffusion module. Lower values produce less\ndetail and higher can introduce artifacts. The default of `3` produces best results."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    }
+  },
+  "POST /v2beta/audio/stable-audio-2/text-to-audio": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish the output audio to be. A strong, descriptive prompt that clearly defines\ninstruments, moods, styles, and genre will lead to better results.\n\nYou can make a prompt as simple or complex as you like. Simple prompts are good for clean\noutput audio. Complex prompts are good for adding texture and depth to the output audio.\n\n\nCheck our [prompt guide](https://www.stableaudio.com/user-guide/text-to-audio) for tips.",
+      "example_value": "A short, clear bell tone."
+    },
+    "body.duration": {
+      "display_name": "Duration (Seconds)",
+      "short_desc": "Duration (Seconds)",
+      "preselected": false,
+      "desc": "Controls the duration in seconds of the generated audio."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Controls the number of sampling steps.\n\n- For `stable-audio-2`: accepts steps between `30` and `100` (defaults to `50`).\n- For `stable-audio-2.5`: accepts steps between `4` and `8` (defaults to `8`).",
+      "depends_on": [
+        "model"
+      ]
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values make your\naudio closer to your prompt). \n\nDefaults to 7 for `stable-audio-2` and 1 for `stable-audio-2.5` if not specified."
+    },
+    "body.model": {
+      "display_name": "Model",
+      "short_desc": "Model",
+      "preselected": true,
+      "desc": "The model to use for generation.\n\n- `stable-audio-2.5` requires 20 credits per generation\n- `stable-audio-2` requires 20 credits per generation",
+      "allowed_values": [
+        {
+          "value": "stable-audio-2.5",
+          "display_name": "Stable Audio 2.5"
+        },
+        {
+          "value": "stable-audio-2",
+          "display_name": "Stable Audio 2"
+        }
+      ],
+      "has_dependents": true
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated audio.",
+      "allowed_values": [
+        {
+          "value": "mp3",
+          "display_name": "MP3"
+        },
+        {
+          "value": "wav",
+          "display_name": "WAV"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/audio/stable-audio-2/audio-to-audio": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish the output audio to be. A strong, descriptive prompt that clearly defines\ninstruments, moods, styles, and genre will lead to better results.\n\nYou can make a prompt as simple or complex as you like. Simple prompts are good for clean\noutput audio. Complex prompts are good for adding texture and depth to the output audio.\n\n\nCheck our [prompt guide](https://www.stableaudio.com/user-guide/audio-to-audio) for tips.",
+      "example_value": "A short, clear bell tone."
+    },
+    "body.duration": {
+      "display_name": "Duration (Seconds)",
+      "short_desc": "Duration (Seconds)",
+      "preselected": false,
+      "desc": "Controls the duration in seconds of the generated audio."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Controls the number of sampling steps.\n\n- For `stable-audio-2`: accepts steps between `30` and `100` (defaults to `50`).\n- For `stable-audio-2.5`: accepts steps between `4` and `8` (defaults to `8`).",
+      "depends_on": [
+        "model"
+      ]
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values make your\naudio closer to your prompt). \n\nDefaults to 7 for `stable-audio-2` and 1 for `stable-audio-2.5` if not specified."
+    },
+    "body.model": {
+      "display_name": "Model",
+      "short_desc": "Model",
+      "preselected": true,
+      "desc": "The model to use for generation.\n\n- `stable-audio-2.5` requires 20 credits per generation\n- `stable-audio-2` requires 20 credits per generation",
+      "allowed_values": [
+        {
+          "value": "stable-audio-2.5",
+          "display_name": "Stable Audio 2.5"
+        },
+        {
+          "value": "stable-audio-2",
+          "display_name": "Stable Audio 2"
+        }
+      ],
+      "has_dependents": true
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated audio.",
+      "allowed_values": [
+        {
+          "value": "mp3",
+          "display_name": "MP3"
+        },
+        {
+          "value": "wav",
+          "display_name": "WAV"
+        }
+      ]
+    },
+    "body.audio": {
+      "display_name": "Audio",
+      "short_desc": "Audio",
+      "preselected": true,
+      "desc": "The audio to be use as the starting point for the generation.\n\nSupported Formats:\n- mp3\n- wav\n\nValidation Rule:\n- Audio must be between 6 and 190 seconds long"
+    },
+    "body.strength": {
+      "display_name": "Strength",
+      "short_desc": "Strength",
+      "preselected": false,
+      "desc": "Sometimes referred to as _denoising_, this parameter controls how much influence the\n`audio` parameter has on the generated audio.\nA value of 0 would yield audio that is identical to the input.\nA value of 1 would be as if you passed in no audio at all.\n\nMinimum value for `stable-audio-2.5` is 0.01."
+    }
+  },
+  "POST /v2beta/audio/stable-audio-2/inpaint": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish the output audio to be. A strong, descriptive prompt that clearly defines\ninstruments, moods, styles, and genre will lead to better results.\n\nYou can make a prompt as simple or complex as you like. Simple prompts are good for clean\noutput audio. Complex prompts are good for adding texture and depth to the output audio.",
+      "example_value": "A short, clear bell tone."
+    },
+    "body.duration": {
+      "display_name": "Duration (Seconds)",
+      "short_desc": "Duration (Seconds)",
+      "preselected": false,
+      "desc": "Controls the duration in seconds of the generated audio."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Controls the number of sampling steps."
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated audio.",
+      "allowed_values": [
+        {
+          "value": "mp3",
+          "display_name": "MP3"
+        },
+        {
+          "value": "wav",
+          "display_name": "WAV"
+        }
+      ]
+    },
+    "body.audio": {
+      "display_name": "Audio",
+      "short_desc": "Audio",
+      "preselected": true,
+      "desc": "The audio to be use as the starting point for the generation.\n\nSupported Formats:\n- mp3\n- wav\n\nValidation Rule:\n- Audio must be between 6 and 190 seconds long"
+    },
+    "body.mask_start": {
+      "display_name": "Mask Start (Seconds)",
+      "short_desc": "Mask Start (Seconds)",
+      "preselected": false,
+      "desc": "Start of the replaced audio range, in seconds."
+    },
+    "body.mask_end": {
+      "display_name": "Mask End (Seconds)",
+      "short_desc": "Mask End (Seconds)",
+      "preselected": false,
+      "desc": "End of the replaced audio range, in seconds."
+    }
+  },
+  "POST /v2beta/audio/stable-audio/text-to-audio": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish the output audio to be. A strong, descriptive prompt that clearly defines\ninstruments, moods, styles, and genre will lead to better results.\n\nYou can make a prompt as simple or complex as you like. Simple prompts are good for clean\noutput audio. Complex prompts are good for adding texture and depth to the output audio.",
+      "example_value": "A short, clear bell tone."
+    },
+    "body.model": {
+      "display_name": "Model",
+      "short_desc": "Model",
+      "preselected": true,
+      "desc": "The model to use for generation.\n\n- `stable-audio-3` requires 26 credits per generation",
+      "allowed_values": [
+        {
+          "value": "stable-audio-3",
+          "display_name": "Stable Audio 3"
+        }
+      ]
+    },
+    "body.duration": {
+      "display_name": "Duration (Seconds)",
+      "short_desc": "Duration (Seconds)",
+      "preselected": false,
+      "desc": "Controls the duration in seconds of the generated audio."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Controls the number of sampling steps."
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values make your audio closer to your prompt). Defaults to 1 if not specified."
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated audio.",
+      "allowed_values": [
+        {
+          "value": "mp3",
+          "display_name": "MP3"
+        },
+        {
+          "value": "wav",
+          "display_name": "WAV"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/audio/stable-audio/audio-to-audio": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish the output audio to be. A strong, descriptive prompt that clearly defines\ninstruments, moods, styles, and genre will lead to better results.\n\nYou can make a prompt as simple or complex as you like. Simple prompts are good for clean\noutput audio. Complex prompts are good for adding texture and depth to the output audio.",
+      "example_value": "A short, clear bell tone."
+    },
+    "body.model": {
+      "display_name": "Model",
+      "short_desc": "Model",
+      "preselected": true,
+      "desc": "The model to use for generation.\n\n- `stable-audio-3` requires 26 credits per generation",
+      "allowed_values": [
+        {
+          "value": "stable-audio-3",
+          "display_name": "Stable Audio 3"
+        }
+      ]
+    },
+    "body.duration": {
+      "display_name": "Duration (Seconds)",
+      "short_desc": "Duration (Seconds)",
+      "preselected": false,
+      "desc": "Controls the duration in seconds of the generated audio."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Controls the number of sampling steps."
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values make your audio closer to your prompt). Defaults to 1 if not specified."
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated audio.",
+      "allowed_values": [
+        {
+          "value": "mp3",
+          "display_name": "MP3"
+        },
+        {
+          "value": "wav",
+          "display_name": "WAV"
+        }
+      ]
+    },
+    "body.strength": {
+      "display_name": "Strength",
+      "short_desc": "Strength",
+      "preselected": false,
+      "desc": "Sometimes referred to as _denoising_, this parameter controls how much influence the\n`audio` parameter has on the generated audio.\nA value of 0 would yield audio that is identical to the input.\nA value of 1 would be as if you passed in no audio at all."
+    },
+    "body.audio": {
+      "display_name": "Audio",
+      "short_desc": "Audio",
+      "preselected": true,
+      "desc": "The audio to be used as the starting point for the generation.\n\nSupported Formats:\n- mp3\n- wav\n\nValidation Rule:\n- Audio must be between 6 and 380 seconds long"
+    }
+  },
+  "POST /v2beta/audio/stable-audio/inpaint": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish the output audio to be. A strong, descriptive prompt that clearly defines\ninstruments, moods, styles, and genre will lead to better results.\n\nYou can make a prompt as simple or complex as you like. Simple prompts are good for clean\noutput audio. Complex prompts are good for adding texture and depth to the output audio.",
+      "example_value": "A short, clear bell tone."
+    },
+    "body.model": {
+      "display_name": "Model",
+      "short_desc": "Model",
+      "preselected": true,
+      "desc": "The model to use for generation.\n\n- `stable-audio-3` requires 26 credits per generation",
+      "allowed_values": [
+        {
+          "value": "stable-audio-3",
+          "display_name": "Stable Audio 3"
+        }
+      ]
+    },
+    "body.duration": {
+      "display_name": "Duration (Seconds)",
+      "short_desc": "Duration (Seconds)",
+      "preselected": false,
+      "desc": "Controls the duration in seconds of the generated audio."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Controls the number of sampling steps."
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values make your audio closer to your prompt). Defaults to 1 if not specified."
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated audio.",
+      "allowed_values": [
+        {
+          "value": "mp3",
+          "display_name": "MP3"
+        },
+        {
+          "value": "wav",
+          "display_name": "WAV"
+        }
+      ]
+    },
+    "body.mask_start": {
+      "display_name": "Mask Start (Seconds)",
+      "short_desc": "Mask Start (Seconds)",
+      "preselected": false,
+      "desc": "Start of the replaced audio range, in seconds."
+    },
+    "body.mask_end": {
+      "display_name": "Mask End (Seconds)",
+      "short_desc": "Mask End (Seconds)",
+      "preselected": false,
+      "desc": "End of the replaced audio range, in seconds."
+    },
+    "body.audio": {
+      "display_name": "Audio",
+      "short_desc": "Audio",
+      "preselected": true,
+      "desc": "The audio to be used as the starting point for the generation.\n\nSupported Formats:\n- mp3\n- wav\n\nValidation Rule:\n- Audio must be between 6 and 380 seconds long"
+    }
+  },
+  "POST /v2beta/stable-image/upscale/conservative": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image you wish to upscale.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.creativity": {
+      "display_name": "Creativity",
+      "short_desc": "Creativity",
+      "preselected": false,
+      "desc": "Controls the likelihood of creating additional details not heavily conditioned by the init image."
+    }
+  },
+  "POST /v2beta/stable-image/upscale/creative": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image you wish to upscale.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 1,048,576 pixels"
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.creativity": {
+      "display_name": "Creativity",
+      "short_desc": "Creativity",
+      "preselected": false,
+      "desc": "Indicates how creative the model should be when upscaling an image.\nHigher values will result in more details being added to the image during upscaling."
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/upscale/fast": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image you wish to upscale.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Width must be between 32 and 1,536 pixels\n- Height must be between 32 and 1,536 pixels\n- Total pixel count must be between 1,024 and 1,048,576 pixels"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/erase": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image you wish to erase from.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels"
+    },
+    "body.mask": {
+      "display_name": "Mask",
+      "short_desc": "Mask",
+      "preselected": false,
+      "desc": "- Controls the strength of the inpainting process on a per-pixel basis, either via a\nsecond image (passed into this parameter) or via the alpha channel of the `image` parameter.\n\n**Passing in a Mask**\n\nThe image passed to this parameter should be a black and white image that represents,\nat any pixel, the strength of inpainting based on how dark or light the given pixel is.\nCompletely black pixels represent no inpainting strength while completely white pixels\nrepresent maximum strength.\n\nIn the event the mask is a different size than the `image` parameter, it will be automatically resized.\n\n**Alpha Channel Support**\n\nIf you don't provide an explicit mask, one will be derived from the alpha channel of the `image` parameter.\nTransparent pixels will be inpainted while opaque pixels will be preserved.\n\nIn the event an `image` with an alpha channel is provided along with a `mask`, the `mask` will take precedence."
+    },
+    "body.grow_mask": {
+      "display_name": "Grow Mask",
+      "short_desc": "Grow Mask",
+      "preselected": false,
+      "desc": "Grows the edges of the mask outward in all directions by the specified number of pixels. The expanded area around the mask will be blurred, which can help smooth the transition between inpainted content and the original image.\n\nTry this parameter if you notice seams or rough edges around the inpainted content.\n\n> Note: Excessive growth may obscure fine details in the mask and/or merge nearby masked regions."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/inpaint": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image you wish to inpaint.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels"
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.mask": {
+      "display_name": "Mask",
+      "short_desc": "Mask",
+      "preselected": false,
+      "desc": "- Controls the strength of the inpainting process on a per-pixel basis, either via a\nsecond image (passed into this parameter) or via the alpha channel of the `image` parameter.\n\n**Passing in a Mask**\n\nThe image passed to this parameter should be a black and white image that represents,\nat any pixel, the strength of inpainting based on how dark or light the given pixel is.\nCompletely black pixels represent no inpainting strength while completely white pixels\nrepresent maximum strength.\n\nIn the event the mask is a different size than the `image` parameter, it will be automatically resized.\n\n**Alpha Channel Support**\n\nIf you don't provide an explicit mask, one will be derived from the alpha channel of the `image` parameter.\nTransparent pixels will be inpainted while opaque pixels will be preserved.\n\nIn the event an `image` with an alpha channel is provided along with a `mask`, the `mask` will take precedence."
+    },
+    "body.grow_mask": {
+      "display_name": "Grow Mask",
+      "short_desc": "Grow Mask",
+      "preselected": false,
+      "desc": "Grows the edges of the mask outward in all directions by the specified number of pixels. The expanded area around the mask will be blurred, which can help smooth the transition between inpainted content and the original image.\n\nTry this parameter if you notice seams or rough edges around the inpainted content.\n\n> Note: Excessive growth may obscure fine details in the mask and/or merge nearby masked regions."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/outpaint": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image you wish to outpaint.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.left": {
+      "display_name": "Left",
+      "short_desc": "Left",
+      "preselected": false,
+      "desc": "The number of pixels to outpaint on the left side of the image. At least one outpainting direction must be supplied with a non-zero value."
+    },
+    "body.right": {
+      "display_name": "Right",
+      "short_desc": "Right",
+      "preselected": false,
+      "desc": "The number of pixels to outpaint on the right side of the image. At least one outpainting direction must be supplied with a non-zero value."
+    },
+    "body.up": {
+      "display_name": "Up",
+      "short_desc": "Up",
+      "preselected": false,
+      "desc": "The number of pixels to outpaint on the top of the image. At least one outpainting direction must be supplied with a non-zero value."
+    },
+    "body.down": {
+      "display_name": "Down",
+      "short_desc": "Down",
+      "preselected": false,
+      "desc": "The number of pixels to outpaint on the bottom of the image. At least one outpainting direction must be supplied with a non-zero value."
+    },
+    "body.creativity": {
+      "display_name": "Creativity",
+      "short_desc": "Creativity",
+      "preselected": false,
+      "desc": "Controls the likelihood of creating additional details not heavily conditioned by the init image."
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": false,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/search-and-replace": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "An image containing content you wish to replace.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.search_prompt": {
+      "display_name": "Search Prompt",
+      "short_desc": "Search Prompt",
+      "preselected": true,
+      "desc": "Short description of what to inpaint in the `image`."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.grow_mask": {
+      "display_name": "Grow Mask",
+      "short_desc": "Grow Mask",
+      "preselected": false,
+      "desc": "Grows the edges of the mask outward in all directions by the specified number of pixels. The expanded area around the mask will be blurred, which can help smooth the transition between inpainted content and the original image.\n\nTry this parameter if you notice seams or rough edges around the inpainted content.\n\n> Note: Excessive growth may obscure fine details in the mask and/or merge nearby masked regions."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/search-and-recolor": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "An image containing content you wish to recolor.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.select_prompt": {
+      "display_name": "Select Prompt",
+      "short_desc": "Select Prompt",
+      "preselected": true,
+      "desc": "Short description of what to search for in the `image`."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.grow_mask": {
+      "display_name": "Grow Mask",
+      "short_desc": "Grow Mask",
+      "preselected": false,
+      "desc": "Grows the edges of the mask outward in all directions by the specified number of pixels. The expanded area around the mask will be blurred, which can help smooth the transition between inpainted content and the original image.\n\nTry this parameter if you notice seams or rough edges around the inpainted content.\n\n> Note: Excessive growth may obscure fine details in the mask and/or merge nearby masked regions."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/remove-background": {
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "The image whose background you wish to remove.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 4,194,304 pixels"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/edit/replace-background-and-relight": {
+    "body.subject_image": {
+      "display_name": "Subject Image",
+      "short_desc": "Subject Image",
+      "preselected": true,
+      "desc": "An image containing the subject that you wish to change background and relight.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.background_reference": {
+      "display_name": "Background Reference",
+      "short_desc": "Background Reference",
+      "preselected": true,
+      "desc": "An image whose style you wish to use in the background. Similar to the Control: Style API,\nstylistic elements from this image are added to the background.\n\n> **Important:** either `background_reference` or `background_prompt` must be provided.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels",
+      "required_groups": [
+        "background"
+      ],
+      "exclusive_with": [
+        "background_prompt"
+      ]
+    },
+    "body.background_prompt": {
+      "display_name": "Background Prompt",
+      "short_desc": "Background Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the background of the output image. This could be a description\nof the desired background scene, or just a description of the lighting if modifying the\nlight source through `light_source_direction` or `light_reference`.\n\n> **Important:** either `background_reference` or `background_prompt` must be provided.",
+      "required_groups": [
+        "background"
+      ],
+      "exclusive_with": [
+        "background_reference"
+      ]
+    },
+    "body.foreground_prompt": {
+      "display_name": "Foreground Prompt",
+      "short_desc": "Foreground Prompt",
+      "preselected": false,
+      "desc": "Description of the subject. Use this to prevent elements of the background from\nbleeding into the subject. For example, if you find your subject is turning\ngreen with a forest in the background, try putting a short description of the\nsubject in this field."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.preserve_original_subject": {
+      "display_name": "Preserve Original Subject",
+      "short_desc": "Preserve Original Subject",
+      "preselected": false,
+      "desc": "How much to overlay the original subject to exactly match the original image. A\n1.0 is an exact pixel match for the subject, and 0.0 is a close match but will\nhave new lighting qualities. This is an advanced feature."
+    },
+    "body.original_background_depth": {
+      "display_name": "Original Background Depth",
+      "short_desc": "Original Background Depth",
+      "preselected": false,
+      "desc": "Controls the generated background to have the same depth as the original subject image. This is an advanced feature."
+    },
+    "body.keep_original_background": {
+      "display_name": "Keep Original Background",
+      "short_desc": "Keep Original Background",
+      "preselected": false,
+      "desc": "Whether to keep the background of the original image. When this is on, the background\nwill have different lighting than the original image that changes based on the other\nparameters in this API.",
+      "allowed_values": [
+        {
+          "value": true,
+          "display_name": "Keep Background"
+        },
+        {
+          "value": false,
+          "display_name": "Replace Background"
+        }
+      ]
+    },
+    "body.light_source_direction": {
+      "display_name": "Light Source Direction",
+      "short_desc": "Light Source Direction",
+      "preselected": false,
+      "desc": "Direction of the light source.",
+      "allowed_values": [
+        {
+          "value": "left",
+          "display_name": "Left"
+        },
+        {
+          "value": "right",
+          "display_name": "Right"
+        },
+        {
+          "value": "above",
+          "display_name": "Above"
+        },
+        {
+          "value": "below",
+          "display_name": "Below"
+        }
+      ],
+      "exclusive_with": [
+        "light_reference"
+      ]
+    },
+    "body.light_reference": {
+      "display_name": "Light Reference",
+      "short_desc": "Light Reference",
+      "preselected": false,
+      "desc": "An image with the desired lighting. Lighter sections of the `light_reference` image will correspond to sections with brighter lighting in the output image.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels",
+      "exclusive_with": [
+        "light_source_direction"
+      ]
+    },
+    "body.light_source_strength": {
+      "display_name": "Light Source Strength",
+      "short_desc": "Light Source Strength",
+      "preselected": false,
+      "desc": "If using `light_reference_image` or `light_source_direction`, controls the strength\nof the light source. 1.0 is brighter and 0.0 is dimmer. This is an advanced feature.\n\n> **Important:** Use of this parameter requires `light_reference` or `light_source_direction` to be provided."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/generate/ultra": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.aspect_ratio": {
+      "display_name": "Aspect Ratio",
+      "short_desc": "Aspect Ratio",
+      "preselected": false,
+      "desc": "Controls the aspect ratio of the generated image.",
+      "allowed_values": [
+        {
+          "value": "21:9",
+          "display_name": "21:9 (Cinemascope)"
+        },
+        {
+          "value": "16:9",
+          "display_name": "16:9 (Landscape Video)"
+        },
+        {
+          "value": "3:2",
+          "display_name": "3:2 (Wide Landscape)"
+        },
+        {
+          "value": "5:4",
+          "display_name": "5:4 (Standard)"
+        },
+        {
+          "value": "1:1",
+          "display_name": "1:1 (Square)"
+        },
+        {
+          "value": "4:5",
+          "display_name": "4:5 (Portrait)"
+        },
+        {
+          "value": "2:3",
+          "display_name": "2:3 (Tall Portrait)"
+        },
+        {
+          "value": "9:16",
+          "display_name": "9:16 (Portrait Video)"
+        },
+        {
+          "value": "9:21",
+          "display_name": "9:21 (Tall Cinemascope)"
+        }
+      ]
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": false,
+      "desc": "The image to use as the starting point for the generation.\n\n> **Important:** The `strength` parameter is required when `image` is provided.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Width must be between 64 and 16,384 pixels\n- Height must be between 64 and 16,384 pixels\n- Total pixel count must be at least 4,096 pixels"
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    },
+    "body.strength": {
+      "display_name": "Strength",
+      "short_desc": "Strength",
+      "preselected": false,
+      "desc": "Sometimes referred to as _denoising_, this parameter controls how much influence the \n`image` parameter has on the generated image.  A value of 0 would yield an image that \nis identical to the input.  A value of 1 would be as if you passed in no image at all.\n\n> **Important:** This parameter is required when `image` is provided."
+    }
+  },
+  "POST /v2beta/stable-image/generate/core": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.aspect_ratio": {
+      "display_name": "Aspect Ratio",
+      "short_desc": "Aspect Ratio",
+      "preselected": false,
+      "desc": "Controls the aspect ratio of the generated image.",
+      "allowed_values": [
+        {
+          "value": "21:9",
+          "display_name": "21:9 (Cinemascope)"
+        },
+        {
+          "value": "16:9",
+          "display_name": "16:9 (Landscape Video)"
+        },
+        {
+          "value": "3:2",
+          "display_name": "3:2 (Wide Landscape)"
+        },
+        {
+          "value": "5:4",
+          "display_name": "5:4 (Standard)"
+        },
+        {
+          "value": "1:1",
+          "display_name": "1:1 (Square)"
+        },
+        {
+          "value": "4:5",
+          "display_name": "4:5 (Portrait)"
+        },
+        {
+          "value": "2:3",
+          "display_name": "2:3 (Tall Portrait)"
+        },
+        {
+          "value": "9:16",
+          "display_name": "9:16 (Portrait Video)"
+        },
+        {
+          "value": "9:21",
+          "display_name": "9:21 (Tall Cinemascope)"
+        }
+      ]
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/generate/sd3": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.mode": {
+      "display_name": "Mode",
+      "short_desc": "Mode",
+      "preselected": false,
+      "desc": "Controls whether this is a text-to-image or image-to-image generation, which affects which parameters are required:\n- **text-to-image** requires only the `prompt` parameter\n- **image-to-image** requires the `prompt`, `image`, and `strength` parameters",
+      "allowed_values": [
+        {
+          "value": "text-to-image",
+          "display_name": "Text To Image"
+        },
+        {
+          "value": "image-to-image",
+          "display_name": "Image To Image"
+        }
+      ],
+      "has_dependents": true
+    },
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": false,
+      "desc": "The image to use as the starting point for the generation.\n\nSupported formats:\n  - jpeg\n  - png\n  - webp\n\nSupported dimensions:\n  - Every side must be at least 64 pixels\n\n> **Important:** This parameter is only valid for **image-to-image** requests.",
+      "depends_on": [
+        "mode=image-to-image"
+      ]
+    },
+    "body.strength": {
+      "display_name": "Strength",
+      "short_desc": "Strength",
+      "preselected": false,
+      "desc": "Sometimes referred to as _denoising_, this parameter controls how much influence the\n`image` parameter has on the generated image.  A value of 0 would yield an image that\nis identical to the input.  A value of 1 would be as if you passed in no image at all.\n\n> **Important:** This parameter is only valid for **image-to-image** requests. For SD 3.5 Flash, the\n best results for image-to-image generation are achieved with a `strength` between .94 - .97.",
+      "depends_on": [
+        "mode=image-to-image"
+      ]
+    },
+    "body.aspect_ratio": {
+      "display_name": "Aspect Ratio",
+      "short_desc": "Aspect Ratio",
+      "preselected": false,
+      "desc": "Controls the aspect ratio of the generated image. Defaults to 1:1.\n\n> **Important:** This parameter is only valid for **text-to-image** requests.",
+      "allowed_values": [
+        {
+          "value": "21:9",
+          "display_name": "21:9 (Cinemascope)"
+        },
+        {
+          "value": "16:9",
+          "display_name": "16:9 (Landscape Video)"
+        },
+        {
+          "value": "3:2",
+          "display_name": "3:2 (Wide Landscape)"
+        },
+        {
+          "value": "5:4",
+          "display_name": "5:4 (Standard)"
+        },
+        {
+          "value": "1:1",
+          "display_name": "1:1 (Square)"
+        },
+        {
+          "value": "4:5",
+          "display_name": "4:5 (Portrait)"
+        },
+        {
+          "value": "2:3",
+          "display_name": "2:3 (Tall Portrait)"
+        },
+        {
+          "value": "9:16",
+          "display_name": "9:16 (Portrait Video)"
+        },
+        {
+          "value": "9:21",
+          "display_name": "9:21 (Tall Cinemascope)"
+        }
+      ],
+      "depends_on": [
+        "mode=text-to-image"
+      ]
+    },
+    "body.model": {
+      "display_name": "Model",
+      "short_desc": "Model",
+      "preselected": true,
+      "desc": "The model to use for generation.\n\n- `sd3.5-large` requires 6.5 credits per generation\n- `sd3.5-large-turbo` requires 4 credits per generation\n- `sd3.5-medium` requires 3.5 credits per generation\n- `sd3.5-flash` requires 2.5 credits per generation\n- As of the April 17, 2025, `sd3-large`, `sd3-large-turbo` and `sd3-medium`\n  are re-routed to their `sd3.5-[model version]` equivalent, at the same price.",
+      "allowed_values": [
+        {
+          "value": "sd3.5-large",
+          "display_name": "SD3.5 Large"
+        },
+        {
+          "value": "sd3.5-large-turbo",
+          "display_name": "SD3.5 Large Turbo"
+        },
+        {
+          "value": "sd3.5-medium",
+          "display_name": "SD3.5 Medium"
+        },
+        {
+          "value": "sd3.5-flash",
+          "display_name": "SD3.5 Flash"
+        }
+      ]
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "Keywords of what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values keep your image closer to your prompt). The _Large_ and _Medium_ models use a default of `4`. The _Turbo_ and _Flash_ model uses a default of `1`."
+    }
+  },
+  "POST /v2beta/stable-image/control/sketch": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "Supported Formats:\n- jpeg\n- png\n- webp\n\nImage Dimensions:\n- Every side must be at least 64 pixels\n- The total pixel count cannot exceed 9,437,184 pixels (e.g. 3072x3072, 4096x2304, etc.)\n\nImage Aspect Ratio:\n- Must be between 1:2.5 and 2.5:1 (i.e. cannot be too tall or too wide)"
+    },
+    "body.control_strength": {
+      "display_name": "Control Strength",
+      "short_desc": "Control Strength",
+      "preselected": false,
+      "desc": "How much influence, or control, the `image` has on the generation. Represented as a float between 0 and 1, where 0 is the least influence and 1 is the maximum."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/control/structure": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "An image whose structure you wish to use as the foundation for a generation.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.control_strength": {
+      "display_name": "Control Strength",
+      "short_desc": "Control Strength",
+      "preselected": false,
+      "desc": "How much influence, or control, the `image` has on the generation. Represented as a float between 0 and 1, where 0 is the least influence and 1 is the maximum."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/control/style": {
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": true,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.image": {
+      "display_name": "Image",
+      "short_desc": "Image",
+      "preselected": true,
+      "desc": "An image whose style you wish to use as the foundation for a generation.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Every side must be at least 64 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.aspect_ratio": {
+      "display_name": "Aspect Ratio",
+      "short_desc": "Aspect Ratio",
+      "preselected": false,
+      "desc": "Controls the aspect ratio of the generated image.",
+      "allowed_values": [
+        {
+          "value": "21:9",
+          "display_name": "21:9 (Cinemascope)"
+        },
+        {
+          "value": "16:9",
+          "display_name": "16:9 (Landscape Video)"
+        },
+        {
+          "value": "3:2",
+          "display_name": "3:2 (Wide Landscape)"
+        },
+        {
+          "value": "5:4",
+          "display_name": "5:4 (Standard)"
+        },
+        {
+          "value": "1:1",
+          "display_name": "1:1 (Square)"
+        },
+        {
+          "value": "4:5",
+          "display_name": "4:5 (Portrait)"
+        },
+        {
+          "value": "2:3",
+          "display_name": "2:3 (Tall Portrait)"
+        },
+        {
+          "value": "9:16",
+          "display_name": "9:16 (Portrait Video)"
+        },
+        {
+          "value": "9:21",
+          "display_name": "9:21 (Tall Cinemascope)"
+        }
+      ]
+    },
+    "body.fidelity": {
+      "display_name": "Fidelity",
+      "short_desc": "Fidelity",
+      "preselected": false,
+      "desc": "How closely the output image's style resembles the input image's style."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Guides the image model towards a particular style.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    }
+  },
+  "POST /v2beta/stable-image/control/style-transfer": {
+    "body.init_image": {
+      "display_name": "Initial Image",
+      "short_desc": "Initial Image",
+      "preselected": true,
+      "desc": "An image containing the subject you wish to restyle.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Width must be between 64 and 16,383 pixels\n- Height must be between 64 and 16,383 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels\n- The aspect ratio must be between 1:2.5 and 2.5:1"
+    },
+    "body.style_image": {
+      "display_name": "Style Image",
+      "short_desc": "Style Image",
+      "preselected": true,
+      "desc": "An image containing the new style.\n\nSupported Formats:\n- jpeg\n- png\n- webp\n\nValidation Rules:\n- Width must be between 64 and 16,383 pixels\n- Height must be between 64 and 16,383 pixels\n- Total pixel count must be between 4,096 and 9,437,184 pixels"
+    },
+    "body.prompt": {
+      "display_name": "Prompt",
+      "short_desc": "Prompt",
+      "preselected": false,
+      "desc": "What you wish to see in the output image. A strong, descriptive prompt that clearly defines\nelements, colors, and subjects will lead to better results.\n\nTo control the weight of a given word use the format `(word:weight)`,\nwhere `word` is the word you'd like to control the weight of and `weight`\nis a value between 0 and 1. For example: `The sky was a crisp (blue:0.3) and (green:0.8)`\nwould convey a sky that was blue and green, but more green than blue.",
+      "example_value": "A blue ceramic mug on a plain studio background."
+    },
+    "body.negative_prompt": {
+      "display_name": "Negative Prompt",
+      "short_desc": "Negative Prompt",
+      "preselected": false,
+      "desc": "A blurb of text describing what you **do not** wish to see in the output image.\nThis is an advanced feature."
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "A specific value that is used to guide the 'randomness' of the generation. (Omit this parameter or pass `0` to use a random seed.)"
+    },
+    "body.style_strength": {
+      "display_name": "Style Strength",
+      "short_desc": "Style Strength",
+      "preselected": false,
+      "desc": "Sometimes referred to as _denoising_, this parameter controls how much influence the\n`style_image` parameter has on the generated image. A value of 0 would yield an image that\nis identical to the input. A value of 1 would be as if you passed in no image at all."
+    },
+    "body.composition_fidelity": {
+      "display_name": "Composition Fidelity",
+      "short_desc": "Composition Fidelity",
+      "preselected": false,
+      "desc": "How closely the output image's style resembles the input image's style."
+    },
+    "body.change_strength": {
+      "display_name": "Change Strength",
+      "short_desc": "Change Strength",
+      "preselected": false,
+      "desc": "How much the original image should change"
+    },
+    "body.output_format": {
+      "display_name": "Output Format",
+      "short_desc": "Output Format",
+      "preselected": true,
+      "desc": "Dictates the `content-type` of the generated image.",
+      "allowed_values": [
+        {
+          "value": "png",
+          "display_name": "PNG"
+        },
+        {
+          "value": "jpeg",
+          "display_name": "JPEG"
+        },
+        {
+          "value": "webp",
+          "display_name": "WebP"
+        }
+      ]
+    }
+  },
+  "POST /v1/generation/{engine_id}/text-to-image": {
+    "body.height": {
+      "display_name": "Height",
+      "short_desc": "Height",
+      "preselected": false,
+      "desc": "Height of the image to generate, in pixels, in an increment divisible by 64."
+    },
+    "body.width": {
+      "display_name": "Width",
+      "short_desc": "Width",
+      "preselected": false,
+      "desc": "Width of the image to generate, in pixels, in an increment divisible by 64."
+    },
+    "body.text_prompts": {
+      "display_name": "Weighted Prompts",
+      "short_desc": "Weighted Prompts",
+      "preselected": true,
+      "desc": "One or more prompts with optional weights. Use negative weights for content to avoid."
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values keep your image closer to your prompt)"
+    },
+    "body.clip_guidance_preset": {
+      "display_name": "Clip Guidance Preset",
+      "short_desc": "Clip Guidance Preset",
+      "preselected": false,
+      "allowed_values": [
+        {
+          "value": "FAST_BLUE",
+          "display_name": "Fast Blue"
+        },
+        {
+          "value": "FAST_GREEN",
+          "display_name": "Fast Green"
+        },
+        {
+          "value": "NONE",
+          "display_name": "None"
+        },
+        {
+          "value": "SIMPLE",
+          "display_name": "Simple"
+        },
+        {
+          "value": "SLOW",
+          "display_name": "Slow"
+        },
+        {
+          "value": "SLOWER",
+          "display_name": "Slower"
+        },
+        {
+          "value": "SLOWEST",
+          "display_name": "Slowest"
+        }
+      ],
+      "desc": "Choose a legacy CLIP guidance preset."
+    },
+    "body.sampler": {
+      "display_name": "Sampler",
+      "short_desc": "Sampler",
+      "preselected": false,
+      "desc": "Which sampler to use for the diffusion process. If this value is omitted we'll automatically select an appropriate sampler for you.",
+      "allowed_values": [
+        {
+          "value": "DDIM",
+          "display_name": "DDIM"
+        },
+        {
+          "value": "DDPM",
+          "display_name": "DDPM"
+        },
+        {
+          "value": "K_DPMPP_2M",
+          "display_name": "DPM++ 2M"
+        },
+        {
+          "value": "K_DPMPP_2S_ANCESTRAL",
+          "display_name": "DPM++ 2S Ancestral"
+        },
+        {
+          "value": "K_DPM_2",
+          "display_name": "DPM 2"
+        },
+        {
+          "value": "K_DPM_2_ANCESTRAL",
+          "display_name": "DPM 2 Ancestral"
+        },
+        {
+          "value": "K_EULER",
+          "display_name": "Euler"
+        },
+        {
+          "value": "K_EULER_ANCESTRAL",
+          "display_name": "Euler Ancestral"
+        },
+        {
+          "value": "K_HEUN",
+          "display_name": "Heun"
+        },
+        {
+          "value": "K_LMS",
+          "display_name": "LMS"
+        }
+      ]
+    },
+    "body.samples": {
+      "display_name": "Samples",
+      "short_desc": "Samples",
+      "preselected": false,
+      "desc": "Number of images to generate"
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "Random noise seed (omit this option or use `0` for a random seed)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Number of diffusion steps to run."
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Pass in a style preset to guide the image model towards a particular style.\nThis list of style presets is subject to change.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    },
+    "body.extras": {
+      "display_name": "Extras",
+      "short_desc": "Extras",
+      "preselected": false,
+      "desc": "Extra parameters passed to the engine.\nThese parameters are used for in-development or experimental features and may change\nwithout warning, so please use with caution."
+    }
+  },
+  "POST /v1/generation/{engine_id}/image-to-image": {
+    "body.text_prompts": {
+      "display_name": "Weighted Prompts",
+      "short_desc": "Weighted Prompts",
+      "preselected": true,
+      "desc": "One or more prompts with optional weights. Use negative weights for content to avoid."
+    },
+    "body.init_image": {
+      "display_name": "Initial Image",
+      "short_desc": "Initial Image",
+      "preselected": true,
+      "desc": "Image used to initialize the diffusion process, in lieu of random noise."
+    },
+    "body.init_image_mode": {
+      "display_name": "Init Image Mode",
+      "short_desc": "Init Image Mode",
+      "preselected": false,
+      "desc": "Whether to use `image_strength` or `step_schedule_*` to control how much influence the `init_image` has on the result.",
+      "allowed_values": [
+        {
+          "value": "IMAGE_STRENGTH",
+          "display_name": "Image Strength"
+        },
+        {
+          "value": "STEP_SCHEDULE",
+          "display_name": "Diffusion Step Schedule"
+        }
+      ],
+      "has_dependents": true
+    },
+    "body.image_strength": {
+      "display_name": "Image Strength",
+      "short_desc": "Image Strength",
+      "preselected": false,
+      "desc": "**Usage**\n\n- How much influence the `init_image` has on the diffusion process. Values close to `1` will yield images very similar to the `init_image` while values close to `0` will yield images wildly different than the `init_image`. The behavior of this is meant to mirror DreamStudio's \"Image Strength\" slider.  <br/> <br/> This parameter is just an alternate way to set `step_schedule_start`, which is done via the calculation `1 - image_strength`. For example, passing in an Image Strength of 35% (`0.35`) would result in a `step_schedule_start` of `0.65`.\n",
+      "depends_on": [
+        "init_image_mode=IMAGE_STRENGTH"
+      ]
+    },
+    "body.step_schedule_start": {
+      "display_name": "Step Schedule Start",
+      "short_desc": "Step Schedule Start",
+      "preselected": false,
+      "desc": "Skips a proportion of the start of the diffusion steps, allowing the `init_image` to influence the final generated image.  Lower values will result in more influence from the `init_image`, while higher values will result in more influence from the diffusion steps.  (e.g. a value of `0` would simply return you the `init_image`, where a value of `1` would return you a completely different image.)",
+      "depends_on": [
+        "init_image_mode=STEP_SCHEDULE"
+      ]
+    },
+    "body.step_schedule_end": {
+      "display_name": "Step Schedule End",
+      "short_desc": "Step Schedule End",
+      "preselected": false,
+      "desc": "Skips a proportion of the end of the diffusion steps, allowing the `init_image` to influence the final generated image.  Lower values will result in more influence from the `init_image`, while higher values will result in more influence from the diffusion steps.",
+      "depends_on": [
+        "init_image_mode=STEP_SCHEDULE"
+      ]
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values keep your image closer to your prompt)"
+    },
+    "body.clip_guidance_preset": {
+      "display_name": "Clip Guidance Preset",
+      "short_desc": "Clip Guidance Preset",
+      "preselected": false,
+      "allowed_values": [
+        {
+          "value": "FAST_BLUE",
+          "display_name": "Fast Blue"
+        },
+        {
+          "value": "FAST_GREEN",
+          "display_name": "Fast Green"
+        },
+        {
+          "value": "NONE",
+          "display_name": "None"
+        },
+        {
+          "value": "SIMPLE",
+          "display_name": "Simple"
+        },
+        {
+          "value": "SLOW",
+          "display_name": "Slow"
+        },
+        {
+          "value": "SLOWER",
+          "display_name": "Slower"
+        },
+        {
+          "value": "SLOWEST",
+          "display_name": "Slowest"
+        }
+      ],
+      "desc": "Choose a legacy CLIP guidance preset."
+    },
+    "body.sampler": {
+      "display_name": "Sampler",
+      "short_desc": "Sampler",
+      "preselected": false,
+      "desc": "Which sampler to use for the diffusion process. If this value is omitted we'll automatically select an appropriate sampler for you.",
+      "allowed_values": [
+        {
+          "value": "DDIM",
+          "display_name": "DDIM"
+        },
+        {
+          "value": "DDPM",
+          "display_name": "DDPM"
+        },
+        {
+          "value": "K_DPMPP_2M",
+          "display_name": "DPM++ 2M"
+        },
+        {
+          "value": "K_DPMPP_2S_ANCESTRAL",
+          "display_name": "DPM++ 2S Ancestral"
+        },
+        {
+          "value": "K_DPM_2",
+          "display_name": "DPM 2"
+        },
+        {
+          "value": "K_DPM_2_ANCESTRAL",
+          "display_name": "DPM 2 Ancestral"
+        },
+        {
+          "value": "K_EULER",
+          "display_name": "Euler"
+        },
+        {
+          "value": "K_EULER_ANCESTRAL",
+          "display_name": "Euler Ancestral"
+        },
+        {
+          "value": "K_HEUN",
+          "display_name": "Heun"
+        },
+        {
+          "value": "K_LMS",
+          "display_name": "LMS"
+        }
+      ]
+    },
+    "body.samples": {
+      "display_name": "Samples",
+      "short_desc": "Samples",
+      "preselected": false,
+      "desc": "Number of images to generate"
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "Random noise seed (omit this option or use `0` for a random seed)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Number of diffusion steps to run."
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Pass in a style preset to guide the image model towards a particular style.\nThis list of style presets is subject to change.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    },
+    "body.extras": {
+      "display_name": "Extras",
+      "short_desc": "Extras",
+      "preselected": false,
+      "desc": "Extra parameters passed to the engine.\nThese parameters are used for in-development or experimental features and may change\nwithout warning, so please use with caution."
+    }
+  },
+  "POST /v1/generation/{engine_id}/image-to-image/masking": {
+    "body.init_image": {
+      "display_name": "Initial Image",
+      "short_desc": "Initial Image",
+      "preselected": true,
+      "desc": "Image used to initialize the diffusion process, in lieu of random noise."
+    },
+    "body.mask_source": {
+      "display_name": "Mask Source",
+      "short_desc": "Mask Source",
+      "preselected": true,
+      "desc": "**Usage**\n\nFor any given pixel, the mask determines the strength of generation on a linear scale.  This parameter determines where to source the mask from:\n- `MASK_IMAGE_WHITE` will use the white pixels of the `mask_image` as the mask, where white pixels are completely replaced and black pixels are unchanged\n- `MASK_IMAGE_BLACK` will use the black pixels of the `mask_image` as the mask, where black pixels are completely replaced and white pixels are unchanged\n- `INIT_IMAGE_ALPHA` will use the alpha channel of the `init_image` as the mask, where fully transparent pixels are completely replaced and fully opaque pixels are unchanged",
+      "allowed_values": [
+        {
+          "value": "MASK_IMAGE_WHITE",
+          "display_name": "Replace White Mask Pixels"
+        },
+        {
+          "value": "MASK_IMAGE_BLACK",
+          "display_name": "Replace Black Mask Pixels"
+        },
+        {
+          "value": "INIT_IMAGE_ALPHA",
+          "display_name": "Replace Transparent Image Pixels"
+        }
+      ]
+    },
+    "body.mask_image": {
+      "display_name": "Mask Image",
+      "short_desc": "Mask Image",
+      "preselected": false,
+      "desc": "Optional grayscale mask that allows for influence over which pixels are eligible for diffusion and at what strength. Must be the same dimensions as the `init_image`. Use the `mask_source` option to specify whether the white or black pixels should be inpainted."
+    },
+    "body.text_prompts": {
+      "display_name": "Weighted Prompts",
+      "short_desc": "Weighted Prompts",
+      "preselected": true,
+      "desc": "One or more prompts with optional weights. Use negative weights for content to avoid."
+    },
+    "body.cfg_scale": {
+      "display_name": "Prompt Guidance",
+      "short_desc": "Prompt Guidance",
+      "preselected": false,
+      "desc": "How strictly the diffusion process adheres to the prompt text (higher values keep your image closer to your prompt)"
+    },
+    "body.clip_guidance_preset": {
+      "display_name": "Clip Guidance Preset",
+      "short_desc": "Clip Guidance Preset",
+      "preselected": false,
+      "allowed_values": [
+        {
+          "value": "FAST_BLUE",
+          "display_name": "Fast Blue"
+        },
+        {
+          "value": "FAST_GREEN",
+          "display_name": "Fast Green"
+        },
+        {
+          "value": "NONE",
+          "display_name": "None"
+        },
+        {
+          "value": "SIMPLE",
+          "display_name": "Simple"
+        },
+        {
+          "value": "SLOW",
+          "display_name": "Slow"
+        },
+        {
+          "value": "SLOWER",
+          "display_name": "Slower"
+        },
+        {
+          "value": "SLOWEST",
+          "display_name": "Slowest"
+        }
+      ],
+      "desc": "Choose a legacy CLIP guidance preset."
+    },
+    "body.sampler": {
+      "display_name": "Sampler",
+      "short_desc": "Sampler",
+      "preselected": false,
+      "desc": "Which sampler to use for the diffusion process. If this value is omitted we'll automatically select an appropriate sampler for you.",
+      "allowed_values": [
+        {
+          "value": "DDIM",
+          "display_name": "DDIM"
+        },
+        {
+          "value": "DDPM",
+          "display_name": "DDPM"
+        },
+        {
+          "value": "K_DPMPP_2M",
+          "display_name": "DPM++ 2M"
+        },
+        {
+          "value": "K_DPMPP_2S_ANCESTRAL",
+          "display_name": "DPM++ 2S Ancestral"
+        },
+        {
+          "value": "K_DPM_2",
+          "display_name": "DPM 2"
+        },
+        {
+          "value": "K_DPM_2_ANCESTRAL",
+          "display_name": "DPM 2 Ancestral"
+        },
+        {
+          "value": "K_EULER",
+          "display_name": "Euler"
+        },
+        {
+          "value": "K_EULER_ANCESTRAL",
+          "display_name": "Euler Ancestral"
+        },
+        {
+          "value": "K_HEUN",
+          "display_name": "Heun"
+        },
+        {
+          "value": "K_LMS",
+          "display_name": "LMS"
+        }
+      ]
+    },
+    "body.samples": {
+      "display_name": "Samples",
+      "short_desc": "Samples",
+      "preselected": false,
+      "desc": "Number of images to generate"
+    },
+    "body.seed": {
+      "display_name": "Seed",
+      "short_desc": "Seed",
+      "preselected": false,
+      "desc": "Random noise seed (omit this option or use `0` for a random seed)"
+    },
+    "body.steps": {
+      "display_name": "Steps",
+      "short_desc": "Steps",
+      "preselected": false,
+      "desc": "Number of diffusion steps to run."
+    },
+    "body.style_preset": {
+      "display_name": "Style Preset",
+      "short_desc": "Style Preset",
+      "preselected": false,
+      "desc": "Pass in a style preset to guide the image model towards a particular style.\nThis list of style presets is subject to change.",
+      "allowed_values": [
+        {
+          "value": "enhance",
+          "display_name": "Enhance"
+        },
+        {
+          "value": "anime",
+          "display_name": "Anime"
+        },
+        {
+          "value": "photographic",
+          "display_name": "Photographic"
+        },
+        {
+          "value": "digital-art",
+          "display_name": "Digital Art"
+        },
+        {
+          "value": "comic-book",
+          "display_name": "Comic Book"
+        },
+        {
+          "value": "fantasy-art",
+          "display_name": "Fantasy Art"
+        },
+        {
+          "value": "line-art",
+          "display_name": "Line Art"
+        },
+        {
+          "value": "analog-film",
+          "display_name": "Analog Film"
+        },
+        {
+          "value": "neon-punk",
+          "display_name": "Neon Punk"
+        },
+        {
+          "value": "isometric",
+          "display_name": "Isometric"
+        },
+        {
+          "value": "low-poly",
+          "display_name": "Low Poly"
+        },
+        {
+          "value": "origami",
+          "display_name": "Origami"
+        },
+        {
+          "value": "modeling-compound",
+          "display_name": "Modeling Compound"
+        },
+        {
+          "value": "cinematic",
+          "display_name": "Cinematic"
+        },
+        {
+          "value": "3d-model",
+          "display_name": "3D Model"
+        },
+        {
+          "value": "pixel-art",
+          "display_name": "Pixel Art"
+        },
+        {
+          "value": "tile-texture",
+          "display_name": "Tile Texture"
+        }
+      ]
+    },
+    "body.extras": {
+      "display_name": "Extras",
+      "short_desc": "Extras",
+      "preselected": false,
+      "desc": "Extra parameters passed to the engine.\nThese parameters are used for in-development or experimental features and may change\nwithout warning, so please use with caution."
+    }
+  }
+}

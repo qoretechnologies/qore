@@ -28,31 +28,43 @@
 %requires(reexport) DataProvider
 %requires(reexport) StabilityAiRestClient
 %requires RestClientIo
+%requires QoreAsyncJobUtils
 
 module StabilityAiDataProvider {
-    version = "1.0";
-    desc = "user module providing a data provider API for Stability AI image generation";
+    version = "1.1";
+    desc = "user module providing Stability AI image, audio, 3D, and account actions";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("StabilityAiDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                list<hash<DataProviderDiscoveryExpectedIdentityInfo>> result = (
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "generate-image"},
+                    <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": "make-api-call"},
+                );
+                foreach string action in ((keys StabilityAiApi::Operations) + (keys StabilityAiWaitDataProvider::Jobs)) {
+                    push result, <DataProviderDiscoveryExpectedIdentityInfo>{"app": AppName, "action": action};
+                }
+                return result;
+            });
         DataProvider::registerFactory(new StabilityAiDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
             "name": StabilityAiDataProvider::AppName,
             "presentation_source_locale": "en",
             "display_name": "Stability AI",
-            "short_desc": "Stability AI text-to-image generation (Stable Diffusion)",
+            "short_desc": "Generate and edit images, audio, and 3D assets with Stability AI",
             "desc": "Provides access to [Stability AI](https://stability.ai) "
-                "— the company behind Stable Diffusion.  Three model tiers:\n\n"
-                "- **Ultra** (`ultra`): highest-quality SD3 Ultra, best for "
-                "marketing artwork, photo-real images, and brand visuals\n"
-                "- **SD3** (`sd3`): Stable Diffusion 3 / 3.5 — the default "
-                "balanced quality / speed model\n"
-                "- **Core** (`core`): faster + cheaper model with "
-                "preset-driven style transfer for prototyping and bulk work",
+                "for image generation, editing, backgrounds, style control, upscaling, audio, and 3D assets.\n\n"
+                "- Use **Core**, **Ultra**, or a concrete **SD3.5** model for images.\n"
+                "- Start/get/wait actions preserve asynchronous job IDs.\n"
+                "- Account and balance reads do not generate media.\n\n"
+                "Generation and transformations consume credits. Check the [current pricing](https://platform.stability.ai/pricing) "
+                "and use **Get Credit Balance** before submitting work.",
             "scheme": "stability-ai",
-            "logo": StabilityAiLogo,
+            "logo": Priv::StabilityAiLogoText,
             "logo_file_name": "stability-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (
@@ -61,6 +73,22 @@ module StabilityAiDataProvider {
             ),
         });
 
+        StabilityAiGenerateImageDataProvider::initializeTypes();
+        foreach hash<DataProviderActionInfo> action in (StabilityAiApi::getActionSet().getActionInfoList(AppName)) {
+            if (action.metadata.kind != "json") { action.output_type = StabilityAiOperation::MediaType; }
+            DataProviderActionCatalog::registerAction(action);
+        }
+        foreach hash<auto> job in (StabilityAiWaitDataProvider::Jobs.pairIterator()) {
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": AppName, "action": job.key, "path": "/" + job.key,
+                "display_name": job.value[1], "short_desc": job.value[2],
+                "desc": "Waits for an existing job and returns verified media. The timeout includes every status request. "
+                    "Timeout errors preserve the job ID and last status. Waiting never resubmits or cancels a job.",
+                "action_code": DPAT_API, "mutates_state": False,
+                "options": DataProviderActionCatalog::getActionOptionFromFields(StabilityAiWaitDataProvider::RequestType.getFields()),
+                "output_type": StabilityAiOperation::MediaType,
+            });
+        }
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": StabilityAiDataProvider::AppName,
             "path": "/generate-image",
@@ -71,22 +99,22 @@ module StabilityAiDataProvider {
                 "v2beta `/stable-image/generate/*` endpoints.  The `model` "
                 "option selects the endpoint (`ultra` / `sd3` / `core`).\n\n"
                 "Returns raw image bytes — `image` holds the bytes, "
-                "`content_type` the MIME type, and `finish_reason` flags "
-                "content-safety blocks (`CONTENT_FILTERED`).",
+                "`content_type` the verified MIME type, and `finish_reason` reports completion. "
+                "Safety-filtered responses raise an error. Select a concrete SD3.5 model with `sd3_model`.",
             "action_code": DPAT_API,
             "groups": ("Image Generation",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                StabilityAiGenerateImageRequestDataType::Fields{"prompt",}, {
+                StabilityAiGenerateImageDataProvider::RequestType.getFields(){"prompt",}, {
                     "preselected": True, "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                StabilityAiGenerateImageRequestDataType::Fields{
+                StabilityAiGenerateImageDataProvider::RequestType.getFields(){
                     "model", "output_format", "aspect_ratio",
                 }, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                StabilityAiGenerateImageRequestDataType::Fields - (
+                StabilityAiGenerateImageDataProvider::RequestType.getFields() - (
                     "prompt", "model", "output_format", "aspect_ratio",
                 )
             ),
@@ -102,14 +130,31 @@ module StabilityAiDataProvider {
     @section stabilityaidataproviderintro StabilityAiDataProvider Introduction
 
     The %StabilityAiDataProvider module provides a data provider API for
-    [Stability AI](https://stability.ai) text-to-image generation.
+    [Stability AI](https://stability.ai) images, audio, 3D assets, and account reads.
+    The offline catalog contains 34 typed service operations, the compatible
+    `generate-image` action, three bounded wait helpers, and generic API access.
 
-    A single DPAT_API action is registered:
-    - `generate-image` — submit a text prompt and receive image bytes
+    |!Action family|!Capabilities
+    |Images|Core, Ultra, SD3.5; masks, erasing, inpainting, outpainting, replacement and recoloring
+    |Control and upscale|Sketch, structure, style guide and transfer; fast, conservative and creative upscale
+    |Background jobs|Background replacement and relighting; start, get and bounded wait
+    |Audio|Stable Audio 2/2.5 and asynchronous Audio 3 generation, transformation and inpainting
+    |3D|Stable Fast 3D and Stable Point Aware 3D GLB assets
+    |Legacy and account|Supported legacy image operations, engine inventory, account and credit balance
 
-    The `model` option selects the underlying endpoint: `ultra`
-    (SD3 Ultra), `sd3` (Stable Diffusion 3 / 3.5), or `core` (faster +
-    cheaper, with `style_preset` support).
+    The compatible `model` option selects `ultra` (the default), `sd3`, or `core`.
+    `sd3_model` selects Large, Large Turbo, Medium, or Flash within SD3.5.
+    Finite choices preserve wire values when labels are translated. Legacy engine
+    choices come from the authenticated engine list and are separate from v2 models.
+    The API no longer supports the previously advertised `4:3` and `3:4` ratios;
+    use supported `5:4` and `4:5` ratios or another published choice.
+
+    Uploads accept binary media or named file objects and use actual multipart encoding.
+    Successful media includes verified MIME type, bytes, seeds, and completion status.
+    Filtered or malformed responses raise errors. Wait helpers retain the job ID on
+    timeout and never retry paid submissions. Production polling waits at least ten seconds.
+    Video and SD 1.6 are retired and are not advertised. Consult the pinned provenance
+    installed with StabilityAiRestClient for the reviewed contract and normalization.
 
     For programmatic use via @ref qoremediautilsintro "QoreMediaUtils",
     see @ref stabilityairestclientintro "StabilityAiRestClient" —
@@ -118,6 +163,11 @@ module StabilityAiDataProvider {
     and is registered with `MediaProviderRegistry` automatically.
 
     @section StabilityAiDataProviderRelnotes Release Notes
+
+    @subsection StabilityAiDataProviderv1_1 StabilityAiDataProvider v1.1
+    - complete the typed media/account catalog and bounded asynchronous waits
+    - validate conditional inputs and preserve binary, base64, zero, false, and empty negative prompts
+    - add complete registration, presentation, locale, wire, and installed qualification
 
     @subsection StabilityAiDataProviderv1_0 StabilityAiDataProvider v1.0
     - the initial version of the %StabilityAiDataProvider module
@@ -129,6 +179,8 @@ public namespace StabilityAiDataProvider {
 public const AppName = "StabilityAi";
 }
 
-#! App logo loaded from file
-public const StabilityAiLogo =
-    File::readTextFile(get_script_dir() + "/stability-ai-logo.svg");
+namespace Priv {
+    const StabilityAiLogoText = File::readTextFile(get_script_dir() + "/stability-ai-logo.svg");
+}
+#! Compatible public logo alias; the immutable resource is loaded in Priv during module initialization
+public const StabilityAiLogo = Priv::StabilityAiLogoText;

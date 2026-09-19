@@ -1,0 +1,83 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires StabilityAiDataProvider
+%requires json
+%exec-class StabilityCatalogTest
+
+class StabilityCatalogTest inherits QUnit::Test {
+    public {
+        # Independent reviewed inventory, including the framework generic action.
+        const Actions = ("generate-image", "make-api-call", "generate-ultra", "generate-core", "generate-sd3",
+            "upscale-fast", "upscale-conservative", "start-creative-upscale", "get-upscale-result",
+            "erase-object", "inpaint-image", "outpaint-image", "search-and-replace", "search-and-recolor",
+            "remove-background", "start-background-relight", "get-image-result", "control-sketch",
+            "control-structure", "control-style", "transfer-style", "generate-fast-3d", "generate-point-aware-3d",
+            "generate-audio-2", "transform-audio-2", "inpaint-audio-2", "start-audio-3", "start-audio-3-transform",
+            "start-audio-3-inpaint", "get-audio-result", "get-account", "get-balance", "list-engines",
+            "legacy-text-to-image", "legacy-image-to-image", "legacy-mask-image", "wait-for-image", "wait-for-upscale", "wait-for-audio");
+    }
+    constructor() : Test("Stability AI independent catalog", "1.0") {
+        addTestCase("complete registration and reachable typed actions", \inventoryTest());
+        addTestCase("recursive static presentation and repeated type serialization", \presentationTest());
+        addTestCase("qualified discovery rejects a missing action even with no diagnostics", \qualificationTest());
+        set_return_value(main());
+    }
+    private inventoryTest() {
+        StabilityAiRestClientIo client({"apikey": "offline-catalog", "url": "http://127.0.0.1:1"});
+        StabilityAiDataProvider::StabilityAiDataProvider root({"restclient": client});
+        for (int pass = 0; pass < 2; ++pass) {
+            auto actions = DataProviderActionCatalog::getActionsEx("StabilityAi");
+            assertEq(sort(Actions), sort(map $1.action, actions));
+            assertEq(0, DataProviderActionCatalog::getInitializationFailures(("StabilityAi",)).size());
+            foreach hash<auto> action in (actions) {
+                assertTrue(action.display_name.val().toBool(), action.action);
+                assertTrue(action.short_desc.val().toBool() && action.short_desc.size() < 80, action.action);
+                assertTrue(action.desc.val().toBool(), action.action);
+                assertNothing(action.cls);
+                assertTrue(action.output_type instanceof AbstractDataProviderType);
+                assertTrue(action.path.val().toBool());
+                auto provider = root.getChildProvider(action.path.substr(1));
+                assertTrue(provider instanceof AbstractDataProvider, action.path);
+                assertTrue(provider.getResponseType() instanceof AbstractDataProviderType);
+                assertTrue(action.options.val().toBool() || inlist(action.action, ("get-account", "get-balance", "list-engines")));
+            }
+        }
+    }
+    private presentationTest() {
+        auto app = DataProviderActionCatalog::getApp("StabilityAi");
+        auto actions = DataProviderActionCatalog::getActionsEx("StabilityAi");
+        auto first = DataProviderPresentation::buildSourceCatalogs(app, actions);
+        assertTrue(first{"data-provider.U3RhYmlsaXR5QWk"}.locales.root.messages.size() > 2000);
+        assertEq(first, DataProviderPresentation::buildSourceCatalogs(app, actions));
+        foreach hash<auto> action in (actions) {
+            foreach AbstractDataProviderType original in ((action.output_type,) + (map $1.type, action.options.iterator())) {
+                AbstractDataProviderType type = original;
+                for (int pass = 0; pass < 3; ++pass) {
+                    type = Serializable::deserialize(type.serialize());
+                    assertEq(sort(keys original.getFields()), sort(keys type.getFields()));
+                }
+            }
+        }
+        auto type = StabilityAiApi::getActionSet().getOperationEx("legacy-text-to-image").getRequestFields().extras.getType();
+        auto object = {"value": {"value": "literal"}, "enabled": False, "count": 0};
+        assertEq(object, type.acceptsValue(object));
+        type = Serializable::deserialize(type.serialize());
+        assertEq(object, type.acceptsValue(object));
+    }
+    private qualificationTest() {
+        list<hash<DataProviderDiscoveryExpectedIdentityInfo>> expected = (<DataProviderDiscoveryExpectedIdentityInfo>{"app": "StabilityAi"},)
+            + (map <DataProviderDiscoveryExpectedIdentityInfo>{"app": "StabilityAi", "action": $1}, Actions);
+        auto session = DataProviderActionCatalog::beginDiscovery(expected, ("StabilityAi",));
+        DataProviderActionCatalog::collectDiscoveryExpectedInventory(session);
+        auto qualified = DataProviderActionCatalog::sealDiscovery(session);
+        assertTrue(qualified.getReport().complete);
+        assertEq(0, qualified.getReport().failures.size());
+        DataProviderActionCatalog::discardQualifiedDiscovery(qualified);
+        session = DataProviderActionCatalog::beginDiscovery(expected + <DataProviderDiscoveryExpectedIdentityInfo>{
+            "app": "StabilityAi", "action": "deliberately-missing"}, ("StabilityAi",));
+        assertThrows("DATA-PROVIDER-DISCOVERY-ERROR", sub () { DataProviderActionCatalog::sealDiscovery(session); });
+    }
+}

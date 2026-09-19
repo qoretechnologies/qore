@@ -1,190 +1,71 @@
 #!/usr/bin/env qore
-# -*- mode: qore; indent-tabs-mode: nil -*-
-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
 %modern
-%allow-injection
-
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
 %requires QUnit
-%requires Logger
-%requires ConnectionProvider
-%requires DataProvider
-%requires QoreMediaUtils
-%requires StabilityAiRestClient
 %requires StabilityAiDataProvider
+%requires HttpServer
+%requires HttpServerUtil
+%exec-class StabilityCompatibilityTest
 
-%exec-class StabilityAiDataProviderTest
+const Png = parse_base64_string("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmElEQVR4nO3QMREAIBDAsJeDHPwfXkBGBjpk73XWPvdnowO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAeup0yLMxMyo0AAAAASUVORK5CYII=");
 
-class FakeStabilityAiClient inherits StabilityAiRestClient::StabilityAiRestClientIo {
-    public {
-        string last_path;
-        hash<auto> last_body;
-        hash<auto> last_headers;
+class CompatibilityHandler inherits AbstractHttpRequestHandler {
+    public { hash<auto> last; }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        last = {"path": cx.raw_path, "headers": hdr, "body": body.toString("ISO-8859-1")};
+        return makeResponse({"Content-Type": "image/png", "Seed": "0", "Finish-Reason": "SUCCESS"}, 200, Png);
     }
-    constructor() : StabilityAiRestClient::StabilityAiRestClientIo(
-            {"apikey": "k", "url": "https://api.stability.ai"}) {
-    }
-    hash<RestClient::RestResponseInfo> restPost(string path, auto body,
-            *hash<auto> hdr) {
-        last_path = path;
-        last_body = body;
-        last_headers = hdr;
-        return <RestClient::RestResponseInfo>{
-            "body": binary("PNG-BYTES"),
-            "headers": {"finish-reason": "SUCCESS", "seed": "99"},
-        };
-    }
-    string getSafeUrl() { return "https://api.stability.ai"; }
 }
 
-public class StabilityAiDataProviderTest inherits QUnit::Test {
-    public {
-        const MyOpts = Opts + {
-            "conn": "c,connection=s",
-        };
-
-        const OptionColumn = 22;
-    }
-
+class StabilityCompatibilityTest inherits QUnit::Test {
     private {
-        *string conn_name;
+        HttpServer server;
+        CompatibilityHandler handler();
+        StabilityAiRestClientIo client;
     }
-
-    constructor() : Test("StabilityAiDataProvider Test", "1.0",
-            \ARGV, MyOpts) {
-        conn_name = m_options.conn ?? ENV.STABILITY_AI_CONNECTION;
-
-        addTestCase("factory + app + action registered", \registrationTest());
-        addTestCase("generate-image hits the ultra endpoint by default",
-            \defaultEndpointTest());
-        addTestCase("model override selects sd3 endpoint",
-            \modelOverrideTest());
-        addTestCase("response surfaces image bytes + finish_reason + seed",
-            \responseTest());
-        addTestCase("app declares DesignCreative AppGroup",
-            \designCreativeGroupTest());
-        addTestCase("model allowed_values has display_name",
-            \allowedValuesTest());
-
-        # Live test requires a real Stability AI connection.
-        # Cost: one image on `core` (~$0.03 per run — well within the
-        # $10 starter credit).
-        if (conn_name) {
-            addTestCase("live: ping + generate-image (core)",
-                \liveStabilityAiTest());
-        }
+    constructor() : Test("Stability AI compatible generation", "1.1") {
+        addTestCase("prebuilt client needs no redundant API key", \constructorsTest());
+        addTestCase("default and overridden families send actual multipart", \generationTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5422-compat", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        client = new StabilityAiRestClientIo({"apikey": "compatibility-key",
+            "url": sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port)});
         set_return_value(main());
     }
-
-    private usageIntern() {
-        TestReporter::usageIntern(OptionColumn);
-        printOption("-c,--connection=ARG",
-            "set the Stability AI connection name; without it (and without "
-            "the STABILITY_AI_CONNECTION env var) the live test is skipped",
-            OptionColumn);
-    }
-
-    private registrationTest() {
-        DataProvider::AbstractDataProviderFactory f =
-            DataProvider::DataProvider::getFactory("stability-ai");
-        assertEq("stability-ai", f.getInfo().name);
-
-        hash<DataProviderAppInfo> app =
-            DataProvider::DataProviderActionCatalog::getApp("StabilityAi");
-        assertEq("StabilityAi", app.name);
-        assertEq("stability-ai", app.scheme);
-
-        # filter out the framework-injected make-api-call action (covered by
-        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
-        list<hash<DataProviderActionInfo>> actions = select
-            DataProvider::DataProviderActionCatalog::getActions("StabilityAi"),
-            $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(1, actions.size());
-        assertEq("generate-image", actions[0].action);
-    }
-
-    private defaultEndpointTest() {
-        FakeStabilityAiClient fake();
-        StabilityAiDataProvider::StabilityAiGenerateImageDataProvider prov(fake);
-        prov.doRequest({"prompt": "a sunset over the ocean"});
-        # ultra is the default model
-        assertEq("/v2beta/stable-image/generate/ultra", fake.last_path);
-        assertEq("a sunset over the ocean", fake.last_body.prompt);
-    }
-
-    private modelOverrideTest() {
-        FakeStabilityAiClient fake();
-        StabilityAiDataProvider::StabilityAiGenerateImageDataProvider prov(fake);
-        prov.doRequest({
-            "prompt": "x",
-            "model":  "sd3",
-        });
-        assertEq("/v2beta/stable-image/generate/sd3", fake.last_path);
-    }
-
-    private responseTest() {
-        FakeStabilityAiClient fake();
-        StabilityAiDataProvider::StabilityAiGenerateImageDataProvider prov(fake);
-        auto r = prov.doRequest({
-            "prompt": "x",
-            "output_format": "jpeg",
-            "aspect_ratio": "16:9",
-        });
-        assertEq(binary("PNG-BYTES"), r.image);
-        assertEq("image/jpeg",        r.content_type);
-        assertEq("SUCCESS",           r.finish_reason);
-        assertEq("99",                r.seed);
-        # Confirm aspect_ratio + output_format were forwarded in the body
-        assertEq("jpeg",              fake.last_body.output_format);
-        assertEq("16:9",              fake.last_body.aspect_ratio);
-        # And Accept header matched output_format
-        assertEq("image/jpeg",        fake.last_headers.Accept);
-    }
-
-    private designCreativeGroupTest() {
-        hash<DataProviderAppInfo> app =
-            DataProvider::DataProviderActionCatalog::getApp("StabilityAi");
-        assertTrue(inlist(DataProvider::AppGroup::AiLlm,          app.groups));
-        assertTrue(inlist(DataProvider::AppGroup::DesignCreative, app.groups));
-    }
-
-    private allowedValuesTest() {
-        *hash<auto> fld =
-            StabilityAiDataProvider::StabilityAiGenerateImageRequestDataType::Fields.model;
-        assertEq(3, fld.allowed_values.size());
-        # Every allowed value has both value + display_name
-        foreach hash<auto> av in (fld.allowed_values) {
-            assertTrue(av.value.val());
-            assertTrue(av.display_name.val());
+    globalTearDown() { delete server; }
+    private constructorsTest() {
+        foreach auto root in ((new StabilityAiDataProvider::StabilityAiDataProvider(client),
+                new StabilityAiDataProvider::StabilityAiDataProvider({"restclient": client}))) {
+            assertEq("generate-image", root.getChildProvider("generate-image").getName());
+            assertTrue(inlist("wait-for-audio", map $1.name, root.getChildProviderSummaryInfo()));
         }
     }
-
-    #! Exercises Stability AI's live `/v2beta/stable-image/generate/core`
-    /** Verifies the actual wire format against Stability's production
-        endpoint including the `Accept: image/<format>` raw-bytes-response
-        mode.  Cost: ~$0.03 per image on the `core` model.
-    */
-    private liveStabilityAiTest() {
-        AbstractConnection conn = get_connection(conn_name);
-        hash<auto> ping = conn.ping(True);
-        assertTrue(ping.ok, sprintf("Stability AI connection ping failed: %s",
-            ping.info ?? "no info"));
-
-        AbstractDataProvider prov = conn.getDataProvider();
-        AbstractDataProvider gi = prov.getChildProvider("generate-image");
-        auto result = gi.doRequest({
-            "prompt":        "a single red apple on a white background",
-            "model":         "core",   # cheapest tier
-            "output_format": "jpeg",
-            "aspect_ratio":  "1:1",
-        });
-        assertTrue(result.image.size() > 1024,
-            "Stability AI returned a non-trivial image (>1KB)");
-        assertEq("image/jpeg", result.content_type,
-            "content_type matches requested output_format");
-        # Stability returns the seed used as a response header
-        assertTrue(result.seed.val(),
-            "Stability AI returned a seed");
+    private generationTest() {
+        StabilityAiGenerateImageDataProvider provider(client);
+        auto fields = provider.getRequestType().getFields();
+        assertEq(("model=sd3",), fields.sd3_model.getAttributes().depends_on);
+        assertEq(("model=sd3",), fields.mode.getAttributes().depends_on);
+        assertEq(("model",), fields.image.getAttributes().depends_on);
+        assertEq(("image",), fields.strength.getAttributes().depends_on);
+        foreach hash<auto> request in (({"prompt": "blue mug", "aspect_ratio": "5:4"},
+                {"prompt": "blue mug", "model": "ultra", "image": Png, "strength": 0},
+                {"prompt": "blue mug", "model": "sd3", "sd3_model": "sd3.5-flash", "seed": 0},
+                {"prompt": "blue mug", "model": "core", "negative_prompt": "", "aspect_ratio": "4:5"})) {
+            auto response = provider.doRequest(request);
+            assertEq("/v2beta/stable-image/generate/" + (request.model ?? "ultra"), handler.last.path);
+            assertTrue(handler.last.headers."content-type" =~ /^multipart\/form-data;.*boundary=/);
+            assertEq("Bearer compatibility-key", handler.last.headers.authorization);
+            assertEq(Png, response.image);
+            assertEq("image/png", response.content_type);
+            assertEq("0", response.seed);
+            assertEq("SUCCESS", response.finish_reason);
+            auto restored = Serializable::deserialize(provider.getResponseType().serialize());
+            assertEq(response, restored.acceptsValue(response));
+            if (request.model == "sd3") {
+                assertTrue(handler.last.body.find("\r\n\r\nsd3.5-flash\r\n") >= 0);
+                assertEq(-1, handler.last.body.find("\r\n\r\nsd3\r\n"));
+            }
+        }
     }
 }

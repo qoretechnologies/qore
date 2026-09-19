@@ -203,7 +203,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
             # add to app info map
             index.appinfomap{app.name} = app;
             # add to app action info map (skip apps with no actions)
-            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name)) {
+            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, discovery)) {
                 index.actioninfomap{app.name} = actions;
             }
             if (!index.appmap{app.name}) {
@@ -277,14 +277,22 @@ public class ProviderIndex inherits ProviderIndexUtil {
     }
 
     #! Get YAML-serializable hash of actions keyed by action name
-    private static *hash<string, hash<auto>> getSerializableAppActions(string app) {
+    private static *hash<string, hash<auto>> getSerializableAppActions(string app,
+            DataProviderDiscoverySession discovery) {
         hash<string, hash<auto>> rv;
         foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app, False)) {
-            action -= ("get_dynamic_options", "get_output_type", "output_type");
-            rv{action.action} = action + {
-                "options": getSerializableActionOptions(action.options),
-                "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
-            };
+            try {
+                # Native serialization retains nested fields, unions, binary types, and choice values.
+                # It never executes dynamic type/default/example callbacks; unsupported state fails qualification.
+                rv{action.action} = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
+                    "output_type": action.output_type ? action.output_type.serialize() : NOTHING,
+                    "options": getSerializableActionOptions(action.options),
+                    "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
+                };
+            } catch (hash<ExceptionInfo> ex) {
+                DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-types",
+                    app + "/" + action.action, ex.err, ex.desc, ex.arg, app, action.action);
+            }
         }
         return rv;
     }
@@ -309,7 +317,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
     #! Get YAML-serializable action options
     private static *hash<auto> getSerializableActionOptions(*hash<auto> options) {
         return map {$1.key: $1.value + {
-            "type": $1.value.type.getBaseTypeName(),
+            "type": $1.value.type.serialize(),
         }}, options.pairIterator();
     }
 

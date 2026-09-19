@@ -406,6 +406,7 @@ module RestSchemaActions {
     @section restschemaactionsrelnotes Release Notes
 
     @subsection restschemaactionsv1_0 RestSchemaActions v1.0
+    - add a boolean-string codec for APIs with literal true/false string fields
     - select a declared response representation with \c response_content_type, including its output type and
       outgoing \c Accept header
     - retain schemas reached through discriminator mappings when pruning vendor documents

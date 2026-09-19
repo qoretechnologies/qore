@@ -51,12 +51,23 @@ public class StabilityAiDataProvider inherits StabilityAiDataProviderCommon {
     string getName() { return ProviderInfo.name; }
 
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        list<hash<DataProviderSummaryInfo>> result = map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        foreach string name in (keys StabilityAiApi::Operations) {
+            push result, <DataProviderSummaryInfo>{"name": name, "type": "StabilityAiOperation", "supports_request": True};
+        }
+        foreach string name in (keys StabilityAiWaitDataProvider::Jobs) {
+            push result, <DataProviderSummaryInfo>{"name": name, "type": "StabilityAiWaitDataProvider", "supports_request": True};
+        }
+        return result;
     }
-    private *list<string> getChildProviderNamesImpl() { return keys childMap; }
+    private *list<string> getChildProviderNamesImpl() {
+        return (keys childMap) + (keys StabilityAiApi::Operations) + (keys StabilityAiWaitDataProvider::Jobs);
+    }
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = childMap{name};
-        return cls ? cls.newObject(rest) : NOTHING;
+        if (cls) { return cls.newObject(rest); }
+        if (StabilityAiWaitDataProvider::Jobs.hasKey(name)) { return new StabilityAiWaitDataProvider(name, rest); }
+        return StabilityAiApi::Operations.hasKey(name) ? new StabilityAiOperation(name, rest) : NOTHING;
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
@@ -66,7 +77,7 @@ public class StabilityAiDataProviderFactory inherits AbstractDataProviderFactory
         static Class cls = new Class("StabilityAiDataProvider");
         const FactoryInfo = <DataProviderFactoryInfo>{
             "name": "stability-ai",
-            "desc": "Stability AI image-generation data provider factory",
+            "desc": "Stability AI image, audio, 3D, and account data provider factory",
             "children_can_support_apis": True,
         };
     }

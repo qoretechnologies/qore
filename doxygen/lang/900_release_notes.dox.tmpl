@@ -2884,6 +2884,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" module
       - new module providing a provider-neutral async-job polling helper
       - bounds sleep by the remaining deadline and rejects success arriving after the deadline
+      - fixes the default sleeper's millisecond-to-microsecond conversion to honor polling intervals
 
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
@@ -2912,6 +2913,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref qoremediautilsintro "QoreMediaUtils" module
       - new module providing a provider-neutral abstraction layer for generative media (image + video)
+      - validates media signatures and MIME types, reads image dimensions and WAV/MP3 duration,
+        and supports Stability AI multipart generation through the media backend
 
     - @ref qoremlutilsintro "QoreMLUtils" module
       - new module providing hyperparameter optimization and model explainability
@@ -3034,9 +3037,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref stabilityaidataproviderintro "StabilityAiDataProvider" module
       - new module providing a data provider API for <a href="https://stability.ai">Stability AI</a> text-to-image generation
+      - exposes 34 typed media/account operations, compatible generation, three bounded wait helpers,
+        and generic API access, with complete offline registration and translated presentation
 
     - @ref stabilityairestclientintro "StabilityAiRestClient" module
       - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
+      - pins attributed service schemas, authenticates balance ping and organization scope, validates
+        multipart media and responses, and rejects credential forwarding across origins
 
     - @ref stripedataproviderintro "StripeDataProvider" module
       - new module providing a data provider API for <a href="https://stripe.com">Stripe</a> payments, billing
@@ -3346,6 +3353,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - \c qdp and the @ref providerindexintro "ProviderIndex" and
       @ref providerindexutilintro "ProviderIndexUtil" modules
+      - preserve complete action input and output types in published indexes, including nested fields,
+        structured choices, and media/job results; unserializable types block qualified publication
       - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
         @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
         @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard

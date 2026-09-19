@@ -145,6 +145,7 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - redact authentication headers and echoed rejected credentials from blocking and polling error diagnostics
     - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
       request information as a blocking request, including \c response-headers-raw, the redirects followed
       (\c redirects, \c redirect-N), and \c effective-url
@@ -390,6 +391,67 @@ printf("%Y\n", ans.body);
 
 #! the RestClient namespace contains all the objects in the RestClient module
 public namespace RestClient {
+#! Removes authentication headers and echoed credentials from diagnostic values
+public class RestDiagnostics {
+    public {
+        const SensitiveHeaders = {"authorization": True, "proxy-authorization": True, "cookie": True,
+            "set-cookie": True, "x-api-key": True, "api-key": True, "apikey": True, "x-auth-token": True,
+            "x-amz-security-token": True, "unstructured-api-key": True, "ocp-apim-subscription-key": True,
+            "x-key": True};
+    }
+    #! Returns a copy of headers suitable for diagnostics
+    /** @param headers HTTP headers
+        @return headers with credential values replaced
+    */
+    static *hash<auto> headers(*hash<auto> headers) {
+        if (!exists headers) { return headers; }
+        return map {$1.key: SensitiveHeaders{$1.key.lwr()} ? "<redacted>" : $1.value}, headers.pairIterator();
+    }
+    #! Redacts known request credentials wherever a server echoes them in an error
+    /** @param value diagnostic value
+        @param request_headers headers actually sent, used only to identify secrets
+        @return sanitized diagnostic value, retaining HTTP status and structured metadata
+    */
+    static auto redact(auto value, *hash<auto> request_headers) {
+        list<string> secrets = ();
+        foreach hash<auto> item in (request_headers.pairIterator()) {
+            if (!SensitiveHeaders{item.key.lwr()}) { continue; }
+            softlist<auto> parts = item.value;
+            foreach auto part in (parts) {
+                if (part.typeCode() != NT_STRING || !part.val()) { continue; }
+                push secrets, part;
+                if (inlist(item.key.lwr(), ("authorization", "proxy-authorization")) && part =~ /^\S+\s+\S+/) {
+                    string credential = part;
+                    credential =~ s/^\S+\s+//;
+                    push secrets, credential;
+                }
+            }
+        }
+        return redactIntern(value, secrets, 0);
+    }
+    private static auto redactIntern(auto value, list<string> secrets, int depth) {
+        if (depth > 32) { return "<diagnostic nesting omitted>"; }
+        switch (value.typeCode()) {
+            case NT_HASH: {
+                hash<auto!> result = {};
+                foreach hash<auto> item in (value.pairIterator()) {
+                    result{item.key} = SensitiveHeaders{item.key.lwr()} ? "<redacted>"
+                        : redactIntern(item.value, secrets, depth + 1);
+                }
+                return result;
+            }
+            case NT_LIST: return map redactIntern($1, secrets, depth + 1), value;
+            case NT_STRING: case NT_BINARY: {
+                bool binary_value = value.typeCode() == NT_BINARY;
+                string result = binary_value ? binary_to_string(value, "ISO-8859-1") : value;
+                foreach string secret in (secrets) { result = replace(result, secret, "<redacted>"); }
+                return binary_value ? binary(result) : result;
+            }
+        }
+        return value;
+    }
+}
+
 #! Hash to use for generating authorization code requests
 /** @since RestClient 2.0
 */
@@ -2775,8 +2837,8 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
         setToken(h.token_type, h.access_token, h.refresh_token,
             h.expires_in ? (now_us() + seconds(h.expires_in)) : NOTHING);
-        debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s; expires in: %s", h.token_type,
-            h.access_token, h.refresh_token ?? "n/a", h.expires_in ?? "n/a");
+        debug("RestClient: set OAuth2 auth header: %s <redacted>; expires in: %s", h.token_type,
+            h.expires_in ?? "n/a");
     }
 
     #! Returns options to update after an OAuth2 login
@@ -3469,6 +3531,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     private hash<auto> sendAndDecodeResponse(*data body, string m, string path, hash<auto> hdr,
             *reference<hash<auto>> info, *softbool decode_errors, *string assume_content_type, *string shdr,
             *code signer, *bool no_auth_retry, *int max_response_bytes) {
+        on_error {
+            hash<auto> safe = RestDiagnostics::redact($1, hdr);
+            info = RestDiagnostics::redact(info, hdr);
+            rethrow safe.err, safe.desc, safe.arg;
+        }
         hash<auto> h;
 
         bool retry = !no_auth_retry;
@@ -3494,11 +3561,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                         "body": body,
                         "hdr": hdr - shdr,
                     });
-                    debug("sending (signed) %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
+                    debug("sending (signed) %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), RestDiagnostics::headers(hdr));
                 }
                 # in case of any "signer" and "shdr" args, the request could be signed twice
                 signRequest(m, path, body, \hdr);
-                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), hdr);
+                debug("sending %y: path: %y body: %d bytes hdr: %y", m, path, body.size(), RestDiagnostics::headers(hdr));
                 h = max_response_bytes
                     ? sendWithResponseLimit(body, m, path, hdr, \info, max_response_bytes)
                     : send(body, m, path, hdr, False, \info);
@@ -3519,7 +3586,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                 }
             } catch (hash<ExceptionInfo> ex) {
                 error("RestClient sent: %y received: %y err: %s: %s", info."request-uri", info."response-uri", ex.err,
-                    ex.desc);
+                    RestDiagnostics::redact(ex.desc, hdr));
                 info."response-code" = info."response-headers".status_code;
                 if (negotiate_retry && info."response-code" == 401
                         && tryNegotiateAuthRetry(info."response-headers", \hdr, \negotiate_context)) {
@@ -5916,7 +5983,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
         string http_version = real_opts.http_version ?? "auto";
         rc.debug("RestConnecton ping: start ping: %s %y path: %y http_version: %y hdr: %y", method, rc.getURL(),
-            path, http_version, headers);
+            path, http_version, RestDiagnostics::headers(headers));
         state = SPS_REST_PING;
         poller = rc.startPollSendRecv(method, path, body, headers);
     }
@@ -6043,7 +6110,11 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
     */
     *hash<SocketPollInfo> continuePoll() {
         AutoLock al(m);
-
+        on_error {
+            hash<auto> safe = RestDiagnostics::redact($1, hdr);
+            info = RestDiagnostics::redact(info, hdr);
+            rethrow safe.err, safe.desc, safe.arg;
+        }
         while (True) {
             *hash<SocketPollInfo> pinfo = poller.continuePoll();
             if (pinfo) {

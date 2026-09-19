@@ -499,6 +499,9 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
         hash<PingInfo> rv(self{"name", "desc", "opts"} + {
             "ping_flags": ping_flags,
         });
+        # Ping results are diagnostics, including when authentication fails. Apply
+        # the same sensitive-option policy as getInfo() before returning either result.
+        map remove rv.opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
         rv.url = safe_url;
 
         last_check = now_us();
@@ -603,7 +606,7 @@ public class AbstractConnection inherits Qore::Serializable, Logger::LoggerWrapp
             h.url = safe_url;
             delete h.url_hash.password;
             # remove all sensitive option values as well
-            map remove h.opts{$1}, keys getConnectionSchemeInfo().sensitive_options;
+            map remove h.opts{$1.key}, getConnectionSchemeInfo().options.pairIterator(), $1.value.sensitive;
         }
         # sort options by key
         if (h.opts) {

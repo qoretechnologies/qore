@@ -43,7 +43,7 @@
 %requires reflection
 
 module ProviderIndexUtil {
-    version = "1.1";
+    version = "1.2";
     desc = "user module for indexing data providers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -60,6 +60,9 @@ module ProviderIndexUtil {
     on-demand initialization.
 
     @section providerindexutil_relnotes Release Notes
+
+    @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
+    - restore complete input and output type graphs from ProviderIndex 1.2, retaining support for legacy indexes
 
     @subsection providerindexutil_v1_1 ProviderIndexUtil v1.1
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled

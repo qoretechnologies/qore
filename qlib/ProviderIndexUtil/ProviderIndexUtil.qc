@@ -54,18 +54,14 @@ public hashdecl DataProviderIndexInfo {
     *hash<string, hash<auto>> appinfomap;
 
     #! Maps apps to actions to action info hashes
-    /** @note Actions are missing the "data_provider_info", "get_dynamic_options" and "get_output_type" keys, which
-        cannot be serialized to YAML, so they are not included in the action info hashes
-
-        Additionally, action option types are approximated from the base type name of each option type
+    /** @note Dynamic action callbacks are omitted. Since ProviderIndex 1.2, action input and output types
+        use native serialized type graphs. Readers also accept primitive type names from legacy indexes.
     */
     *hash<string, hash<string, hash<auto>>> actioninfomap;
 
     #! Maps app actions to action info hashes
-    /** @note Actions are missing the "data_provider_info", "get_dynamic_options" and "get_output_type" keys, which
-        cannot be serialized to YAML, so they are not included in the action info hashes
-
-        Additionally, action option types are approximated from the base type name of each option type
+    /** @note Dynamic action callbacks are omitted. Since ProviderIndex 1.2, action input and output types
+        use native serialized type graphs. Readers also accept primitive type names from legacy indexes.
     */
     *hash<string, hash<auto>> top_actioninfomap;
 }
@@ -1283,6 +1279,8 @@ public class ProviderIndexUtil {
             foreach hash<auto> j in (i.value.pairIterator()) {
                 on_error rethrow $1.err, sprintf("%s (app %y action %y)", $1.desc, i.key, j.key);
                 overrides{j.key} = {
+                    "output_type": exists j.value.output_type
+                        ? deserializeActionType(j.value.output_type, type_map) : NOTHING,
                     "path_vars": (j.value.path_vars
                         ? path_vars_th.doCastValues(j.value.path_vars)
                         : NOTHING),
@@ -1295,7 +1293,7 @@ public class ProviderIndexUtil {
                             "element_allowed_values": (exists $1.value.element_allowed_values
                                 ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
                                 : NOTHING),
-                            "type": type_map{$1.value.type} ?? type_map."auto",
+                            "type": deserializeActionType($1.value.type, type_map),
                             "default_view": ui_view_map{$1.value.default_view},
                         }
                     }, j.value.options.pairIterator()) : NOTHING),
@@ -1310,6 +1308,12 @@ public class ProviderIndexUtil {
             rv{i.key} = action_info_th.doCastValuesWithOverrides(i.value, overrides);
         }
         return rv;
+    }
+
+    #! Restores exact current action types while retaining legacy primitive-name indexes
+    static private auto deserializeActionType(auto value, hash<auto> type_map) {
+        return value.typeCode() == NT_BINARY ? Serializable::deserialize(value)
+            : type_map{value} ?? type_map."auto";
     }
 
     #! Deserialize data provider info
