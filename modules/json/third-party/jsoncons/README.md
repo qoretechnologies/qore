@@ -15,7 +15,7 @@ Compared to other JSON libraries, jsoncons has been designed to handle very larg
 SAX-style parsers and serializers. It supports reading an entire JSON text in memory in a variant-like structure.
 But it also supports efficient access to the underlying data using StAX-style pull parsing and push serializing.
 And it supports incremental parsing into a user's preferred types, using
-information about user types provided by specializations of [reflection traits](doc/ref/corelib/reflect.md).
+information about user types provided by specializations of [reflection traits](doc/ref/corelib/reflection-traits.md).
 
 The [jsoncons data model](doc/ref/corelib/data-model.md) supports the familiar JSON types - nulls,
 booleans, numbers, strings, arrays, objects - plus byte strings. In addition, jsoncons 
@@ -78,9 +78,9 @@ _"really good"_ _"awesome project"_ _"very solid and very dependable"_ _"my team
 
 - [JSONTestSuite and JSON_checker test suites](https://danielaparker.github.io/json_benchmarks/) 
 
-- [Performance benchmarks with text and integers](https://github.com/danielaparker/json_benchmarks/blob/master/report/performance.md)
+- [Performance benchmarks with text and integers](https://github.com/danielaparker/json_benchmarks/blob/master/report/big.text.integer.md)
 
-- [Performance benchmarks with text and doubles](https://github.com/danielaparker/json_benchmarks/blob/master/report/performance_fp.md)
+- [Performance benchmarks with text and floating point numbers](https://github.com/danielaparker/json_benchmarks/blob/master/report/big.text.floating_point.md)
 
 The benchmark code is available [here](https://github.com/danielaparker/json_benchmarks).
 
@@ -218,7 +218,7 @@ The functions [decode_json](doc/ref/corelib/decode_json.md) and [encode_json](do
 convert strings or streams of JSON data to C++ data structures and back. 
 Decode and encode work for all C++ classes that implement jsoncons reflection traits.
 defined. jsoncons already supports many types in the standard library, 
-and your own types will be supported too if you specialize [reflection traits](doc/ref/corelib/reflect.md)
+and your own types will be supported too if you specialize [reflection traits](doc/ref/corelib/reflection-traits.md)
 in the `jsoncons` namespace. 
 
 ```cpp
@@ -338,7 +338,7 @@ Marilyn C, 0.9, 1514862245
 ```
 This example makes use of the convenience macros `JSONCONS_ENUM_TRAITS`,
 `JSONCONS_N_CTOR_GETTER_TRAITS`, and `JSONCONS_ALL_CTOR_GETTER_TRAITS` to specialize the 
-[reflection traits](doc/ref/corelib/reflect.md) for the enum type
+[reflection traits](doc/ref/corelib/reflection-traits.md) for the enum type
 `ns::hiking_experience`, the class `ns::hiking_reputon` (with some non-mandatory members), and the class
 `ns::hiking_reputation` (with all mandatory members.)
 The macro `JSONCONS_ENUM_TRAITS` generates the code from
@@ -521,7 +521,7 @@ jsoncons allows you to work with the CBOR data similarly to JSON data:
 
 - As a variant-like data structure, [basic_json](doc/ref/corelib/basic_json.md) 
 
-- As a strongly typed C++ data structure that implements [reflection traits](doc/ref/corelib/reflect.md)
+- As a strongly typed C++ data structure that implements [reflection traits](doc/ref/corelib/reflection-traits.md)
 
 - With [cursor-level access](doc/ref/cbor/basic_cbor_cursor.md) to a stream of parse events
 
@@ -778,12 +778,16 @@ The jsoncons platform dependent binary configuration draws on to the excellent M
 
 Thanks to Milo Yip, author of [RapidJSON](http://rapidjson.org/), for raising the quality of JSON libraries across the board, by publishing [the benchmarks](https://github.com/miloyip/nativejson-benchmark), and contacting this project (among others) to share the results.
 
-The jsoncons implementation of the Grisu3 algorithm for printing floating-point numbers follows Florian Loitsch's MIT licensed [grisu3_59_56 implementation](http://florian.loitsch.com/publications), with minor modifications. 
+The library includes a slightly modified version of the [Grisu3 algorithm for printing floating-point numbers](http://florian.loitsch.com/publications) from Florian Loitsch ahich is licensed under the [MIT License](https://opensource.org/license/MIT). Copyright © 2009 Florian Loitsch
+
+Since 1.9.0, the library includes a slightly modified version of the [A5HASH Fast Hash Functions](https://github.com/avaneev/a5hash) from Aleksey Vaneev which is licensed under the [MIT License](https://opensource.org/license/MIT). Copyright (c) 2025 Aleksey Vaneev
 
 The macro `JSONCONS_ALL_MEMBER_TRAITS` follows the approach taken by Martin York's [ThorsSerializer](https://github.com/Loki-Astari/ThorsSerializer)
 
 The jsoncons implementations of BSON decimal128 to and from string,
 and ObjectId to and from string, are based on the Apache 2 licensed [libbson](https://github.com/mongodb/mongo-c-driver/tree/master/src/libbson).
+
+
 
 Special thanks to our [contributors](https://github.com/danielaparker/jsoncons/blob/master/acknowledgements.md)
  

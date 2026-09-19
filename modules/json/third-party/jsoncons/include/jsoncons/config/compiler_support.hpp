@@ -478,7 +478,7 @@ namespace jsoncons {
 namespace jsoncons { 
 namespace binary { 
 
-    static inline bool add_check_overflow(std::size_t v1, std::size_t v2, std::size_t *r)
+    inline bool add_check_overflow(std::size_t v1, std::size_t v2, std::size_t *r)
     {
     #if ((defined(__GNUC__) && (__GNUC__ >= 5)) && !defined(__INTEL_COMPILER)) || __has_builtin(__builtin_add_overflow)
         return __builtin_add_overflow(v1, v2, r);
@@ -571,5 +571,34 @@ namespace binary {
 #else
 #  define JSONCONS_FALLTHROUGH
 #endif
+
+#if defined( __INTEL_COMPILER ) && __INTEL_COMPILER >= 1300 && \
+	!defined( _MSC_VER )
+
+	#define JSONCONS_ICC_GCC
+
+#endif // ICC check
+
+#if defined( __GNUC__ ) || defined( __clang__ ) || \
+	defined( __IBMC__ ) || defined( __IBMCPP__ ) || defined( JSONCONS_ICC_GCC )
+
+	#define JSONCONS_HAS_GCC_BUILTINS
+
+#endif // GCC built-ins check
+
+#if defined( _MSC_VER )
+	#if defined( __BMI2__ ) || ( !defined( JSONCONS_HAS_GCC_BUILTINS ) && \
+		defined( _M_AMD64 ) && defined( __AVX2__ ) && \
+		( defined( __INTEL_COMPILER ) || _MSC_VER >= 1900 ))
+
+		#include <immintrin.h>
+		#define JSONCONS_HAS_MULX_INTRINSIC
+
+	#else // BMI2
+
+		#include <intrin.h>
+
+	#endif // BMI2
+#endif // defined( _MSC_VER )
 
 #endif // JSONCONS_CONFIG_COMPILER_SUPPORT_HPP

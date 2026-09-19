@@ -131,8 +131,14 @@ private:
     bool allow_trailing_comma_;
     bool allow_comments_;    
     bool lossless_number_;    
-    bool lossless_bignum_;    
-
+    bool lossless_bignum_; 
+    bool enable_str_to_inf_;   
+    bool enable_str_to_neginf_;   
+    bool enable_str_to_nan_;   
+    std::basic_string<char_type> inf_to_str_;
+    std::basic_string<char_type> neginf_to_str_;
+    std::basic_string<char_type> nan_to_str_;
+    
     std::function<bool(json_errc,const ser_context&)> err_handler_;
     int level_{0};
     uint32_t cp_{0};
@@ -155,7 +161,6 @@ private:
     std::basic_string<char_type,std::char_traits<char_type>,char_allocator_type> buffer_;
 
     std::vector<parse_state,parse_state_allocator_type> state_stack_;
-    std::vector<std::pair<std::basic_string<char_type>,double>> string_double_map_;
 
     // Noncopyable and nonmoveable
     basic_json_parser(const basic_json_parser&) = delete;
@@ -180,6 +185,12 @@ public:
          allow_comments_(options.allow_comments()),
          lossless_number_(options.lossless_number()),
          lossless_bignum_(options.lossless_bignum()),
+         enable_str_to_inf_(options.enable_str_to_inf()),
+         enable_str_to_neginf_(options.enable_str_to_neginf()),
+         enable_str_to_nan_(options.enable_str_to_nan()),
+         inf_to_str_(options.inf_to_str()),
+         neginf_to_str_(options.neginf_to_str()),
+         nan_to_str_(options.nan_to_str()),
 #if !defined(JSONCONS_NO_DEPRECATED)
          err_handler_(options.err_handler()),
 #else
@@ -193,19 +204,6 @@ public:
         std::size_t initial_stack_capacity = options.max_nesting_depth() <= (default_initial_stack_capacity-2) ? (options.max_nesting_depth()+2) : default_initial_stack_capacity;
         state_stack_.reserve(initial_stack_capacity );
         push_state(parse_state::root);
-
-        if (options.enable_str_to_nan())
-        {
-            string_double_map_.emplace_back(options.nan_to_str(),std::nan(""));
-        }
-        if (options.enable_str_to_inf())
-        {
-            string_double_map_.emplace_back(options.inf_to_str(),std::numeric_limits<double>::infinity());
-        }
-        if (options.enable_str_to_neginf())
-        {
-            string_double_map_.emplace_back(options.neginf_to_str(),-std::numeric_limits<double>::infinity());
-        }
     }
 #if !defined(JSONCONS_NO_DEPRECATED)
 
@@ -222,6 +220,12 @@ public:
          allow_comments_(options.allow_comments()),
          lossless_number_(options.lossless_number()),
          lossless_bignum_(options.lossless_bignum()),
+         enable_str_to_inf_(options.enable_str_to_inf()),
+         enable_str_to_neginf_(options.enable_str_to_neginf()),
+         enable_str_to_nan_(options.enable_str_to_nan()),
+         inf_to_str_(options.inf_to_str()),
+         neginf_to_str_(options.neginf_to_str()),
+         nan_to_str_(options.nan_to_str()),
          err_handler_(err_handler),
          buffer_(temp_alloc),
          state_stack_(temp_alloc)
@@ -231,19 +235,6 @@ public:
         std::size_t initial_stack_capacity = options.max_nesting_depth() <= (default_initial_stack_capacity-2) ? (options.max_nesting_depth()+2) : default_initial_stack_capacity;
         state_stack_.reserve(initial_stack_capacity );
         push_state(parse_state::root);
-
-        if (options.enable_str_to_nan())
-        {
-            string_double_map_.emplace_back(options.nan_to_str(),std::nan(""));
-        }
-        if (options.enable_str_to_inf())
-        {
-            string_double_map_.emplace_back(options.inf_to_str(),std::numeric_limits<double>::infinity());
-        }
-        if (options.enable_str_to_neginf())
-        {
-            string_double_map_.emplace_back(options.neginf_to_str(),-std::numeric_limits<double>::infinity());
-        }
     }
 #endif
     
@@ -2328,13 +2319,13 @@ escape_u8:
         JSONCONS_UNREACHABLE();               
     }
 
-    void translate_conv_errc(unicode_traits::conv_errc result, std::error_code& ec)
+    void translate_conv_errc(unicode_traits::unicode_errc result, std::error_code& ec)
     {
         switch (result)
         {
-        case unicode_traits::conv_errc():
+        case unicode_traits::unicode_errc():
             break;
-        case unicode_traits::conv_errc::over_long_utf8_sequence:
+        case unicode_traits::unicode_errc::over_long_utf8_sequence:
             more_ = err_handler_(json_errc::over_long_utf8_sequence, *this);
             if (!more_)
             {
@@ -2342,7 +2333,7 @@ escape_u8:
                 return;
             }
             break;
-        case unicode_traits::conv_errc::unpaired_high_surrogate:
+        case unicode_traits::unicode_errc::unpaired_high_surrogate:
             more_ = err_handler_(json_errc::unpaired_high_surrogate, *this);
             if (!more_)
             {
@@ -2350,15 +2341,15 @@ escape_u8:
                 return;
             }
             break;
-        case unicode_traits::conv_errc::expected_continuation_byte:
-            more_ = err_handler_(json_errc::expected_continuation_byte, *this);
+        case unicode_traits::unicode_errc::bad_continuation_byte:
+            more_ = err_handler_(json_errc::bad_continuation_byte, *this);
             if (!more_)
             {
-                ec = json_errc::expected_continuation_byte;
+                ec = json_errc::bad_continuation_byte;
                 return;
             }
             break;
-        case unicode_traits::conv_errc::illegal_surrogate_value:
+        case unicode_traits::unicode_errc::illegal_surrogate_value:
             more_ = err_handler_(json_errc::illegal_surrogate_value, *this);
             if (!more_)
             {
@@ -2377,27 +2368,27 @@ escape_u8:
         }
     }
 
-    std::size_t line() const override
+    std::size_t line() const final
     {
         return line_;
     }
 
-    std::size_t column() const override
+    std::size_t column() const final
     {
         return (position_ - mark_position_) + 1;
     }
 
-    std::size_t begin_position() const override
+    std::size_t begin_position() const final
     {
         return begin_position_;
     }
 
-    std::size_t position() const override
+    std::size_t position() const final
     {
         return begin_position_;
     }
 
-    std::size_t end_position() const override
+    std::size_t end_position() const final
     {
         return position_;
     }
@@ -2594,7 +2585,7 @@ private:
     {
         string_view_type sv(s, length);
         auto result = unicode_traits::validate(s, length);
-        if (result.ec != unicode_traits::conv_errc())
+        if (result.ec != unicode_traits::unicode_errc())
         {
             translate_conv_errc(result.ec,ec);
             position_ += (result.ptr - s);
@@ -2612,37 +2603,47 @@ private:
             case parse_state::object:
             case parse_state::array:
             {
-                auto it = std::find_if(string_double_map_.begin(), string_double_map_.end(), string_maps_to_double{ sv });
-                if (it != string_double_map_.end())
+                if (enable_str_to_inf_ && sv == inf_to_str_)
                 {
-                    visitor.double_value((*it).second, semantic_tag::none, *this, ec);
-                    if (JSONCONS_UNLIKELY(ec)){return;}
-                    more_ = !cursor_mode_;
+                    visitor.double_value(std::numeric_limits<double>::infinity(), semantic_tag::none, *this, ec);
+                }
+                else if (enable_str_to_neginf_ && sv == neginf_to_str_)
+                {
+                    visitor.double_value(-std::numeric_limits<double>::infinity(), semantic_tag::none, *this, ec);
+                }
+                else if (enable_str_to_nan_ && sv == nan_to_str_)
+                {
+                    visitor.double_value(std::numeric_limits<double>::quiet_NaN(), semantic_tag::none, *this, ec);
                 }
                 else
                 {
                     visitor.string_value(sv, escape_tag_, *this, ec);
-                    if (JSONCONS_UNLIKELY(ec)){return;}
-                    more_ = !cursor_mode_;
                 }
+                if (JSONCONS_UNLIKELY(ec)){return;}
+                more_ = !cursor_mode_;
                 state_ = parse_state::expect_comma_or_end;
                 break;
             }
             case parse_state::root:
             {
-                auto it = std::find_if(string_double_map_.begin(),string_double_map_.end(),string_maps_to_double{sv});
-                if (it != string_double_map_.end())
+                if (enable_str_to_inf_ && sv == inf_to_str_)
                 {
-                    visitor.double_value((*it).second, semantic_tag::none, *this, ec);
-                    if (JSONCONS_UNLIKELY(ec)){return;}
-                    more_ = !cursor_mode_;
+                    visitor.double_value(std::numeric_limits<double>::infinity(), semantic_tag::none, *this, ec);
+                }
+                else if (enable_str_to_neginf_ && sv == neginf_to_str_)
+                {
+                    visitor.double_value(-std::numeric_limits<double>::infinity(), semantic_tag::none, *this, ec);
+                }
+                else if (enable_str_to_nan_ && sv == nan_to_str_)
+                {
+                    visitor.double_value(std::numeric_limits<double>::quiet_NaN(), semantic_tag::none, *this, ec);
                 }
                 else
                 {
                     visitor.string_value(sv, escape_tag_, *this, ec);
-                    if (JSONCONS_UNLIKELY(ec)){return;}
-                    more_ = !cursor_mode_;
                 }
+                if (JSONCONS_UNLIKELY(ec)){return;}
+                more_ = !cursor_mode_;
                 state_ = parse_state::accept;
                 break;
             }

@@ -121,7 +121,7 @@ that the runtime accepts with type names and some that it rejects.
 When `lib/scanner.lpp` changes these rules, update the table in `src/scanner.c`,
 keeping it sorted, and the keyword lists in both tests. Then regenerate
 `parser.c`, `grammar.json` and `node-types.json` with Node 24 and
-`npx tree-sitter-cli@0.26.8 generate`.
+`npx tree-sitter-cli@0.26.13 generate`.
 
 `examples/test/modules/astparser/keyword-call.qtest` compares the runtime and
 AstParser for each keyword in each call context: statements, expressions,

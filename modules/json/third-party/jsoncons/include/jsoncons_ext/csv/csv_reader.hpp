@@ -151,7 +151,7 @@ namespace csv {
             {
                 if (parser_.source_exhausted())
                 {
-                    auto s = source_.read_buffer(ec);
+                    auto s = source_.read_chunk(ec);
                     if (JSONCONS_UNLIKELY(ec)) return;
                     if (s.size() > 0)
                     {
@@ -164,8 +164,8 @@ namespace csv {
         }
     };
 
-    using csv_string_reader = basic_csv_reader<char,string_source<char>>;
-    using wcsv_string_reader = basic_csv_reader<wchar_t,string_source<wchar_t>>;
+    using csv_string_reader = basic_csv_reader<char,chars_source<char>>;
+    using wcsv_string_reader = basic_csv_reader<wchar_t,chars_source<wchar_t>>;
     using csv_stream_reader = basic_csv_reader<char,stream_source<char>>;
     using wcsv_stream_reader = basic_csv_reader<wchar_t,stream_source<wchar_t>>;
 

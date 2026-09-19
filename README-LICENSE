@@ -40,10 +40,10 @@ under the following license:
           http://www.boost.org/LICENSE_1_0.txt)
 */
 
-the qore library contains xxHash source code under the following license:
+the qore library contains xxHash 0.8.4 source code under the following license:
 /*
    xxHash - Fast Hash algorithm
-   Copyright (C) 2012, Yann Collet.
+   Copyright (C) 2012-2023 Yann Collet.
    BSD 2-Clause License (http://www.opensource.org/licenses/bsd-license.php)
 
    Redistribution and use in source and binary forms, with or without
@@ -70,7 +70,7 @@ the qore library contains xxHash source code under the following license:
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
    You can contact the author at :
-   - xxHash source repository : http://code.google.com/p/xxhash/
+   - xxHash source repository : https://github.com/Cyan4973/xxHash
 */
 
 the qore executable contains getopt_long source code

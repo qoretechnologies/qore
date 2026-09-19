@@ -257,12 +257,12 @@ public:
 private:
     // Implementing methods
 
-    void visit_flush() override
+    void visit_flush() final
     {
         sink_.flush();
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_begin_object(semantic_tag, const ser_context&, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_begin_object(semantic_tag, const ser_context&, std::error_code& ec) final
     {
         if (JSONCONS_UNLIKELY(++nesting_depth_ > max_nesting_depth_))
         {
@@ -275,7 +275,7 @@ private:
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_begin_object(std::size_t length, semantic_tag, const ser_context&, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_begin_object(std::size_t length, semantic_tag, const ser_context&, std::error_code& ec) final
     {
         if (JSONCONS_UNLIKELY(++nesting_depth_ > max_nesting_depth_))
         {
@@ -284,44 +284,12 @@ private:
         } 
         stack_.emplace_back(cbor_container_type::object, length);
 
-        if (length <= 0x17)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0xa0 + length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (length <= 0xff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0xb8), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint8_t>(length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (length <= 0xffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0xb9), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint16_t>(length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (length <= 0xffffffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0xba), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint32_t>(length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (uint64_t(length) <= (std::numeric_limits<std::uint64_t>::max)())
-        {
-            binary::native_to_big(static_cast<uint8_t>(0xbb), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint64_t>(length), 
-                                  std::back_inserter(sink_));
-        }
+        write_type_and_length(0xa0, length);
 
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_end_object(const ser_context&, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_end_object(const ser_context&, std::error_code& ec) final
     {
         JSONCONS_ASSERT(!stack_.empty());
         --nesting_depth_;
@@ -350,7 +318,7 @@ private:
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_begin_array(semantic_tag, const ser_context&, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_begin_array(semantic_tag, const ser_context&, std::error_code& ec) final
     {
         if (JSONCONS_UNLIKELY(++nesting_depth_ > max_nesting_depth_))
         {
@@ -362,7 +330,7 @@ private:
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_begin_array(std::size_t length, semantic_tag, const ser_context&, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_begin_array(std::size_t length, semantic_tag, const ser_context&, std::error_code& ec) final
     {
         if (JSONCONS_UNLIKELY(++nesting_depth_ > max_nesting_depth_))
         {
@@ -370,43 +338,11 @@ private:
             JSONCONS_VISITOR_RETURN;
         } 
         stack_.emplace_back(cbor_container_type::array, length);
-        if (length <= 0x17)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x80 + length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (length <= 0xff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x98), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint8_t>(length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (length <= 0xffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x99), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint16_t>(length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (length <= 0xffffffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x9a), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint32_t>(length), 
-                                  std::back_inserter(sink_));
-        } 
-        else if (uint64_t(length) <= (std::numeric_limits<std::uint64_t>::max)())
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x9b), 
-                                  std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint64_t>(length), 
-                                  std::back_inserter(sink_));
-        }
+        write_type_and_length(0x80, length);
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_end_array(const ser_context&, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_end_array(const ser_context&, std::error_code& ec) final
     {
         JSONCONS_ASSERT(!stack_.empty());
         --nesting_depth_;
@@ -435,13 +371,13 @@ private:
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_key(const string_view_type& name, const ser_context& context, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_key(const string_view_type& name, const ser_context& context, std::error_code& ec) final
     {
         visit_string(name, semantic_tag::none, context, ec);
         JSONCONS_VISITOR_RETURN;
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_null(semantic_tag tag, const ser_context&, std::error_code&) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_null(semantic_tag tag, const ser_context&, std::error_code&) final
     {
         if (tag == semantic_tag::undefined)
         {
@@ -459,7 +395,7 @@ private:
     void write_string(const string_view& sv)
     {
         auto sink = unicode_traits::validate(sv.data(), sv.size());
-        if (sink.ec != unicode_traits::conv_errc())
+        if (sink.ec != unicode_traits::unicode_errc())
         {
             JSONCONS_THROW(ser_error(cbor_errc::invalid_utf8_text_string));
         }
@@ -485,49 +421,42 @@ private:
         }
     }
 
-    void write_utf8_string(const string_view& sv)
+    void write_type_and_length(uint8_t major_type, uint64_t length)
     {
-        const size_t length = sv.size();
-
         if (length <= 0x17)
         {
-            // fixstr stores a byte array whose length is upto 31 bytes
-            binary::native_to_big(static_cast<uint8_t>(0x60 + length), 
-                                            std::back_inserter(sink_));
+            sink_.push_back(static_cast<uint8_t>(major_type + length));
         }
         else if (length <= 0xff)
         {
-            binary::native_to_big(static_cast<uint8_t>(0x78), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint8_t>(length), 
-                                            std::back_inserter(sink_));
+            sink_.push_back(static_cast<uint8_t>(major_type + 0x18));
+            sink_.push_back(static_cast<uint8_t>(length));
         }
         else if (length <= 0xffff)
         {
-            binary::native_to_big(static_cast<uint8_t>(0x79), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint16_t>(length), 
+            sink_.push_back(static_cast<uint8_t>(major_type + 0x19));
+            binary::native_to_big(static_cast<uint16_t>(length),
                                             std::back_inserter(sink_));
         }
         else if (length <= 0xffffffff)
         {
-            binary::native_to_big(static_cast<uint8_t>(0x7a), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint32_t>(length), 
+            sink_.push_back(static_cast<uint8_t>(major_type + 0x1a));
+            binary::native_to_big(static_cast<uint32_t>(length),
                                             std::back_inserter(sink_));
         }
-        else if (uint64_t(length) <= (std::numeric_limits<std::uint64_t>::max)())
+        else
         {
-            binary::native_to_big(static_cast<uint8_t>(0x7b), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint64_t>(length), 
+            sink_.push_back(static_cast<uint8_t>(major_type + 0x1b));
+            binary::native_to_big(static_cast<uint64_t>(length),
                                             std::back_inserter(sink_));
         }
+    }
 
-        for (auto c : sv)
-        {
-            sink_.push_back(c);
-        }
+    void write_utf8_string(const string_view& sv)
+    {
+        write_type_and_length(0x60, sv.size());
+
+        sink_.append(reinterpret_cast<const uint8_t*>(sv.data()), sv.size());
     }
 
     void write_bignum(bigint& n)
@@ -917,7 +846,7 @@ private:
         visit_end_array(context, ec);
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_string(const string_view_type& sv, semantic_tag tag, const ser_context& context, std::error_code& ec) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_string(const string_view_type& sv, semantic_tag tag, const ser_context& context, std::error_code& ec) final
     {
         switch (tag)
         {
@@ -980,7 +909,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_byte_string(const byte_string_view& b, 
                            semantic_tag tag, 
                            const ser_context&,
-                           std::error_code&) override
+                           std::error_code&) final
     {
         byte_string_chars_format encoding_hint;
         switch (tag)
@@ -1037,9 +966,9 @@ private:
     }
 
     JSONCONS_VISITOR_RETURN_TYPE visit_byte_string(const byte_string_view& b, 
-                           uint64_t ext_tag, 
+                           uint64_t raw_tag, 
                            const ser_context&,
-                           std::error_code&) override
+                           std::error_code&) final
     {
         if (pack_strings_ && b.size() >= jsoncons::cbor::detail::min_length_for_stringref(next_stringref_))
         {
@@ -1048,7 +977,7 @@ private:
             if (it == bytestringref_map_.end())
             {
                 bytestringref_map_.emplace(std::make_pair(bs, next_stringref_++));
-                write_tag(ext_tag);
+                write_tag(raw_tag);
                 write_byte_string(bs);
             }
             else
@@ -1059,7 +988,7 @@ private:
         }
         else
         {
-            write_tag(ext_tag);
+            write_tag(raw_tag);
             write_byte_string(b);
         }
 
@@ -1069,51 +998,15 @@ private:
 
     void write_byte_string(const byte_string_view& b) 
     {
-        if (b.size() <= 0x17)
-        {
-            // fixstr stores a byte array whose length is upto 31 bytes
-            binary::native_to_big(static_cast<uint8_t>(0x40 + b.size()), 
-                                            std::back_inserter(sink_));
-        }
-        else if (b.size() <= 0xff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x58), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint8_t>(b.size()), 
-                                            std::back_inserter(sink_));
-        }
-        else if (b.size() <= 0xffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x59), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint16_t>(b.size()), 
-                                            std::back_inserter(sink_));
-        }
-        else if (b.size() <= 0xffffffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x5a), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint32_t>(b.size()), 
-                                            std::back_inserter(sink_));
-        }
-        else // if (b.size() <= 0xffffffffffffffff)
-        {
-            binary::native_to_big(static_cast<uint8_t>(0x5b), 
-                                            std::back_inserter(sink_));
-            binary::native_to_big(static_cast<uint64_t>(b.size()), 
-                                            std::back_inserter(sink_));
-        }
+        write_type_and_length(0x40, b.size());
 
-        for (auto c : b)
-        {
-            sink_.push_back(c);
-        }
+        sink_.append(b.data(), b.size());
     }
 
     JSONCONS_VISITOR_RETURN_TYPE visit_double(double val, 
                       semantic_tag tag,
                       const ser_context&,
-                      std::error_code&) override
+                      std::error_code&) final
     {
         switch (tag)
         {
@@ -1161,7 +1054,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_int64(int64_t value, 
                         semantic_tag tag, 
                         const ser_context& context,
-                        std::error_code& ec) override
+                        std::error_code& ec) final
     {
         switch (tag)
         {
@@ -1182,7 +1075,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_uint64(uint64_t value, 
                       semantic_tag tag, 
                       const ser_context& context,
-                      std::error_code& ec) override
+                      std::error_code& ec) final
     {
         switch (tag)
         {
@@ -1203,143 +1096,27 @@ private:
 
     void write_tag(uint64_t value)
     {
-        if (value <= 0x17)
-        {
-            sink_.push_back(0xc0 | static_cast<uint8_t>(value)); 
-        } 
-        else if (value <=(std::numeric_limits<uint8_t>::max)())
-        {
-            sink_.push_back(0xd8);
-            sink_.push_back(static_cast<uint8_t>(value));
-        } 
-        else if (value <=(std::numeric_limits<uint16_t>::max)())
-        {
-            sink_.push_back(0xd9);
-            binary::native_to_big(static_cast<uint16_t>(value), 
-                                            std::back_inserter(sink_));
-        }
-        else if (value <=(std::numeric_limits<uint32_t>::max)())
-        {
-            sink_.push_back(0xda);
-            binary::native_to_big(static_cast<uint32_t>(value), 
-                                            std::back_inserter(sink_));
-        }
-        else 
-        {
-            sink_.push_back(0xdb);
-            binary::native_to_big(static_cast<uint64_t>(value), 
-                                            std::back_inserter(sink_));
-        }
+        write_type_and_length(0xc0, value);
     }
 
-    void write_uint64_value(uint64_t value) 
+    void write_uint64_value(uint64_t value)
     {
-        if (value <= 0x17)
-        {
-            sink_.push_back(static_cast<uint8_t>(value));
-        } 
-        else if (value <=(std::numeric_limits<uint8_t>::max)())
-        {
-            sink_.push_back(static_cast<uint8_t>(0x18));
-            sink_.push_back(static_cast<uint8_t>(value));
-        } 
-        else if (value <=(std::numeric_limits<uint16_t>::max)())
-        {
-            sink_.push_back(static_cast<uint8_t>(0x19));
-            binary::native_to_big(static_cast<uint16_t>(value), 
-                                            std::back_inserter(sink_));
-        } 
-        else if (value <=(std::numeric_limits<uint32_t>::max)())
-        {
-            sink_.push_back(static_cast<uint8_t>(0x1a));
-            binary::native_to_big(static_cast<uint32_t>(value), 
-                                            std::back_inserter(sink_));
-        } 
-        else if (value <=(std::numeric_limits<uint64_t>::max)())
-        {
-            sink_.push_back(static_cast<uint8_t>(0x1b));
-            binary::native_to_big(static_cast<uint64_t>(value), 
-                                            std::back_inserter(sink_));
-        }
+        write_type_and_length(0x00, value);
     }
 
     void write_int64_value(int64_t value) 
     {
         if (value >= 0)
         {
-            if (value <= 0x17)
-            {
-                binary::native_to_big(static_cast<uint8_t>(value), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (value <= (std::numeric_limits<uint8_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x18), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<uint8_t>(value), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (value <= (std::numeric_limits<uint16_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x19), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<uint16_t>(value), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (value <= (std::numeric_limits<uint32_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x1a), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<uint32_t>(value), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (value <= (std::numeric_limits<int64_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x1b), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<int64_t>(value), 
-                                  std::back_inserter(sink_));
-            }
-        } else
+            write_type_and_length(0x00, static_cast<uint64_t>(value));
+        }
+        else
         {
-            const auto posnum = -1 - value;
-            if (value >= -24)
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x20 + posnum), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (posnum <= (std::numeric_limits<uint8_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x38), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<uint8_t>(posnum), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (posnum <= (std::numeric_limits<uint16_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x39), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<uint16_t>(posnum), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (posnum <= (std::numeric_limits<uint32_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x3a), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<uint32_t>(posnum), 
-                                  std::back_inserter(sink_));
-            } 
-            else if (posnum <= (std::numeric_limits<int64_t>::max)())
-            {
-                binary::native_to_big(static_cast<uint8_t>(0x3b), 
-                                  std::back_inserter(sink_));
-                binary::native_to_big(static_cast<int64_t>(posnum), 
-                                  std::back_inserter(sink_));
-            }
+            write_type_and_length(0x20, static_cast<uint64_t>(-1 - value));
         }
     }
 
-    JSONCONS_VISITOR_RETURN_TYPE visit_bool(bool value, semantic_tag, const ser_context&, std::error_code&) override
+    JSONCONS_VISITOR_RETURN_TYPE visit_bool(bool value, semantic_tag, const ser_context&, std::error_code&) final
     {
         if (value)
         {
@@ -1357,7 +1134,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const uint8_t>& data, 
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1391,7 +1168,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const uint16_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1420,7 +1197,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const uint32_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1449,7 +1226,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const uint64_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1478,7 +1255,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const int8_t>& data,  
         semantic_tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1505,7 +1282,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const int16_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1534,7 +1311,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const int32_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1563,7 +1340,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const int64_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1593,7 +1370,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(half_arg_t, const jsoncons::span<const uint16_t>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1622,7 +1399,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const float>& data,  
                         semantic_tag tag,
                         const ser_context& context, 
-                        std::error_code& ec) override
+                        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1651,7 +1428,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const double>& data,  
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         if (use_typed_arrays_)
         {
@@ -1678,7 +1455,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_typed_array(const jsoncons::span<const float128_type>&, 
                         semantic_tag,
                         const ser_context&, 
-                        std::error_code&) override
+                        std::error_code&) final
     {
         JSONCONS_VISITOR_RETURN;
     }
@@ -1686,7 +1463,7 @@ private:
     JSONCONS_VISITOR_RETURN_TYPE visit_begin_multi_dim(const jsoncons::span<const size_t>& shape,
         semantic_tag tag,
         const ser_context& context, 
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         switch (tag)
         {
@@ -1711,7 +1488,7 @@ private:
     }
 
     JSONCONS_VISITOR_RETURN_TYPE visit_end_multi_dim(const ser_context& context,
-        std::error_code& ec) override
+        std::error_code& ec) final
     {
         visit_end_array(context, ec);
         JSONCONS_VISITOR_RETURN;

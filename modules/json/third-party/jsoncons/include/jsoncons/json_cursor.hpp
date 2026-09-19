@@ -38,7 +38,7 @@ public:
     using string_view_type = jsoncons::basic_string_view<CharT>;
 private:
     using char_allocator_type = typename std::allocator_traits<allocator_type>:: template rebind_alloc<CharT>;
-    static constexpr size_t default_max_buffer_size = 16384;
+    static constexpr size_t default_max_chunk_size = 16384;
 
     json_source_adaptor<Source> source_;
     basic_json_parser<CharT,Allocator> parser_;
@@ -359,7 +359,7 @@ public:
         {
             parser_.cursor_mode(false);
             parser_.mark_level(parser_.level());
-            cursor_visitor_.event().send_json_event(visitor, *this, ec);
+            cursor_visitor_.event().send_event(visitor, *this, ec);
             if (JSONCONS_UNLIKELY(ec))
             {
                 return;
@@ -378,7 +378,7 @@ public:
         }
         else
         {
-            cursor_visitor_.event().send_json_event(visitor, *this, ec);
+            cursor_visitor_.event().send_event(visitor, *this, ec);
         }
     }
 
@@ -425,7 +425,7 @@ public:
             {
                 if (parser_.source_exhausted())
                 {
-                    auto s = source_.read_buffer(ec);
+                    auto s = source_.read_chunk(ec);
                     if (JSONCONS_UNLIKELY(ec)) {return;}
                     if (s.size() > 0)
                     {
@@ -532,7 +532,7 @@ private:
         {
             if (parser_.source_exhausted())
             {
-                auto s = source_.read_buffer(ec);
+                auto s = source_.read_chunk(ec);
                 if (JSONCONS_UNLIKELY(ec)) {return;}
                 if (s.size() > 0)
                 {
@@ -561,9 +561,9 @@ private:
 };
 
 using json_stream_cursor = basic_json_cursor<char,jsoncons::stream_source<char>>;
-using json_string_cursor = basic_json_cursor<char,jsoncons::string_source<char>>;
+using json_string_cursor = basic_json_cursor<char,jsoncons::chars_source<char>>;
 using wjson_stream_cursor = basic_json_cursor<wchar_t,jsoncons::stream_source<wchar_t>>;
-using wjson_string_cursor = basic_json_cursor<wchar_t,jsoncons::string_source<wchar_t>>;
+using wjson_string_cursor = basic_json_cursor<wchar_t,jsoncons::chars_source<wchar_t>>;
 
 } // namespace jsoncons
 

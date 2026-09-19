@@ -583,11 +583,17 @@ val = "string";      # OK
     The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 + \c ngtcp2_crypto_ossl +
     \c nghttp3 (QUIC/HTTP/3), and <a href="https://c-ares.org/"><tt>c-ares</tt></a> (asynchronous DNS
     resolution, so hostname lookups never block async I/O controller threads) &mdash; is now required.
-    %Qore prefers an adequate system installation of each (\c nghttp2 >= 1.68.1, \c c-ares >= 1.19.1,
-    \c nghttp3 >= 1.14.0; \c ngtcp2_crypto_ossl needs OpenSSL 3.5+ for the QUIC TLS API), and otherwise
-    downloads and statically links the latest stable release automatically, so the build always succeeds
-    without manual intervention.  Installing these development packages is therefore recommended for
+    %Qore prefers an adequate system installation of each (\c nghttp2 >= 1.70.0, \c c-ares >= 1.34.8,
+    \c ngtcp2 >= 1.25.0, \c nghttp3 >= 1.18.0; \c ngtcp2_crypto_ossl needs OpenSSL 3.5+ for the QUIC TLS API),
+    and otherwise downloads and statically links the pinned supported release automatically.
+    Installing these development packages is therefore recommended for
     faster builds and distro security updates, but is not required.
+
+    The c-ares minimum includes the fixes for CVE-2026-33630, CVE-2026-69184 and CVE-2026-69186,
+    with callback API compatibility restored in 1.34.8. The source-build dependencies also include
+    Apache Arrow/Parquet 25.0.1, tree-sitter 0.26.13 and jemalloc 5.4.0 (musl targets).
+    The bundled jsoncons headers are updated to 1.9.0 while preserving schema stack/cancellation
+    checks, and xxHash is updated to 0.8.4 with unchanged XXH32/XXH64 cache and AOT checksums.
 
     The following libraries are also required system build dependencies for %Qore and cannot be disabled at build time:
     - <b><a href="https://github.com/google/brotli">Brotli</a>, <a href="https://facebook.github.io/zstd/">Zstd</a>, <a href="https://lz4.org/">LZ4</a>:</b> Compression formats are always available

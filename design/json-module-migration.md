@@ -48,11 +48,12 @@ Removing `<qore/QoreJson.h>` is an API break only once 3.0.0 has released. It ha
 window was open; after 3.0.0 ships, the header would have had to stay until the next major
 version.
 
-### 2. jsoncons is vendored at v1.8.1, not fetched and not discovered
+### 2. jsoncons is vendored at v1.9.0, not fetched and not discovered
 
 Vendor `modules/json/third-party/jsoncons/{include,LICENSE,README.md}` — 3.8 MB of headers, pinned
-at **v1.8.1** (2026-06-09, newest stable). `doc/`, `test/`, `examples/`, `examples_boost/` and
-`fuzzers/` are not vendored (~14 MB dropped). No git submodule: the Qore tree has none today.
+at **v1.9.0** (2026-08-07). The 2026-09 dependency refresh retains the local patches below.
+`doc/`, `test/`, `examples/`, `examples_boost/` and `fuzzers/` are not vendored (~14 MB dropped).
+No git submodule: the Qore tree has none today.
 
 The vendored bigint copy constructor delegates to its allocator-taking overload. With an empty
 allocator base, GCC 16 at `-Og` otherwise aliases the destination allocator reference with the

@@ -58,6 +58,11 @@ public:
         : ec_{ec}
     {
     }
+
+    read_error(std::error_code ec, const std::string& message_arg)
+        : ec_{ec}, message_arg_(message_arg)
+    {
+    }
     
     read_error(std::error_code ec, std::size_t line, std::size_t column)
         : ec_{ec}, line_{line}, column_{column}
@@ -81,7 +86,7 @@ public:
     {
         return ec_;
     }
-    const std::string& message_arg() const noexcept
+    const std::string& msg_arg() const noexcept
     {
         return message_arg_;
     }

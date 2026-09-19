@@ -1,7 +1,10 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# MIT License
 
 %modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 # child programs do not inherit parent's restrictions
 %no-child-restrictions
 
@@ -57,6 +60,7 @@ auto sub test(binary data) {
         addTestCase("nested structures", \testNestedStructures());
         addTestCase("empty containers", \testEmptyContainers());
         addTestCase("error cases", \testErrorCases());
+        addTestCase("CBOR parser boundaries", \testParserBoundaries());
         addTestCase("cross-format verification", \testCrossFormat());
         addTestCase("deeply nested structures", \testDeeplyNested());
         addTestCase("sandbox depth limit make_cbor", \testSandboxDepthLimitMake());
@@ -280,6 +284,26 @@ auto sub test(binary data) {
 
         # serialize unsupported type (object)
         assertThrows("CBOR-SERIALIZATION-ERROR", sub() { auto v = make_cbor(new Mutex()); });
+    }
+
+    testParserBoundaries() {
+        # Truncated multibyte heads must raise an error rather than read past the input.
+        # These cover the integer and half-float paths fixed in jsoncons 1.9.0.
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto value = parse_cbor(<1901>); });
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto value = parse_cbor(<1aff>); });
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto value = parse_cbor(<1affffff>); });
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto value = parse_cbor(<1b0102>); });
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto value = parse_cbor(<f93c>); });
+
+        # Every indefinite-length text chunk must itself be valid UTF-8 (RFC 8949 section 3.2.3).
+        assertThrows("CBOR-PARSE-ERROR", sub() { auto value = parse_cbor(<7f61c361a9ff>); });
+        assertEq("éa", parse_cbor(<7f62c3a96161ff>));
+        assertEq(<c3>, parse_cbor(<5f41c3ff>), "byte-string chunks are not UTF-8 text");
+
+        # Complete heads still parse correctly after the malformed inputs.
+        assertEq(256, parse_cbor(<190100>));
+        assertEq(4278190080, parse_cbor(<1aff000000>));
+        assertEq(1.0, parse_cbor(<f93c00>));
     }
 
     testCrossFormat() {
