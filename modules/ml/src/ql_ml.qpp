@@ -516,6 +516,22 @@ hashdecl Qore::ML::OnnxSessionConfig {
     *hash<auto> config;
     //! device-buffer binding policy for GPU/accelerator execution providers
     *hash<OnnxDeviceBindingConfig> device_binding;
+    //! whether to capture an authoritative content identity for the loaded model
+    /** Values:
+        - \c "disabled" (default): no content is captured; @ref Qore::ML::OnnxModel::getContentIdentity()
+          reports an unknown identity
+        - \c "best_effort": the model graph bytes and every external tensor byte are captured and
+          handed to ONNX Runtime, so the reported identity describes exactly the content the session
+          loaded; if the content cannot be fully bound, an unknown identity is reported with a reason
+        - \c "required": as \c "best_effort", but model loading fails with
+          \c ML-ONNX-CONTENT-IDENTITY-ERROR if a complete identity cannot be established
+
+        Capturing content identity holds the model graph and all external tensor data in memory for
+        the lifetime of the session, so it is disabled by default.
+
+        @see @ref Qore::ML::OnnxModel::getContentIdentity()
+    */
+    *string content_identity;
 }
 
 //! ONNX model metadata
@@ -542,6 +558,70 @@ hashdecl Qore::ML::OnnxModelInfo {
     list<hash<OnnxProviderDiagnostic>> provider_diagnostics;
     //! whether CPU fallback was used after an automatic non-CPU provider failed
     bool cpu_fallback_used;
+}
+
+//! One external tensor data dependency consumed by a loaded ONNX model
+/** Describes a distinct byte range of external tensor data that the loaded session consumed.
+    No local filesystem path is reported; the declared location is identified only by its digest,
+    so the same model package identifies identically no matter where it is stored.
+
+    @see @ref Qore::ML::OnnxContentIdentity
+*/
+hashdecl Qore::ML::OnnxContentDependency {
+    //! digest of the external data location declared by the model
+    string id;
+    //! byte offset of the consumed range in the external data file
+    int offset;
+    //! byte length of the consumed range
+    int length;
+    //! digest of the consumed bytes
+    string digest;
+    //! number of tensors in the model that consume this exact range
+    int references;
+}
+
+//! Content identity of a loaded ONNX model
+/** Identifies the content actually loaded into an ONNX Runtime session: the model graph bytes and
+    every external tensor byte the session consumed.
+
+    The identity is captured while the session is created and never recomputed afterwards, so it
+    always describes the loaded session and not the current state of any file. It never contains
+    raw model content, local filesystem paths or credentials, and is unaffected by
+    content-preserving relocation of the model or by timestamp changes.
+
+    A model's tokenizer configuration and any preprocessing or pooling policy are not part of this
+    identity; they must be bound separately by the producer that applies them.
+
+    @note \c digest is only present when \c complete is @ref True; an incomplete identity must
+    never be treated as a content fingerprint.
+
+    @see
+    - @ref Qore::ML::OnnxModel::getContentIdentity()
+    - @ref Qore::ML::OnnxSessionConfig::content_identity
+*/
+hashdecl Qore::ML::OnnxContentIdentity {
+    //! identity manifest schema version
+    int version;
+    //! digest algorithm used for all digests in this hash
+    string algorithm;
+    //! whether the identity completely describes the content loaded into the session
+    bool complete;
+    //! \c "complete" or \c "unknown"
+    string status;
+    //! how the model was loaded: \c "file", \c "memory" or \c "unknown"
+    string source;
+    //! why the identity is not complete; only present when \c complete is @ref False
+    *string unknown_reason;
+    //! digest binding the model graph bytes and every consumed external tensor byte
+    /** only present when \c complete is @ref True
+    */
+    *string digest;
+    //! digest of the model graph bytes loaded into the session
+    *string model_digest;
+    //! size of the model graph bytes loaded into the session
+    *int model_size;
+    //! external tensor data dependencies consumed by the loaded model
+    list<hash<OnnxContentDependency>> dependencies;
 }
 
 //! StandardScaler model information

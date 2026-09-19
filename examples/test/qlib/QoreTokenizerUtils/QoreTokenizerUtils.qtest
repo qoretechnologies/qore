@@ -66,6 +66,8 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
             \rerankerIndexParityTest());
         addTestCase("CrossEncoderReranker rerankWithScores truncation", \rerankerTruncationTest());
         addTestCase("CrossEncoderReranker RerankerScoredHit hashdecl", \rerankerScoredHitHashdeclTest());
+        addTestCase("EmbeddingModel content identity", \embeddingContentIdentityTest());
+        addTestCase("CrossEncoderReranker content identity", \rerankerContentIdentityTest());
         set_return_value(main());
     }
 
@@ -87,6 +89,96 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
             return True;
         }
         return False;
+    }
+
+    embeddingContentIdentityTest() {
+        string model_path = getTokenModelPath("test_token_embedding.onnx");
+        if (skipTokenOnnxFixture(model_path)) {
+            return;
+        }
+        hash<QoreTokenizerUtils::EmbeddingConfig> config = <QoreTokenizerUtils::EmbeddingConfig>{
+            "mode": "onnx",
+            "model_path": model_path,
+            "tokenizer_config": tokenizer_config,
+            "session_config": <ML::OnnxSessionConfig>{
+                "providers": (),
+                "content_identity": "required",
+            },
+            "max_tokens": 16,
+        };
+        QoreTokenizerUtils::EmbeddingModel emb(config);
+
+        *hash<ML::OnnxContentIdentity> id = emb.getContentIdentity();
+        assertTrue(exists id, "an ONNX-mode embedding model must report a content identity");
+        assertTrue(id.complete);
+        assertEq(64, id.digest.size());
+
+        # the identity must describe the instance that actually encodes, and must not change
+        # when the model is used
+        list<list<float>> vectors = emb.embedBatch(("hello world",));
+        assertEq(1, vectors.size());
+        assertEq(id.digest, emb.getContentIdentity().digest,
+            "using the model must not change the identity of what it loaded");
+
+        # a second model over the same file reports the same identity, and an independently
+        # loaded ML::OnnxModel agrees with the embedder's own session
+        QoreTokenizerUtils::EmbeddingModel other(config);
+        assertEq(id.digest, other.getContentIdentity().digest);
+        ML::OnnxModel direct(model_path, <ML::OnnxSessionConfig>{
+            "providers": (),
+            "content_identity": "required",
+        });
+        assertEq(direct.getContentIdentity().digest, id.digest,
+            "the wrapper must report the identity of the same content, not a different reading");
+
+        # without capture the wrapper reports unknown rather than substituting the model path
+        config.session_config = <ML::OnnxSessionConfig>{"providers": ()};
+        QoreTokenizerUtils::EmbeddingModel plain(config);
+        *hash<ML::OnnxContentIdentity> unknown = plain.getContentIdentity();
+        assertFalse(unknown.complete);
+        assertNothing(unknown.digest);
+
+        # HTTP mode has no local model content to identify
+        QoreTokenizerUtils::EmbeddingModel http(<QoreTokenizerUtils::EmbeddingConfig>{
+            "mode": "http",
+            "url": "http://localhost:1",
+            "model": "test-model",
+        });
+        assertNothing(http.getContentIdentity());
+    }
+
+    rerankerContentIdentityTest() {
+        string model_path = getTokenModelPath("test_token_reranker.onnx");
+        if (skipTokenOnnxFixture(model_path)) {
+            return;
+        }
+        QoreTokenizerUtils::CrossEncoderReranker reranker(<QoreTokenizerUtils::RerankerConfig>{
+            "mode": "onnx",
+            "model_path": model_path,
+            "tokenizer_config": tokenizer_config,
+            "session_config": <ML::OnnxSessionConfig>{
+                "providers": (),
+                "content_identity": "required",
+            },
+            "max_length": 16,
+        });
+
+        *hash<ML::OnnxContentIdentity> id = reranker.getContentIdentity();
+        assertTrue(exists id, "an ONNX-mode reranker must report a content identity");
+        assertTrue(id.complete);
+        ML::OnnxModel direct(model_path, <ML::OnnxSessionConfig>{
+            "providers": (),
+            "content_identity": "required",
+        });
+        assertEq(direct.getContentIdentity().digest, id.digest);
+
+        # HTTP mode has no local model content to identify
+        QoreTokenizerUtils::CrossEncoderReranker http(<QoreTokenizerUtils::RerankerConfig>{
+            "mode": "http",
+            "url": "http://localhost:1",
+            "model": "test-model",
+        });
+        assertNothing(http.getContentIdentity());
     }
 
     # ===================== DocumentChunker Tests =====================

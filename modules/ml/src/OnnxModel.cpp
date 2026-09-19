@@ -978,7 +978,7 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, ExceptionSink* xsink)
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
-        createSessionFromPath(model_path, session_options, nullptr, xsink);
+        createSession(makeSessionSource(model_path, nullptr, 0), session_options, nullptr, xsink);
         if (*xsink) {
             return;
         }
@@ -993,13 +993,20 @@ QoreOnnxModel::QoreOnnxModel(const char* model_path, const QoreHashNode* config,
     ExceptionSink* xsink) : active_provider("CPUExecutionProvider") {
     source_model_path = model_path;
     source_load_model_format = getConfigStringValue(config, "load_model_format");
+    if (!parseOnnxContentIdentityMode(config, content_identity_mode, xsink)) {
+        return;
+    }
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
         if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
         }
-        createSessionFromPath(model_path, session_options, config, xsink);
+        if (!captureContentIdentity(model_path, nullptr, 0, xsink)) {
+            return;
+        }
+        applyCapturedExternalInitializers(session_options);
+        createSession(makeSessionSource(model_path, nullptr, 0), session_options, config, xsink);
         if (*xsink) {
             return;
         }
@@ -1021,7 +1028,8 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
         session_options.SetIntraOpNumThreads(1);
         autoDetectProvider(session_options);
         // Ort::Session copies the buffer, so the caller's memory lifetime doesn't matter
-        createSessionFromMemory(model_data, model_data_len, session_options, nullptr, xsink);
+        createSession(makeSessionSource(nullptr, model_data, model_data_len), session_options,
+            nullptr, xsink);
         if (*xsink) {
             return;
         }
@@ -1038,13 +1046,21 @@ QoreOnnxModel::QoreOnnxModel(const void* model_data, size_t model_data_len,
     const char* data = static_cast<const char*>(model_data);
     source_model_data.assign(data, data + model_data_len);
     source_load_model_format = getConfigStringValue(config, "load_model_format");
+    if (!parseOnnxContentIdentityMode(config, content_identity_mode, xsink)) {
+        return;
+    }
     try {
         available_providers = getAvailableOnnxProviders();
         Ort::SessionOptions session_options;
         if (!initEnvAndOptions(session_options, config, xsink)) {
             return;
         }
-        createSessionFromMemory(model_data, model_data_len, session_options, config, xsink);
+        if (!captureContentIdentity(nullptr, model_data, model_data_len, xsink)) {
+            return;
+        }
+        applyCapturedExternalInitializers(session_options);
+        createSession(makeSessionSource(nullptr, model_data, model_data_len), session_options,
+            config, xsink);
         if (*xsink) {
             return;
         }
@@ -1597,18 +1613,26 @@ void QoreOnnxModel::validateRequiredProviders(ExceptionSink* xsink) const {
     }
 }
 
-void QoreOnnxModel::createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
+void QoreOnnxModel::makeSession(const OnnxSessionSource& src, Ort::SessionOptions& opts) {
+    if (src.data) {
+        session = std::make_unique<Ort::Session>(*env, src.data, src.len, opts);
+    } else {
+        session = std::make_unique<Ort::Session>(*env, src.path, opts);
+    }
+}
+
+void QoreOnnxModel::createSession(const OnnxSessionSource& src, Ort::SessionOptions& opts,
     const QoreHashNode* config, ExceptionSink* xsink) {
     try {
-        session = std::make_unique<Ort::Session>(*env, model_path, opts);
+        makeSession(src, opts);
     } catch (const Ort::Exception& e) {
         if (explicit_provider_config && active_provider != "CPUExecutionProvider") {
             markProviderError(active_provider, e.what());
             xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
-                "failed to load ONNX model '%s' with requested execution provider '%s': %s; "
+                "failed to load ONNX model %s with requested execution provider '%s': %s; "
                 "available providers reported by ONNX Runtime: %s. Use providers: () for "
                 "explicit CPU-only execution, or set a provider that is fully installed on "
-                "this host.", model_path, active_provider.c_str(), e.what(),
+                "this host.", src.description.c_str(), active_provider.c_str(), e.what(),
                 availableProvidersString().c_str());
             return;
         }
@@ -1621,60 +1645,8 @@ void QoreOnnxModel::createSessionFromPath(const char* model_path, Ort::SessionOp
         markProviderError(provider, e.what());
         if (!allow_cpu_fallback || fail_on_provider_fallback) {
             xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
-                "failed to load ONNX model '%s' with auto-selected provider '%s': %s; "
-                "CPU fallback is disabled by session configuration", model_path, provider.c_str(),
-                e.what());
-            return;
-        }
-        Ort::SessionOptions cpu_opts;
-        configureBaseSessionOptions(cpu_opts, config, xsink);
-        if (*xsink) {
-            return;
-        }
-        active_provider = "CPUExecutionProvider";
-        auto_provider_selected = false;
-        cpu_fallback_used = true;
-        markProviderAppended("CPUExecutionProvider", false);
-        OnnxProviderDiagnostic& cpu_diag = providerDiagnostic("CPUExecutionProvider");
-        cpu_diag.cpu_fallback = true;
-
-        try {
-            session = std::make_unique<Ort::Session>(*env, model_path, cpu_opts);
-        } catch (const Ort::Exception& cpu_e) {
-            xsink->raiseException("ML-ONNX-ERROR",
-                "failed to load ONNX model '%s' with auto-selected provider '%s': %s; "
-                "CPU fallback also failed: %s", model_path, provider.c_str(), e.what(),
-                cpu_e.what());
-        }
-    }
-}
-
-void QoreOnnxModel::createSessionFromMemory(const void* model_data, size_t model_data_len,
-    Ort::SessionOptions& opts, const QoreHashNode* config, ExceptionSink* xsink) {
-    try {
-        session = std::make_unique<Ort::Session>(*env, model_data, model_data_len, opts);
-    } catch (const Ort::Exception& e) {
-        if (explicit_provider_config && active_provider != "CPUExecutionProvider") {
-            markProviderError(active_provider, e.what());
-            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
-                "failed to load ONNX model from memory (%zu bytes) with requested execution "
-                "provider '%s': %s; available providers reported by ONNX Runtime: %s. Use "
-                "providers: () for explicit CPU-only execution, or set a provider that is "
-                "fully installed on this host.", model_data_len, active_provider.c_str(),
-                e.what(), availableProvidersString().c_str());
-            return;
-        }
-        if (!auto_provider_selected || active_provider == "CPUExecutionProvider") {
-            throw;
-        }
-
-        std::string provider = active_provider;
-        disableAutoProvider(provider);
-        markProviderError(provider, e.what());
-        if (!allow_cpu_fallback || fail_on_provider_fallback) {
-            xsink->raiseException("ML-ONNX-PROVIDER-ERROR",
-                "failed to load ONNX model from memory (%zu bytes) with auto-selected provider "
-                "'%s': %s; CPU fallback is disabled by session configuration", model_data_len,
+                "failed to load ONNX model %s with auto-selected provider '%s': %s; "
+                "CPU fallback is disabled by session configuration", src.description.c_str(),
                 provider.c_str(), e.what());
             return;
         }
@@ -1683,6 +1655,8 @@ void QoreOnnxModel::createSessionFromMemory(const void* model_data, size_t model
         if (*xsink) {
             return;
         }
+        // the CPU fallback session must consume the same captured content as the original attempt
+        applyCapturedExternalInitializers(cpu_opts);
         active_provider = "CPUExecutionProvider";
         auto_provider_selected = false;
         cpu_fallback_used = true;
@@ -1691,15 +1665,69 @@ void QoreOnnxModel::createSessionFromMemory(const void* model_data, size_t model
         cpu_diag.cpu_fallback = true;
 
         try {
-            session = std::make_unique<Ort::Session>(*env, model_data, model_data_len,
-                cpu_opts);
+            makeSession(src, cpu_opts);
         } catch (const Ort::Exception& cpu_e) {
             xsink->raiseException("ML-ONNX-ERROR",
-                "failed to load ONNX model from memory (%zu bytes) with auto-selected "
-                "provider '%s': %s; CPU fallback also failed: %s", model_data_len,
-                provider.c_str(), e.what(), cpu_e.what());
+                "failed to load ONNX model %s with auto-selected provider '%s': %s; "
+                "CPU fallback also failed: %s", src.description.c_str(), provider.c_str(),
+                e.what(), cpu_e.what());
         }
     }
+}
+
+bool QoreOnnxModel::captureContentIdentity(const char* model_path, const void* model_data,
+    size_t model_data_len, ExceptionSink* xsink) {
+    if (content_identity_mode == OnnxContentIdentityMode::Disabled) {
+        return true;
+    }
+    if (model_path) {
+        return captureOnnxContentIdentityFromPath(model_path, content_identity_mode,
+            content_identity, xsink);
+    }
+    return captureOnnxContentIdentityFromMemory(model_data, model_data_len, content_identity_mode,
+        content_identity, xsink);
+}
+
+OnnxSessionSource QoreOnnxModel::makeSessionSource(const char* model_path, const void* model_data,
+    size_t model_data_len) const {
+    OnnxSessionSource src;
+    if (model_path) {
+        src.path = model_path;
+        src.description = "'" + std::string(model_path) + "'";
+    } else {
+        src.data = model_data;
+        src.len = model_data_len;
+        char buf[64];
+        snprintf(buf, sizeof(buf), "from memory (%zu bytes)", model_data_len);
+        src.description = buf;
+    }
+    // when content identity was captured, the session is created from the captured bytes so that
+    // the loaded graph is exactly the graph the identity describes; the source description still
+    // names the caller's original source
+    if (content_identity.hasModelBytes()) {
+        src.path = nullptr;
+        src.data = content_identity.getModelBytes().data();
+        src.len = content_identity.getModelBytes().size();
+    }
+    return src;
+}
+
+void QoreOnnxModel::applyCapturedExternalInitializers(Ort::SessionOptions& opts) {
+    if (content_identity.files.empty()) {
+        return;
+    }
+    std::vector<std::basic_string<ORTCHAR_T>> names;
+    std::vector<char*> buffers;
+    std::vector<size_t> lengths;
+    names.reserve(content_identity.files.size());
+    buffers.reserve(content_identity.files.size());
+    lengths.reserve(content_identity.files.size());
+    for (OnnxExternalFileCapture& file : content_identity.files) {
+        names.push_back(file.location);
+        buffers.push_back(file.data.data());
+        lengths.push_back(file.data.size());
+    }
+    opts.AddExternalInitializersFromFilesInMemory(names, buffers, lengths);
 }
 
 void QoreOnnxModel::configureSession(Ort::SessionOptions& opts, const QoreHashNode* config,
@@ -2168,6 +2196,16 @@ QoreHashNode* QoreOnnxModel::getModelInfo(ExceptionSink* xsink) const {
     rv->setKeyValue("cpu_fallback_used", cpu_fallback_used, xsink);
 
     return rv.release();
+}
+
+QoreHashNode* QoreOnnxModel::getContentIdentity(ExceptionSink* xsink) const {
+    if (!content_identity.wasAttempted()) {
+        return makeUnknownOnnxContentIdentity(source_model_path.empty() ? "memory" : "file",
+            "content identity capture was not enabled for this session; set "
+            "OnnxSessionConfig::content_identity to \"best_effort\" or \"required\" when the "
+            "model is loaded", xsink);
+    }
+    return content_identity.toHash(xsink);
 }
 
 void QoreOnnxModel::flattenToFloats(const QoreValue& val, std::vector<float>& out,
@@ -5022,6 +5060,7 @@ QoreOnnxSessionPool::QoreOnnxSessionPool(const char* model_path,
         }
         sessions.push_back(std::move(session));
     }
+    validateContentIdentity(xsink);
 }
 
 QoreOnnxSessionPool::QoreOnnxSessionPool(const void* model_data, size_t model_data_len,
@@ -5048,6 +5087,48 @@ QoreOnnxSessionPool::QoreOnnxSessionPool(const void* model_data, size_t model_da
         }
         sessions.push_back(std::move(session));
     }
+    validateContentIdentity(xsink);
+}
+
+bool QoreOnnxSessionPool::validateContentIdentity(ExceptionSink* xsink) {
+    if (sessions.empty()) {
+        return true;
+    }
+    const OnnxContentIdentityMode mode = sessions[0]->getContentIdentityMode();
+    if (mode == OnnxContentIdentityMode::Disabled) {
+        return true;
+    }
+    // each pooled session loads the model independently, so content replaced while the pool was
+    // being created would leave sessions serving different content under one pool object
+    const std::string& first = sessions[0]->getContentIdentityDigest();
+    for (size_t i = 1; i < sessions.size(); ++i) {
+        if (sessions[i]->getContentIdentityDigest() == first) {
+            continue;
+        }
+        content_identity_divergent = true;
+        if (mode == OnnxContentIdentityMode::Required) {
+            xsink->raiseException(ML_ONNX_CONTENT_IDENTITY_ERROR,
+                "the sessions in this pool did not load identical content; the model content "
+                "changed while the pool was being created, so the pool has no single content "
+                "identity");
+            return false;
+        }
+        return true;
+    }
+    return true;
+}
+
+QoreHashNode* QoreOnnxSessionPool::getContentIdentity(ExceptionSink* xsink) const {
+    if (sessions.empty()) {
+        return makeUnknownOnnxContentIdentity("unknown", "the pool holds no sessions", xsink);
+    }
+    if (content_identity_divergent) {
+        return makeUnknownOnnxContentIdentity(
+            sessions[0]->getContentIdentityDigest().empty() ? "unknown" : "file",
+            "the sessions in this pool did not load identical content; the model content changed "
+            "while the pool was being created", xsink);
+    }
+    return sessions[0]->getContentIdentity(xsink);
 }
 
 void QoreOnnxSessionPool::parsePoolOptions(const QoreHashNode* pool_options,

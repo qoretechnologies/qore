@@ -78,6 +78,8 @@ public const OnnxProtoDefinition =
     "  repeated double double_data = 10;\n"
     "  repeated uint64 uint64_data = 11;\n"
     "  string doc_string = 12;\n"
+    "  repeated StringStringEntryProto external_data = 13;\n"
+    "  int32 data_location = 14;\n"
     "}\n"
     "\n"
     "message AttributeProto {\n"
@@ -183,6 +185,14 @@ public const ONNX_DOUBLE = 11;
 public const ONNX_UINT32 = 12;
 public const ONNX_UINT64 = 13;
 public const ONNX_BFLOAT16 = 16;
+
+#! ONNX TensorProto DataLocation constants
+/** @see https://github.com/onnx/onnx/blob/main/onnx/onnx.proto
+*/
+#! tensor data is stored inline in the TensorProto message
+public const ONNX_DATA_LOCATION_DEFAULT = 0;
+#! tensor data is stored in an external file referenced by \c external_data
+public const ONNX_DATA_LOCATION_EXTERNAL = 1;
 
 #! ONNX AttributeProto type constants
 public const ONNX_ATTR_FLOAT = 1;

@@ -461,6 +461,61 @@ if (caps.has_onnx) {
 }
     @endcode
 
+    @subsection mlalgo_onnx_identity Loaded-Content Identity
+
+    A caller that must prove which model produced a result needs to identify the content the
+    session actually loaded. A model path, file size, modification time or execution provider name
+    does not identify that content, and neither does a digest of the \c .onnx bytes alone: when a
+    model stores tensors in external data files, identical model bytes produce different results
+    depending on files the model only refers to.
+
+    @ref Qore::ML::OnnxModel::getContentIdentity() reports an immutable, versioned identity that
+    binds the model graph bytes and every external tensor byte the session consumed. Capture is
+    requested when the model is loaded:
+
+    @code{.py}
+ML::OnnxModel model(path, <ML::OnnxSessionConfig>{"content_identity": "required"});
+hash<ML::OnnxContentIdentity> identity = model.getContentIdentity();
+printf("content: %s (%d external dependencies)\n", identity.digest, identity.dependencies.size());
+    @endcode
+
+    Capture modes:
+
+    |!Value|!Behavior
+    |\c "disabled"|default; nothing is captured and the reported identity is \c "unknown"
+    |\c "best_effort"|content is captured when it can be bound; otherwise an \c "unknown" identity with a reason is reported
+    |\c "required"|as \c "best_effort", but loading fails with \c ML-ONNX-CONTENT-IDENTITY-ERROR when a complete identity cannot be established
+
+    Properties of the identity:
+    - It is captured while the session is created and never recomputed from the model source, so
+      replacing the model files afterwards cannot change what an already-loaded session reports.
+    - When capture is enabled, the model graph and every external tensor file are read by Qore and
+      handed to ONNX Runtime, so the digest describes exactly the bytes the session loaded; there
+      is no window in which a file could be substituted between validation and use.
+    - It is content-only: relocating a model package or rewriting it with identical bytes does not
+      change the identity, while any change to the model graph or to a consumed external byte
+      range does.
+    - It contains no model content, local paths or declared dependency filenames, so it is safe in
+      caller-facing diagnostics.
+    - An identity that cannot be fully established is reported as \c "unknown" with a reason and
+      carries no digest; a size, timestamp, path or provider name is never substituted for it.
+
+    External tensor data declared outside the model's top-level initializers (in a subgraph, a
+    local function body, a node attribute or a sparse tensor) is resolved by ONNX Runtime from the
+    model's directory and cannot be attributed to the loaded session. Such a model still loads
+    exactly as it would without capture, and reports an \c "unknown" identity.
+
+    Tokenizer configuration and any preprocessing or pooling policy applied around the model are
+    not part of this identity; a producer that applies them must bind them separately.
+
+    @ref Qore::ML::OnnxSessionPool::getContentIdentity() reports the identity shared by all pooled
+    sessions. Each pooled session loads the model independently, so if the content changes while
+    the pool is being created, the pool has no single identity: with \c "required" the pool
+    constructor fails, and otherwise an \c "unknown" identity is reported.
+
+    @note Capturing content identity holds the model graph and all external tensor data in memory
+    for the lifetime of the session, which is why it is disabled by default.
+
     @subsection mlalgo_onnx_device GPU Device Binding (Zero-Copy)
 
     On builds with a device-capable execution provider (CUDA first), ONNX inputs and

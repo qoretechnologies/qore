@@ -32,6 +32,7 @@
 #include <qore/QoreFuture.h>
 
 #include "QC_Tensor.h"
+#include "OnnxContentIdentity.h"
 
 #include <vector>
 #include <string>
@@ -124,6 +125,22 @@ struct OnnxDeviceBindingPolicy {
     bool materialize_outputs = false;
     bool require_zero_copy_inputs = false;
     bool require_zero_copy_outputs = false;
+};
+
+//! Describes the source an ONNX Runtime session is created from
+/** When content identity capture is enabled, \a data points at the captured model bytes even for
+    models given by path, so the session loads exactly the bytes bound by the identity; \a
+    description always describes the caller's original source for diagnostics.
+*/
+struct OnnxSessionSource {
+    //! model path; used only when \a data is nullptr
+    const char* path = nullptr;
+    //! model bytes; when set, the session is created from memory
+    const void* data = nullptr;
+    //! length of \a data in bytes
+    size_t len = 0;
+    //! source description used in error messages
+    std::string description;
 };
 
 struct OnnxBoundOrtValue;
@@ -238,6 +255,22 @@ public:
     //! Get model info
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink) const;
 
+    //! Returns the content identity captured when this session was created
+    /** The identity is never recomputed from the model source after construction, so it always
+        describes the content loaded into this session.
+    */
+    DLLLOCAL QoreHashNode* getContentIdentity(ExceptionSink* xsink) const;
+
+    //! Returns the manifest digest of a complete content identity, or an empty string
+    DLLLOCAL const std::string& getContentIdentityDigest() const {
+        return content_identity.getDigest();
+    }
+
+    //! Returns the content identity capture mode requested for this session
+    DLLLOCAL OnnxContentIdentityMode getContentIdentityMode() const {
+        return content_identity_mode;
+    }
+
     //! Get input tensor info
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink* xsink) const;
 
@@ -265,6 +298,17 @@ private:
     std::string source_model_path;
     std::vector<char> source_model_data;
     std::string source_load_model_format;
+
+    //! content identity capture mode requested by the session configuration
+    OnnxContentIdentityMode content_identity_mode = OnnxContentIdentityMode::Disabled;
+    //! content identity captured while this session was created
+    /** Written only during construction and immutable afterwards, so concurrent readers need no
+        locking and the reported identity can never drift from what the session loaded.
+
+        When content identity capture is enabled, the captured external tensor data is handed to
+        ONNX Runtime and must outlive \a session.
+    */
+    OnnxContentIdentity content_identity;
 
     std::string active_provider;
     bool auto_provider_selected = false;
@@ -334,13 +378,33 @@ private:
     //! the active execution provider (matching device family).
     DLLLOCAL bool inputDeviceMatchesProvider(const QoreBufferDeviceInfo& dinfo) const;
 
-    //! Create a path-based session, falling back to CPU if an auto-selected provider fails
-    DLLLOCAL void createSessionFromPath(const char* model_path, Ort::SessionOptions& opts,
+    //! Creates the session, falling back to CPU if an auto-selected provider fails
+    DLLLOCAL void createSession(const OnnxSessionSource& src, Ort::SessionOptions& opts,
         const QoreHashNode* config, ExceptionSink* xsink);
 
-    //! Create an in-memory session, falling back to CPU if an auto-selected provider fails
-    DLLLOCAL void createSessionFromMemory(const void* model_data, size_t model_data_len,
-        Ort::SessionOptions& opts, const QoreHashNode* config, ExceptionSink* xsink);
+    //! Creates the ONNX Runtime session from the given source
+    DLLLOCAL void makeSession(const OnnxSessionSource& src, Ort::SessionOptions& opts);
+
+    //! Captures the content identity of the model when capture is enabled
+    /** @param model_path the model path, or nullptr for in-memory models
+        @param model_data the model bytes for in-memory models
+        @param model_data_len the length of \a model_data
+        @param xsink exception sink
+
+        @return false if an exception was raised
+    */
+    DLLLOCAL bool captureContentIdentity(const char* model_path, const void* model_data,
+        size_t model_data_len, ExceptionSink* xsink);
+
+    //! Builds the session source, preferring authoritative captured model bytes
+    DLLLOCAL OnnxSessionSource makeSessionSource(const char* model_path, const void* model_data,
+        size_t model_data_len) const;
+
+    //! Supplies captured external tensor data to ONNX Runtime as in-memory initializer files
+    /** The supplied buffers take precedence over the declared external data files, so the loaded
+        session consumes exactly the bytes bound by the content identity.
+    */
+    DLLLOCAL void applyCapturedExternalInitializers(Ort::SessionOptions& opts);
 
     //! Auto-detect and append the best available GPU execution provider
     DLLLOCAL void autoDetectProvider(Ort::SessionOptions& opts);
@@ -627,7 +691,21 @@ public:
     DLLLOCAL QoreListNode* getInputInfo(ExceptionSink* xsink);
     DLLLOCAL QoreListNode* getOutputInfo(ExceptionSink* xsink);
 
+    //! Returns the content identity shared by every session in the pool
+    /** Each pooled session loads the model independently, so the pool can only report an identity
+        when all of its sessions loaded identical content.
+    */
+    DLLLOCAL QoreHashNode* getContentIdentity(ExceptionSink* xsink) const;
+
 private:
+    //! Verifies that every pooled session loaded identical content
+    /** @return false if an exception was raised
+    */
+    DLLLOCAL bool validateContentIdentity(ExceptionSink* xsink);
+
+    //! set when pooled sessions did not all load identical content
+    bool content_identity_divergent = false;
+
     struct Lease {
         DLLLOCAL Lease(QoreOnnxSessionPool& pool, size_t index) : pool(pool), index(index) {}
         DLLLOCAL ~Lease();

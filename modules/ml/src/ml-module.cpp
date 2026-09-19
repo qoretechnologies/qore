@@ -186,6 +186,8 @@ DLLLOCAL TypedHashDecl* init_hashdecl_OnnxDeviceBindingConfig(QoreNamespace& ns)
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxProviderDiagnostic(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxSessionConfig(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_OnnxModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxContentDependency(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_OnnxContentIdentity(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_StandardScalerInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MinMaxScalerInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ImputerInfo(QoreNamespace& ns);
@@ -231,6 +233,8 @@ const TypedHashDecl* hashdeclOnnxDeviceBindingConfig;
 const TypedHashDecl* hashdeclOnnxProviderDiagnostic;
 const TypedHashDecl* hashdeclOnnxSessionConfig;
 const TypedHashDecl* hashdeclOnnxModelInfo;
+const TypedHashDecl* hashdeclOnnxContentDependency;
+const TypedHashDecl* hashdeclOnnxContentIdentity;
 const TypedHashDecl* hashdeclStandardScalerInfo;
 const TypedHashDecl* hashdeclMinMaxScalerInfo;
 const TypedHashDecl* hashdeclImputerInfo;
@@ -332,6 +336,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // OnnxSessionConfig references OnnxDeviceBindingConfig; init it after the above
     hashdeclOnnxSessionConfig = init_hashdecl_OnnxSessionConfig(MLNS);
     hashdeclOnnxModelInfo = init_hashdecl_OnnxModelInfo(MLNS);
+    hashdeclOnnxContentDependency = init_hashdecl_OnnxContentDependency(MLNS);
+    // OnnxContentIdentity references OnnxContentDependency; init it after the above
+    hashdeclOnnxContentIdentity = init_hashdecl_OnnxContentIdentity(MLNS);
     hashdeclStandardScalerInfo = init_hashdecl_StandardScalerInfo(MLNS);
     hashdeclMinMaxScalerInfo = init_hashdecl_MinMaxScalerInfo(MLNS);
     hashdeclImputerInfo = init_hashdecl_ImputerInfo(MLNS);

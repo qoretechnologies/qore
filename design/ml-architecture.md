@@ -403,6 +403,56 @@ and reports transfer counters through diagnostics. QoreModelRegistry manifests
 can carry `execution.device_binding`; `ModelExecutableAdapter` propagates it
 into loaded ONNX sessions and includes the resulting diagnostics.
 
+### Loaded-Content Identity
+
+`OnnxModel::getContentIdentity()` answers "which content produced this result?" for callers that
+must qualify a generation against its actual producer. It is opt-in through
+`OnnxSessionConfig::content_identity` (`disabled` by default, `best_effort`, `required`) because a
+capture holds the model graph and all external tensor data in memory for the session's lifetime.
+
+Why a digest of the `.onnx` bytes is not enough: a `TensorProto` with `data_location = EXTERNAL`
+holds no data, only a declared `location`/`offset`/`length`. Identical model bytes therefore
+produce different results depending on files the model merely refers to, which ONNX Runtime
+resolves from the model's directory (path loads) or the current working directory (memory loads).
+
+The implementation lives in `modules/ml/src/OnnxContentIdentity.{h,cpp}` and has three parts:
+
+1. **Dependency scan.** A bounded, cancellable protobuf wire-format walk of the `ModelProto` —
+   main graph initializers and sparse initializers, node attributes, nested subgraphs and local
+   function bodies — collecting every external data reference, plus EPContext nodes with
+   `embed_mode = 0`, whose compiled context binaries are not ONNX external tensors. It is depth-
+   and message-bounded and adds no protobuf library dependency.
+2. **Authoritative capture.** Qore reads the model bytes and each referenced external file itself
+   (RAII descriptors, chunked reads with cancellation checks, rejecting absolute locations and
+   locations that traverse out of the model directory), digests them, and then creates the session
+   from *those* buffers: the model bytes are loaded from memory and the external files are supplied
+   through `Ort::SessionOptions::AddExternalInitializersFromFilesInMemory()`, which matches them by
+   the model's declared location string and takes precedence over the files on disk. What the
+   session consumed is therefore exactly what was digested — there is no pathname TOCTOU
+   attribution gap and no re-reading of a filename after construction.
+3. **Manifest.** A versioned text manifest binds the model digest and size plus one sorted line per
+   distinct consumed byte range (hashed location, offset, length, range digest); its SHA-256 is the
+   reported identity. Locations are hashed rather than reported, so caller-facing output carries no
+   model content, no local path and no declared dependency filename, and a content-preserving
+   relocation or rewrite does not change the identity.
+
+Only the top-level graph's initializers can be supplied in memory; ONNX Runtime resolves subgraph,
+function-body, node-attribute and sparse tensor data itself. When such a dependency exists, the
+capture is **discarded entirely**: the model loads exactly as it would without capture and the
+identity is reported as `unknown` with a reason (or, under `required`, loading fails). The same
+discard applies to any capture failure, so requesting an identity never changes whether a model
+loads. An `unknown` identity carries no digest at all — a partial or unattributable digest is never
+reported, and a path, size, timestamp or provider name is never substituted for one.
+
+`OnnxSessionPool` creates its sessions independently, so it cross-checks their identities and has
+no single identity if the content changed mid-construction. `QoreTokenizerUtils::EmbeddingModel`,
+`QoreTokenizerUtils::CrossEncoderReranker`, `QoreRagUtils::LocalOnnxEmbedder`,
+`QoreRagUtils::LocalOnnxReranker` and `DataProviderML::QoreOnnxModelProcessor` expose the identity
+of *their own* session instance (forcing lazy construction where applicable), so a fingerprint
+always describes the same instance that encodes, scores or infers — never a second model
+constructed to answer the question. Tokenizer configuration and preprocessing/pooling policy are
+deliberately outside this identity and must be bound by the producer that applies them.
+
 ## Tokenizer Module
 
 Separate binary module (`modules/tokenizer/`) providing HuggingFace-compatible text

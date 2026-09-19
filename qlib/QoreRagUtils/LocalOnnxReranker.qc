@@ -34,6 +34,9 @@ public namespace QoreRagUtils {
     - \c options.tokenizer_config (required): tokenizer JSON hash
     - \c options.max_length (optional): maximum query+passage tokens; default 512
     - \c options.activation (optional): \c "sigmoid" (default), \c "softmax", or \c "none"
+    - \c options.session_config (optional): an @ref ML::OnnxSessionConfig hash passed to the
+      underlying ONNX session; set its \c content_identity key to make
+      @ref getContentIdentity() report the content actually loaded
 */
 public class LocalOnnxReranker inherits AbstractReranker {
     private {
@@ -99,6 +102,23 @@ public class LocalOnnxReranker inherits AbstractReranker {
         return basename(config.model_path);
     }
 
+    #! Returns the content identity of the ONNX model this reranker scores with
+    /** Creates the underlying reranker if it does not exist yet, so the returned identity always
+        describes the same instance that @ref rerank() uses; the model file is never re-read to
+        answer this call and no second model is constructed.
+
+        Request capture by setting \c content_identity in \c options.session_config; otherwise
+        an identity with \c complete = @ref False is returned.
+
+        @return an @ref ML::OnnxContentIdentity hash describing the loaded content
+
+        @see @ref ML::OnnxModel::getContentIdentity()
+    */
+    *hash<ML::OnnxContentIdentity> getContentIdentity() {
+        ensureReranker();
+        return reranker.getContentIdentity();
+    }
+
     #! Ensures the underlying CrossEncoderReranker is created
     private ensureReranker() {
         if (!reranker) {
@@ -115,6 +135,9 @@ public class LocalOnnxReranker inherits AbstractReranker {
                 }
                 if (config.options.activation.val()) {
                     cfg.activation = config.options.activation;
+                }
+                if (config.options.session_config) {
+                    cfg.session_config = config.options.session_config;
                 }
                 reranker = new QoreTokenizerUtils::CrossEncoderReranker(cfg);
             }

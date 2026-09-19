@@ -1,0 +1,165 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LocalOnnxContentIdentity.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#! Verifies that the local ONNX RAG providers report the content identity of the model instance
+#! they actually encode and score with
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/ml"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/tokenizer"
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QoreRagUtils
+%requires QoreTokenizerUtils
+%requires ml
+%requires Util
+%requires QUnit
+
+%exec-class LocalOnnxContentIdentityTest
+
+public class LocalOnnxContentIdentityTest inherits QUnit::Test {
+    private {
+        #! Tokenizer configuration shared by the local ONNX providers
+        hash<auto> tokenizer_config;
+    }
+
+    constructor() : Test("LocalOnnxContentIdentityTest", "1.0") {
+        tokenizer_config = LocalOnnxContentIdentityTest::makeTokenizerConfig();
+        addTestCase("LocalOnnxEmbedder content identity", \embedderContentIdentityTest());
+        addTestCase("LocalOnnxReranker content identity", \rerankerContentIdentityTest());
+        set_return_value(main());
+    }
+
+    #! Returns the path of an ONNX fixture shipped with the ml module tests
+    private string getFixturePath(string filename) {
+        string path = normalize_dir(get_script_dir()
+            + "/../../../../modules/ml/test/data/" + filename);
+        if (!is_file(path)) {
+            path = "modules/ml/test/data/" + filename;
+        }
+        return path;
+    }
+
+    #! Returns True (and skips) when the ONNX fixture cannot be used here
+    private bool skipFixture(string path) {
+        if (!ML::ml_get_capabilities().has_onnx) {
+            testSkip("ml module was not built with ONNX Runtime support");
+            return True;
+        }
+        if (!is_file(path)) {
+            testSkip("ONNX fixture not found at: " + path);
+            return True;
+        }
+        return False;
+    }
+
+    #! Builds a minimal WordPiece tokenizer configuration for the fixtures
+    private static hash<auto> makeTokenizerConfig() {
+        list<auto> vocab = (
+            ("[PAD]", 0), ("[UNK]", 1), ("[CLS]", 2), ("[SEP]", 3),
+            ("hello", 4), ("world", 5), ("machine", 6), ("learning", 7),
+        );
+        hash<auto> vocab_hash = {};
+        foreach list<auto> entry in (vocab) {
+            vocab_hash{entry[0]} = entry[1];
+        }
+        return {
+            "model": {
+                "type": "WordPiece",
+                "vocab": vocab_hash,
+                "unk_token": "[UNK]",
+                "max_input_chars_per_word": 100,
+            },
+            "normalizer": {"type": "Lowercase"},
+            "pre_tokenizer": {"type": "Whitespace"},
+        };
+    }
+
+    #! Session configuration requesting an authoritative content identity
+    private hash<ML::OnnxSessionConfig> identityConfig() {
+        return <ML::OnnxSessionConfig>{
+            "providers": (),
+            "content_identity": "required",
+        };
+    }
+
+    embedderContentIdentityTest() {
+        string model_path = getFixturePath("test_token_embedding.onnx");
+        if (skipFixture(model_path)) {
+            return;
+        }
+
+        QoreRagUtils::LocalOnnxEmbedder embedder(<QoreRagUtils::EmbedderConfig>{
+            "model_path": model_path,
+            "options": {
+                "tokenizer_config": tokenizer_config,
+                "max_tokens": 16,
+                "session_config": identityConfig(),
+            },
+        });
+
+        # the underlying model is created lazily; asking for the identity must create it rather
+        # than reporting that there is nothing to identify
+        *hash<ML::OnnxContentIdentity> id = embedder.getContentIdentity();
+        assertTrue(exists id, "the embedder must report an identity even before first use");
+        assertTrue(id.complete);
+        assertEq(64, id.digest.size());
+        assertEq("file", id.source);
+
+        # the identity describes the instance that encodes: encoding does not change it, and an
+        # independently loaded session over the same file agrees
+        list<float> vector = embedder.encode("hello world");
+        assertTrue(vector.size() > 0);
+        assertEq(id.digest, embedder.getContentIdentity().digest,
+            "encoding must not change the identity of the loaded content");
+        ML::OnnxModel direct(model_path, identityConfig());
+        assertEq(direct.getContentIdentity().digest, id.digest);
+
+        # without the option the embedder reports unknown rather than substituting the model path
+        QoreRagUtils::LocalOnnxEmbedder plain(<QoreRagUtils::EmbedderConfig>{
+            "model_path": model_path,
+            "options": {
+                "tokenizer_config": tokenizer_config,
+                "max_tokens": 16,
+            },
+        });
+        *hash<ML::OnnxContentIdentity> unknown = plain.getContentIdentity();
+        assertFalse(unknown.complete);
+        assertNothing(unknown.digest);
+        assertTrue(unknown.unknown_reason.val());
+        assertFalse(sprintf("%y", unknown) =~ /test_token_embedding/,
+            "an unknown identity must not leak the configured model path");
+    }
+
+    rerankerContentIdentityTest() {
+        string model_path = getFixturePath("test_token_reranker.onnx");
+        if (skipFixture(model_path)) {
+            return;
+        }
+
+        QoreRagUtils::LocalOnnxReranker reranker(<QoreRagUtils::RerankerConfig>{
+            "model_path": model_path,
+            "options": {
+                "tokenizer_config": tokenizer_config,
+                "max_length": 16,
+                "session_config": identityConfig(),
+            },
+        });
+
+        *hash<ML::OnnxContentIdentity> id = reranker.getContentIdentity();
+        assertTrue(exists id, "the reranker must report an identity even before first use");
+        assertTrue(id.complete);
+        ML::OnnxModel direct(model_path, identityConfig());
+        assertEq(direct.getContentIdentity().digest, id.digest);
+
+        # scoring does not change the identity of what was loaded
+        list<hash<QoreRagUtils::RerankResult>> results =
+            reranker.rerank("hello", ("hello world", "machine learning"), 2);
+        assertEq(2, results.size());
+        assertEq(id.digest, reranker.getContentIdentity().digest);
+    }
+}

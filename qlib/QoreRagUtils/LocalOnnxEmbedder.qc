@@ -36,6 +36,9 @@ public namespace QoreRagUtils {
       parsed contents of the model's \c tokenizer.json
     - \c options.max_tokens (optional): maximum input tokens; default 512
     - \c options.pooling_strategy (optional): \c "mean" (default), \c "cls", or \c "max"
+    - \c options.session_config (optional): an @ref ML::OnnxSessionConfig hash passed to the
+      underlying ONNX session; set its \c content_identity key to make
+      @ref getContentIdentity() report the content actually loaded
 
     @par Laziness
 
@@ -125,6 +128,23 @@ public class LocalOnnxEmbedder inherits AbstractEmbedder {
         return basename(config.model_path);
     }
 
+    #! Returns the content identity of the ONNX model this embedder encodes with
+    /** Creates the underlying model if it does not exist yet, so the returned identity always
+        describes the same instance that @ref encode() and @ref encodeBatch() use; the model file
+        is never re-read to answer this call and no second model is constructed.
+
+        Request capture by setting \c content_identity in \c options.session_config; otherwise
+        an identity with \c complete = @ref False is returned.
+
+        @return an @ref ML::OnnxContentIdentity hash describing the loaded content
+
+        @see @ref ML::OnnxModel::getContentIdentity()
+    */
+    *hash<ML::OnnxContentIdentity> getContentIdentity() {
+        ensureModel();
+        return model.getContentIdentity();
+    }
+
     #! Ensures the underlying EmbeddingModel is created
     private ensureModel() {
         if (!model) {
@@ -141,6 +161,9 @@ public class LocalOnnxEmbedder inherits AbstractEmbedder {
                 }
                 if (config.options.pooling_strategy.val()) {
                     emb_cfg.pooling_strategy = config.options.pooling_strategy;
+                }
+                if (config.options.session_config) {
+                    emb_cfg.session_config = config.options.session_config;
                 }
                 model = new QoreTokenizerUtils::EmbeddingModel(emb_cfg);
             }

@@ -33,6 +33,10 @@
 %requires(reexport) QoreTokenizerUtils
 %requires(reexport) QoreRagTypes
 
+# ml provides the local ONNX sessions used by LocalOnnxEmbedder and LocalOnnxReranker, whose
+# content identity accessors name ML hashdecls directly
+%requires ml
+
 # json is used by PgVectorRagProvider for jsonb payload marshalling; declare
 # as a try-module so the rest of QoreRagUtils still loads when json is
 # unavailable (PgVectorRagProvider will throw at construction time then)

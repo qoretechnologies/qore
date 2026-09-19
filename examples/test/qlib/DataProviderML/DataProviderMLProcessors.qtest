@@ -191,6 +191,7 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("onnx-model - input map flush", \onnxModelInputMapFlush());
         addTestCase("onnx-model - capabilities", \onnxModelCapabilities());
         addTestCase("onnx-model - constructor validation", \onnxModelConstructorValidation());
+        addTestCase("onnx-model - content identity", \onnxModelContentIdentity());
 
         # StandardScaler tests
         addTestCase("standard-scaler - basic window", \stdScalerBasicWindow());
@@ -2760,6 +2761,47 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             assertTrue(abs(expected - actual) < 0.01,
                 sprintf("record %d: expected %f, got %f", i, expected, actual));
         }
+    }
+
+    onnxModelContentIdentity() {
+        if (skipOnnx()) {
+            return;
+        }
+        # without the option the processor reports an unknown identity rather than substituting
+        # the model path it was configured with
+        DataProviderML::QoreOnnxModelProcessor plain({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 1,
+        });
+        hash<ML::OnnxContentIdentity> unknown = plain.getContentIdentity();
+        assertFalse(unknown.complete);
+        assertNothing(unknown.digest);
+        assertTrue(unknown.unknown_reason.val());
+
+        DataProviderML::QoreOnnxModelProcessor proc({
+            "model_path": getTestModelPath(),
+            "fields": "x",
+            "window_size": 1,
+            "content_identity": "required",
+        });
+        hash<ML::OnnxContentIdentity> id = proc.getContentIdentity();
+        assertTrue(id.complete);
+        assertEq(64, id.digest.size());
+
+        # the identity describes the session the processor infers with
+        ML::OnnxModel direct(getTestModelPath(), <ML::OnnxSessionConfig>{
+            "providers": (),
+            "content_identity": "required",
+        });
+        assertEq(direct.getContentIdentity().model_digest, id.model_digest);
+
+        # inference does not change the identity, and diagnostics report the same value
+        list<auto> results;
+        DataProviderMLProcessorsTest::collectResult(\results, proc.processRecord({"x": 1.0}));
+        assertEq(1, results.size());
+        assertEq(id.digest, proc.getContentIdentity().digest);
+        assertEq(id.digest, proc.getDiagnostics().content_identity.digest);
     }
 
     onnxModelDiagnostics() {

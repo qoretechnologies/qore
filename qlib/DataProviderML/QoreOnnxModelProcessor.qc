@@ -303,6 +303,26 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "/var/tmp/customer-score-profile",
             },
+            "content_identity": <DataProviderOptionInfo>{
+                "display_name": "Content Identity",
+                "short_desc": "Capture an authoritative identity of the loaded model content",
+                "desc": "Whether to capture an immutable identity of the content actually loaded "
+                    "into the ONNX session: the model graph bytes and every external tensor byte "
+                    "the session consumed. `disabled` (default) captures nothing; `best_effort` "
+                    "captures the content and reports an unknown identity with a reason if it "
+                    "cannot be fully bound; `required` fails model loading when a complete "
+                    "identity cannot be established. Capturing holds the model graph and all "
+                    "external tensor data in memory for the lifetime of the session. The "
+                    "identity is reported by `getContentIdentity()` and by `getDiagnostics()`.",
+                "type": AbstractDataProviderTypeMap."*string",
+                "default_value": "disabled",
+                "example_value": "required",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "disabled", "display_name": "Disabled (default)"},
+                    <AllowedValueInfo>{"value": "best_effort", "display_name": "Best Effort"},
+                    <AllowedValueInfo>{"value": "required", "display_name": "Required"},
+                ),
+            },
             "include_diagnostics": <DataProviderOptionInfo>{
                 "display_name": "Include Diagnostics",
                 "short_desc": "Attach runtime diagnostics to output events",
@@ -463,6 +483,9 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
         if (exists copts.profile_file_prefix) {
             session_config.profile_file_prefix = copts.profile_file_prefix;
         }
+        if (copts.content_identity.val()) {
+            session_config.content_identity = copts.content_identity;
+        }
         if (copts.device_binding) {
             hash<ML::OnnxDeviceBindingConfig> dbc = <ML::OnnxDeviceBindingConfig>{
                 "enabled": True,
@@ -484,6 +507,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
                 || exists session_config.log_severity
                 || exists session_config.enable_profiling
                 || exists session_config.profile_file_prefix
+                || exists session_config.content_identity
                 || exists session_config.device_binding) {
             model = new ML::OnnxModel(model_path, session_config);
         } else {
@@ -537,6 +561,28 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
 
         @since DataProviderML 1.4
     */
+    #! Returns the content identity of the ONNX model this processor infers with
+    /** Returns the identity of the content loaded into \b this processor's ONNX session, so the
+        fingerprint describes the same model instance that produces the processor's output; no
+        second model is constructed and the model file is never re-read.
+
+        Request capture with the \c content_identity constructor option; otherwise an identity
+        with \c complete = @ref False is returned.
+
+        @return an @ref ML::OnnxContentIdentity hash describing the loaded content
+
+        @throw PROCESSOR-ERROR the processor is not configured
+
+        @see @ref ML::OnnxModel::getContentIdentity()
+    */
+    hash<ML::OnnxContentIdentity> getContentIdentity() {
+        if (!configured) {
+            throw "PROCESSOR-ERROR",
+                "QoreOnnxModelProcessor: not configured; provide constructor options";
+        }
+        return model.getContentIdentity();
+    }
+
     hash<auto> getDiagnostics(bool finish_profile = False) {
         if (!configured) {
             throw "PROCESSOR-ERROR",
@@ -551,6 +597,7 @@ public class QoreOnnxModelProcessor inherits AbstractDataProviderMLProcessor {
             "inference_stats": model.getInferenceStats(),
             "io_binding": getIoBindingDiagnostics(),
             "device_binding": getDeviceBindingDiagnostics(),
+            "content_identity": model.getContentIdentity(),
         };
         if (finish_profile) {
             *string profile_path = model.endProfiling();

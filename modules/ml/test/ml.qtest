@@ -190,6 +190,41 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OnnxModel backward compat", \onnxBackwardCompatTest());
         addTestCase("OnnxModel empty providers", \onnxEmptyProvidersTest());
         addTestCase("OnnxModel CUDA conditional", \onnxCudaTest());
+        addTestCase("OnnxModel content identity disabled by default",
+            \onnxContentIdentityDisabledTest());
+        addTestCase("OnnxModel content identity self-contained model",
+            \onnxContentIdentitySelfContainedTest());
+        addTestCase("OnnxModel content identity external tensor data",
+            \onnxContentIdentityExternalTest());
+        addTestCase("OnnxModel content identity binds external content changes",
+            \onnxContentIdentityExternalChangeTest());
+        addTestCase("OnnxModel content identity offset and length",
+            \onnxContentIdentityOffsetLengthTest());
+        addTestCase("OnnxModel content identity arbitrary dependency filenames",
+            \onnxContentIdentityArbitraryNamesTest());
+        addTestCase("OnnxModel content identity missing dependency",
+            \onnxContentIdentityMissingDependencyTest());
+        addTestCase("OnnxModel content identity truncated dependency",
+            \onnxContentIdentityTruncatedDependencyTest());
+        addTestCase("OnnxModel content identity rejects escaping locations",
+            \onnxContentIdentityLocationPolicyTest());
+        addTestCase("OnnxModel content identity survives relocation and touch",
+            \onnxContentIdentityRelocationTest());
+        addTestCase("OnnxModel content identity immune to caller mutation",
+            \onnxContentIdentityCallerMutationTest());
+        addTestCase("OnnxModel content identity nested graph dependencies",
+            \onnxContentIdentityNestedGraphTest());
+        addTestCase("OnnxModel content identity memory constructor",
+            \onnxContentIdentityMemoryTest());
+        addTestCase("OnnxModel content identity diagnostics are path-free",
+            \onnxContentIdentityNoPathsTest());
+        addTestCase("OnnxModel content identity invalid configuration",
+            \onnxContentIdentityInvalidConfigTest());
+        addTestCase("OnnxModel content identity malformed model",
+            \onnxContentIdentityMalformedModelTest());
+        addTestCase("OnnxModel content identity concurrent construction",
+            \onnxContentIdentityConcurrentTest());
+        addTestCase("OnnxSessionPool content identity", \onnxContentIdentityPoolTest());
         addTestCase("StandardScaler basic", \stdScalerBasicTest());
         addTestCase("StandardScaler matrix API", \stdScalerMatrixTest());
         addTestCase("StandardScaler inverse round-trip", \stdScalerInverseTest());
@@ -3231,6 +3266,508 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-GMM-ERROR", sub() {
             gmm.updateMatrix(((1.0, 2.0, 3.0),));
         });
+    }
+
+
+    #
+    # ONNX loaded-content identity
+    #
+
+    #! Session config used by content identity tests: CPU only, no graph optimization
+    private hash<ML::OnnxSessionConfig> ciConfig(*string content_identity) {
+        hash<ML::OnnxSessionConfig> rv = <ML::OnnxSessionConfig>{
+            "providers": (),
+            "intra_op_threads": 1,
+            "graph_optimization_level": 0,
+        };
+        if (content_identity.val()) {
+            rv.content_identity = content_identity;
+        }
+        return rv;
+    }
+
+    #! Builds an "Add" model whose bias tensor B is stored inline
+    private binary ciSelfContainedModel(float bias = 1.0) {
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-ci-inline",
+                (QoreOnnxExport::OnnxGraphBuilder::makeNode("Add", ("X", "B"), ("Y",)),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeInput("X", 1),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeOutput("Y", 1),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeTensorFloat("B", (1,), (bias,)),)));
+    }
+
+    #! Builds an "Add" model whose bias tensor B lives in an external file
+    private binary ciExternalModel(string location, *softint offset, *softint length) {
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-ci-external",
+                (QoreOnnxExport::OnnxGraphBuilder::makeNode("Add", ("X", "B"), ("Y",)),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeInput("X", 1),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeOutput("Y", 1),),
+                (QoreOnnxExport::OnnxGraphBuilder::makeTensorExternal("B", (1,),
+                    QoreOnnxExport::ONNX_FLOAT, location, offset, length),)));
+    }
+
+    #! Builds an If model whose then-branch initializer lives in an external file
+    private binary ciNestedIfModel() {
+        hash<auto> then_branch = {
+            "name": "then_branch",
+            "node": (QoreOnnxExport::OnnxGraphBuilder::makeNode("Identity", ("B",), ("T",)),),
+            "output": (ciValueInfo("T"),),
+            "initializer": (QoreOnnxExport::OnnxGraphBuilder::makeTensorExternal("B", (1,),
+                QoreOnnxExport::ONNX_FLOAT, "weights.bin"),),
+        };
+        hash<auto> else_branch = {
+            "name": "else_branch",
+            "node": (QoreOnnxExport::OnnxGraphBuilder::makeNode("Identity", ("C",), ("E",)),),
+            "output": (ciValueInfo("E"),),
+            "initializer": (QoreOnnxExport::OnnxGraphBuilder::makeTensorFloat("C", (1,), (9.0,)),),
+        };
+        hash<auto> if_node = QoreOnnxExport::OnnxGraphBuilder::makeNode("If", ("cond",), ("Y",),
+            ({"name": "then_branch", "type": QoreOnnxExport::ONNX_ATTR_GRAPH, "g": then_branch},
+             {"name": "else_branch", "type": QoreOnnxExport::ONNX_ATTR_GRAPH, "g": else_branch}));
+        return QoreOnnxExport::OnnxGraphBuilder::serialize(
+            QoreOnnxExport::OnnxGraphBuilder::buildModel("qore-ml-ci-nested", (if_node,),
+                (ciValueInfo("cond", QoreOnnxExport::ONNX_BOOL, ()),), (ciValueInfo("Y"),), ()));
+    }
+
+    #! Builds a ValueInfoProto hash with an explicit shape
+    private hash<auto> ciValueInfo(string name, int elem = QoreOnnxExport::ONNX_FLOAT,
+            *list<auto> dims) {
+        return {
+            "name": name,
+            "type": {
+                "tensor_type": {
+                    "elem_type": elem,
+                    "shape": {"dim": dims ?? ({"dim_value": 1},)},
+                },
+            },
+        };
+    }
+
+    #! Writes binary content to a file, replacing any existing content
+    private ciWrite(string path, binary content) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(content);
+        f.close();
+    }
+
+    #! Returns the little-endian float32 encoding of a value
+    private binary ciFloatBytes(float value) {
+        return value === 1.0 ? parse_hex_string("0000803f")
+            : (value === 2.0 ? parse_hex_string("00000040")
+                : (value === 4.0 ? parse_hex_string("00008040") : parse_hex_string("00000000")));
+    }
+
+    #! Runs the Add model with X = 1.0 and returns Y
+    private float ciRun(ML::OnnxModel model) {
+        return model.run({"X": ((1.0,),)}).Y[0];
+    }
+
+    onnxContentIdentityDisabledTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        ML::OnnxModel model(ciSelfContainedModel(), ciConfig());
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+        assertFalse(id.complete);
+        assertEq("unknown", id.status);
+        assertNothing(id.digest, "a disabled capture must never report a content digest");
+        assertTrue(id.unknown_reason.val());
+        assertEq(1, id.version);
+        assertEq("SHA-256", id.algorithm);
+        assertEq((), id.dependencies);
+    }
+
+    onnxContentIdentitySelfContainedTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        binary bytes = ciSelfContainedModel();
+        ML::OnnxModel model(bytes, ciConfig("required"));
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+        assertTrue(id.complete);
+        assertEq("complete", id.status);
+        assertEq("memory", id.source);
+        assertEq(64, id.digest.size(), "SHA-256 digests are 64 hex characters");
+        assertEq(bytes.size(), id.model_size);
+        assertEq((), id.dependencies, "a self-contained model has no external dependencies");
+        assertNothing(id.unknown_reason);
+        assertEq(2.0, ciRun(model));
+
+        # a different inline bias is different content
+        ML::OnnxModel other(ciSelfContainedModel(2.0), ciConfig("required"));
+        assertNeq(id.digest, other.getContentIdentity().digest);
+    }
+
+    onnxContentIdentityExternalTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        binary bytes = ciExternalModel("weights.bin");
+        ciWrite(tmp.path + "/model.onnx", bytes);
+
+        ML::OnnxModel model(tmp.path + "/model.onnx", ciConfig("required"));
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+        assertTrue(id.complete);
+        assertEq("file", id.source);
+        assertEq(1, id.dependencies.size(), "the external tensor must be bound as a dependency");
+        assertEq(0, id.dependencies[0].offset);
+        assertEq(4, id.dependencies[0].length);
+        assertEq(64, id.dependencies[0].digest.size());
+        assertEq(1, id.dependencies[0].references);
+        assertEq(2.0, ciRun(model), "the model must still load and run normally");
+
+        # identical content loaded again yields the identical identity
+        ML::OnnxModel again(tmp.path + "/model.onnx", ciConfig("required"));
+        assertEq(id.digest, again.getContentIdentity().digest);
+    }
+
+    onnxContentIdentityExternalChangeTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        binary bytes = ciExternalModel("weights.bin");
+        ciWrite(tmp.path + "/model.onnx", bytes);
+
+        ML::OnnxModel first(tmp.path + "/model.onnx", ciConfig("required"));
+        hash<ML::OnnxContentIdentity> id1 = first.getContentIdentity();
+        assertEq(2.0, ciRun(first));
+
+        # replace only the external weights: same size, and the model bytes do not change
+        date before = hstat(tmp.path + "/weights.bin").mtime;
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(2.0));
+        assertEq(4, hstat(tmp.path + "/weights.bin").size,
+            "the replacement must be the same size as the original");
+
+        ML::OnnxModel second(tmp.path + "/model.onnx", ciConfig("required"));
+        hash<ML::OnnxContentIdentity> id2 = second.getContentIdentity();
+        assertEq(3.0, ciRun(second), "the new session consumes the new weights");
+        assertNeq(id1.digest, id2.digest,
+            "changing only external tensor bytes must change the content identity");
+        assertEq(id1.model_digest, id2.model_digest,
+            "the model graph bytes are unchanged, so the model digest must match");
+        assertNeq(id1.dependencies[0].digest, id2.dependencies[0].digest);
+
+        # the already-loaded session keeps both its identity and its results
+        assertEq(id1.digest, first.getContentIdentity().digest,
+            "an existing session's identity must describe what it loaded, not the current file");
+        assertEq(2.0, ciRun(first));
+        assertTrue(exists before);
+    }
+
+    onnxContentIdentityOffsetLengthTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        # one file holding 1.0 at offset 0 and 2.0 at offset 4
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0) + ciFloatBytes(2.0));
+
+        ciWrite(tmp.path + "/a.onnx", ciExternalModel("weights.bin", 0, 4));
+        ciWrite(tmp.path + "/b.onnx", ciExternalModel("weights.bin", 4, 4));
+        ML::OnnxModel a(tmp.path + "/a.onnx", ciConfig("required"));
+        ML::OnnxModel b(tmp.path + "/b.onnx", ciConfig("required"));
+        hash<ML::OnnxContentIdentity> ida = a.getContentIdentity();
+        hash<ML::OnnxContentIdentity> idb = b.getContentIdentity();
+
+        assertEq(2.0, ciRun(a));
+        assertEq(3.0, ciRun(b), "the second model reads the tensor at offset 4");
+        assertEq(0, ida.dependencies[0].offset);
+        assertEq(4, idb.dependencies[0].offset);
+        assertNeq(ida.dependencies[0].digest, idb.dependencies[0].digest,
+            "different byte ranges of the same file are different content");
+        assertNeq(ida.digest, idb.digest);
+    }
+
+    onnxContentIdentityArbitraryNamesTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        mkdir(tmp.path + "/nested");
+        ciWrite(tmp.path + "/nested/an.arbitrary.name", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/model.onnx", ciExternalModel("nested/an.arbitrary.name"));
+
+        ML::OnnxModel model(tmp.path + "/model.onnx", ciConfig("required"));
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+        assertTrue(id.complete,
+            "dependency filenames are read from the model, not inferred from conventions");
+        assertEq(1, id.dependencies.size());
+        assertEq(2.0, ciRun(model));
+    }
+
+    onnxContentIdentityMissingDependencyTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/model.onnx", ciExternalModel("absent.bin"));
+
+        # required: loading fails rather than reporting an identity it cannot establish
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", \ciConstruct(),
+            (tmp.path + "/model.onnx", ciConfig("required")));
+
+        # best effort: the model still fails to load (ONNX Runtime needs the file), but the
+        # failure is the runtime's, not a fabricated identity
+        assertThrows("ML-ONNX-ERROR", \ciConstruct(),
+            (tmp.path + "/model.onnx", ciConfig("best_effort")));
+    }
+
+    #! Constructs a model; used to assert on constructor exceptions
+    private ciConstruct(string path, hash<ML::OnnxSessionConfig> config) {
+        ML::OnnxModel model(path, config);
+    }
+
+    #! Constructs a model from bytes; used to assert on constructor exceptions
+    private ciConstructBytes(binary bytes, hash<ML::OnnxSessionConfig> config) {
+        ML::OnnxModel model(bytes, config);
+    }
+
+    onnxContentIdentityTruncatedDependencyTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        # declare 8 bytes but store only 4
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/model.onnx", ciExternalModel("weights.bin", 0, 8));
+
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "holds only 4 bytes", \ciConstruct(),
+            (tmp.path + "/model.onnx", ciConfig("required")));
+
+        # an offset past the end of the file is equally rejected
+        ciWrite(tmp.path + "/past.onnx", ciExternalModel("weights.bin", 64, 4));
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", \ciConstruct(),
+            (tmp.path + "/past.onnx", ciConfig("required")));
+    }
+
+    onnxContentIdentityLocationPolicyTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+
+        # an absolute location is never followed
+        ciWrite(tmp.path + "/abs.onnx", ciExternalModel(tmp.path + "/weights.bin"));
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "only relative paths", \ciConstruct(),
+            (tmp.path + "/abs.onnx", ciConfig("required")));
+
+        # neither is a location that traverses out of the model directory
+        ciWrite(tmp.path + "/esc.onnx", ciExternalModel("../weights.bin"));
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "outside the model directory",
+            \ciConstruct(), (tmp.path + "/esc.onnx", ciConfig("required")));
+    }
+
+    onnxContentIdentityRelocationTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        mkdir(tmp.path + "/one");
+        mkdir(tmp.path + "/two");
+        binary bytes = ciExternalModel("weights.bin");
+        ciWrite(tmp.path + "/one/model.onnx", bytes);
+        ciWrite(tmp.path + "/one/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/two/model.onnx", bytes);
+        ciWrite(tmp.path + "/two/weights.bin", ciFloatBytes(1.0));
+
+        ML::OnnxModel one(tmp.path + "/one/model.onnx", ciConfig("required"));
+        ML::OnnxModel two(tmp.path + "/two/model.onnx", ciConfig("required"));
+        assertEq(one.getContentIdentity().digest, two.getContentIdentity().digest,
+            "content-preserving relocation must not change the identity");
+
+        # rewriting identical bytes updates the file's timestamps without changing its content
+        hash<StatInfo> before = hstat(tmp.path + "/two/weights.bin");
+        ciWrite(tmp.path + "/two/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/two/model.onnx", bytes);
+        assertEq(before.size, hstat(tmp.path + "/two/weights.bin").size);
+        ML::OnnxModel rewritten(tmp.path + "/two/model.onnx", ciConfig("required"));
+        assertEq(one.getContentIdentity().digest, rewritten.getContentIdentity().digest,
+            "rewriting identical content must not change the identity");
+    }
+
+    onnxContentIdentityCallerMutationTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        hash<ML::OnnxSessionConfig> config = ciConfig("required");
+        binary bytes = ciSelfContainedModel();
+        ML::OnnxModel model(bytes, config);
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+
+        # mutating the caller's config and byte buffer after construction changes nothing
+        config.content_identity = "disabled";
+        config.intra_op_threads = 4;
+        bytes = ciSelfContainedModel(2.0);
+        hash<ML::OnnxContentIdentity> after = model.getContentIdentity();
+        assertEq(id.digest, after.digest);
+        assertEq(id.model_digest, after.model_digest);
+        assertTrue(after.complete);
+        assertEq(2.0, ciRun(model));
+    }
+
+    onnxContentIdentityNestedGraphTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/if.onnx", ciNestedIfModel());
+
+        # ONNX Runtime resolves subgraph external data from the model directory itself and offers
+        # no way to supply it in memory, so the loaded bytes cannot be attributed to the session;
+        # the identity must say so instead of reporting a digest that only describes the files as
+        # they were read separately
+        ML::OnnxModel model(tmp.path + "/if.onnx", ciConfig("best_effort"));
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+        assertFalse(id.complete, "a subgraph dependency cannot be bound to the loaded session");
+        assertEq("unknown", id.status);
+        assertNothing(id.digest);
+        assertNothing(id.model_digest,
+            "an unknown identity must not report a digest of separately read bytes");
+        assertRegex("subgraph", id.unknown_reason);
+        # the If model's output is a single value, not a row
+        assertEq(1.0, model.run({"cond": True}).Y,
+            "requesting an identity must never change how the model loads or runs");
+
+        # "required" refuses rather than reporting an identity it cannot establish
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "could not be established", \ciConstruct(),
+            (tmp.path + "/if.onnx", ciConfig("required")));
+    }
+
+    onnxContentIdentityMemoryTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        binary bytes = ciSelfContainedModel();
+        ML::OnnxModel model(bytes, ciConfig("required"));
+        hash<ML::OnnxContentIdentity> id = model.getContentIdentity();
+        assertEq("memory", id.source);
+        assertTrue(id.complete);
+        assertEq(bytes.size(), id.model_size);
+
+        # the same bytes loaded from a file identify identically: the identity describes content,
+        # not how the content was supplied
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/model.onnx", bytes);
+        ML::OnnxModel from_file(tmp.path + "/model.onnx", ciConfig("required"));
+        assertEq(id.model_digest, from_file.getContentIdentity().model_digest);
+    }
+
+    onnxContentIdentityNoPathsTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/model.onnx", ciExternalModel("weights.bin"));
+        ML::OnnxModel model(tmp.path + "/model.onnx", ciConfig("required"));
+
+        string rendered = sprintf("%y", model.getContentIdentity());
+        assertFalse(rendered =~ /weights\.bin/,
+            "the identity must not expose declared dependency filenames");
+        assertFalse(rendered =~ /qore-ml-ci-/,
+            "the identity must not expose local filesystem paths");
+        assertFalse(rendered =~ /model\.onnx/);
+    }
+
+    onnxContentIdentityInvalidConfigTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        hash<ML::OnnxSessionConfig> bad = ciConfig();
+        bad.content_identity = "sometimes";
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "expected \"disabled\"",
+            \ciConstructBytes(), (ciSelfContainedModel(), bad));
+
+        # the explicit disabled value is accepted and behaves like the default
+        hash<ML::OnnxSessionConfig> off = ciConfig("disabled");
+        ML::OnnxModel model(ciSelfContainedModel(), off);
+        assertFalse(model.getContentIdentity().complete);
+    }
+
+    onnxContentIdentityMalformedModelTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        # truncating a valid model leaves a byte string that is not a parsable ModelProto
+        binary bytes = ciSelfContainedModel();
+        binary truncated = bytes[0..(bytes.size() - 8)];
+        assertThrows("ML-ONNX-CONTENT-IDENTITY-ERROR", "could not be parsed",
+            \ciConstructBytes(), (truncated, ciConfig("required")));
+
+        # best effort leaves loading to ONNX Runtime, which rejects the same bytes
+        assertThrows("ML-ONNX-ERROR", \ciConstructBytes(),
+            (truncated, ciConfig("best_effort")));
+    }
+
+    onnxContentIdentityConcurrentTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/model.onnx", ciExternalModel("weights.bin"));
+
+        # concurrent constructions of the same unchanging content must all agree
+        Counter c(4);
+        list<string> digests = ();
+        Mutex m();
+        code worker = sub () {
+            on_exit c.dec();
+            ML::OnnxModel model(tmp.path + "/model.onnx", ciConfig("required"));
+            string digest = model.getContentIdentity().digest;
+            m.lock();
+            on_exit m.unlock();
+            digests += digest;
+        };
+        for (int i = 0; i < 4; ++i) {
+            background worker();
+        }
+        c.waitForZero();
+        assertEq(4, digests.size());
+        hash<string, bool> distinct;
+        map distinct{$1} = True, digests;
+        assertEq(1, distinct.size(),
+            "identical content must produce identical identities across threads");
+
+        # a session created after the content changes reports a different identity, and each
+        # session keeps the identity of what it loaded
+        ML::OnnxModel before(tmp.path + "/model.onnx", ciConfig("required"));
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(2.0));
+        ML::OnnxModel after(tmp.path + "/model.onnx", ciConfig("required"));
+        assertNeq(before.getContentIdentity().digest, after.getContentIdentity().digest);
+        assertEq(digests[0], before.getContentIdentity().digest);
+    }
+
+    onnxContentIdentityPoolTest() {
+        if (skipOnnx()) {
+            return;
+        }
+        FsUtil::TmpDir tmp("qore-ml-ci-");
+        ciWrite(tmp.path + "/weights.bin", ciFloatBytes(1.0));
+        ciWrite(tmp.path + "/model.onnx", ciExternalModel("weights.bin"));
+
+        ML::OnnxSessionPool pool(tmp.path + "/model.onnx", ciConfig("required"),
+            {"max_sessions": 3});
+        hash<ML::OnnxContentIdentity> id = pool.getContentIdentity();
+        assertTrue(id.complete, "all pooled sessions loaded identical content");
+        assertEq(1, id.dependencies.size());
+        assertEq(2.0, pool.run({"X": ((1.0,),)}).Y[0]);
+
+        # a single session over the same content agrees with the pool
+        ML::OnnxModel single(tmp.path + "/model.onnx", ciConfig("required"));
+        assertEq(single.getContentIdentity().digest, id.digest);
+
+        # without capture the pool reports an unknown identity rather than guessing
+        ML::OnnxSessionPool plain(tmp.path + "/model.onnx", ciConfig(), {"max_sessions": 2});
+        assertFalse(plain.getContentIdentity().complete);
     }
 
     private string getTestModelPath() {

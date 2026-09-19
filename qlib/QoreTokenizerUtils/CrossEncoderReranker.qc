@@ -554,6 +554,30 @@ public class CrossEncoderReranker {
         return scores;
     }
 
+    #! Returns the content identity of the ONNX model this instance scores with
+    /** Returns the identity of the content loaded into \b this object's ONNX session, so the
+        fingerprint describes the same model instance that scores document pairs; no second model
+        is constructed and no model file is re-read.
+
+        Content identity capture must be requested when the model is loaded, by setting
+        \c content_identity in @ref RerankerConfig::session_config; otherwise an identity with
+        \c complete = @ref False is returned.
+
+        The tokenizer configuration and the activation function applied around the model are not
+        part of this identity and must be bound separately by the producer that applies them.
+
+        @return an @ref ML::OnnxContentIdentity hash, or @ref nothing in HTTP and SGLang modes,
+            where there is no local model content to identify
+
+        @see @ref ML::OnnxModel::getContentIdentity()
+    */
+    *hash<ML::OnnxContentIdentity> getContentIdentity() {
+        if (mode != "onnx" || !onnx_model) {
+            return;
+        }
+        return onnx_model.getContentIdentity();
+    }
+
     #! Ensures the REST client is initialized
     private ensureRestClient() {
         if (!rest_client) {

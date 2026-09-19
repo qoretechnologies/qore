@@ -620,6 +620,40 @@ hash<OnnxModelInfo> OnnxModel::getModelInfo() {
     return model->getModelInfo(xsink);
 }
 
+//! Returns the content identity of the model loaded into this session
+/** Returns an immutable, versioned identity for the content this session actually loaded: the
+    model graph bytes and every external tensor byte the session consumed.
+
+    The identity is captured while the session is created and is never recomputed from the model
+    source afterwards, so replacing or editing the model files after construction cannot change
+    what this method reports for an already-loaded model.
+
+    Content identity capture must be requested when the model is loaded by setting
+    @ref OnnxSessionConfig::content_identity; otherwise an identity with \c complete = @ref False
+    and an \c unknown_reason is returned. A model path, file size, modification time, execution
+    provider name or package-declared companion filename is never substituted for the loaded
+    session's identity.
+
+    Tokenizer configuration and any preprocessing or pooling policy applied around the model are
+    not part of this identity and must be bound separately by the producer that applies them.
+
+    @return an @ref OnnxContentIdentity hash describing the loaded content
+
+    @par Example:
+    @code{.py}
+ML::OnnxModel model(path, <ML::OnnxSessionConfig>{"content_identity": "required"});
+hash<ML::OnnxContentIdentity> identity = model.getContentIdentity();
+printf("identity: %s (%d external dependencies)\n", identity.digest, identity.dependencies.size());
+    @endcode
+
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR the identity could not be built
+
+    @see @ref OnnxSessionConfig::content_identity
+*/
+hash<OnnxContentIdentity> OnnxModel::getContentIdentity() [flags=RET_VALUE_ONLY] {
+    return model->getContentIdentity(xsink);
+}
+
 //! Returns input tensor metadata
 /** @return a list of @ref OnnxTensorInfo hashes describing each input tensor
 
@@ -937,6 +971,23 @@ nothing OnnxSessionPool::resetPoolStats() {
 */
 hash<OnnxModelInfo> OnnxSessionPool::getModelInfo() {
     return pool->getModelInfo(xsink);
+}
+
+//! Returns the content identity shared by every session in the pool
+/** Every pooled session loads the model independently, so an identity is only reported when all
+    of them loaded identical content. If the model content changed while the pool was being
+    created, the pool has no single identity: with
+    @ref OnnxSessionConfig::content_identity \c "required" the pool constructor fails, and
+    otherwise an identity with \c complete = @ref False is returned.
+
+    @return an @ref OnnxContentIdentity hash describing the loaded content
+
+    @throw ML-ONNX-CONTENT-IDENTITY-ERROR the identity could not be built
+
+    @see @ref OnnxModel::getContentIdentity()
+*/
+hash<OnnxContentIdentity> OnnxSessionPool::getContentIdentity() [flags=RET_VALUE_ONLY] {
+    return pool->getContentIdentity(xsink);
 }
 
 //! Returns input tensor metadata from an acquired session

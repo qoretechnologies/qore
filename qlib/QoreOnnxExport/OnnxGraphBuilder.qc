@@ -63,6 +63,43 @@ public class OnnxGraphBuilder {
         };
     }
 
+    #! Creates a TensorProto hash whose data is stored in an external file
+    /** External tensor data is not stored in the model itself; the model only
+        declares where the bytes live, so the model bytes alone do not determine
+        the tensor values actually loaded at runtime.
+
+        @param name the tensor name
+        @param dims the tensor dimensions (list of int)
+        @param elem_type the element data type (ex: @ref ONNX_FLOAT)
+        @param location the external data file location; must be a relative path
+            resolved by the ONNX runtime against the model's directory
+        @param offset the byte offset of the tensor data in the external file, or
+            @ref nothing for the start of the file
+        @param length the byte length of the tensor data in the external file, or
+            @ref nothing for the remainder of the file
+
+        @return a TensorProto-compatible hash
+
+        @see https://github.com/onnx/onnx/blob/main/onnx/onnx.proto
+    */
+    static hash<auto> makeTensorExternal(string name, list<softint> dims, int elem_type,
+            string location, *softint offset, *softint length) {
+        list<hash<auto>> external_data = ({"key": "location", "value": location},);
+        if (exists offset) {
+            external_data += {"key": "offset", "value": string(offset)};
+        }
+        if (exists length) {
+            external_data += {"key": "length", "value": string(length)};
+        }
+        return {
+            "dims": dims,
+            "data_type": elem_type,
+            "name": name,
+            "data_location": ONNX_DATA_LOCATION_EXTERNAL,
+            "external_data": external_data,
+        };
+    }
+
     #! Creates a ValueInfoProto hash for a graph input
     /** @param name the input tensor name
         @param n_features the number of features (columns)
