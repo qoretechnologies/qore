@@ -821,6 +821,14 @@ public:
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreTypeInfo* getComplexBufferValueType(const QoreTypeInfo* ti);
 
+    //! returns true if a value of the source container type may be folded into the target container type
+    /** Answers, for a source type that the target does not already accept, whether the element-by-element
+        conversion in QoreTypeSpec::acceptInputComplexHash()/acceptInputComplexList() could still convert it
+        at runtime.  Parse-time checks use this to defer to a runtime check instead of rejecting outright;
+        see design/container-element-folding.md.
+    */
+    DLLLOCAL static bool mayFoldContainerValueTo(const QoreTypeInfo* target_ti, const QoreTypeInfo* source_ti);
+
     DLLLOCAL void getAcceptTypes(ReferenceHolder<QoreHashNode>& h, bool simple = false) const {
         for (auto& i : getAcceptSpecs()) {
             const char* type_name = simple ? i.spec.getSimpleTypeName() : i.spec.getTypeName();

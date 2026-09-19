@@ -7,6 +7,10 @@
 %requires QUnit
 %requires reflection
 
+%try-module json
+%define NoJson
+%endtry
+
 %exec-class HashDeclTest
 
 public hashdecl Container {
@@ -53,6 +57,37 @@ public hashdecl RuntimeFoldExpression {
 public hashdecl RuntimeFoldContainer {
     *hash<string, hash<RuntimeFoldExpression>> expressions;
     *list<hash<RuntimeFoldExpression>> expression_list;
+}
+
+#! Leaf for the container-folding tests below
+/** "value" is auto and "format" is optional, so an initializer whose values are all strings is
+    valid for every field -- which is what makes it a usable probe for the inferred element type.
+*/
+public hashdecl FoldLeaf {
+    auto value;
+    *string format;
+}
+
+#! Nonoptional list container of hashdecls
+public hashdecl FoldListParent {
+    list<hash<FoldLeaf>> parts;
+}
+
+#! Optional hash container of hashdecls, covering the complex-hash gate as well as the list one
+public hashdecl FoldHashParent {
+    *hash<string, hash<FoldLeaf>> parts;
+}
+
+#! Recursive container: the nested element type is the declaring hashdecl itself
+public hashdecl FoldTree {
+    auto value;
+    *string format;
+    *list<hash<FoldTree>> parts;
+}
+
+#! Container of a scalar type, to confirm folding eligibility does not reach scalar element types
+public hashdecl FoldScalarParent {
+    list<int> numbers;
 }
 
 public hashdecl OverrideCastInfo {
@@ -124,6 +159,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("hashdecl inheritance", \testHashDeclInheritance());
         addTestCase("complex type defaults", \testComplexTypeDefaults());
         addTestCase("generic container hashdecl folding", \testGenericContainerHashDeclFolding());
+        addTestCase("homogeneous container hashdecl folding", \testHomogeneousContainerHashDeclFolding());
         addTestCase("typed hash cast with overrides", \testTypedHashCastWithOverrides());
         addTestCase("typed container runtime assignment", \testTypedContainerRuntimeAssignment());
         set_return_value(main());
@@ -1175,6 +1211,169 @@ class HashDeclTest inherits QUnit::Test {
             };
             delete bad;
         });
+    }
+
+    #! Container folding must not depend on whether the source values happen to share a type
+    /** The fold path adopts generically-typed data -- a hash literal, a parsed JSON document -- into
+        a declared structure, so what makes a source element eligible is its shape, not its value
+        type.  Restricting eligibility to hash<auto>/list<auto> sources made acceptance turn on an
+        accident of inference: {"value": 1, "format": "a"} infers hash<auto> and was folded, while
+        the equally valid {"value": "x", "format": "a"} infers hash<string, string> and was rejected
+        outright, before any field was examined, purely because both of its values were strings.
+
+        Every case goes through auto_value() so that the container check happens at runtime; a fully
+        resolved initializer is diagnosed at parse time by a different path.
+    */
+    testHomogeneousContainerHashDeclFolding() {
+        # the regression itself: homogeneous and heterogeneous initializers must fold alike
+        hash<FoldListParent> homogeneous = new hash<FoldListParent>(auto_value({
+            "parts": ({"value": "hello", "format": "content:a"},),
+        }));
+        assertEq(True, homogeneous.parts[0] instanceof hash<FoldLeaf>, "all-string list child folded");
+        assertEq("hello", homogeneous.parts[0].value, "all-string child value");
+        assertEq("content:a", homogeneous.parts[0].format, "all-string child format");
+
+        hash<FoldListParent> heterogeneous = new hash<FoldListParent>(auto_value({
+            "parts": ({"value": 1, "format": "content:a"},),
+        }));
+        assertEq(True, heterogeneous.parts[0] instanceof hash<FoldLeaf>, "mixed-type list child folded");
+        assertEq(1, heterogeneous.parts[0].value, "mixed-type child value");
+
+        # a single-key child is homogeneous by construction
+        hash<FoldListParent> single = new hash<FoldListParent>(auto_value({
+            "parts": ({"value": "only"},),
+        }));
+        assertEq(True, single.parts[0] instanceof hash<FoldLeaf>, "single-key list child folded");
+        assertEq(NOTHING, single.parts[0].format, "omitted optional field stays unset");
+
+        # the same gate governs hash containers, not just lists
+        hash<FoldHashParent> hash_container = new hash<FoldHashParent>(auto_value({
+            "parts": {"a": {"value": "hello", "format": "content:a"}},
+        }));
+        assertEq(True, hash_container.parts.a instanceof hash<FoldLeaf>, "all-string hash child folded");
+        assertEq("hello", hash_container.parts.a.value, "all-string hash child value");
+
+        # recursive element types fold at every level
+        hash<FoldTree> tree = new hash<FoldTree>(auto_value({
+            "value": "a",
+            "format": "f",
+            "parts": ({
+                "value": "b",
+                "format": "g",
+                "parts": ({"value": "c", "format": "h"},),
+            },),
+        }));
+        assertEq(True, tree.parts[0] instanceof hash<FoldTree>, "recursive child folded");
+        assertEq(True, tree.parts[0].parts[0] instanceof hash<FoldTree>, "recursive grandchild folded");
+        assertEq("c", tree.parts[0].parts[0].value, "recursive grandchild value");
+        assertEq(NOTHING, tree.parts[0].parts[0].parts, "omitted optional recursive field stays unset");
+
+        # empty containers: nothing to fold, but the container must still be accepted and retyped
+        list<auto> empty_list();
+        hash<auto> empty_hash();
+        hash<FoldListParent> empty_parts = new hash<FoldListParent>(auto_value({"parts": empty_list}));
+        assertEq((), empty_parts.parts, "empty list container accepted");
+        hash<FoldHashParent> empty_map = new hash<FoldHashParent>(auto_value({"parts": empty_hash}));
+        assertEq({}, empty_map.parts, "empty hash container accepted");
+        hash<FoldListParent> empty_child = new hash<FoldListParent>(auto_value({"parts": (empty_hash,)}));
+        assertEq(True, empty_child.parts[0] instanceof hash<FoldLeaf>, "empty child hash folded");
+
+        # an incompatible field value is still rejected, and the error names the offending key
+        assertThrows("RUNTIME-TYPE-ERROR", "key 'format' expects type '\\*string'", sub () {
+            hash<FoldListParent> bad = new hash<FoldListParent>(auto_value({
+                "parts": ({"value": "x", "format": 1},),
+            }));
+            delete bad;
+        }, NOTHING, "incompatible field value rejected in a list container");
+
+        assertThrows("RUNTIME-TYPE-ERROR", "key 'format' expects type '\\*string'", sub () {
+            hash<FoldHashParent> bad = new hash<FoldHashParent>(auto_value({
+                "parts": {"a": {"value": "x", "format": 1}},
+            }));
+            delete bad;
+        }, NOTHING, "incompatible field value rejected in a hash container");
+
+        # ... as is an unknown field, exactly as in direct construction
+        assertThrows("HASHDECL-INIT-ERROR", "unknown key 'bogus'", sub () {
+            hash<FoldListParent> bad = new hash<FoldListParent>(auto_value({
+                "parts": ({"value": "x", "bogus": "y"},),
+            }));
+            delete bad;
+        }, NOTHING, "unknown field rejected in a folded child");
+
+        # folding eligibility must not reach scalar element types
+        assertThrows("RUNTIME-TYPE-ERROR", NOTHING, sub () {
+            hash<FoldScalarParent> bad = new hash<FoldScalarParent>(auto_value({
+                "numbers": ("a", "b"),
+            }));
+            delete bad;
+        }, NOTHING, "string elements rejected for a list<int> field");
+
+        # the source must survive both outcomes unchanged, whether or not it is shared
+        hash<auto> shared_ok = {"parts": ({"value": "hello", "format": "content:a"},)};
+        hash<auto> shared_ok_before = shared_ok;
+        hash<FoldListParent> from_shared = new hash<FoldListParent>(auto_value(shared_ok));
+        assertEq("hello", from_shared.parts[0].value, "shared source folded");
+        assertEq(shared_ok_before, shared_ok, "shared source unchanged after a successful fold");
+        assertEq("hash<FoldLeaf>", from_shared.parts[0].fullType(), "folded child carries the declared type");
+        assertEq("hash<string, string>", shared_ok.parts[0].fullType(),
+            "shared source child not retyped in place");
+
+        hash<auto> shared_bad = {"parts": ({"value": "x", "format": 1},)};
+        hash<auto> shared_bad_before = shared_bad;
+        assertThrows("RUNTIME-TYPE-ERROR", NOTHING, sub () {
+            hash<FoldListParent> bad = new hash<FoldListParent>(auto_value(shared_bad));
+            delete bad;
+        }, NOTHING, "shared source with an invalid field rejected");
+        assertEq(shared_bad_before, shared_bad, "shared source unchanged after a failed fold");
+
+        # an unshared source reaches the in-place branch of the fold loops
+        hash<FoldListParent> from_unshared = new hash<FoldListParent>(auto_value(
+            {"parts": ({"value": "hello", "format": "content:a"},)}
+        ));
+        assertEq("hello", from_unshared.parts[0].value, "unshared source folded");
+
+        # a fully resolved initializer takes the parse-time path rather than the runtime gate
+        # above; it must reach the same verdict, recursively as well
+        hash<FoldListParent> resolved = new hash<FoldListParent>({
+            "parts": ({"value": "hello", "format": "content:a"},),
+        });
+        assertEq("hello", resolved.parts[0].value, "fully resolved initializer folded");
+        hash<FoldTree> resolved_tree = new hash<FoldTree>({
+            "value": "a",
+            "parts": ({"value": "b", "format": "g"},),
+        });
+        assertEq("b", resolved_tree.parts[0].value, "fully resolved recursive initializer folded");
+
+        # the parse-time check defers to the runtime gate only where the fold could actually
+        # convert the value; a scalar element type is still rejected outright
+        Program scalar_pgm(PO_NEW_STYLE);
+        assertThrows("PARSE-EXCEPTION", "incompatible value type 'list<string>'", \scalar_pgm.parse(), (
+            'hashdecl ParseScalar { list<int> numbers; }
+             sub t() { ParseScalar s = new hash<ParseScalar>({"numbers": ("a", "b")}); delete s; }', ""),
+            "scalar element type still rejected at parse time");
+
+        # ... and one declared structure is still not reinterpreted as another
+        Program hashdecl_pgm(PO_NEW_STYLE);
+        hashdecl_pgm.parse(
+            'hashdecl ParseA { int i; }
+             hashdecl ParseB { int i; }
+             hashdecl ParseBC { list<hash<ParseB>> items; }
+             auto sub t() {
+                 list<hash<ParseA>> la = (new hash<ParseA>({"i": 1}),);
+                 return new hash<ParseBC>({"items": la});
+             }', "");
+        assertThrows("RUNTIME-TYPE-ERROR", "expects type 'list<hash<ParseB>>'", \hashdecl_pgm.callFunction(), "t",
+            "hashdecl source not folded into a different hashdecl");
+
+%ifndef NoJson
+        # JSON-derived values are the motivating case: every leaf of this document is a string
+        hash<FoldTree> from_json = new hash<FoldTree>(auto_value(parse_json(
+            '{"value": "a", "format": "f", "parts": [{"value": "b", "format": "g"}]}'
+        )));
+        assertEq(True, from_json.parts[0] instanceof hash<FoldTree>, "JSON-derived child folded");
+        assertEq("b", from_json.parts[0].value, "JSON-derived child value");
+%endif
     }
 
     testTypedHashCastWithOverrides() {

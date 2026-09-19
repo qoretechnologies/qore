@@ -2845,21 +2845,55 @@ static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass
     return false;
 }
 
-static bool qore_generic_container_value_may_fold_to(const QoreTypeInfo* target_ti,
+// Decides whether a container element type that the target element type does not already accept may
+// still be converted into it, one element at a time, by the fold loops in the two callers below.
+//
+// The fold path exists so that generically-typed data -- a parsed JSON document, a hash literal, the
+// result of a map expression -- can be adopted into a declared structure; plain lvalue assignment
+// does no such conversion, so this is deliberately more permissive than QoreTypeInfo::parseAccepts().
+// Eligibility is therefore a question of *shape*: a hash-shaped source element may be folded into a
+// hash-shaped target element, and a list-shaped one into a list-shaped target.  The source's value
+// type is intentionally not consulted, because it is the per-element conversion in the callers that
+// decides whether the values actually fit; a field that does not still fails there, with an error
+// naming the offending key.
+//
+// Requiring the source value type to be exactly auto/auto!, as this once did, made acceptance depend
+// on whether a literal's values happened to be homogeneous.  {"value": 1, "format": "a"} infers
+// hash<auto> and was folded, while the equally valid {"value": "x", "format": "a"} infers
+// hash<string, string> and was rejected outright -- before any field was examined -- purely because
+// both of its values were strings.
+//
+// Hashdecl sources are not eligible and are left to parseAccepts() and the descendant/parameterized
+// rules: reinterpreting one declared structure as another is not the adoption of generic data, and
+// lvalue assignment rejects it too.  getComplexHashValueType() returns nullptr for QTS_HASHDECL, so
+// they do not reach the hash branch here.
+static bool qore_container_value_may_convert_to(const QoreTypeInfo* target_ti,
         const QoreTypeInfo* source_ti) {
     if (!QoreTypeInfo::hasType(target_ti) || !QoreTypeInfo::hasType(source_ti)) {
         return false;
     }
 
-    const QoreTypeInfo* hash_value_type = QoreTypeInfo::getComplexHashValueType(source_ti);
-    if ((hash_value_type == autoTypeInfo || hash_value_type == autoNoNarrowTypeInfo)
+    if (QoreTypeInfo::getComplexHashValueType(source_ti)
             && QoreTypeInfo::parseAcceptsBaseType(target_ti, NT_HASH)) {
         return true;
     }
 
-    const QoreTypeInfo* list_value_type = QoreTypeInfo::getComplexListValueType(source_ti);
-    return (list_value_type == autoTypeInfo || list_value_type == autoNoNarrowTypeInfo)
+    return QoreTypeInfo::getComplexListValueType(source_ti)
         && QoreTypeInfo::parseAcceptsBaseType(target_ti, NT_LIST);
+}
+
+bool QoreTypeInfo::mayFoldContainerValueTo(const QoreTypeInfo* target_ti, const QoreTypeInfo* source_ti) {
+    // both sides must be containers of the same shape; it is their element types that the fold loops
+    // convert, so the eligibility question is asked about those
+    const QoreTypeInfo* target_elem = QoreTypeInfo::getComplexListValueType(target_ti);
+    const QoreTypeInfo* source_elem = QoreTypeInfo::getComplexListValueType(source_ti);
+    if (target_elem && source_elem) {
+        return qore_container_value_may_convert_to(target_elem, source_elem);
+    }
+
+    target_elem = QoreTypeInfo::getComplexHashValueType(target_ti);
+    source_elem = QoreTypeInfo::getComplexHashValueType(source_ti);
+    return target_elem && source_elem && qore_container_value_may_convert_to(target_elem, source_elem);
 }
 
 bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
@@ -2871,7 +2905,7 @@ bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeIn
         return true;
     }
     if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
-            && !qore_generic_container_value_may_fold_to(u.ti, ti)) {
+            && !qore_container_value_may_convert_to(u.ti, ti)) {
         return false;
     }
 
@@ -2932,7 +2966,7 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
         return true;
     }
     if (ti && QoreTypeInfo::hasType(ti) && !QoreTypeInfo::parseAccepts(u.ti, ti)
-            && !qore_generic_container_value_may_fold_to(u.ti, ti)) {
+            && !qore_container_value_may_convert_to(u.ti, ti)) {
         return false;
     }
 

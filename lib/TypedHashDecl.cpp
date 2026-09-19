@@ -499,6 +499,15 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
                         runtime_check = true;
                     if (res && (res == QTI_IDENT || (!strict_check || !may_not_match)))
                         continue;
+                    // a container whose elements the fold path can convert is decided at runtime, where
+                    // each element is either converted or reported against the key that failed; see
+                    // design/container-element-folding.md
+                    if (QoreTypeInfo::mayFoldContainerValueTo(m->getTypeInfo(), kti)) {
+                        if (!runtime_check) {
+                            runtime_check = true;
+                        }
+                        continue;
+                    }
                     parse_error(*loc, "hashdecl '%s' initializer value from %s cannot be assigned from key '%s' " \
                         "with incompatible value type '%s'; expecting '%s'", name.c_str(), context, i.getKey(),
                         QoreTypeInfo::getName(kti), QoreTypeInfo::getName(m->getTypeInfo()));
@@ -563,6 +572,16 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
                                     }
                                 }
                             }
+                        }
+
+                        // a container whose elements the fold path can convert is decided at runtime,
+                        // where each element is either converted or reported against the key that
+                        // failed; see design/container-element-folding.md
+                        if (QoreTypeInfo::mayFoldContainerValueTo(m->getTypeInfo(), vti)) {
+                            if (!runtime_check) {
+                                runtime_check = true;
+                            }
+                            continue;
                         }
 
                         if ((res == QTI_WILDCARD || res == QTI_AMBIGUOUS || res == QTI_NEAR) && may_not_match) {
