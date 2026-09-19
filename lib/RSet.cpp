@@ -45,6 +45,13 @@ static thread_local int64 scan_object_count = 0;
 int64 q_get_scan_object_count() {
     return scan_object_count;
 }
+
+//! the number of recursive sets that scans in the current thread have created
+static thread_local int64 rset_create_count = 0;
+
+int64 q_get_rset_create_count() {
+    return rset_create_count;
+}
 #endif
 
 RObject::~RObject() {
@@ -800,6 +807,7 @@ bool RSetHelper::scan(RObject& root) {
 
     countInternalReferences();
     findClosedComponents();
+    findUnchangedComponents();
     return prepareCommit();
 }
 
@@ -858,10 +866,95 @@ void RSetHelper::findClosedComponents() {
     }
 }
 
+void RSetHelper::findUnchangedComponents() {
+    // A scan that finds exactly the recursive sets that are already in place has nothing to record.  Replacing
+    // a set with an identical one releases and retakes a weak reference to every member, drops and re-registers
+    // the watches of its nodes, and makes every scan a writer of every object it entered; keeping the set makes
+    // a scan of an unchanged graph free of writes apart from the scan generation.
+    size_t ncomp = component_size.size();
+    component_unchanged.assign(ncomp, 1);
+    std::vector<RSet*> comp_rset(ncomp, nullptr);
+    std::vector<size_t> comp_objects(ncomp, 0), comp_nodes(ncomp, 0);
+
+    for (const ScanNode& n : nodes) {
+        int c = n.component;
+        if (n.kind != NodeKind::Object) {
+            ++comp_nodes[c];
+            continue;
+        }
+        ++comp_objects[c];
+        if (!component_unchanged[c]) {
+            continue;
+        }
+        RObject* obj = static_cast<RObject*>(n.ptr);
+        if (!component_cyclic[c]) {
+            // the scan assigns no set to the objects of a component without a cycle
+            if (obj->rset) {
+                component_unchanged[c] = 0;
+            }
+            continue;
+        }
+        RSet* rs = obj->rset;
+        if (!rs || !rs->active() || obj->rcount != n.internal
+            || obj->rclosed.load(std::memory_order_relaxed) != (component_closed[c] ? rs : nullptr)) {
+            component_unchanged[c] = 0;
+            continue;
+        }
+        if (!comp_rset[c]) {
+            comp_rset[c] = rs;
+        } else if (comp_rset[c] != rs) {
+            component_unchanged[c] = 0;
+        }
+    }
+
+    // the set must have exactly the objects and nodes that the scan found, with the same internal counts
+    for (size_t c = 0; c < ncomp; ++c) {
+        if (!component_unchanged[c] || !component_cyclic[c]) {
+            continue;
+        }
+        RSet* rs = comp_rset[c];
+        if (!rs || rs->size() != comp_objects[c] || rs->nodeCount() != comp_nodes[c]
+            || !matchesComponent(*rs, static_cast<int>(c))) {
+            component_unchanged[c] = 0;
+        }
+    }
+}
+
+bool RSetHelper::matchesComponent(RSet& rs, int component) {
+    // The set cannot be invalidated here: every path that invalidates it needs the rsection or the write lock
+    // of one of its objects, and the scan holds the rsection of all of them.  The counts are compared by the
+    // caller, so finding each of the set's members and nodes in the component proves that the two are equal.
+    for (rset_t::iterator i = rs.begin(), e = rs.end(); i != e; ++i) {
+        auto ni = node_map.find(*i);
+        if (ni == node_map.end() || ni->second < 0) {
+            return false;
+        }
+        const ScanNode& n = nodes[ni->second];
+        if (n.kind != NodeKind::Object || n.component != component) {
+            return false;
+        }
+    }
+    for (auto i = rs.nodeBegin(), e = rs.nodeEnd(); i != e; ++i) {
+        auto ni = node_map.find(i->node);
+        if (ni == node_map.end() || ni->second < 0) {
+            return false;
+        }
+        const ScanNode& n = nodes[ni->second];
+        if (n.kind == NodeKind::Object || n.component != component || n.internal != i->internal) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool RSetHelper::prepareCommit() {
     int tid = q_gettid();
     for (const ScanNode& n : nodes) {
         if (n.kind != NodeKind::Object || !component_cyclic[n.component]) {
+            continue;
+        }
+        if (component_unchanged[n.component]) {
+            // the set is kept, so its members are not locked for an invalidation that will not happen
             continue;
         }
         RObject* obj = static_cast<RObject*>(n.ptr);
@@ -1052,20 +1145,25 @@ void RSetHelper::commit() {
         deccnt();
     }
 
-    // create a recursive set for each component with a cycle
+    // create a recursive set for each component with a cycle whose set is not already in place
     std::vector<RSet*> rsets(component_size.size(), nullptr);
     for (const ScanNode& n : nodes) {
-        if (n.kind != NodeKind::Object || !component_cyclic[n.component]) {
+        if (n.kind != NodeKind::Object || !component_cyclic[n.component]
+            || component_unchanged[n.component]) {
             continue;
         }
         RSet*& rs = rsets[n.component];
         if (!rs) {
             rs = new RSet;
+#ifdef DEBUG
+            ++rset_create_count;
+#endif
         }
         rs->insert(static_cast<RObject*>(n.ptr));
     }
     for (const ScanNode& n : nodes) {
-        if (n.kind == NodeKind::Object || !component_cyclic[n.component]) {
+        if (n.kind == NodeKind::Object || !component_cyclic[n.component]
+            || component_unchanged[n.component]) {
             continue;
         }
         // every component with a cycle has an object or closure-bound variable
@@ -1080,6 +1178,13 @@ void RSetHelper::commit() {
         }
         RObject* obj = static_cast<RObject*>(n.ptr);
         assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
+        if (component_unchanged[n.component]) {
+            // the object already has exactly this recursive set; only the scan generation advances
+            printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
+                obj->rset);
+            obj->confirmRSet();
+            continue;
+        }
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
@@ -1133,6 +1238,7 @@ void RSetHelper::rollback() {
     component_size.clear();
     component_cyclic.clear();
     component_closed.clear();
+    component_unchanged.clear();
     root_rset = nullptr;
     next_index = 0;
     current = -1;

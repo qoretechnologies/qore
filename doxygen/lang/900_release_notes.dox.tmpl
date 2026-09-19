@@ -3203,6 +3203,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       key or a list element; the object's recursive set then still counted the reference that the removal took
       out, and a later dereference of any of its members could destroy the whole set although its objects were
       still referenced from outside it
+    - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
+      it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
+      releases and retakes a weak reference to every member of the set, drops and re-registers the watches of
+      its lists, hashes, closures and references, or writes to every object it entered
     - Fixed recursive reference scans walking a cycle that references nothing outside itself again on every scan
       that reaches it; such a set is now recorded as closed when it is computed, and a scan that reaches it from
       outside stops there, so a short-lived object that references a long-lived graph no longer pays for the size

@@ -260,6 +260,34 @@ Debug builds count the objects that scans have entered in the current thread
 `examples/test/qore/misc/dgc-closed-sets.qtest` uses it along with collection checks for each of the rules
 above.
 
+### A scan that finds the set already in place leaves it alone
+
+A scan that cannot skip a recursive set still usually finds exactly the set that is already there. Replacing it
+with an identical one is not free: `RSet::invalidateIntern()` releases the weak reference the set holds to every
+member and removes the watches of its nodes, a new `RSet` is allocated and every member's weak reference and
+each node's watch are taken again, and every object the scan entered is written. The last part is what costs
+under load, because it makes every scan a writer of every object it reached.
+
+`RSetHelper::findUnchangedComponents()` compares each component with the set its objects already have: the same
+set for every object of the component, the same `rcount` for each of them, the same closed state, and the same
+lists, hashes, closures and references with the same internal counts. When they match, `commit()` creates no set
+and calls `RObject::confirmRSet()` in place of `setRSet()`: the set, its watches and `rcount` are left alone and
+only the scan generation advances, so a scan waiting for the object still sees that its set is current. An
+object in a component without a cycle that already has no set is left alone the same way.
+
+`confirmRSet()` does refresh the reference count that `rcount` was computed against, and only when it has moved.
+`RSet::canDelete()` compares a member's live reference count with that snapshot to tell a stale verdict from a
+genuine reference from outside the set, and a snapshot left behind by an earlier scan makes that test read a
+graph that no longer exists.
+
+`prepareCommit()` skips a component that is left in place: the members of a set that is not being replaced do
+not have to be locked for an invalidation that will not happen.
+
+Debug builds count the recursive sets that scans have created (`dbg_get_rset_create_count()`), and
+`examples/test/qore/misc/dgc-unchanged-sets.qtest` uses it to check that a second scan of an unchanged graph
+creates none, that a new cycle still gets one, and that a set left in place is still collected and keeps the
+watch of a node held from outside it.
+
 ## Scan locking: how the scanner stays deadlock-free and convergent
 
 A scan (`RSetHelper`, `lib/RSet.cpp`) walks an arbitrary object graph and needs the r-section of every object
@@ -476,3 +504,5 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 - `examples/test/qore/misc/shared-container-dense-cycles.qtest` — dense graphs sharing one container.
 - `examples/test/qore/misc/dgc-closed-sets.qtest` — closed recursive sets: the scan cost, the three rules that
   keep the mark accurate, and collection through and around them.
+- `examples/test/qore/misc/dgc-unchanged-sets.qtest` — a scan that finds the set already in place leaves it,
+  its watches and its counts alone.

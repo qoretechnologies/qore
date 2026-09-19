@@ -46,6 +46,11 @@ class RSet;
 class RSetHelper;
 
 #ifdef DEBUG
+//! Returns the number of recursive sets that scans in the current thread have created
+/** A scan that finds the sets it would compute already in place creates none; see dbg_get_rset_create_count().
+*/
+DLLLOCAL int64 q_get_rset_create_count();
+
 //! Returns the number of objects that recursive-reference scans have entered in the current thread
 /** A scan takes the rsection of every object it enters and follows all of its references, so this is the cost
     of the scans a thread has made; see dbg_get_scan_object_count().
@@ -155,6 +160,25 @@ public:
     }
 
     DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed);
+
+    //! Records that a scan found the recursive set that is already in place, without changing it
+    /** The scan generation still advances, so a scan waiting for this object skips its own scan: the set it
+        would compute is current.  The set itself and rcount are left alone, so a scan of an unchanged graph
+        does not replace a set with an identical one.
+
+        The reference-count snapshot is still refreshed, and only when it has actually moved.
+        RSet::canDelete() compares a member's live reference count with the count observed when its rcount was
+        assigned, to tell a stale verdict from a genuine reference from outside the set; a snapshot left behind
+        by an earlier scan makes that test read the wrong graph and can leave a set that has become
+        collectable stranded.
+    */
+    DLLLOCAL void confirmRSet() {
+        assert(rml.checkRSectionExclusive());
+        if (rset && scan_refs != references) {
+            scan_refs = references;
+        }
+        ++rcycle;
+    }
 
     // check if we should defer the scan, marks the object for a deferred scan if necessary
     // returns 0 if the scan can be made now, -1 if deferred
@@ -272,6 +296,13 @@ private:
 // set of objects in a recursive directed graph
 class RSet {
 public:
+    //! A list, hash, closure or reference in the recursive set
+    struct SetNode {
+        AbstractQoreNode* node;
+        // the number of references to the node held by the members of the recursive set
+        int internal;
+    };
+
     QoreRWLock rwl;
 
     DLLLOCAL RSet() : acnt(0), valid(true) {
@@ -374,14 +405,20 @@ public:
     }
 #endif
 
-protected:
-    //! A list, hash, closure or reference in the recursive set
-    struct SetNode {
-        AbstractQoreNode* node;
-        // the number of references to the node held by the members of the recursive set
-        int internal;
-    };
+    //! Returns the number of lists, hashes, closures and references in the recursive set
+    DLLLOCAL size_t nodeCount() const {
+        return nodes.size();
+    }
 
+    DLLLOCAL std::vector<SetNode>::const_iterator nodeBegin() const {
+        return nodes.begin();
+    }
+
+    DLLLOCAL std::vector<SetNode>::const_iterator nodeEnd() const {
+        return nodes.end();
+    }
+
+protected:
     rset_t set;
     std::vector<SetNode> nodes;
     unsigned acnt;
@@ -509,6 +546,8 @@ private:
     std::vector<char> component_cyclic;
     // whether no node of the component references a node outside it
     std::vector<char> component_closed;
+    // whether the component's objects already have exactly the recursive set that this scan would assign
+    std::vector<char> component_unchanged;
     // the recursive set of the object the scan started at, which the scan always enters
     RSet* root_rset = nullptr;
     int next_index = 0;
@@ -560,6 +599,12 @@ private:
 
     //! Marks each component from which no reference leaves
     DLLLOCAL void findClosedComponents();
+
+    //! Marks each component whose recursive set is already in place and does not have to be replaced
+    DLLLOCAL void findUnchangedComponents();
+
+    //! Returns true if the set has exactly the objects and nodes that the scan found for the component
+    DLLLOCAL bool matchesComponent(RSet& rs, int component);
 
     //! Locks the unscanned members of the recursive sets to be replaced; returns true on a lock error
     DLLLOCAL bool prepareCommit();
