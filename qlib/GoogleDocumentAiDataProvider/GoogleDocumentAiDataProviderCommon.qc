@@ -43,18 +43,33 @@ public class GoogleDocumentAiDataProviderCommon inherits DataProvider::AbstractD
                 "desc": "Document AI region (e.g. `us`, `eu`).  Determines the "
                     "regional endpoint hostname.",
                 "default_value": DefaultRegion,
+                "allowed_values": GoogleDocumentAiRestClientBase::Regions,
+                "allowed_values_creatable": True,
             },
             "gcp_sa_json_path": <DataProviderOptionInfo>{
-                "display_name": "Service-Account JSON Location",
-                "short_desc": "Location of a service-account JSON key file",
+                "display_name": "Google Credential Location",
+                "short_desc": "Location of a service-account or authorized-user credential file",
                 "type": AbstractDataProviderType::get(StringOrNothingType, NOTHING, {
                     DTT_FromLocation: True,
                 }),
-                "desc": "Location of a GCP service-account JSON key file for "
-                    "JWT-bearer auth, read via the @ref filelocationhandlerintro "
+                "desc": "Location of a GCP service-account or authorized-user credential file, "
+                    "read via the @ref filelocationhandlerintro "
                     "\"FileLocationHandler\" module (a bare path or any registered "
                     "scheme: `file://`, `http(s)://`, `sftp://`, ...).  When omitted, "
                     "Application Default Credentials are used.",
+                "sensitive": True,
+            },
+            "gcp_quota_project_id": <DataProviderOptionInfo>{
+                "display_name": "Quota Project",
+                "short_desc": "Optional project used for API quota and billing",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Overrides the environment and credential file quota project. This is independent of the resource project.",
+            },
+            "url": <DataProviderOptionInfo>{
+                "display_name": "Endpoint",
+                "short_desc": "Optional explicit Document AI service origin",
+                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Trusted HTTPS origin; defaults to the regional Document AI endpoint. Loopback HTTP is supported for tests.",
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
@@ -84,6 +99,13 @@ public class GoogleDocumentAiDataProviderCommon inherits DataProvider::AbstractD
             self.region = region;
         }
         self.sa_json_path = sa_json_path;
+        GoogleDocumentAiResources::prefix(project_id, self.region);
+        GoogleDocumentAiRestClientBase::normalizeEndpoint(rest.getUrl(), self.region);
+        if (sa_json_path.val()) {
+            # Preserve the legacy injected-client constructor's explicit credential selection.
+            self.rest = new GoogleDocumentAiRestClientIo(rest.getConstructorOptions()
+                + {"gcp_sa_json_path": sa_json_path});
+        }
     }
 
     constructor(*hash<auto> options) {
@@ -97,19 +119,23 @@ public class GoogleDocumentAiDataProviderCommon inherits DataProvider::AbstractD
             region = copts.gcp_region;
         }
         sa_json_path = copts.gcp_sa_json_path;
+        GoogleDocumentAiResources::prefix(project_id, region);
         if (copts.restclient) {
             rest = copts.restclient;
+            if (copts.hasKey("gcp_sa_json_path") || copts.hasKey("gcp_quota_project_id")) {
+                rest = new GoogleDocumentAiRestClientIo(rest.getConstructorOptions()
+                    + copts{"gcp_sa_json_path", "gcp_quota_project_id"});
+            }
         } else {
-            rest = new GoogleDocumentAiRestClient::GoogleDocumentAiRestClientIo({
-                "gcp_region": region,
-            });
+            rest = new GoogleDocumentAiRestClientIo(copts{"url", "gcp_sa_json_path", "gcp_quota_project_id"}
+                + {"gcp_region": region});
         }
+        GoogleDocumentAiRestClientBase::normalizeEndpoint(rest.getUrl(), region);
     }
 
-    #! Posts a Document AI request with a fresh GCP access token
+    #! Posts a Document AI request through the authenticated client
     private hash<auto> doDocAiRequest(string path, hash<auto> body) {
-        string token = GcpAuth::getAccessToken(sa_json_path, Scopes);
-        return rest.restPost(path, body, {"Authorization": "Bearer " + token}).body;
+        return rest.restPost(path, body).body;
     }
 }
 }

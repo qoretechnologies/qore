@@ -78,6 +78,7 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - retain supplied enumeration labels and descriptions in structured field choices
     - enforce boolean enumerations and preserve false values in generated enumeration examples
     - preserve opaque audio, image, and video response bytes in the null schema validator
     - retain nullable value types and independent presence requirements across cached field uses
@@ -1465,7 +1466,7 @@ public namespace RestSchemaValidator {
                 "name": name,
                 "desc": getMergedFieldDesc(desc),
                 "type": AutoType,
-                "allowed_values": keys enumValues,
+                "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
             } + ((type == "object" || hasSchemaCompositionFeatures()) && required ? {
                 "attr": {
@@ -1503,6 +1504,14 @@ public namespace RestSchemaValidator {
                 }
             }
             return desc.val() ? desc.getDecoded(CE_XHTML) : "";
+        }
+
+        #! Returns enumeration values for field construction
+        /** Subclasses can attach structured presentation metadata. updateFieldType() restores
+            each value's declared scalar type after the placeholder field is constructed.
+        */
+        private *list<auto> getFieldEnumValues() {
+            return keys enumValues;
         }
 
         #! Returns a field object from the given cache
@@ -1554,7 +1563,7 @@ public namespace RestSchemaValidator {
                     "name": name,
                     "desc": field_desc,
                     "type": AutoType,
-                    "allowed_values": keys enumValues,
+                    "allowed_values": getFieldEnumValues(),
                     "default_value": default_value,
                 } + (required ? {
                     "attr": {
@@ -1572,7 +1581,7 @@ public namespace RestSchemaValidator {
                 "name": name,
                 "desc": field_desc,
                 "type": AutoType,
-                "allowed_values": keys enumValues,
+                "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
             });
             fieldmap{name}{rstr} = field;

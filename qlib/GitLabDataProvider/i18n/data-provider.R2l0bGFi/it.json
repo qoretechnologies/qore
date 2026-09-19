@@ -1347,31 +1347,31 @@
           "source": "Minimum access level of authenticated user",
           "message": "Livello minimo di accesso dell'utente autenticato"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjEw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjEw.display_name": {
           "source": "10",
           "message": "10"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjE1.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjE1.display_name": {
           "source": "15",
           "message": "15"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjIw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjIw.display_name": {
           "source": "20",
           "message": "20"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjI1.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjI1.display_name": {
           "source": "25",
           "message": "25"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -2015,23 +2015,23 @@
           "source": "Determine if developers can push to default branch",
           "message": "Determina se gli sviluppatori possono eseguire il push nel branch predefinito"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjA.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjA.display_name": {
           "source": "0",
           "message": "0"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjM.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjM.display_name": {
           "source": "3",
           "message": "3"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjE.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjE.display_name": {
           "source": "1",
           "message": "1"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjI.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjI.display_name": {
           "source": "2",
           "message": "2"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjQ.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjQ.display_name": {
           "source": "4",
           "message": "4"
         },
@@ -2083,19 +2083,19 @@
           "source": "A valid access level",
           "message": "Un livello di accesso valido"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjYw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjYw.display_name": {
           "source": "60",
           "message": "60"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjA.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNHOXpkRUZ3YVZZMFIzSnZkWEJ6Okhhc2hEYXRhVHlwZTppdGVtcyNiYjZjNzFhYzEyMzVkYjE2ZTI3NTMwZTA2MzA5YjgyOTA4MWFkN2NmZjc4ZGMxY2ZiZjFiYzFjN2U0N2ZlNWFjOm9wdGlvbjpaR1ZtWVhWc2RGOWljbUZ1WTJoZmNISnZkR1ZqZEdsdmJsOWtaV1poZFd4MGN3OmZpZWxkOllXeHNiM2RsWkY5MGIxOXRaWEpuWlE.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjA.display_name": {
           "source": "0",
           "message": "0"
         },
@@ -2583,15 +2583,15 @@
           "source": "The minimum access level required to enable Duo Agent Platform. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per abilitare il Duo Agent Platform. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -2607,27 +2607,27 @@
           "source": "The minimum access level required to execute Duo Agent Platform. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per eseguire il Duo Agent Platform. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjEw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjEw.display_name": {
           "source": "10",
           "message": "10"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjE1.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjE1.display_name": {
           "source": "15",
           "message": "15"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjIw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjIw.display_name": {
           "source": "20",
           "message": "20"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -2643,15 +2643,15 @@
           "source": "The minimum access level required to execute Duo Agent Platform features in CI/CD. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per eseguire le funzionalità del Duo Agent Platform in CI/CD. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -2667,15 +2667,15 @@
           "source": "The minimum access level required to manage Duo Agent Platform. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per gestire il Duo Agent Platform. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -3199,23 +3199,23 @@
           "source": "Determine if developers can push to default branch",
           "message": "Determina se gli sviluppatori possono eseguire il push nel branch predefinito"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjA.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjA.display_name": {
           "source": "0",
           "message": "0"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjM.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjM.display_name": {
           "source": "3",
           "message": "3"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjE.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjE.display_name": {
           "source": "1",
           "message": "1"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjI.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjI.display_name": {
           "source": "2",
           "message": "2"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.c3RyaW5nOjQ.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZGVmYXVsdF9icmFuY2hfcHJvdGVjdGlvbg.allowed-value.aW50OjQ.display_name": {
           "source": "4",
           "message": "4"
         },
@@ -3267,19 +3267,19 @@
           "source": "A valid access level",
           "message": "Un livello di accesso valido"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjYw.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjYw.display_name": {
           "source": "60",
           "message": "60"
         },
-        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.c3RyaW5nOjA.display_name": {
+        "app.R2l0bGFi.type.YWN0aW9uOmNIVjBRWEJwVmpSSGNtOTFjSE5KWkE6SGFzaERhdGFUeXBlOml0ZW1zI2JiNmM3MWFjMTIzNWRiMTZlMjc1MzBlMDYzMDliODI5MDgxYWQ3Y2ZmNzhkYzFjZmJmMWJjMWM3ZTQ3ZmU1YWM6b3B0aW9uOlpHVm1ZWFZzZEY5aWNtRnVZMmhmY0hKdmRHVmpkR2x2Ymw5a1pXWmhkV3gwY3c6ZmllbGQ6WVd4c2IzZGxaRjkwYjE5dFpYSm5aUQ.field.YWNjZXNzX2xldmVs.allowed-value.aW50OjA.display_name": {
           "source": "0",
           "message": "0"
         },
@@ -3767,15 +3767,15 @@
           "source": "The minimum access level required to enable Duo Agent Platform. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per abilitare il Duo Agent Platform. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZW5hYmxlX29uX3Byb2plY3Rz.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -3791,27 +3791,27 @@
           "source": "The minimum access level required to execute Duo Agent Platform. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per eseguire il Duo Agent Platform. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjEw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjEw.display_name": {
           "source": "10",
           "message": "10"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjE1.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjE1.display_name": {
           "source": "15",
           "message": "15"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjIw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjIw.display_name": {
           "source": "20",
           "message": "20"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZQ.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -3827,15 +3827,15 @@
           "source": "The minimum access level required to execute Duo Agent Platform features in CI/CD. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per eseguire le funzionalità del Duo Agent Platform in CI/CD. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfZXhlY3V0ZV9hc3luYw.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -3851,15 +3851,15 @@
           "source": "The minimum access level required to manage Duo Agent Platform. This field is behind a feature flag.",
           "message": "Il livello di accesso minimo richiesto per gestire il Duo Agent Platform. Questo campo è protetto da un flag di funzionalità."
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.field.bWluaW11bV9hY2Nlc3NfbGV2ZWxfbWFuYWdl.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },
@@ -9487,31 +9487,31 @@
           "source": "Limit by minimum access level of authenticated user",
           "message": "Limita in base al livello di accesso minimo dell'utente autenticato"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjEw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjEw.display_name": {
           "source": "10",
           "message": "10"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjE1.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjE1.display_name": {
           "source": "15",
           "message": "15"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjIw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjIw.display_name": {
           "source": "20",
           "message": "20"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjI1.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjI1.display_name": {
           "source": "25",
           "message": "25"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjMw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjMw.display_name": {
           "source": "30",
           "message": "30"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjQw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjQw.display_name": {
           "source": "40",
           "message": "40"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.c3RyaW5nOjUw.display_name": {
+        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWluX2FjY2Vzc19sZXZlbA.allowed-value.aW50OjUw.display_name": {
           "source": "50",
           "message": "50"
         },

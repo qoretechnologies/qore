@@ -1,0 +1,64 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires OpenApi3
+%requires json
+%exec-class EnumPresentationTest
+
+class EnumPresentationTest inherits QUnit::Test {
+    constructor() : Test("Schema enumeration presentation", "1.0", \ARGV) {
+        addTestCase("labels and descriptions survive adaptation and snapshots", \choices());
+        set_return_value(main());
+    }
+
+    private choices() {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.0.3", "info": {"title": "Choices", "version": "1"}, "paths": {},
+            "components": {"schemas": {
+                "Mode": {"type": "integer", "enum": (0, 7), "x-enumNames": ("Automatic", "Reviewed"),
+                    "x-enum-descriptions": ("Choose automatically.", "Use the reviewed result.")},
+                "Wrapped": {"allOf": ({"$ref": "#/components/schemas/Mode"},), "description": "Mode."},
+                "Legacy": {"type": "string", "enum": ("FAST",), "x-enum-varnames": ("Fast Mode",)},
+                "Malformed": {"type": "string", "enum": ("a", "b"), "x-enumNames": ("Wrong length",)},
+                "RawNumber": {"type": "integer", "enum": (0, 7)},
+                "Flag": {"type": "boolean", "enum": (False, True), "x-enumNames": ("Disabled", "Enabled")},
+            }},
+        }), True);
+        foreach string name in (("Mode", "Wrapped")) {
+            SchemaObject schema = doc.components.schemas{name};
+            foreach string desc in (("First use", "Decorated use")) {
+                AbstractDataField field = schema.getField("mode", desc, True);
+                for (int i = 0; i < 3; ++i) {
+                    list<hash<AllowedValueInfo>> choices = field.getAllowedValues();
+                    assertEq(0, choices[0].value);
+                    assertEq(NT_INT, choices[0].value.typeCode());
+                    assertEq("Automatic", choices[0].display_name);
+                    assertEq("Use the reviewed result.", choices[1].desc);
+                    assertEq(7, field.acceptsValue(7));
+                    assertEq(0, field.acceptsValue(0));
+                    field = Serializable::deserialize(field.serialize());
+                }
+                hash<auto!> config = field.getConfigInfo();
+                config.allowed_values[0].display_name = "Automatisch";
+                assertEq(0, new QoreDataField(config).acceptsValue(0));
+            }
+        }
+        assertEq("FAST", doc.components.schemas.Legacy.getField("mode").getAllowedValues()[0].display_name);
+        assertEq(("a", "b"), map $1.value, doc.components.schemas.Malformed.getField("mode").getAllowedValues());
+        assertEq((0, 7), map $1.value, doc.components.schemas.RawNumber.getField("number").getAllowedValues());
+        assertEq((False, True), map $1.value, doc.components.schemas.Flag.getField("flag").getAllowedValues());
+        # A codec overlay can deliberately replace a scalar wire field with a
+        # structured form and then replace its choices. The intermediate type
+        # assignment must not try to assign the old strings to the new hash.
+        AbstractDataField field = doc.components.schemas.Legacy.getField("sort").copy();
+        HashDataType sort_type("SortForm");
+        sort_type.addQoreFields({"field": {"name": "field", "type": Qore::Reflection::StringType}});
+        cast<QoreDataField>(field).updateFieldType(sort_type);
+        field.setAllowedValues(());
+        assertEq({"field": "created"}, field.acceptsValue({"field": "created"}));
+    }
+}

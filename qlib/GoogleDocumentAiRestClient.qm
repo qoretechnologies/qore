@@ -29,10 +29,11 @@
 %requires(reexport) RestClient >= 1.3.1
 %requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
-%requires GcpAuth
+%requires(reexport) GcpAuth
+%requires json
 
 module GoogleDocumentAiRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "user module for calling Google Document AI REST services";
     author = "Qore Technologies <info@qoretechnologies.com>";
     url = "https://qore.org";
@@ -56,7 +57,16 @@ module GoogleDocumentAiRestClient {
     processors for domain-specific schemas.
 
     Authentication uses @ref gcpauthintro "GcpAuth" — either an
-    explicit service-account JSON file or Application Default Credentials.
+    explicit service-account or authorized-user JSON file, Application Default Credentials,
+    or Google metadata credentials. The compatibility option \c gcp_sa_json_path accepts either
+    supported file type. OAuth tokens and credential JSON are not connection form fields.
+
+    Connections require the resource project. The optional quota project is independent and is
+    sent in \c x-goog-user-project. Ping performs an authenticated, bounded processor listing;
+    an empty valid result succeeds, while invalid credentials or malformed responses fail.
+
+    Endpoints default to the selected location. Explicit HTTPS origins are trusted configuration;
+    HTTP is accepted only for loopback tests. Redirects and copies to another origin are rejected.
 
     The main classes are:
     - @ref GoogleDocumentAiRestClient::GoogleDocumentAiRestClient — sync client
@@ -68,22 +78,23 @@ module GoogleDocumentAiRestClient {
     @code{.py}
 %modern
 %requires GoogleDocumentAiRestClient
-%requires GcpAuth
-
-string token = GcpAuth::getAccessToken("/etc/gcp/sa.json");
 GoogleDocumentAiRestClient::GoogleDocumentAiRestClient rest({
     "url": "https://us-documentai.googleapis.com",
+    "gcp_sa_json_path": "/etc/gcp/sa.json",
 });
 hash<auto> resp = rest.post(
     sprintf("/v1/projects/%s/locations/us/processors/%s:process",
         project_id, processor_id),
-    {"rawDocument": {"content": base64_pdf, "mimeType": "application/pdf"}},
-    NOTHING,
-    {"Authorization": "Bearer " + token});
+    {"rawDocument": {"content": base64_pdf, "mimeType": "application/pdf"}});
 printf("Text: %s\n", resp.body.document.text);
     @endcode
 
     @section GoogleDocumentAiRestClientRelnotes Release Notes
+
+    @subsection GoogleDocumentAiRestClientv1_1 GoogleDocumentAiRestClient v1.1
+    - authenticated synchronous, asynchronous, raw, copied, and generic API requests through GcpAuth
+    - added service-authenticated ping, quota-project handling, regional choices, and app association
+    - corrected constructor parity, regional URL persistence, and sensitive credential options
 
     @subsection GoogleDocumentAiRestClientv1_0 GoogleDocumentAiRestClient v1.0
     - the initial version of the %GoogleDocumentAiRestClient module
@@ -104,24 +115,142 @@ public class GoogleDocumentAiRestClientBase {
 
         const DefaultOptions = {
             "data": "json",
+            "timeout": 60s,
+            "connect_timeout": 10s,
         };
+
+        #! Known service locations; custom values permit newly available locations
+        const Regions = (
+            <AllowedValueInfo>{"value": "us", "display_name": "United States"},
+            <AllowedValueInfo>{"value": "eu", "display_name": "European Union"},
+            <AllowedValueInfo>{"value": "asia-south1", "display_name": "Mumbai"},
+            <AllowedValueInfo>{"value": "asia-southeast1", "display_name": "Singapore"},
+            <AllowedValueInfo>{"value": "australia-southeast1", "display_name": "Sydney"},
+            <AllowedValueInfo>{"value": "europe-west2", "display_name": "London"},
+            <AllowedValueInfo>{"value": "europe-west3", "display_name": "Frankfurt"},
+            <AllowedValueInfo>{"value": "northamerica-northeast1", "display_name": "Montreal"},
+            <AllowedValueInfo>{"value": "us-east7", "display_name": "United States East (us-east7)"},
+        );
+    }
+
+    private {
+        # Immutable after construction; tokens live only in GcpAuth's synchronized cache.
+        *string credential_location;
+        *string quota_project;
+        string credential_origin;
+    }
+
+    constructor(hash<auto> opts) {
+        credential_location = opts.gcp_sa_json_path;
+        quota_project = opts.gcp_quota_project_id;
+        credential_origin = getOptions(opts).url;
     }
 
     #! Builds the per-region Document AI URL
+    /** @param region location ID; defaults to US
+        @return regional HTTPS service origin
+        @throw GOOGLE-DOCUMENTAI-CONFIG-ERROR invalid location syntax
+    */
     static string buildUrl(*string region) {
+        if (exists region && region !~ /^[a-z][a-z0-9-]*$/) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "gcp_region must be a nonempty location ID";
+        }
         return sprintf(DefaultUrlPattern, region ?? DefaultRegion);
     }
 
     #! Returns options for the REST client constructors
+    /** @param opts connection options
+        @return normalized authenticated transport options
+        @throw GOOGLE-DOCUMENTAI-CONFIG-ERROR invalid endpoint or conflicting authentication
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto!> rv;
         rv += DefaultOptions + opts;
         if (!rv.url.val()) {
             rv.url = buildUrl(rv.gcp_region);
         }
-        # GcpAuth-managed auth — no inline apikey / token mapping;
-        # callers inject Authorization: Bearer <gcp_access_token> per request.
+        rv.url = normalizeEndpoint(rv.url, rv.gcp_region);
+        rv.data = "json";
+        rv.max_redirects = 0;
+        rv.redirect_passthru = False;
+        rv.error_passthru = False;
+        rv.allow_any_response = False;
+        foreach string option in (keys rv) {
+            if (option =~ /^(oauth2_(grant_type|client_id|client_secret|refresh_token)|token|username|password|apikey)$/
+                    && rv{option}.val()) {
+                throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "use GcpAuth credentials for Document AI authentication";
+            }
+        }
         return rv;
+    }
+
+    #! Returns transport options without unrelated credential mechanisms
+    /** @return connection option declarations for the GcpAuth transport */
+    static hash<string, hash<ConnectionOptionInfo>> connectionOptions() {
+        return map {$1.key: $1.value}, RestConnection::ConnectionScheme.options.pairIterator(),
+            $1.key !~ /^(oauth2_|custom_token_|negotiate_|swagger|openapi3$|token|validator$|data$|username$|password$|rest_body_auth_)/;
+    }
+
+    #! Checks endpoint syntax and regional consistency
+    /** @param endpoint explicitly trusted HTTPS origin, or a loopback HTTP test origin
+        @param region optional resource location to check against a Google regional hostname
+        @return normalized origin without a trailing slash
+        @throw GOOGLE-DOCUMENTAI-CONFIG-ERROR invalid endpoint or conflicting region
+    */
+    static string normalizeEndpoint(string endpoint, *string region) {
+        hash<auto> parsed;
+        try { parsed = parse_url(endpoint); }
+        catch () { throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "invalid Document AI endpoint"; }
+        if (!parsed.host.val() || parsed.username.val() || parsed.password.val() || endpoint =~ /[?#@\r\n\\]/
+                || (parsed.path.val() && parsed.path != "/")
+                || (parsed.protocol != "https"
+                    && !(parsed.protocol == "http" && inlist(parsed.host, ("localhost", "127.0.0.1", "::1"))))) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "use an HTTPS origin without a path or embedded credentials";
+        }
+        *string endpoint_region = (parsed.host =~ x/^([a-z0-9-]+)-documentai\.googleapis\.com$/)[0];
+        if (region.val() && endpoint_region.val() && region != endpoint_region) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "gcp_region conflicts with the Document AI endpoint";
+        }
+        endpoint =~ s/\/$//;
+        return endpoint;
+    }
+
+    #! Adds per-request authentication after validating the target
+    /** @param endpoint current transport origin
+        @param path prepared request path
+        @param headers outgoing headers
+        @throw GOOGLE-DOCUMENTAI-CONFIG-ERROR unsafe target
+        @throw GCP-AUTH-ERROR credential acquisition failed
+    */
+    private hash<auto> authenticate(string endpoint, *string path, *hash<auto> headers) {
+        if (normalizeEndpoint(endpoint) != credential_origin || path =~ /^\/?[a-zA-Z][-a-zA-Z0-9+.]*:/
+                || path =~ /^\/\// || path =~ /[#\r\n\\]/) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "authenticated requests must stay on the configured origin";
+        }
+        # Resolve once so token and quota project come from the same credential selection.
+        *string location = GcpAuth::resolveCredentialLocation(credential_location);
+        string token = GcpAuth::getAccessToken(location, DefaultScopes);
+        *string project = GcpAuth::getQuotaProject(location, quota_project);
+        headers = map {$1.key: $1.value}, headers.pairIterator(),
+            $1.key.lwr() != "authorization" && $1.key.lwr() != "x-goog-user-project";
+        headers.authorization = "Bearer " + token;
+        if (exists project) {
+            headers."x-goog-user-project" = project;
+        }
+        return headers;
+    }
+
+    #! Prevents copies from forwarding credentials to another origin
+    /** @param endpoint requested target
+        @return normalized same-origin endpoint
+        @throw GOOGLE-DOCUMENTAI-CONFIG-ERROR the copy would cross origins
+    */
+    private string checkedCopyUrl(string endpoint) {
+        endpoint = normalizeEndpoint(endpoint);
+        if (endpoint != credential_origin) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "create a new connection to use a different origin";
+        }
+        return endpoint;
     }
 }
 
@@ -129,7 +258,16 @@ public class GoogleDocumentAiRestClientBase {
 public class GoogleDocumentAiRestClient inherits RestClient::RestClient,
         GoogleDocumentAiRestClientBase {
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(GoogleDocumentAiRestClientBase::getOptions(opts), True) {
+            : GoogleDocumentAiRestClientBase(opts),
+            RestClient(GoogleDocumentAiRestClientBase::getOptions(opts), do_not_connect) {
+    }
+
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        hdr = authenticate(getURL(), path, hdr);
+    }
+
+    AbstractRestClient copyWithUrl(string new_url) {
+        return RestClient::copyWithUrl(checkedCopyUrl(new_url));
     }
 }
 
@@ -137,7 +275,26 @@ public class GoogleDocumentAiRestClient inherits RestClient::RestClient,
 public class GoogleDocumentAiRestClientIo inherits RestClientIo::RestClientIo,
         GoogleDocumentAiRestClientBase {
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(GoogleDocumentAiRestClientBase::getOptions(opts), shared_mgr) {
+            : GoogleDocumentAiRestClientBase(opts),
+            RestClientIo(GoogleDocumentAiRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+        hdr = authenticate(getUrl(), path, hdr);
+        return rv;
+    }
+
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        hdr = authenticate(getUrl(), path, hdr);
+        return rv;
+    }
+
+    AbstractRestClient copyWithUrl(string new_url) {
+        return RestClientIo::copyWithUrl(checkedCopyUrl(new_url));
     }
 }
 
@@ -151,8 +308,8 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
             "short_desc": "A connection to Google Document AI",
             "desc": "A connection to [Google Document AI](https://cloud.google.com/document-ai) "
                 "— a managed document-extraction service.  Authentication is "
-                "via @ref gcpauthintro \"GcpAuth\" using Application Default "
-                "Credentials or an explicit service-account JSON file.",
+                "via GcpAuth using Application Default Credentials or an explicit "
+                "service-account or authorized-user credential file.",
             "cls": Class::forName("GoogleDocumentAiRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -161,7 +318,7 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
             "base_scheme_map": {
                 "https": "google-documentai",
             },
-            "options": RestConnection::ConnectionScheme.options + {
+            "options": GoogleDocumentAiRestClientBase::connectionOptions() + {
                 "gcp_project_id": <ConnectionOptionInfo>{
                     "display_name": "GCP Project ID",
                     "short_desc": "GCP project that owns the Document AI processors",
@@ -175,18 +332,28 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
                     "desc": "Document AI region (e.g. `us`, `eu`).  Determines the "
                         "regional endpoint hostname.",
                     "default_value": DefaultRegion,
+                    "allowed_values": GoogleDocumentAiRestClientBase::Regions,
+                    "allowed_values_creatable": True,
                 },
                 "gcp_sa_json_path": <ConnectionOptionInfo>{
-                    "display_name": "Service-Account JSON Location",
-                    "short_desc": "Location of a service-account JSON key file",
+                    "display_name": "Google Credential Location",
+                    "short_desc": "Location of a service-account or authorized-user credential file",
                     "type": "file-as-string",
-                    "desc": "Location of a GCP service-account JSON file for "
-                        "JWT-bearer auth; processed with "
+                    "desc": "Location of a GCP service-account or authorized-user JSON file; processed with "
                         "`FileLocationHandler::getTextFileFromLocation()`, so it may "
                         "be a bare path or any registered scheme (ex: "
                         "`file:///etc/gcp/sa.json`, `http(s)://`, `sftp://`).  When "
                         "omitted, Application Default Credentials are used.",
                     "freeform": True,
+                    "sensitive": True,
+                },
+                "gcp_quota_project_id": <ConnectionOptionInfo>{
+                    "display_name": "Quota Project",
+                    "short_desc": "Optional project used for API quota and billing",
+                    "type": "string",
+                    "desc": "Overrides `GOOGLE_CLOUD_QUOTA_PROJECT` and the credential file's `quota_project_id`. "
+                        "Sent as `x-goog-user-project`; independent of the resource project. The credential "
+                        "needs `serviceusage.services.use` on this project.",
                 },
             },
             "required_options": "gcp_project_id",
@@ -195,11 +362,63 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
 
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(GoogleDocumentAiRestConnection::getConfig({
+                "name": name, "desc": description, "url": url, "opts": options,
+            }), attributes) {
     }
 
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(GoogleDocumentAiRestConnection::getConfig(config), attr) {
+    }
+
+    #! Associates connections with their action catalog
+    *string getAppName() { return "GoogleDocumentAi"; }
+
+    #! Validates a successful authenticated processor-list response
+    /** @param body parsed JSON or JSON text from the service
+        @throw REST-PING-ERROR malformed response
+    */
+    validatePingResponse(auto body) {
+        if (body.typeCode() == NT_STRING || body.typeCode() == NT_BINARY) {
+            try { body = parse_json(body.toString("UTF-8")); }
+            catch () { throw "REST-PING-ERROR", "Document AI ping returned invalid JSON"; }
+        }
+        if (body.typeCode() != NT_HASH || body.hasKey("error")
+                || (body - ("processors", "nextPageToken")).size()
+                || (body.hasKey("processors") && body.processors.typeCode() != NT_LIST)
+                || (body.hasKey("nextPageToken") && body.nextPageToken.typeCode() != NT_STRING)) {
+            throw "REST-PING-ERROR", "Document AI ping returned an invalid processor list";
+        }
+        foreach auto processor in (body.processors) {
+            if (processor.typeCode() != NT_HASH || processor.name.typeCode() != NT_STRING
+                    || processor.name !~ /^projects\/[^\/]+\/locations\/[^\/]+\/processors\/[^\/]+$/) {
+                throw "REST-PING-ERROR", "Document AI ping returned an invalid processor";
+            }
+        }
+    }
+
+    private static hash<auto> getConfig(hash<auto> config) {
+        hash<auto> options = config.opts ?? {};
+        string region = options.gcp_region ?? DefaultRegion;
+        string target = config.url ?? DefaultUrl;
+        # The platform supplies the default URL for auto_url connections; derive it from the region.
+        if (target == DefaultUrl || target == "google-documentai://x") {
+            target = "google-documentai://" + region + "-documentai.googleapis.com";
+        }
+        string endpoint = regex_subst(target, "^google-documentai://", "https://");
+        GoogleDocumentAiRestClientBase::normalizeEndpoint(endpoint, region);
+        if (options.gcp_project_id.typeCode() != NT_STRING
+                || options.gcp_project_id !~ /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "gcp_project_id must be a nonempty project ID or number";
+        }
+        GoogleDocumentAiRestClientBase::buildUrl(region);
+        options.gcp_region = region;
+        options.ping_method = "GET";
+        options.ping_path = sprintf("/v1/projects/%s/locations/%s/processors?pageSize=1",
+            encode_url(options.gcp_project_id, True), encode_url(region, True));
+        options -= ("ping_body", "ping_headers");
+        target =~ s/^https:\/\//google-documentai:\/\//;
+        return config + {"url": target, "opts": options};
     }
 
     string getType() {
@@ -213,7 +432,8 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         load_module("GoogleDocumentAiDataProvider");
         return create_object("GoogleDocumentAiDataProvider",
-            (constructor_options ?? {}) + getConnectionOptions());
+            (constructor_options ?? {}) + getConnectionOptions(){"gcp_project_id", "gcp_region"}
+                + {"restclient": getAsync()});
     }
 
     private setChildCapabilities() {
@@ -236,10 +456,10 @@ public class GoogleDocumentAiRestConnection inherits RestClient::RestConnection 
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
             hash<auto> update;
-            *string region = opts.gcp_region ?? DefaultRegion;
-            string canonical = "google-documentai://" + region + "-documentai.googleapis.com";
-            if (url != canonical) {
-                update.url = canonical;
+            hash<auto> normalized = getConfig({"url": url, "opts": opts});
+            if (url != normalized.url) { update.url = normalized.url; }
+            foreach string key in ("ping_method", "ping_path") {
+                if (opts{key} != normalized.opts{key}) { update{key} = normalized.opts{key}; }
             }
             if (update) {
                 doUpdateOptions(self, update);

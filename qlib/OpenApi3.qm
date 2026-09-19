@@ -6244,6 +6244,11 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         }
         if (!enumValues && source.enumValues) {
             enumValues = source.enumValues;
+            foreach string key in (("x-enumNames", "x-enum-descriptions")) {
+                if (!vendorExtensions.hasKey(key) && source.vendorExtensions.hasKey(key)) {
+                    vendorExtensions{key} = source.vendorExtensions{key};
+                }
+            }
         }
         if (!nullable) {
             nullable = source.nullable;
@@ -6717,6 +6722,34 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     /** This extension provides descriptions for each enum value. */
     *list<string> getEnumDescriptions() {
         return vendorExtensions."x-enum-descriptions";
+    }
+
+    #! Preserves enumeration presentation extensions in structured field choices
+    /** Every wire value comes from the enumeration. Optional extension arrays with the wrong
+        length are ignored. Values remain strings until updateFieldType() restores their type.
+    */
+    private *list<auto> getFieldEnumValues() {
+        if (!enumValues) { return; }
+        list<string> values = keys enumValues ?? ();
+        # x-enum-varnames names generated code symbols, not user-facing labels.
+        auto names = vendorExtensions."x-enumNames";
+        auto descriptions = vendorExtensions."x-enum-descriptions";
+        bool have_names = names.typeCode() == NT_LIST && names.size() == values.size();
+        bool have_descs = descriptions.typeCode() == NT_LIST && descriptions.size() == values.size();
+        if (!have_names && !have_descs) {
+            return values;
+        }
+        list<auto> result = ();
+        for (int i = 0; i < values.size(); ++i) {
+            string value = values[i];
+            result += <AllowedValueInfo>{
+                "value": value,
+                "display_name": have_names && names[i].typeCode() == NT_STRING && names[i].val()
+                    ? names[i] : value,
+                "desc": have_descs && descriptions[i].typeCode() == NT_STRING ? descriptions[i] : "",
+            };
+        }
+        return result;
     }
 
     #! Returns the x-codegen-type extension value if set.

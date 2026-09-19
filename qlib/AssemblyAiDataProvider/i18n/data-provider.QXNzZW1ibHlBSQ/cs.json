@@ -5051,11 +5051,11 @@
           "source": "Number of audio channels. Required when `audio` is `audio/pcm`. Stereo is down-mixed to mono internally.",
           "message": "Počet audio kanálů. Povinné, když `audio` je `audio/pcm`. Stereo je interně smícháno na mono."
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.c3RyaW5nOjE.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.aW50OjE.display_name": {
           "source": "1",
           "message": "1"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.c3RyaW5nOjI.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.aW50OjI.display_name": {
           "source": "2",
           "message": "2"
         },
@@ -5119,31 +5119,31 @@
           "source": "Source sample rate in Hz. Required when `audio` is `audio/pcm`. WAV reads the rate from its header.",
           "message": "Vzorkovací frekvence zdroje v Hz. Povinné, když `audio` je `audio/pcm`. WAV čte rychlost ze své hlavičky."
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjgwMDA.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjgwMDA.display_name": {
           "source": "8000",
           "message": "8000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjE2MDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjE2MDAw.display_name": {
           "source": "16000",
           "message": "16000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjIyMDUw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjIyMDUw.display_name": {
           "source": "22050",
           "message": "22050"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjI0MDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjI0MDAw.display_name": {
           "source": "24000",
           "message": "24000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjMyMDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjMyMDAw.display_name": {
           "source": "32000",
           "message": "32000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjQ0MTAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjQ0MTAw.display_name": {
           "source": "44100",
           "message": "44100"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjQ4MDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1zaG9ydC1hdWRpbw.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjQ4MDAw.display_name": {
           "source": "48000",
           "message": "48000"
         },
@@ -5211,11 +5211,11 @@
           "source": "Number of audio channels. Required when `audio` is `audio/pcm`. Stereo is down-mixed to mono internally.",
           "message": "Počet audio kanálů. Povinné, když `audio` je `audio/pcm`. Stereo je interně smícháno na mono."
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.c3RyaW5nOjE.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.aW50OjE.display_name": {
           "source": "1",
           "message": "1"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.c3RyaW5nOjI.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.Y2hhbm5lbHM.allowed-value.aW50OjI.display_name": {
           "source": "2",
           "message": "2"
         },
@@ -5279,31 +5279,31 @@
           "source": "Source sample rate in Hz. Required when `audio` is `audio/pcm` (the usual case for a live source). WAV reads the rate from its header.",
           "message": "Vzorkovací frekvence zdroje v Hz. Vyžadováno, když `audio` je `audio/pcm` (obvyklý případ pro živý zdroj). WAV čte rychlost ze své hlavičky."
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjgwMDA.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjgwMDA.display_name": {
           "source": "8000",
           "message": "8000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjE2MDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjE2MDAw.display_name": {
           "source": "16000",
           "message": "16000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjIyMDUw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjIyMDUw.display_name": {
           "source": "22050",
           "message": "22050"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjI0MDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjI0MDAw.display_name": {
           "source": "24000",
           "message": "24000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjMyMDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjMyMDAw.display_name": {
           "source": "32000",
           "message": "32000"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjQ0MTAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjQ0MTAw.display_name": {
           "source": "44100",
           "message": "44100"
         },
-        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.c3RyaW5nOjQ4MDAw.display_name": {
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZS1saXZlLXVwbG9hZA.option.Y29uZmln.field.c2FtcGxlX3JhdGU.allowed-value.aW50OjQ4MDAw.display_name": {
           "source": "48000",
           "message": "48000"
         },

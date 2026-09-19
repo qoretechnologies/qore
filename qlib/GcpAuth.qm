@@ -32,7 +32,7 @@
 %requires json
 
 module GcpAuth {
-    version = "1.0";
+    version = "1.1";
     desc = "GCP service-account JWT-bearer and Application Default Credentials "
         "token broker for Vertex AI, GCP Vision, GCP Document AI, etc.; "
         "credential files are read as FileLocationHandler locations";
@@ -48,9 +48,9 @@ module GcpAuth {
     @section gcpauthintro Introduction to the GcpAuth Module
 
     The %GcpAuth module exchanges GCP service-account credentials for
-    bearer access tokens.  Three paths are supported, matching the
-    Application Default Credentials (ADC) chain used by
-    <tt>gcloud</tt> and the official Google client libraries:
+    bearer access tokens. Service-account files, authorized-user ADC, and the Google metadata
+    server are supported. External-account federation files and impersonated-service-account
+    files are not supported; this module does not implement every Google SDK credential type.
 
     1. **Service-account JSON file** — sign an RS256 JWT with the SA private
        key, exchange at <tt>oauth2.googleapis.com/token</tt> using
@@ -69,7 +69,7 @@ module GcpAuth {
        refresh-token grant (<tt>grant_type=refresh_token</tt>).  See
        @ref GcpAuth::getAccessTokenFromAuthorizedUserFile() "getAccessTokenFromAuthorizedUserFile()".
 
-    4. **Composite ADC chain** — explicit SA file → \c GOOGLE_APPLICATION_CREDENTIALS
+    4. **Composite ADC chain** — explicit credential file → \c GOOGLE_APPLICATION_CREDENTIALS
        env var → \c ~/.config/gcloud/application_default_credentials.json →
        metadata server, dispatching each resolved file to the service-account or
        authorized_user grant by its \c "type".  See
@@ -78,12 +78,16 @@ module GcpAuth {
     All three functions cache tokens keyed by the request parameters and
     refresh within a 5-minute safety window before expiry.
 
+    A selected invalid file fails authentication rather than falling through to another identity.
+    @ref GcpAuth::getQuotaProject() "getQuotaProject()" resolves a separate quota project from an
+    explicit override, \c GOOGLE_CLOUD_QUOTA_PROJECT, or the credential file's \c quota_project_id.
+    Consumers send it as \c x-goog-user-project; the resource project remains independent.
+
     @par Dependencies
 
     JWT signing uses the \c json binary module's
     @ref Qore::Json::jwt_encode() "jwt_encode()" — RS256 is supported
-    natively.  The module is loaded with @c %try-module so deployments
-    without \c json get a clear error at first JWT-using call.
+    natively. The \c json module is required for credential and token parsing.
 
     @par Example: token for Vertex AI
 
@@ -98,6 +102,12 @@ string token = GcpAuth::getAccessTokenFromServiceAccountFile(
     @endcode
 
     @section gcpauthrelnotes Release Notes
+
+    @subsection gcpauth_v1_1 GcpAuth v1.1
+    - added explicit credential resolution and independent quota-project resolution
+    - validated supported credential types and token response fields without exposing secrets
+    - bounded token requests, disabled redirects, and isolated metadata caches by endpoint
+    - preserved cooperative cancellation while sanitizing authentication failures
 
     @subsection gcpauth_v1_0 GcpAuth v1.0
     - initial release: GCP credential broker that mints bearer access tokens via the
@@ -209,7 +219,6 @@ class TokenCache {
 
     @throw GCP-AUTH-ERROR SA file unreadable, JSON malformed, JWT signing or
         token exchange failed
-    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
         list<string> scopes, *hash<auto> opts) {
@@ -223,14 +232,19 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     }
     hash<auto> sa = readCredentialFile(sa_json_path);
     foreach string field in (("private_key", "client_email")) {
-        if (!sa{field}.val()) {
-            throw "GCP-AUTH-ERROR",
-                sprintf("service-account file %y is missing required field %y",
-                    sa_json_path, field);
+        if (sa{field}.typeCode() != NT_STRING || !sa{field}.val()) {
+            throw "GCP-AUTH-ERROR", sprintf("service-account credentials require a nonempty %s", field);
         }
+    }
+    if ((sa.hasKey("token_uri") && (sa.token_uri.typeCode() != NT_STRING || !sa.token_uri.val()))
+            || (sa.hasKey("private_key_id") && sa.private_key_id.typeCode() != NT_STRING)) {
+        throw "GCP-AUTH-ERROR", "service-account token_uri and private_key_id must be strings when supplied";
     }
     string token_uri = sa.token_uri ?? TokenUrl;
     int lifetime = opts.lifetime_seconds ?? 3600;
+    if (lifetime <= 0 || lifetime > 3600) {
+        throw "GCP-AUTH-ERROR", "service-account JWT lifetime must be between 1 and 3600 seconds";
+    }
     date now = now_us();
     int iat = int(now - 1970-01-01Z);
     # JwtClaims only carries the seven registered claim names plus an
@@ -254,9 +268,8 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     try {
         assertion = jwt_encode(claims, sa.private_key, "RS256", hdr);
     } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("RS256 JWT signing failed for %y: %s",
-                sa.client_email, ex.desc), ex;
+        rethrowCancellation(ex);
+        throw "GCP-AUTH-ERROR", "RS256 JWT signing failed for the configured service account";
     }
     hash<auto> form = {
         "grant_type": JwtBearerGrantType,
@@ -266,8 +279,8 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     try {
         resp = postTokenForm(token_uri, form);
     } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("token exchange at %y failed: %s", token_uri, ex.desc), ex;
+        rethrowCancellation(ex);
+        throw "GCP-AUTH-ERROR", "service-account token exchange failed";
     }
     string token;
     int expires_in;
@@ -292,26 +305,26 @@ public string sub getAccessTokenFromServiceAccountFile(string sa_json_path,
     @return the bearer access token
 
     @throw GCP-AUTH-ERROR metadata server unreachable or returned an error
-    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getAccessTokenFromMetadataServer(list<string> scopes,
         *hash<auto> opts) {
     string scope_str = (foldl $1 + " " + $2, scopes) ?? "";
-    string key = sprintf("mds|%s", scope_str);
+    string endpoint = opts.metadata_endpoint ?? MetadataEndpoint;
+    string key = sprintf("mds|%s|%s", endpoint, scope_str);
     if (!opts.force_refresh) {
         *string cached = TokenCache::getCached(key);
         if (cached) {
             return cached;
         }
     }
-    string endpoint = opts.metadata_endpoint ?? MetadataEndpoint;
-    RestClientIo::RestClientIo rest({"url": endpoint});
+    RestClientIo::RestClientIo rest({"url": endpoint, "timeout": 30s, "connect_timeout": 10s,
+        "max_redirects": 0});
     hash<auto> resp;
     try {
         resp = rest.restGet(MetadataTokenPath, {"Metadata-Flavor": "Google"});
     } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("GCP metadata-server token fetch failed: %s", ex.desc), ex;
+        rethrowCancellation(ex);
+        throw "GCP-AUTH-ERROR", "GCP metadata-server token fetch failed";
     }
     string token;
     int expires_in;
@@ -321,8 +334,7 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
 }
 
 #! Fetches a GCP access token via the standard ADC resolution chain
-/** Walks the Application Default Credentials chain so callers get the same
-    behavior as the official \c gcloud CLI and Google client libraries:
+/** Walks the supported Application Default Credentials chain:
 
     1. explicit \a sa_json_path argument, if provided
     2. \c GOOGLE_APPLICATION_CREDENTIALS environment variable (read via
@@ -336,9 +348,9 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
     \c "gcloud auth application-default login") is exchanged via the OAuth2
     refresh-token grant (see
     @ref GcpAuth::getAccessTokenFromAuthorizedUserFile() "getAccessTokenFromAuthorizedUserFile()"),
-    while any other file is treated as a service-account key and signed with
-    the JWT-bearer grant.  This matches how \c gcloud and the official Google
-    client libraries resolve ADC.
+    while a \c "service_account" file uses the JWT-bearer grant. External-account
+    federation and impersonated-service-account files are not supported. An invalid
+    selected file fails rather than falling through to a different identity.
 
     @param sa_json_path optional explicit SA JSON file path
     @param scopes OAuth2 scopes
@@ -348,11 +360,29 @@ public string sub getAccessTokenFromMetadataServer(list<string> scopes,
     @return the bearer access token
 
     @throw GCP-AUTH-ERROR all candidate sources failed
-    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getAccessToken(*string sa_json_path, list<string> scopes,
         *hash<auto> opts) {
-    *string candidate = sa_json_path;
+    *string candidate = resolveCredentialLocation(sa_json_path);
+    if (candidate.val()) {
+        string type = credentialFileType(candidate);
+        if (type == "authorized_user") {
+            return getAccessTokenFromAuthorizedUserFile(candidate, opts);
+        }
+        if (type == "service_account") {
+            return getAccessTokenFromServiceAccountFile(candidate, scopes, opts);
+        }
+        throw "GCP-AUTH-ERROR", "unsupported ADC credential type; use service_account or authorized_user";
+    }
+    return getAccessTokenFromMetadataServer(scopes, opts);
+}
+
+#! Resolves the supported file-based ADC chain without acquiring a token
+/** @param location explicit credential location, or NOTHING for ADC
+    @return the selected credential location, or NOTHING for compute metadata credentials
+*/
+public *string sub resolveCredentialLocation(*string location) {
+    *string candidate = location;
     if (!candidate.val()) {
         *string env_path = getenv("GOOGLE_APPLICATION_CREDENTIALS");
         if (env_path.val()) {
@@ -361,25 +391,41 @@ public string sub getAccessToken(*string sa_json_path, list<string> scopes,
     }
     if (!candidate.val()) {
         # standard gcloud ADC location
-        *string home = getenv("HOME");
-        if (home.val()) {
-            string adc = home + "/.config/gcloud/application_default_credentials.json";
+        *string user_home = getenv("HOME");
+        if (user_home.val()) {
+            string adc = user_home + "/.config/gcloud/application_default_credentials.json";
             if (is_file(adc)) {
                 candidate = adc;
             }
         }
     }
-    if (candidate.val()) {
-        # dispatch by credential type: "authorized_user" files (written by
-        # "gcloud auth application-default login") use the OAuth2 refresh-token
-        # grant; all other files are treated as service-account keys (JWT-bearer)
-        if (credentialFileType(candidate) == "authorized_user") {
-            return getAccessTokenFromAuthorizedUserFile(candidate, opts);
+    return candidate;
+}
+
+#! Resolves the quota project independently of the project owning a resource
+/** @param location explicit credential location, or NOTHING for ADC
+    @param project explicit quota project override
+    @return the override, GOOGLE_CLOUD_QUOTA_PROJECT, or the selected credential's quota_project_id
+    @throw GCP-AUTH-ERROR invalid quota project or unreadable selected credentials
+    @note No resource project is inferred. The caller needs serviceusage.services.use on this project.
+*/
+public *string sub getQuotaProject(*string location, *string project) {
+    *string value = project ?? getenv("GOOGLE_CLOUD_QUOTA_PROJECT");
+    if (!exists value) {
+        *string candidate = resolveCredentialLocation(location);
+        if (candidate.val()) {
+            hash<auto> credentials = readCredentialFile(candidate);
+            auto configured = credentials.quota_project_id;
+            if (credentials.hasKey("quota_project_id") && configured.typeCode() != NT_STRING) {
+                throw "GCP-AUTH-ERROR", "quota project must be a project ID or number";
+            }
+            value = configured;
         }
-        return getAccessTokenFromServiceAccountFile(candidate, scopes, opts);
     }
-    # last resort: metadata server (will throw if not on GCP)
-    return getAccessTokenFromMetadataServer(scopes, opts);
+    if (exists value && value !~ /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/) {
+        throw "GCP-AUTH-ERROR", "quota project must be a nonempty project ID or number";
+    }
+    return value;
 }
 
 #! Fetches a GCP access token from a user ("authorized_user") ADC credential file
@@ -402,7 +448,6 @@ public string sub getAccessToken(*string sa_json_path, list<string> scopes,
 
     @throw GCP-AUTH-ERROR file unreadable, JSON malformed, required fields
         missing, or the token refresh failed
-    @throw GCP-AUTH-MISSING-JSON-MODULE the json module is unavailable
 */
 public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> opts) {
     string key = sprintf("au|%s", path);
@@ -414,11 +459,12 @@ public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> 
     }
     hash<auto> cred = readCredentialFile(path);
     foreach string field in (("client_id", "client_secret", "refresh_token")) {
-        if (!cred{field}.val()) {
-            throw "GCP-AUTH-ERROR",
-                sprintf("authorized_user credential file %y is missing required field %y",
-                    path, field);
+        if (cred{field}.typeCode() != NT_STRING || !cred{field}.val()) {
+            throw "GCP-AUTH-ERROR", sprintf("authorized_user credentials require a nonempty %s", field);
         }
+    }
+    if (cred.hasKey("token_uri") && (cred.token_uri.typeCode() != NT_STRING || !cred.token_uri.val())) {
+        throw "GCP-AUTH-ERROR", "authorized_user token_uri must be a nonempty string when supplied";
     }
     string token_uri = cred.token_uri ?? TokenUrl;
     hash<auto> form = {
@@ -431,8 +477,8 @@ public string sub getAccessTokenFromAuthorizedUserFile(string path, *hash<auto> 
     try {
         resp = postTokenForm(token_uri, form);
     } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("authorized_user token refresh at %y failed: %s", token_uri, ex.desc), ex;
+        rethrowCancellation(ex);
+        throw "GCP-AUTH-ERROR", "authorized_user token refresh failed";
     }
     string token;
     int expires_in;
@@ -449,16 +495,18 @@ hash<auto> sub readCredentialFile(string location) {
         # a local file, or any registered scheme (file://, http(s)://, sftp://, ...)
         text = FileLocationHandler::getTextFileFromLocation(location);
     } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("cannot read GCP credential location %y: %s: %s",
-                location, ex.err, ex.desc), ex;
+        rethrowCancellation(ex);
+        throw "GCP-AUTH-ERROR", "cannot read the configured GCP credential location";
     }
     try {
-        return parse_json(text);
+        auto value = parse_json(text);
+        if (value.typeCode() != NT_HASH) {
+            throw "GCP-AUTH-ERROR", "GCP credentials must be a JSON object";
+        }
+        return value;
     } catch (hash<ExceptionInfo> ex) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("GCP credential location %y is not valid JSON: %s",
-                location, ex.desc), ex;
+        rethrowCancellation(ex);
+        throw "GCP-AUTH-ERROR", "GCP credentials must be a valid JSON object";
     }
 }
 
@@ -476,30 +524,39 @@ hash<auto> sub readCredentialFile(string location) {
 */
 hash<auto> sub postTokenForm(string token_uri, hash<auto> form) {
     hash<auto> url = parse_url(token_uri);
+    if (!url.host.val() || url.username.val() || url.password.val() || token_uri =~ /[?#@\r\n\\]/
+            || (url.protocol != "https"
+                && !(url.protocol == "http" && inlist(url.host, ("localhost", "127.0.0.1", "::1"))))) {
+        throw "GCP-AUTH-ERROR", "token endpoint must be HTTPS without embedded credentials";
+    }
     string base = sprintf("%s://%s%s", url.protocol ?? "https", url.host,
         exists url.port ? sprintf(":%d", url.port) : "");
     string req_path = url.path ?? "/token";
     RestClientIo::RestClientIo rest({
         "url": base,
         "data": "url",
+        "timeout": 30s,
+        "connect_timeout": 10s,
+        "max_redirects": 0,
     });
     return rest.restPost(req_path, form, {
         "Content-Type": "application/x-www-form-urlencoded",
     });
 }
 
-#! Returns the \c "type" field of a credential file, or \c "service_account" if absent/unreadable
-/** Used by @ref getAccessToken() to dispatch a resolved ADC file to the correct
-    grant.  A missing or unreadable file resolves to \c "service_account" so the
-    downstream service-account fetcher reports the underlying error with full
-    context rather than this helper masking it.
-*/
+#! Returns a credential's type; legacy files without a type retain service-account handling
 string sub credentialFileType(string path) {
-    try {
-        hash<auto> cred = readCredentialFile(path);
-        return cred.type ?? "service_account";
-    } catch (hash<ExceptionInfo> ex) {
-        return "service_account";
+    hash<auto> cred = readCredentialFile(path);
+    if (cred.hasKey("type") && cred.type.typeCode() != NT_STRING) {
+        throw "GCP-AUTH-ERROR", "credential type must be a string";
+    }
+    return cred.type ?? "service_account";
+}
+
+#! Preserves cooperative cancellation while sanitizing authentication diagnostics
+sub rethrowCancellation(hash<ExceptionInfo> ex) {
+    if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+        throw ex.err, ex.desc, ex.arg;
     }
 }
 
@@ -515,8 +572,8 @@ list<auto> sub parseTokenResponse(auto body) {
         try {
             data = parse_json(body.toString("UTF-8"));
         } catch (hash<ExceptionInfo> ex) {
-            throw "GCP-AUTH-ERROR",
-                sprintf("token response is not valid JSON: %s", ex.desc), ex;
+            rethrowCancellation(ex);
+            throw "GCP-AUTH-ERROR", "token response must be a valid JSON object";
         }
     } else if (body.typeCode() == NT_HASH) {
         data = body;
@@ -524,16 +581,23 @@ list<auto> sub parseTokenResponse(auto body) {
         throw "GCP-AUTH-ERROR",
             sprintf("unexpected token response body type %s", body.type());
     }
-    *string token = data.access_token;
-    if (!token.val()) {
-        throw "GCP-AUTH-ERROR",
-            sprintf("token response missing 'access_token': %y", data);
+    if (data.access_token.typeCode() != NT_STRING || data.access_token !~ /^[A-Za-z0-9._~+\/=-]+$/) {
+        throw "GCP-AUTH-ERROR", "token response requires a nonempty bearer access_token";
+    }
+    string token = data.access_token;
+    if (data.hasKey("token_type") && (data.token_type.typeCode() != NT_STRING
+            || data.token_type.lwr() != "bearer")) {
+        throw "GCP-AUTH-ERROR", "token response has an unsupported token_type";
+    }
+    if (data.hasKey("expires_in") && data.expires_in.typeCode() != NT_INT
+            && !(data.expires_in.typeCode() == NT_STRING && data.expires_in =~ /^[0-9]+$/)) {
+        throw "GCP-AUTH-ERROR", "token response expires_in must be a positive integer";
     }
     int expires_in = data.expires_in.typeCode() == NT_INT
         ? data.expires_in
         : (data.expires_in.typeCode() == NT_STRING ? int(data.expires_in) : 3600);
     if (expires_in <= 0) {
-        expires_in = 3600;
+        throw "GCP-AUTH-ERROR", "token response expires_in must be positive";
     }
     return (token, expires_in);
 }

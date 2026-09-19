@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
 
 %modern
 
@@ -108,14 +109,14 @@ public class GcpAuthTest inherits QUnit::Test {
             \exactTokenPathTest());
         addTestCase("missing access_token throws",
             \missingTokenErrorTest());
+        addTestCase("tokens inside expiry safety window are refreshed", \expiryWindowTest());
+        addTestCase("metadata caches are isolated by endpoint", \metadataIsolationTest());
+        addTestCase("quota project precedence and validation", \quotaProjectTest());
+        addTestCase("invalid token responses do not leak secrets", \tokenValidationTest());
+        addTestCase("unsupported and malformed ADC files fail safely", \invalidCredentialsTest());
 
-        try {
-            setup();
-        } catch (hash<ExceptionInfo> ex) {
-            if (m_options.verbose) {
-                printf("setup error: %s\n", get_exception_string(ex));
-            }
-        }
+        # These are required local fixtures: a setup failure must fail the suite.
+        setup();
 
         set_return_value(main());
     }
@@ -136,7 +137,7 @@ public class GcpAuthTest inherits QUnit::Test {
         # write a usable RSA service-account file
         sa_path = tmp_location() + "/gcp_auth_test_sa_" + get_random_string(8) + ".json";
         File f();
-        f.open2(sa_path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.open2(sa_path, O_CREAT | O_EXCL | O_WRONLY, 0600);
         f.write(make_json({
             "type": "service_account",
             "project_id": "test-project",
@@ -151,7 +152,7 @@ public class GcpAuthTest inherits QUnit::Test {
         # "gcloud auth application-default login"
         au_path = tmp_location() + "/gcp_auth_test_au_" + get_random_string(8) + ".json";
         File af();
-        af.open2(au_path, O_CREAT | O_WRONLY | O_TRUNC);
+        af.open2(au_path, O_CREAT | O_EXCL | O_WRONLY, 0600);
         af.write(make_json({
             "type": "authorized_user",
             "client_id": "test-client-id.apps.googleusercontent.com",
@@ -372,6 +373,97 @@ public class GcpAuthTest inherits QUnit::Test {
                 ("https://www.googleapis.com/auth/cloud-platform",),
                 {"force_refresh": True});
         });
+    }
+
+    private expiryWindowTest() {
+        hash<auto> saved = token_handler.token_response;
+        on_exit token_handler.token_response = saved;
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+        token_handler.token_response.expires_in = 299;
+        GcpAuth::getAccessToken(au_path, ("cloud-platform",));
+        GcpAuth::getAccessToken(au_path, ("cloud-platform",));
+        assertEq(2, token_handler.call_count, "short-lived tokens are refreshed before reuse");
+        token_handler.token_response.expires_in = 3600;
+        GcpAuth::getAccessToken(au_path, ("cloud-platform",));
+        GcpAuth::getAccessToken(au_path, ("cloud-platform",));
+        assertEq(3, token_handler.call_count, "fresh tokens are cached");
+    }
+
+    private metadataIsolationTest() {
+        GcpAuth::clearTokenCache();
+        token_handler.call_count = 0;
+        mds_handler.call_count = 0;
+        assertEq("mds-token", GcpAuth::getAccessTokenFromMetadataServer(("same-scope",),
+            {"metadata_endpoint": "http://localhost:" + mds_port}));
+        assertEq("fake-access-token", GcpAuth::getAccessTokenFromMetadataServer(("same-scope",),
+            {"metadata_endpoint": "http://localhost:" + token_port}));
+        assertEq(1, mds_handler.call_count);
+        assertEq(1, token_handler.call_count);
+    }
+
+    private quotaProjectTest() {
+        *string saved = getenv("GOOGLE_CLOUD_QUOTA_PROJECT");
+        on_exit {
+            exists saved ? setenv("GOOGLE_CLOUD_QUOTA_PROJECT", saved) : unsetenv("GOOGLE_CLOUD_QUOTA_PROJECT");
+        }
+        unsetenv("GOOGLE_CLOUD_QUOTA_PROJECT");
+        assertEq("test-project", GcpAuth::getQuotaProject(au_path));
+        assertEq(NOTHING, GcpAuth::getQuotaProject(sa_path));
+        setenv("GOOGLE_CLOUD_QUOTA_PROJECT", "environment-project");
+        assertEq("environment-project", GcpAuth::getQuotaProject(au_path));
+        assertEq("explicit-project", GcpAuth::getQuotaProject(au_path, "explicit-project"));
+        assertThrows("GCP-AUTH-ERROR", sub () { GcpAuth::getQuotaProject(au_path, "bad\r\nheader"); });
+        assertThrows("GCP-AUTH-ERROR", sub () { GcpAuth::getQuotaProject(au_path, ""); });
+    }
+
+    private tokenValidationTest() {
+        hash<auto> saved = token_handler.token_response;
+        on_exit token_handler.token_response = saved;
+        foreach hash<auto> response in ((
+                {"access_token": "", "refresh_token": "rejected-secret"},
+                {"access_token": 42}, {"access_token": "secret\r\ninjection"},
+                {"access_token": "ok", "expires_in": 0}, {"access_token": "ok", "expires_in": NULL},
+                {"access_token": "ok", "expires_in": "bad"}, {"access_token": "ok", "token_type": "Basic"})) {
+            token_handler.token_response = response;
+            try {
+                GcpAuth::getAccessToken(au_path, ("cloud-platform",), {"force_refresh": True});
+                fail("invalid token response accepted");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("GCP-AUTH-ERROR", ex.err);
+                assertFalse(get_exception_string(ex) =~ /rejected-secret/);
+                assertFalse(get_exception_string(ex) =~ /injection/);
+            }
+        }
+        token_handler.error_mode = True;
+        on_exit token_handler.error_mode = False;
+        try {
+            GcpAuth::getAccessToken(au_path, ("cloud-platform",), {"force_refresh": True});
+            fail("failed token exchange accepted");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("GCP-AUTH-ERROR", ex.err);
+            assertFalse(get_exception_string(ex) =~ /test-refresh-token/);
+            assertFalse(get_exception_string(ex) =~ /test-client-secret/);
+        }
+    }
+
+    private invalidCredentialsTest() {
+        string path = tmp_location() + "/qore-5426-invalid-" + get_random_string(16) + ".json";
+        on_exit { if (is_file(path)) { unlink(path); } }
+        foreach string contents in (("{\"private_key\":\"fixture-secret\", BROKEN", "[]",
+                "{\"type\":\"external_account\"}", "{\"type\":\"impersonated_service_account\"}")) {
+            File file();
+            file.open2(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            file.write(contents);
+            file.close();
+            try {
+                GcpAuth::getAccessToken(path, ("cloud-platform",));
+                fail("invalid credential accepted");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("GCP-AUTH-ERROR", ex.err);
+                assertFalse(get_exception_string(ex) =~ /fixture-secret/);
+            }
+        }
     }
 
     # A 2048-bit RSA private key generated specifically for these tests.

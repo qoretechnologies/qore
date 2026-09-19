@@ -29,14 +29,22 @@
 %requires(reexport) GoogleDocumentAiRestClient
 %requires RestClientIo
 %requires GcpAuth
+%requires(reexport) RestSchemaActions
+%requires OpenApi3
+%requires QoreAsyncJobUtils
+%requires json
 
 module GoogleDocumentAiDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "user module providing a data provider API for Google Document AI";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
     init = sub () {
+        DataProviderActionCatalog::registerDiscoveryInventoryProvider("GoogleDocumentAiDataProvider",
+            list<hash<DataProviderDiscoveryExpectedIdentityInfo>> sub () {
+                return GoogleDocumentAiManifest::inventory();
+            });
         DataProvider::registerFactory(new GoogleDocumentAiDataProviderFactory());
 
         DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
@@ -57,9 +65,12 @@ module GoogleDocumentAiDataProvider {
                 "passports, and similar government documents\n"
                 "- **Form parser**: generic key/value form extraction\n"
                 "- **Custom Document Extractor**: train a custom processor "
-                "for domain-specific document schemas",
+                "for domain-specific document schemas\n"
+                "- **Batch processing**: submit GCS documents and track per-document results\n"
+                "- **Processor management**: manage versions, deployments, evaluations, and document schemas\n"
+                "- **Dataset workflows**: explicitly marked beta actions manage training data and version imports",
             "scheme": "google-documentai",
-            "logo": GoogleDocumentAiLogo,
+            "logo": Priv::GoogleDocumentAiLogo,
             "logo_file_name": "google-document-ai-logo.svg",
             "logo_mime_type": MimeTypeSvg,
             "groups": (
@@ -68,6 +79,17 @@ module GoogleDocumentAiDataProvider {
                 DataProvider::AppGroup::GoogleWorkspace,
             ),
         });
+
+        foreach RestSchemaActionSet set in (GoogleDocumentAiSchema::getActionSets()) {
+            foreach hash<DataProviderActionInfo> action in (set.getActionInfoList(AppName)) {
+                if (action.metadata.internal) { continue; }
+                action.options -= ("project_id", "location");
+                if (set.getOperationEx(action.action).getMethod().upr() == "PATCH") { action.options -= "name"; }
+                DataProviderActionCatalog::registerAction(action);
+            }
+        }
+        GoogleDocumentAiProcessDocumentDataProvider::initializeTypes();
+        GoogleDocumentAiWaitOperationDataProvider::initializeTypes();
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": GoogleDocumentAiDataProvider::AppName,
@@ -80,30 +102,29 @@ module GoogleDocumentAiDataProvider {
                 "ID determines the schema of the response — prebuilt "
                 "processors return typed entities; custom processors return "
                 "the schema you trained.\n\n"
-                "Pass the document via one of:\n"
+                "**Document sources** — supply one of:\n"
                 "- `document_bytes` — raw bytes (base64-encoded automatically)\n"
                 "- `document_path` — local file path (read and base64-encoded)\n"
-                "- `gcs_uri` — GCS object URI (`gs://bucket/path`)",
+                "- `gcs_uri` — GCS object URI (`gs://bucket/path`)\n"
+                "- `inline_document` — an existing typed Document object\n\n"
+                "Supply exactly one source. Select a processor version to override the processor's default. "
+                "Processing options, output field masks, labels, and image omission are supported.",
             "action_code": DPAT_API,
             "groups": ("Document Extraction",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GoogleDocumentAiProcessDocumentRequestDataType::Fields{
-                    "processor_id",
-                }, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GoogleDocumentAiProcessDocumentRequestDataType::Fields{
-                    "document_bytes", "document_path", "gcs_uri", "mime_type",
-                }, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GoogleDocumentAiProcessDocumentRequestDataType::Fields{
-                    "process_options",
-                }
-            ),
+                GoogleDocumentAiProcessDocumentDataProvider::RequestType.getFields()),
             "output_type": GoogleDocumentAiProcessDocumentDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AppName, "path": "/wait-for-operation", "action": "wait-for-operation",
+            "display_name": "Wait for Operation", "short_desc": "Wait for a job and return its complete final outcome",
+            "desc": "Polls an existing operation until it finishes. Returns its name, metadata, result, or service "
+                "error, including per-document batch outcomes. A timeout preserves the operation name and last "
+                "status in the exception argument. Waiting does not cancel or delete the job.",
+            "action_code": DPAT_API, "groups": ("Operations",), "mutates_state": False,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GoogleDocumentAiWaitOperationDataProvider::RequestType.getFields()),
+            "output_type": GoogleDocumentAiWaitOperationDataProvider::ResponseType,
         });
     };
 }
@@ -116,7 +137,8 @@ module GoogleDocumentAiDataProvider {
 
     The %GoogleDocumentAiDataProvider module provides a data provider API
     for [Google Document AI](https://cloud.google.com/document-ai).
-    A single DPAT_API action is registered:
+    Typed actions cover processing, processor and version management, evaluations, operations, and
+    document schemas. Explicitly named beta actions support datasets and processor-version import.
 
     - `process-document` — submit a document to a Document AI processor
       and receive the parsed `Document` object with text, layout, and
@@ -133,6 +155,12 @@ module GoogleDocumentAiDataProvider {
 
     @section GoogleDocumentAiDataProviderRelnotes Release Notes
 
+    @subsection GoogleDocumentAiDataProviderv1_1 GoogleDocumentAiDataProvider v1.1
+    - expanded typed actions from pinned, offline Google Discovery contracts
+    - added processor-version selection, complete document types, and scoped resource dropdowns
+    - added batch operations, bounded operation waiting, and explicit beta dataset actions
+    - shared authenticated transport for actions, references, generic calls, and connection ping
+
     @subsection GoogleDocumentAiDataProviderv1_0 GoogleDocumentAiDataProvider v1.0
     - the initial version of the %GoogleDocumentAiDataProvider module
 */
@@ -143,6 +171,10 @@ public namespace GoogleDocumentAiDataProvider {
 public const AppName = "GoogleDocumentAi";
 }
 
-#! App logo loaded from file
-public const GoogleDocumentAiLogo =
-    File::readTextFile(get_script_dir() + "/google-document-ai-logo.svg");
+namespace Priv {
+    #! Immutable logo loaded during module initialization
+    const GoogleDocumentAiLogo = File::readTextFile(get_script_dir() + "/google-document-ai-logo.svg");
+}
+
+#! Compatibility alias for the application logo
+public const GoogleDocumentAiLogo = Priv::GoogleDocumentAiLogo;

@@ -2466,9 +2466,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM API
 
     - @ref gcpauthintro "GcpAuth" module
-      - new module exchanging GCP credentials for bearer access tokens via the full Application Default \
+      - new module exchanging GCP credentials for bearer access tokens via the supported Application Default \
         Credentials chain: service-account JSON keys (JWT-bearer), user \c "authorized_user" credentials \
         from \c "gcloud auth application-default login" (refresh-token grant), and the GCE/GKE metadata server
+      - adds independent quota-project resolution, validates supported credential and token formats,
+        sanitizes authentication failures, bounds token requests, and isolates metadata caches by endpoint
 
     - @ref geminibodyshapeintro "GeminiBodyShape" module
       - new shared module for the Gemini \c generateContent wire format: request/response shapers plus the \
@@ -2518,9 +2520,15 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref googledocumentaidataproviderintro "GoogleDocumentAiDataProvider" module
       - new module providing a data provider API for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+      - provides 47 actions for online and batch processing, processor/version lifecycle, evaluations,
+        schemas, operations, and explicit beta dataset/import work, using pinned offline Discovery contracts
+      - preserves complete document structures, scoped paginated selectors, source exclusivity, partial
+        updates, and operation identity when bounded waiting times out
 
     - @ref googledocumentairestclientintro "GoogleDocumentAiRestClient" module
       - new module providing a REST client for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+      - authenticates synchronous, asynchronous, raw, copied, and generic requests through GcpAuth;
+        verifies authentication with processor-list ping and supports separate resource/quota projects
 
     - @ref googledrivedataproviderintro "GoogleDriveDataProvider" module
       - new module providing a data provider API for <a href="https://www.google.com/drive/">Google Drive</a>
@@ -2801,6 +2809,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - retains enumeration labels and descriptions through schema adaptation and serialization,
+        while preserving typed wire values and keeping code-generation symbols out of forms
       - independent response type snapshots retain read-only/write-only direction through nested types and serialization
       - validates declared object properties even when the schema also permits arbitrary additional properties
       - preserves composed field types and supports multipart file-or-URL inputs, including named file arrays

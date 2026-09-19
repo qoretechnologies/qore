@@ -28,18 +28,19 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
         const Fields = {
             "processor_id": {
                 "display_name": "Processor ID",
-                "short_desc": "Document AI processor ID (UUID)",
+                "short_desc": "Document AI processor ID or resource name",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Document AI processor ID — a UUID identifying a specific "
-                    "processor in the project + region.  Find these in the Google "
-                    "Cloud Console under Document AI > Processors.",
+                "desc": "Processor ID or full resource name in the connection's project and location.",
                 "required": True,
+                "ref_data": "processors",
+                "supports_custom_values": True,
                 "example_value": "a1b2c3d4e5f6abcd",
             },
             "document_bytes": {
                 "display_name": "Document Bytes",
                 "short_desc": "Raw document bytes (PDF / TIFF / image)",
                 "type": AbstractDataProviderTypeMap."*binary",
+                "sensitive": True,
                 "desc": "Raw bytes of the document to process.  Mutually exclusive "
                     "with `document_path` and the `gcs_*` fields.",
             },
@@ -47,6 +48,7 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
                 "display_name": "Document Path",
                 "short_desc": "Local file path to read and upload as bytes",
                 "type": AbstractDataProviderTypeMap."*string",
+                "sensitive": True,
                 "desc": "Local file path to read.  Mutually exclusive with "
                     "`document_bytes` and the `gcs_*` fields.",
             },
@@ -58,6 +60,7 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
                     "`document_bytes` or `document_path`.  Common values: "
                     "`application/pdf`, `image/png`, `image/jpeg`, `image/tiff`.",
                 "default_value": "application/pdf",
+                "allowed_values_creatable": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "application/pdf",  "display_name": "PDF"},
                     <AllowedValueInfo>{"value": "image/png",        "display_name": "PNG"},
@@ -76,6 +79,7 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
                     "Mutually exclusive with `document_bytes` and `document_path`.  "
                     "When set, `mime_type` should also be provided.",
                 "example_value": "gs://my-bucket/docs/invoice.pdf",
+                "sensitive": True,
             },
             "process_options": {
                 "display_name": "Process Options",
@@ -87,15 +91,26 @@ public class GoogleDocumentAiProcessDocumentRequestDataType inherits HashDataTyp
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor() {
+        addQoreFields(Fields);
+        RestSchemaActionOperation op = GoogleDocumentAiSchema::getActionSets()[0].getOperationEx("_process-version");
+        hash<string, AbstractDataField> native = op.getRequestFields();
+        addField(native.processOptions.getRenamedField("process_options", "Process Options"));
+        AbstractDataField inline_document = native.inlineDocument.getRenamedField("inline_document", "Inline Document");
+        inline_document.setAttributes((inline_document.getAttributes() ?? {}) + {"sensitive": True});
+        addField(inline_document);
+        addField(native.fieldMask.getRenamedField("field_mask", "Output Field Mask"));
+        addField(native.imagelessMode.getRenamedField("imageless_mode", "Omit Document Images"));
+        addField(native.labels);
+        addField(native.processor_version_id.getOrNothingType());
+    }
 }
 
 #! Typed sub-hash for the top-level Google Document AI `Document` object
 /** Covers the common top-level fields of the
     [`Document`](https://cloud.google.com/document-ai/docs/reference/rest/v1/Document)
-    proto.  Container fields (`pages`, `entities`, `tables`, etc.) flow
-    through as untyped lists so downstream consumers can access any
-    field the processor returns.
+    proto, including recursively typed pages, entities, tables, text anchors, and normalized values.
+    The retained Fields constant is legacy metadata; instances use the complete pinned contract.
 */
 public class GoogleDocumentAiDocumentDataType inherits HashDataType {
     public {
@@ -152,7 +167,10 @@ public class GoogleDocumentAiDocumentDataType inherits HashDataType {
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor() {
+        map addField($1), OpenApi3::OpenApi3HashDataType::forResponse(GoogleDocumentAiSchema::getSchema()
+            .getTypeForReference("GoogleCloudDocumentaiV1Document")).getFields().iterator();
+    }
 }
 
 public class GoogleDocumentAiProcessDocumentResponseDataType inherits HashDataType {
@@ -164,7 +182,7 @@ public class GoogleDocumentAiProcessDocumentResponseDataType inherits HashDataTy
                     "@ref GoogleDocumentAiDataProvider::GoogleDocumentAiDocumentDataType "
                     "\"GoogleDocumentAiDocument\" — contains `text`, `pages`, "
                     "`entities`, `mimeType`, and processor-specific extras.",
-                "type": new GoogleDocumentAiDocumentDataType(),
+                "type": AbstractDataProviderTypeMap."hash",
             },
             "humanReviewStatus": {
                 "display_name": "Human Review Status",
@@ -173,6 +191,9 @@ public class GoogleDocumentAiProcessDocumentResponseDataType inherits HashDataTy
             },
         };
     }
-    constructor() { addQoreFields(Fields); }
+    constructor() {
+        map addField($1), OpenApi3::OpenApi3HashDataType::forResponse(GoogleDocumentAiSchema::getSchema()
+            .getTypeForReference("GoogleCloudDocumentaiV1ProcessResponse")).getFields().iterator();
+    }
 }
 }

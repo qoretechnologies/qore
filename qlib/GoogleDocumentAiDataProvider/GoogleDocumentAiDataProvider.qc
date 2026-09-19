@@ -41,6 +41,8 @@ public class GoogleDocumentAiDataProvider inherits GoogleDocumentAiDataProviderC
         static hash<string, Reflection::Class> childMap = {
             "process-document":
                 Class::forName("GoogleDocumentAiDataProvider::GoogleDocumentAiProcessDocumentDataProvider"),
+            "wait-for-operation":
+                Class::forName("GoogleDocumentAiDataProvider::GoogleDocumentAiWaitOperationDataProvider"),
         };
     }
 
@@ -52,12 +54,22 @@ public class GoogleDocumentAiDataProvider inherits GoogleDocumentAiDataProviderC
     string getName() { return ProviderInfo.name; }
 
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        return map cast<hash<DataProviderSummaryInfo>>(getChildProvider($1).getInfo(){
+            AbstractDataProvider::DataProviderSummaryInfoKeys}), getChildProviderNamesImpl();
     }
-    private *list<string> getChildProviderNamesImpl() { return keys childMap; }
+    private *list<string> getChildProviderNamesImpl() {
+        list<string> names = keys childMap;
+        foreach RestSchemaActionSet set in (GoogleDocumentAiSchema::getActionSets()) {
+            names += select set.getActionNames(), $1 !~ /^_/;
+        }
+        return names;
+    }
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = childMap{name};
-        return cls ? cls.newObject(rest, project_id, region, sa_json_path) : NOTHING;
+        if (cls) { return cls.newObject(rest, project_id, region, NOTHING); }
+        *RestSchemaActionSet set = GoogleDocumentAiSchema::findActionSet(name);
+        return set && name !~ /^_/ ? new GoogleDocumentAiActionDataProvider(set,
+            set.getOperationEx(name), rest, project_id, region) : NOTHING;
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }
