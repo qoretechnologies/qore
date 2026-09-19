@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/FsUtil.qm
+%exec-class BlockScopeUnwindTest
+
+#! Covers lexical-scope teardown on the exception-unwind path.
+/** An enclosing scope's on_exit/on_error handler must not run until the inner
+    lexical scopes the exception is unwinding out of have uninstantiated their
+    locals.  AST mode gets this for free -- each nested block is its own C++
+    frame holding its own LVListInstantiator -- while the IR, JIT and AOT tiers
+    share one lowering that flattens all locals into a frame-wide slot array and
+    so has to reconstruct the ordering explicitly.
+
+    The checks run in a subprocess, once per execution mode plus once ahead of
+    time, because the tier is a process-wide setting.
+*/
+class BlockScopeUnwindTest inherits QUnit::Test {
+    public {
+        #! one entry per "<name>=<value>" line the worker prints
+        const ExpectedResults = {
+            # an inner block releases its locals at a normal block end
+            "normal-block-exit": "RELEASED",
+
+            # ... and before an enclosing scope-exit handler runs
+            "on_error-nested": "RELEASED",
+            "on_exit-nested": "RELEASED",
+            "on_success-normal": "RELEASED",
+            "double-nested": "RELEASED",
+            "foreach-body": "RELEASED",
+            "while-body": "RELEASED",
+            "if-body": "RELEASED",
+            "try-catch-same-fn": "RELEASED",
+            "nested-handlers-outer": "RELEASED",
+
+            # a handler in the SAME scope as the AutoLock legitimately sees it
+            # still held; this must stay as it is
+            "own-scope-handler": "STILL-HELD:LOCK-ERROR",
+            "nested-handlers-inner": "STILL-HELD:LOCK-ERROR",
+
+            # innermost handler first, each firing exactly once
+            "handler-order": "inner,outer",
+            "fire-count-normal": "1",
+            "fire-count-error": "1",
+
+            # the primary exception reaches the caller, not a secondary error
+            # raised by the handler failing to take the Mutex
+            "exception-identity": "OWNED-FAILURE",
+            "rethrow-identity": "OWNED-FAILURE",
+
+            # an exception raised by the handler itself still propagates
+            "handler-throw-normal": "HANDLER-FAILURE",
+
+            # the same shape reached through other lowering entry points
+            "method-context": "RELEASED",
+            "closure-context": "RELEASED",
+            "background-context": "RELEASED",
+            "deep-nesting": "RELEASED",
+
+            # non-local exit and rethrow from inside a handler body, which the
+            # HandlerBarrier keeps from re-inlining the handler onto its own
+            # exit path
+            "return-in-handler": "RELEASED",
+            "return-in-handler-outcome": "BOOM",
+            "rethrow-in-handler": "RELEASED",
+            "rethrow-in-handler-err": "PRIMARY",
+            "rethrow-in-handler-after": "RELEASED",
+
+            # a handler raising while another exception is already unwinding:
+            # the caller still sees the primary one
+            "handler-throw-error": "RELEASED",
+            "handler-throw-error-err": "PRIMARY",
+
+            # non-local exits take the compile-time cleanup path, not the
+            # unwind path; they are here to catch a regression in it
+            "return-from-nested": "RELEASED",
+            "break-from-loop": "RELEASED",
+            "continue-in-loop": "RELEASED",
+
+            # the shape the defect was first reported in
+            "defer-cancel": "RELEASED",
+            "defer-cancel-after": "RELEASED",
+        };
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR
+            ?? dirname(ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore");
+        string worker = get_script_dir() + DirSep + "unwind-checks.q";
+        string top_level_worker = get_script_dir() + DirSep + "top-level-unwind.q";
+    }
+
+    constructor() : QUnit::Test("BlockScopeUnwind", "1.0", \ARGV) {
+        foreach string mode in (Modes) {
+            string execution_mode = mode;
+            addTestCase("inner scopes unwind before enclosing handlers: " + execution_mode, sub () {
+                checkWorker(execution_mode);
+            });
+            addTestCase("top-level block unwinds its nested scopes: " + execution_mode, sub () {
+                checkTopLevel(execution_mode);
+            });
+        }
+        addTestCase("AOT-compiled code unwinds inner scopes identically", \testAot());
+        set_return_value(main());
+    }
+
+    #! asserts every expected result of a worker run, and that nothing else was printed
+    private checkResults(hash<string, string> results, string raw, string label) {
+        foreach hash<auto> i in (ExpectedResults.pairIterator()) {
+            assertEq(i.value, results{i.key} ?? "<missing>",
+                sprintf("%s (%s); worker output:\n%s", i.key, label, raw));
+        }
+        hash<string, string> unexpected = results - (keys ExpectedResults);
+        assertEq({}, unexpected, sprintf("no unexpected result lines (%s)", label));
+    }
+
+    private checkWorker(string mode) {
+        string output = run(worker, mode);
+        checkResults(parseResults(output), output, mode);
+    }
+
+    #! the same shape with the program's top-level block as the handler-bearing scope
+    /** the throw is unhandled by design, so stderr and the exit status are not
+        part of the result; only the line the handler printed is
+    */
+    private checkTopLevel(string mode) {
+        string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>/dev/null",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(mode), shellQuote(top_level_worker)));
+        assertEq("top-level=RELEASED\n", output,
+            sprintf("the top-level on_error saw the nested block's AutoLock released (%s)", mode));
+    }
+
+    private testAot() {
+        string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc")
+                ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        string dir = make_tmp_dir();
+        on_exit {
+            remove_tree(dir);
+        }
+        string binary = dir + DirSep + "unwind-checks.aot";
+        string compiled = backquote(sprintf("LD_LIBRARY_PATH=%s %s %s -o %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(qcc_bin), shellQuote(worker), shellQuote(binary)));
+        assertTrue(is_file(binary), "the unwind worker compiled ahead of time: " + compiled);
+
+        string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(binary)));
+        checkResults(parseResults(output), output, "aot");
+    }
+
+    private string run(string path, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(mode), shellQuote(path)));
+    }
+
+    #! turns the worker's "<name>=<value>" lines into a hash, ignoring anything else
+    private static hash<string, string> parseResults(string output) {
+        hash<string, string> results;
+        foreach string line in (split("\n", output)) {
+            *list<*string> captured = (line =~ x/^([A-Za-z0-9_-]+)=(.*)$/);
+            if (exists captured) {
+                results{captured[0]} = captured[1] ?? "";
+            }
+        }
+        return results;
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

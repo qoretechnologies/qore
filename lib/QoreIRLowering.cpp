@@ -3435,10 +3435,23 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     QoreIRBasicBlock* lvar_exception_cleanup_continue_block = nullptr;
     QoreIRBasicBlock* saved_exception_target = nullptr;
     bool pushed_lvar_exception_target = false;
-    if (lvars && getCurrentExceptionTarget()) {
+    if (has_on_block_exit || (lvars && getCurrentExceptionTarget())) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.
+        //
+        // A block carrying on_exit/on_error handlers establishes this exception target
+        // even when it has no enclosing target and no locals of its own.  Its handlers
+        // run on the unwind path, where they can observe objects still held by the inner
+        // lexical scopes the exception is leaving -- the classic case being an inner
+        // AutoLock whose Mutex the handler then tries to acquire -- so those scopes have
+        // to uninstantiate their locals first.  Without an anchor here,
+        // getCurrentExceptionTarget() stays null all the way down, no inner block emits
+        // unwind-path cleanup at all, and the throw leaves the execute loop directly for
+        // the function-exit guard, which fires the handlers while every local in the
+        // frame is still alive.  AST mode gets this ordering for free because each nested
+        // block is its own C++ frame holding its own LVListInstantiator; the IR tiers
+        // flatten all locals into one frame-wide slot array and so must reconstruct it.
         saved_exception_target = getCurrentExceptionTarget();
         lvar_exception_cleanup_block = createBlock("block.lvars.exception.cleanup");
         if (!lvar_exception_cleanup_block) {
@@ -3447,7 +3460,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 scope_stack.pop_back();
                 cleanup_stack.pop_back();
             }
-            cleanup_stack.pop_back();
+            if (lvars) {
+                cleanup_stack.pop_back();
+            }
             return false;
         }
         if (has_on_block_exit) {
@@ -3456,7 +3471,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 error = "IR builder failed to create block local exception cleanup continuation block";
                 scope_stack.pop_back();
                 cleanup_stack.pop_back();
-                cleanup_stack.pop_back();
+                if (lvars) {
+                    cleanup_stack.pop_back();
+                }
                 return false;
             }
         }
@@ -3647,13 +3664,25 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             builder.createBranch(lvar_exception_cleanup_continue_block, block->loc);
             builder.setBlock(lvar_exception_cleanup_continue_block);
         }
-        for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
-            auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
-            ui->is_block_exit = true;
+        if (lvars) {
+            for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
+                auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
+                ui->is_block_exit = true;
+            }
         }
-        auto* check_inst = builder.createCheckException(block->loc);
-        check_inst->exception_target = saved_exception_target;
-        builder.createBranch(saved_exception_target, block->loc);
+        if (saved_exception_target) {
+            auto* check_inst = builder.createCheckException(block->loc);
+            check_inst->exception_target = saved_exception_target;
+            builder.createBranch(saved_exception_target, block->loc);
+        } else {
+            // Anchor block: nothing encloses this one, so the exception leaves the
+            // frame here.  A synthetic rethrow is the terminator that propagates it
+            // without touching td->catchException, firing any scope handlers still
+            // pending further out on the way (see the RefForeach/Context cleanup
+            // blocks above, which terminate the same way).
+            auto* rethrow_inst = builder.createRethrow(nullptr, block->loc);
+            rethrow_inst->synthetic = true;
+        }
         builder.setBlock(after_block);
     }
 
