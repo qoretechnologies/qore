@@ -758,7 +758,12 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    return odata->priv->swapKeyValue(key, QoreValue(), this);
+    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
+    if (needs_scan(rv)) {
+        // the removal can take a reference out of this object's recursive set
+        clearRSetClosed();
+    }
+    return rv;
 }
 
 QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
@@ -789,8 +794,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
         if (!getScanCount()) {
             lvh.setDelta(-1);
         }
+        // the removal can take a reference out of this object's recursive set
+        clearRSetClosed();
     }
-    lvh.objectRemoved(scan_value_removed);
+    lvh.objectRemoved(*this, scan_value_removed);
 
     return rv;
 }
@@ -863,7 +870,11 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     if (old_count && !getScanCount()) {
         lvh.setDelta(-1);
     }
-    lvh.objectRemoved(scan_value_removed);
+    if (scan_value_removed) {
+        // the removal can take a reference out of this object's recursive set
+        clearRSetClosed();
+    }
+    lvh.objectRemoved(*this, scan_value_removed);
 }
 
 void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {

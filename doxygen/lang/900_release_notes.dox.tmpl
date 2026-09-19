@@ -3198,6 +3198,15 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       also held an object, even when the removed value was a scalar or did not exist; the scan blocked
       dereferences of every object that it reached, so a large graph stalled all threads using those objects.
       Such a removal no longer makes a recursive reference scan
+    - Fixed @ref remove "remove" and @ref delete "delete" of an object member making no recursive reference scan
+      at all when nothing in the lvalue's path is an object, as when the object is reached as the value of a hash
+      key or a list element; the object's recursive set then still counted the reference that the removal took
+      out, and a later dereference of any of its members could destroy the whole set although its objects were
+      still referenced from outside it
+    - Fixed recursive reference scans walking a cycle that references nothing outside itself again on every scan
+      that reaches it; such a set is now recorded as closed when it is computed, and a scan that reaches it from
+      outside stops there, so a short-lived object that references a long-lived graph no longer pays for the size
+      of that graph on every dereference
     - Fixed crashes when scanning or destroying long chains or cycles of objects; objects in long chains are still
       destroyed before the objects that they reference
     - Fixed a crash when copying or deleting a long chain of exceptions, such as the chain of parse errors from a

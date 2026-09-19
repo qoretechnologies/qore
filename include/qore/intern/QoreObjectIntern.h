@@ -514,6 +514,11 @@ public:
         return true;
     }
 
+    //! Private data containers hold values that their own methods change without scanning this object
+    DLLLOCAL virtual bool valuesCanChangeWithoutScan() const {
+        return scan_private_data != 0;
+    }
+
     DLLLOCAL virtual bool scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata);
 
     DLLLOCAL virtual bool scanMembers(RSetHelper& rsh);

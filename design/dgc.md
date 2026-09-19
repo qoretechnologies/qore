@@ -22,6 +22,7 @@ Every `QoreObject` (via `RObject` in `include/qore/intern/RSet.h`) carries these
 | `rrefs` | "Real" refs: references known *not* to be part of a cycle (set by `realRef()`, e.g., method-call helpers, background thread ownership). If `rrefs > 0`, starting a scan at that object is **deferred**; scans initiated elsewhere still follow its edges. |
 | `rcount` | Number of unique cyclic references pointing *at* this object, computed by the scanner. `rcount == references` ⇒ every ref to this object comes from inside the rset. |
 | `rset` | Pointer to the `RSet` the object belongs to (a group of objects in one detected cycle). |
+| `rclosed` | The object's `RSet` while that set is **closed** (nothing in it references anything outside it), otherwise null. A scan that reaches the object from outside the set does not enter it. |
 | `rml` | Read/write lock with a special "r-section" mode used during scans. |
 
 The cycle detector (`RSetHelper`, `lib/RSet.cpp`) traverses the graph reachable from a candidate object, divides it into strongly connected components, assigns the objects of each component with a cycle to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
@@ -196,6 +197,14 @@ reachable objects:
   `LValueHelper::objectRemoved()` whether any removed value needs a scan. An object's scan count cannot be
   used here: other threads can change the object's members through their own lvalues at the same time.
 
+A removal navigates to the container, so the `RObject` that `robj` holds is whatever the path passed through
+*before* the container — which is not necessarily the object the value is removed from, and for an object
+reached as the value of a hash key or list element (`remove h.x.a`) there is none at all. Without a root there
+is no scan, and the object's recursive set keeps counting a reference that no longer exists, which lets a later
+dereference collect the set while its objects are still held from outside it.
+`qore_object_private::takeMember()` and `takeMembers()` therefore report the object with
+`LValueHelper::objectRemoved()`, which makes it the scan root when the path supplies none.
+
 Removing an object, or a container, closure or reference that needs a scan still scans, because dropping an
 edge can make a cycle collectable. `delete` needs no special case: deleting an object removes a value that needs
 a scan. Any other removal (`lvh.remove()` of the whole value, or an unexpected container type) keeps the
@@ -210,6 +219,46 @@ Debug builds count the scans started by lvalue operations per thread (`dbg_get_l
 `dbg_ref_remove_key()` / `dbg_ref_set_unique_remove_key()` call the public reference helper API;
 `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
 execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
+
+### Closed recursive sets: the region a scan does not enter
+
+A scan costs time linear in the graph reachable from its root, so a short-lived object that merely references a
+long-lived one makes every one of its dereferences walk the whole long-lived graph. Nearly all of that work
+re-derives a result an earlier scan already committed.
+
+A recursive set is **closed** when every reference held by every node of its component — its objects,
+closure-bound variables, lists, hashes, closures and references — points at another node of the same component.
+Nothing in a closed set can reach a node outside it, so no cycle through it can include a node that a scan
+started elsewhere is examining, and its membership and `rcount`s are already computed. A scan that reaches one
+of its objects therefore records the reference as leaving the scanned graph and does not follow it
+(`RSetHelper::checkNode(RObject&)`), which is also what keeps the *referring* component from being called
+closed itself. `RSetHelper::findClosedComponents()` decides this at commit time and `RObject::setRSet()` records
+the set in `rclosed`, which is read without a lock and only ever compared, never dereferenced. The scan always
+enters the set it started in (`root_rset`): that set is the one being recalculated.
+
+**The invariant that makes this safe: any change to a node of a closed set takes the set out of the closed
+state.** Three rules establish it:
+
+- An assignment through an lvalue runs its scan with `robj` set to the innermost `RObject` on the path, i.e. the
+  object or closure-bound variable whose member changed, so the scan enters that object's set. A list or hash
+  node of the set is reached only through such an `RObject`: any other holder gives the container a second
+  reference, and `ensureUnique()` then copies it rather than changing the set's node.
+- A removal's root is not necessarily in the set it changes (see above), so
+  `qore_object_private::takeMember()` / `takeMembers()` call `RObject::clearRSetClosed()` whenever they take out
+  a value that needs a scan.
+- Values in a private data container (Pattern B below) are changed by the container's own methods, which make no
+  scan of the object at all, so `RObject::valuesCanChangeWithoutScan()` keeps a set containing such an object
+  from ever being marked closed.
+
+Invalidating a set clears the mark for every member (`RSet::invalidateIntern()`), so a set that is rescanned,
+collected or torn down is never left marked. Nothing else may mark a set closed: a set whose mark outlives a
+change to one of its nodes describes a graph that no longer exists, and the cycles through it are then never
+found.
+
+Debug builds count the objects that scans have entered in the current thread
+(`dbg_get_scan_object_count()`), which measures what a scan actually walked;
+`examples/test/qore/misc/dgc-closed-sets.qtest` uses it along with collection checks for each of the rules
+above.
 
 ## Scan locking: how the scanner stays deadlock-free and convergent
 
@@ -401,8 +450,8 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 
 ## Related files
 
-- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, the container-edge and
-  per-container counting memos.
+- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, `rclosed`, the
+  container-edge and per-container counting memos.
 - `include/qore/intern/RSection.h` — r-section lock semantics.
 - `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation, and the scanner proper
   (`RSetHelper::scan()`: the component search, and `countInternalReferences()`: `rcount` assignment).
@@ -425,3 +474,5 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 - `examples/test/qore/misc/dgc-graph-components.qtest` — cycles held through lists, objects, closures and queues
   from outside, long cycles and chains in a thread with a small stack, and the scan time of shared containers.
 - `examples/test/qore/misc/shared-container-dense-cycles.qtest` — dense graphs sharing one container.
+- `examples/test/qore/misc/dgc-closed-sets.qtest` — closed recursive sets: the scan cost, the three rules that
+  keep the mark accurate, and collection through and around them.

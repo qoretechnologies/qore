@@ -630,12 +630,24 @@ public:
     }
 
     //! Reports that members were removed from the object held by the lvalue
-    /** @param scan_value_removed true if any removed value needs a recursive-reference scan
+    /** @param obj the object the members were removed from
+        @param scan_value_removed true if any removed value needs a recursive-reference scan
+
+        The lvalue path does not have to pass through an object: \c "remove h.x.a" navigates to the container
+        \c h.x, which is the object itself as the value of a hash key, so nothing on the path is an RObject and
+        the destructor would have no root for the scan.  Removing a reference from an object can break a cycle,
+        and without the scan the object's recursive set keeps describing a graph that no longer exists: the
+        references it counts as internal are gone, and the next dereference of a member can collect the set
+        although its objects are still referenced from outside it.  The object a value was removed from is
+        therefore the scan root when the path supplies none.
     */
-    DLLLOCAL void objectRemoved(bool scan_value_removed) {
+    DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {
             removal_object_scan = true;
+            if (!robj) {
+                robj = &obj;
+            }
         }
     }
 

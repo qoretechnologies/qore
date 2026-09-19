@@ -4054,6 +4054,15 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
     return q_get_lvalue_scan_count();
 }
 
+//! returns the number of objects that recursive-reference scans have entered in the current thread
+/** A scan takes the rsection of every object it enters and follows all of its references, so this reports the
+    size of the graph the scans of the current thread have walked; tests use it to verify that a scan does not
+    enter a region of the graph that it does not have to.
+*/
+static QoreValue f_dbg_get_scan_object_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_scan_object_count();
+}
+
 //! removes a hash key or object member through QoreTypeSafeReferenceHelper::removeHashObjKey()
 /** @param ref a reference to a hash or object
     @param key the key or member to remove
@@ -4150,6 +4159,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");

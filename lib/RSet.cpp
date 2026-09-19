@@ -38,6 +38,15 @@
 
 #include <mutex>
 
+#ifdef DEBUG
+//! the number of objects that recursive-reference scans have entered in the current thread
+static thread_local int64 scan_object_count = 0;
+
+int64 q_get_scan_object_count() {
+    return scan_object_count;
+}
+#endif
+
 RObject::~RObject() {
    assert(!rset);
 }
@@ -55,15 +64,18 @@ bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
     return rsh.checkNode(n);
 }
 
-void RObject::setRSet(RSet* rs, int rcnt) {
+void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
     assert(rml.checkRSectionExclusive());
-    printd(QRO_LVL, "RObject::setRSet() this: %p %s rs: %p rcnt: %d\n", this, getName(), rs, rcnt);
+    printd(QRO_LVL, "RObject::setRSet() this: %p %s rs: %p rcnt: %d closed: %d\n", this, getName(), rs, rcnt,
+        (int)closed);
     if (rset) {
-        // invalidating the rset removes the weak references to all contained objects
+        // invalidating the rset removes the weak references to all contained objects and marks them as not closed
         rset->invalidateDeref();
     }
     rset = rs;
     rcount = rcnt;
+    // set after the old set is invalidated, which clears this flag for every object of that set
+    rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
     // record the reference count the scan saw, so a later canDelete() can tell a stale snapshot from a genuine
     // external reference
     scan_refs = references;
@@ -181,6 +193,16 @@ int RObject::checkDeferScan() {
         rcond.broadcast();
 
     return -1;
+}
+
+void RObject::clearRSetClosed() {
+    assert(rml.checkRSectionExclusive());
+    RSet* rs = rclosed.load(std::memory_order_relaxed);
+    if (rs) {
+        // the object holds a reference to the set, which its rsection keeps in place
+        assert(rs == rset);
+        rs->clearClosed();
+    }
 }
 
 void RObject::removeInvalidateRSet() {
@@ -355,6 +377,16 @@ RSet::~RSet() {
     //printd(5, "RSet::~RSet() this: %p (acnt: %d)\n", this, acnt);
     assert(!acnt);
     releaseNodes();
+}
+
+void RSet::clearClosed() {
+    QoreAutoRWReadLocker al(rwl);
+    if (!valid) {
+        return;
+    }
+    for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
+        (*i)->rclosed.store(nullptr, std::memory_order_relaxed);
+    }
 }
 
 void RSet::addNode(AbstractQoreNode* n, int internal) {
@@ -566,6 +598,17 @@ bool RSetHelper::checkNode(AbstractQoreNode* n) {
 
 bool RSetHelper::checkNode(RObject& robj) {
     assert(current >= 0);
+    // Nothing in a closed recursive set references a node outside that set, so the set cannot become part of a
+    // larger cycle and the scan does not enter it: the reference is recorded as leaving the scanned graph, which
+    // keeps the component holding it from being closed itself.  The set that the scan started in is always
+    // entered - that set is the one being recalculated, and a mutation of any of its nodes starts a scan there.
+    RSet* closed = robj.rclosed.load(std::memory_order_relaxed);
+    if (closed && closed != root_rset) {
+        printd(QRO_LVL, "RSetHelper::checkNode() obj %p '%s' is in closed rset %p; not entering it\n", &robj,
+            robj.getName(), closed);
+        nodes[current].open = true;
+        return false;
+    }
     if (hold_edges && held.insert(&robj).second) {
         robj.tRef();
         held_objects.push_back(&robj);
@@ -610,12 +653,17 @@ int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
         return -1;
     }
 
+#ifdef DEBUG
+    ++scan_object_count;
+#endif
     int id = static_cast<int>(nodes.size());
     nodes.emplace_back(ptr, kind);
     ScanNode& n = nodes.back();
     n.unlock = !had_lock;
     // an object that cannot reference other objects is not part of any cycle
     n.leaf = !obj.needsScan(true);
+    // an object whose private data container can be changed without a scan cannot be part of a closed set
+    n.open = obj.valuesCanChangeWithoutScan();
     node_map.emplace(ptr, id);
     printd(QRO_LVL, "RSetHelper::getNode() + adding obj %p '%s' (leaf: %d)\n", &obj, obj.getName(), n.leaf);
     return id;
@@ -692,6 +740,8 @@ bool RSetHelper::scan(RObject& root) {
     if (root_id < 0) {
         return false;
     }
+    // the object's rsection is held, so its recursive set cannot be replaced while the scan runs
+    root_rset = root.rset;
 
     // Tarjan's strongly connected components algorithm with an explicit stack, as the graph can be deeper than the
     // thread's stack allows
@@ -708,6 +758,8 @@ bool RSetHelper::scan(RObject& root) {
             }
             edges[ei].to = to;
             if (to < 0) {
+                // the target is not scanned, so the source's component is not closed
+                nodes[from].open = true;
                 continue;
             }
             if (nodes[to].index < 0) {
@@ -747,6 +799,7 @@ bool RSetHelper::scan(RObject& root) {
     assert(stack.empty());
 
     countInternalReferences();
+    findClosedComponents();
     return prepareCommit();
 }
 
@@ -781,6 +834,26 @@ void RSetHelper::countInternalReferences() {
             printd(0, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d "
                 "references; not making a recursive set\n", n.ptr, static_cast<int>(n.kind), n.internal, refs);
             component_cyclic[n.component] = false;
+        }
+    }
+}
+
+void RSetHelper::findClosedComponents() {
+    // A component is closed when every reference held by its nodes points at a node of the same component.  Such
+    // a component is a complete region of the graph: no scan that reaches it from outside can find a cycle
+    // through it, so the objects of the recursive set it becomes are not scanned again until one of its nodes
+    // changes and takes the set out of the closed state; see design/dgc.md.
+    component_closed.assign(component_size.size(), 1);
+    for (const ScanEdge& e : edges) {
+        if (e.to < 0 || nodes[e.from].component != nodes[e.to].component) {
+            component_closed[nodes[e.from].component] = 0;
+        }
+    }
+    // a node that references an object the scan did not enter, or whose values can change without a scan,
+    // keeps its component open
+    for (const ScanNode& n : nodes) {
+        if (n.open) {
+            component_closed[n.component] = 0;
         }
     }
 }
@@ -1010,7 +1083,7 @@ void RSetHelper::commit() {
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
-        obj->setRSet(rs, rs ? n.internal : 0);
+        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component]);
     }
 
 #ifdef DEBUG
@@ -1059,6 +1132,8 @@ void RSetHelper::rollback() {
     stack.clear();
     component_size.clear();
     component_cyclic.clear();
+    component_closed.clear();
+    root_rset = nullptr;
     next_index = 0;
     current = -1;
     tr_out.clear();

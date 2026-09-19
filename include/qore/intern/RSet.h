@@ -45,6 +45,14 @@
 class RSet;
 class RSetHelper;
 
+#ifdef DEBUG
+//! Returns the number of objects that recursive-reference scans have entered in the current thread
+/** A scan takes the rsection of every object it enters and follows all of its references, so this is the cost
+    of the scans a thread has made; see dbg_get_scan_object_count().
+*/
+DLLLOCAL int64 q_get_scan_object_count();
+#endif
+
 class RObject {
     friend class robject_dereference_helper;
 
@@ -79,6 +87,23 @@ public:
 
     // set of objects in a cyclic directed graph
     RSet* rset = nullptr;
+
+    //! The object's recursive set while that set is closed, otherwise nullptr
+    /** A set is closed when no value of any of its nodes references a node outside the set. Nothing in such a
+        set can reach a node that a scan started outside it is examining, so the set can never become part of a
+        larger cycle and a scan that reaches one of its objects does not enter it; see
+        RSetHelper::checkNode(RObject&).
+
+        Assigned by setRSet() under the object's rsection and cleared by RSet::invalidateIntern(). The mark is
+        only accurate while nothing can add a reference out of the set without a scan that enters it;
+        design/dgc.md states the three rules that establish this (lvalue assignments, object removals through
+        clearRSetClosed(), and valuesCanChangeWithoutScan() for private data containers).
+
+        Read without any lock and never dereferenced: it is only compared with the set that the scan started
+        in, and it is never assigned to point at a set the object is not in, so a stale read can only make the
+        scan enter a set it could have skipped.
+    */
+    std::atomic<RSet*> rclosed{nullptr};
 
     // reference count
     std::atomic_int& references;
@@ -129,7 +154,7 @@ public:
         return references;
     }
 
-    DLLLOCAL void setRSet(RSet* rs, int rcnt);
+    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed);
 
     // check if we should defer the scan, marks the object for a deferred scan if necessary
     // returns 0 if the scan can be made now, -1 if deferred
@@ -137,6 +162,16 @@ public:
 
     DLLLOCAL void removeInvalidateRSet();
     DLLLOCAL void removeInvalidateRSetIntern();
+
+    //! Takes this object's recursive set out of the closed state, so that scans enter it again
+    /** Called when a value is removed from the object, which can take a reference out of the set: the scan that
+        follows the removal is rooted at the RObject holding the lvalue, which is not necessarily a member of the
+        set, and would otherwise skip it and leave it describing a graph that no longer exists.
+
+        Must be called with the object's rsection held exclusively (its write lock qualifies), so that the set
+        cannot be replaced or released while its members are marked.
+    */
+    DLLLOCAL void clearRSetClosed();
 
     //! Reports a value referenced by this object to the scan in progress; always returns false
     DLLLOCAL bool scanCheck(RSetHelper& rsh, AbstractQoreNode* n);
@@ -166,6 +201,16 @@ public:
     /** @param scan_now scan will be made now
     */
     DLLLOCAL virtual bool needsScan(bool scan_now) = 0;
+
+    //! Returns true if the values this object references can change without any scan of it
+    /** Values held in a private data container (design/dgc.md Pattern B) are changed by the container's own
+        methods, which do not scan the object, so the graph reachable from it can gain or lose an edge with no
+        scan at all.  A recursive set with such an object is never marked closed, as nothing would take the mark
+        off when the container changes.
+    */
+    DLLLOCAL virtual bool valuesCanChangeWithoutScan() const {
+        return false;
+    }
 
     // deletes the object itself
     DLLLOCAL virtual void deleteObject() = 0;
@@ -286,6 +331,9 @@ public:
         return (bool)acnt;
     }
 
+    //! Marks the set as not closed, so that scans started outside it enter it again
+    DLLLOCAL void clearClosed();
+
     DLLLOCAL void insert(RObject* o) {
         assert(set.find(o) == set.end());
         set.insert(o);
@@ -345,6 +393,8 @@ protected:
         valid = false;
         // remove the weak references to all contained objects
         for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
+            // the set is gone, so scans must enter its objects again
+            (*i)->rclosed.store(nullptr, std::memory_order_relaxed);
             (*i)->tDeref();
         }
         clear();
@@ -418,6 +468,9 @@ private:
         bool unlock = false;
         // true for an object whose members are not scanned
         bool leaf = false;
+        // true if the node keeps its component from being closed: it references an object that the scan did not
+        // enter, or its values can change without a scan of it
+        bool open = false;
         int index = -1;
         int lowlink = -1;
         int component = -1;
@@ -454,6 +507,10 @@ private:
     // the size of each component and whether it has a cycle
     std::vector<unsigned> component_size;
     std::vector<char> component_cyclic;
+    // whether no node of the component references a node outside it
+    std::vector<char> component_closed;
+    // the recursive set of the object the scan started at, which the scan always enters
+    RSet* root_rset = nullptr;
     int next_index = 0;
     // the node whose edges are being reported
     int current = -1;
@@ -500,6 +557,9 @@ private:
 
     //! Counts the references within each component with a cycle
     DLLLOCAL void countInternalReferences();
+
+    //! Marks each component from which no reference leaves
+    DLLLOCAL void findClosedComponents();
 
     //! Locks the unscanned members of the recursive sets to be replaced; returns true on a lock error
     DLLLOCAL bool prepareCommit();
