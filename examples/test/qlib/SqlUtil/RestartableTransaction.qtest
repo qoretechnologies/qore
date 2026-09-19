@@ -4,8 +4,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires ../../../../qlib/SqlUtil/SqlUtil.qmod
-%requires ../../../../qlib/QUnit.qmod
+%requires SqlUtil
+%requires QUnit
 
 %exec-class RestartableTransactionTest
 
@@ -13,6 +13,10 @@ class RestartableTransactionTest inherits QUnit::Test {
     constructor() : Test("RestartableTransaction", "1.0") {
         addTestCase("driver error classification",
             \driverErrorClassificationTest());
+        addTestCase("transaction abort classification",
+            \transactionAbortClassificationTest());
+        addTestCase("transaction abort is not confused with other errors",
+            \nonRestartableErrorTest());
         addTestCase("bounded restart policy", \boundedRestartPolicyTest());
         addTestCase("invalid policy arguments", \invalidArgumentsTest());
         set_return_value(main());
@@ -43,6 +47,96 @@ class RestartableTransactionTest inherits QUnit::Test {
             exception("DBI:MYSQL:ERROR", "duplicate entry")));
         assertEq(NOTHING, SqlUtil::get_restart_transaction_reason(
             "unsupported", exception("DBI:ERROR", "failure")));
+    }
+
+    #! a deadlock aborts and rolls back the whole transaction on every driver
+    transactionAbortClassificationTest() {
+        # PostgreSQL reports a deadlock as SQLSTATE 40P01 and any other
+        # serialization failure as 40001
+        *string pgsql_deadlock = SqlUtil::get_restart_transaction_reason(
+            "pgsql", exception("DBI:PGSQL:ERROR", "deadlock detected",
+                {"alterr": "40P01", "alterr_diag": "deadlock detected"}));
+        assertTrue(exists pgsql_deadlock,
+            "a PostgreSQL deadlock must be restartable");
+        assertRegex("40P01", cast<string>(pgsql_deadlock));
+        assertRegex("aborted the transaction", cast<string>(pgsql_deadlock),
+            "the diagnostic must distinguish an abort from a failover");
+
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("pgsql",
+            exception("DBI:PGSQL:ERROR", "could not serialize access",
+                {"alterr": "40001"})));
+
+        # MySQL reports the error number in alterr_code; the SQLSTATE cannot
+        # classify a lock wait timeout, which is reported as "HY000"
+        *string mysql_deadlock = SqlUtil::get_restart_transaction_reason(
+            "mysql", exception("DBI:MYSQL:ERROR",
+                "Deadlock found when trying to get lock",
+                {"alterr": "40001", "alterr_code": 1213}));
+        assertTrue(exists mysql_deadlock,
+            "a MySQL deadlock must be restartable");
+        assertRegex("1213", cast<string>(mysql_deadlock));
+
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("mysql",
+            exception("DBI:MYSQL:ERROR", "Lock wait timeout exceeded",
+                {"alterr": "HY000", "alterr_code": 1205})),
+            "a lock wait timeout must be restartable despite its SQLSTATE");
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("mysql",
+            exception("DBI:MYSQL:ERROR", "MySQL server has gone away",
+                {"alterr": "HY000", "alterr_code": 2006})),
+            "a lost MySQL connection must be restartable");
+
+        # Oracle reports a deadlock as ORA-00060 and a serialization failure
+        # as ORA-08177
+        *string oracle_deadlock = SqlUtil::get_restart_transaction_reason(
+            "oracle", exception("DBI:ORACLE:OCI-ERROR",
+                "ORA-00060: deadlock detected while waiting for resource",
+                {"alterr": "OCI-00060"}));
+        assertTrue(exists oracle_deadlock,
+            "an Oracle deadlock must be restartable");
+        assertRegex("ORA-00060", cast<string>(oracle_deadlock));
+
+        assertTrue(exists SqlUtil::get_restart_transaction_reason("oracle",
+            exception("DBI:ORACLE:OCI-ERROR",
+                "ORA-08177: can't serialize access for this transaction")),
+            "an Oracle serialization failure must be restartable");
+
+        # the policy must act on a deadlock, with no delay on the first replay
+        list<string> logs = ();
+        SqlUtil::RestartableTransaction policy("pgsql", 3, 10s, 2,
+            sub (string message) { logs += message; });
+        assertTrue(exists policy.restartTransaction(
+            exception("DBI:PGSQL:ERROR", "deadlock detected",
+                {"alterr": "40P01"})));
+        assertEq(1, policy.getCount());
+        assertRegex("deadlock", logs[0]);
+    }
+
+    #! errors that a replay would only hit again must not be restartable
+    nonRestartableErrorTest() {
+        # 40002 is a constraint violation and 40003 leaves the outcome of the
+        # statement unknown; neither may be replayed blindly
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("pgsql",
+            exception("DBI:PGSQL:ERROR", "integrity constraint violation",
+                {"alterr": "40002"})));
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("pgsql",
+            exception("DBI:PGSQL:ERROR", "statement completion unknown",
+                {"alterr": "40003"})));
+
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("mysql",
+            exception("DBI:MYSQL:ERROR", "Duplicate entry '1' for key",
+                {"alterr": "23000", "alterr_code": 1062})));
+
+        # a driver that does not report the error number cannot be classified,
+        # and must not be treated as restartable
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("mysql",
+            exception("DBI:MYSQL:ERROR",
+                "Deadlock found when trying to get lock")),
+            "a deadlock with no reported error number is not restartable");
+
+        assertEq(NOTHING, SqlUtil::get_restart_transaction_reason("oracle",
+            exception("DBI:ORACLE:OCI-ERROR",
+                "ORA-00001: unique constraint violated",
+                {"alterr": "OCI-00001"})));
     }
 
     boundedRestartPolicyTest() {

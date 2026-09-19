@@ -35,6 +35,51 @@ const PgsqlRestartTransactionCodes = {
     "08P01": True,
 };
 
+#! PostgreSQL SQLSTATEs for transaction aborts that require a complete transaction restart
+/** PostgreSQL rolls the entire transaction back for these and documents both as errors that the
+    application should retry.  \c 40002 (\c transaction_integrity_constraint_violation) and
+    \c 40003 (\c statement_completion_unknown) are deliberately excluded: the first reports a
+    constraint violation that a replay would hit again, and the second leaves the outcome of the
+    statement unknown, so neither may be replayed blindly.
+
+    @since SqlUtil 3.2
+*/
+const PgsqlTransactionAbortCodes = {
+    # serialization_failure
+    "40001": True,
+    # deadlock_detected
+    "40P01": True,
+};
+
+#! MySQL error numbers for transaction aborts that require a complete transaction restart
+/** @note InnoDB rolls the entire transaction back for \c ER_LOCK_DEADLOCK, but rolls back only the
+    statement for \c ER_LOCK_WAIT_TIMEOUT; replaying the complete transaction body is correct for
+    both only because the caller must roll the failed attempt back before asking for a restart
+    decision.
+
+    @since SqlUtil 3.2
+*/
+const MysqlTransactionAbortCodes = {
+    # ER_LOCK_WAIT_TIMEOUT
+    "1205": True,
+    # ER_LOCK_DEADLOCK
+    "1213": True,
+};
+
+#! MySQL error numbers for connection failures that require a complete transaction restart
+/** @since SqlUtil 3.2
+*/
+const MysqlRestartTransactionCodes = {
+    # CR_CONNECTION_ERROR
+    "2002": True,
+    # CR_CONN_HOST_ERROR
+    "2003": True,
+    # CR_SERVER_GONE_ERROR
+    "2006": True,
+    # CR_SERVER_LOST
+    "2013": True,
+};
+
 #! Returns a diagnostic for a driver error requiring transaction restart
 /** @param driver database driver name
     @param ex one exception in a caught exception chain
@@ -47,15 +92,34 @@ public *string sub get_restart_transaction_reason(string driver,
         hash<ExceptionInfo> ex) {
     switch (driver) {
         case "oracle": {
-            *string code = (ex.desc =~
-                x/ORA-(01041|2540[1-9]|0311[34]|00060)/)[0];
-            if (code) {
+            # the ORA code is matched in the description rather than in the
+            # exception argument, because the driver reports it as "OCI-nnnnn"
+            # in "alterr" and because errors raised outside the DBI layer
+            # carry no argument hash at all
+            if (*string code = (ex.desc =~
+                    x/ORA-(08177|01041|2540[1-9]|0311[34]|00060)/)[0]) {
+                if (code == "00060") {
+                    return sprintf("Oracle deadlock (ORA-00060); the "
+                        "transaction was rolled back and must be restarted: "
+                        "%s: %s", ex.err, ex.desc);
+                }
+                if (code == "08177") {
+                    return sprintf("Oracle serialization failure (ORA-08177); "
+                        "the transaction must be restarted: %s: %s", ex.err,
+                        ex.desc);
+                }
                 return sprintf("recoverable Oracle transaction error "
                     "ORA-%s: %s: %s", code, ex.err, ex.desc);
             }
             return NOTHING;
         }
         case "pgsql": {
+            if (ex.err == "DBI:PGSQL:ERROR"
+                    && PgsqlTransactionAbortCodes{ex.arg.alterr.toString()}) {
+                return sprintf("PostgreSQL aborted the transaction (SQLSTATE "
+                    "%s); it must be restarted: %s: %s",
+                    ex.arg.alterr.toString(), ex.err, ex.desc);
+            }
             if (ex.err == "DBI:PGSQL:CONNECTION-ERROR"
                     || (ex.err == "DBI:PGSQL:ERROR"
                         && (PgsqlRestartTransactionCodes{
@@ -69,8 +133,21 @@ public *string sub get_restart_transaction_reason(string driver,
             }
             return NOTHING;
         }
-        case "mysql":
+        case "mysql": {
+            # the driver reports the MySQL error number in "alterr_code";
+            # the SQLSTATE alone cannot classify these, as MySQL reports
+            # ER_LOCK_WAIT_TIMEOUT with the generic SQLSTATE "HY000"
+            string code = ex.arg.alterr_code.toString();
+            if (MysqlTransactionAbortCodes{code}) {
+                return sprintf("MySQL aborted the transaction (error %s); it "
+                    "must be restarted: %s: %s", code, ex.err, ex.desc);
+            }
+            if (MysqlRestartTransactionCodes{code}) {
+                return sprintf("recoverable MySQL connection error (error "
+                    "%s): %s: %s", code, ex.err, ex.desc);
+            }
             return NOTHING;
+        }
     }
     return NOTHING;
 }

@@ -122,7 +122,8 @@ module SqlUtil {
       @ref SqlUtil::AbstractTable "AbstractTable" for opt-in use by BulkSqlUtil
     - added @ref SqlUtil::RestartableTransaction "RestartableTransaction" for
       bounded, driver-independent recovery of complete idempotent transaction
-      bodies after database failover and datasource-pool timeout errors
+      bodies after a transaction abort (a deadlock or any other serialization
+      failure), database failover, and datasource-pool timeout errors
     - added @ref SqlUtil::AbstractDatabase::getSchemaPhysicalSize()
       "AbstractDatabase::getSchemaPhysicalSize()" for portable schema-level
       physical storage measurement; PostgreSQL includes tables, partitions,
@@ -2122,11 +2123,11 @@ list<auto> rows = source_table.selectRows({
     @code{.py}
 code error_callback = sub (int ac, string type, string name, *string table, *string new_name, *string info,
         string sql, hash<ExceptionInfo> ex) {
-    if (ac == AC_Create && type == "materialized_view" && ex.alterr == "ORA-01031") {
-        # try to drop any table create to back the materialized view; ignoring ORA-00942 table or view does not exist
-        # errors
-        ds.exec("begin execute immediate 'drop table %s'; exception when others then if sqlcode != 942 then raise; "
-            "end if; end;", name);
+    if (ac == AC_Create && type == "materialized_view" && ex.arg.alterr == "OCI-01031") {
+        # try to drop any table created to back the materialized view, ignoring ORA-00942 "table or view does not
+        # exist" errors but rethrowing all others; note that Oracle reports SQLCODE as the negative of the ORA number
+        ds.exec("begin execute immediate 'drop table " + name + "'; exception when others then "
+            "if sqlcode != -942 then raise; end if; end;");
     }
 };
     @endcode
