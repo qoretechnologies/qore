@@ -291,7 +291,8 @@ watch of a node held from outside it.
 ## Scan locking: how the scanner stays deadlock-free and convergent
 
 A scan (`RSetHelper`, `lib/RSet.cpp`) walks an arbitrary object graph and needs the r-section of every object
-it reaches, in whatever order the traversal finds them. **It never blocks to get one.** Every lock a scan takes
+it reaches, in whatever order the traversal finds them. **It never blocks for a lock another thread could in
+turn be waiting on** (it does wait for shared holders, which cannot wait; see below). Every lock a scan takes
 is a try-lock:
 
 - `tryRSectionLockNotifyWaitRead()` (`lib/RSection.cpp`) registers an `RNotifier` against the conflicting owner
@@ -321,6 +322,43 @@ same object — every accepted connection releasing a local that holds a shared 
 restarts stop converging: every thread sits in `RNotifier::wait()`, no scan finishes, and the work those
 threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
 with nothing running, which reads like a deadlock but is the restart loop failing to converge.
+
+### Scans that change nothing share the r-section
+
+A scan is a reader of the graph: it needs the objects it walks to hold still, not to have them to itself. Only
+a scan that has to assign a recursive set needs the r-section exclusively, and after the previous section most
+scans assign none.
+
+`tryRSectionLockSharedNotifyWaitRead()` takes the r-section alongside other scans while still excluding
+writers and exclusive holders, so threads scanning the same unchanged graph proceed at the same time instead of
+aborting one another. When `findUnchangedComponents()` reports a component the scan would have to change, the
+pass has recorded nothing: the scan rolls back and starts over with `exclusive` set, which is the protocol
+exactly as it was before.
+
+**Which mode a scan starts in is a prediction, because guessing wrong costs a second walk of the graph.**
+`RObject::scan_wrote` records whether the last scan rooted at that object had to assign a set, and the next
+scan started there uses it: an object whose graph has settled keeps finding the same sets, and an object that
+is having a cycle built around it keeps changing them. It is true to begin with, because the first scan of a
+new object nearly always assigns a set — which is exactly the case where starting shared would walk everything
+twice.
+
+Two rules keep the writing pass from being starved:
+
+- An exclusive acquisition **waits** when the only conflict is shared holders, instead of registering a
+  notification. That wait always ends: shared holders are scans, a scan never blocks (it releases every lock it
+  holds before waiting on its notifier) and never takes an `RSet` write lock, so it cannot be waiting for
+  anything the waiting scan holds. A conflict with a writer or with another exclusive holder still rolls back
+  and waits on the notifier, because those can hold locks that the scan would have to wait for.
+- While any thread waits for the r-section (`rsection_waiting`), `tryRSectionLockSharedNotifyWaitRead()` admits
+  no new scan. Without this, a stream of read-only scans could keep both a writing scan and
+  `qore_object_private::customDeref()` out of the r-section indefinitely, and collection would stop.
+
+`RObject::scan_refs` is atomic because two scans in shared mode can confirm the same set at once, and the
+assertions that a scan holds the r-section of the object it is walking accept either mode
+(`RSectionLock::checkRSectionHeld()`).
+
+`examples/test/qore/misc/concurrent-cycle-scans.qtest` runs read-only scans beside scans that change the graph;
+starvation there shows up as a test case that never returns.
 
 ### A scan may be re-entered under a write lock the calling thread already holds
 

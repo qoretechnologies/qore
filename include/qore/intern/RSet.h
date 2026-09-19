@@ -74,11 +74,26 @@ public:
 
     int rscan = 0,          // TID flag for starting a recursive scan
         rcount = 0,         // the number of unique recursive references to this object
-        scan_refs = -1,     // "references" as observed when rcount was assigned; -1 = never scanned
         rwaiting = 0,       // the number of threads waiting for a scan of this object
         ref_inprogress = 0, // the number of dereference actions in progress
         ref_waiting = 0,    // the number of threads waiting on a dereference action to complete
         rref_waiting = 0;   // the number of threads waiting on an rset invalidation to complete
+
+    //! Whether the last scan rooted at this object had to assign a recursive set
+    /** Chooses the mode of the next scan started here.  A scan that changes nothing can share the rsection of
+        every object it enters with other scans, but a scan that finds it has to change a set has to walk the
+        graph again with the rsection to itself, so guessing wrong costs a second walk.  The last outcome is a
+        good guess: an object whose graph has settled keeps finding the same sets, and an object that is
+        having a cycle built around it keeps changing them.  True to begin with, because the first scan of a
+        new object nearly always assigns a set.
+    */
+    std::atomic_bool scan_wrote{true};
+
+    //! "references" as observed when rcount was assigned; -1 = never scanned
+    /** Atomic because scans holding the rsection in shared mode can confirm the same set at the same time,
+        and because RSet::canDelete() reads it without the rsection.
+    */
+    std::atomic_int scan_refs{-1};
 
     // The scan generation: incremented every time a committed scan assigns this object's recursive set,
     // so a thread that sampled an older value knows that another thread has scanned this object since.
@@ -173,9 +188,13 @@ public:
         collectable stranded.
     */
     DLLLOCAL void confirmRSet() {
-        assert(rml.checkRSectionExclusive());
-        if (rset && scan_refs != references) {
-            scan_refs = references;
+        // a scan that changes nothing holds the rsection in shared mode
+        assert(rml.checkRSectionHeld());
+        if (rset) {
+            int refs = references.load(std::memory_order_relaxed);
+            if (scan_refs.load(std::memory_order_relaxed) != refs) {
+                scan_refs.store(refs, std::memory_order_relaxed);
+            }
         }
         ++rcycle;
     }
@@ -503,6 +522,8 @@ private:
         bool on_stack = false;
         // true if the scan acquired the object's rsection
         bool unlock = false;
+        // true if the scan acquired the object's rsection in shared mode
+        bool unlock_shared = false;
         // true for an object whose members are not scanned
         bool leaf = false;
         // true if the node keeps its component from being closed: it references an object that the scan did not
@@ -550,6 +571,13 @@ private:
     std::vector<char> component_unchanged;
     // the recursive set of the object the scan started at, which the scan always enters
     RSet* root_rset = nullptr;
+    // true when the scan takes the rsection of every object it enters to itself, which it has to do to
+    // change a recursive set; set from the root object's last outcome (RObject::scan_wrote)
+    bool exclusive = false;
+    // set when a pass in shared mode found a recursive set that it has to change
+    bool need_exclusive = false;
+    // set when the scan found a recursive set that it has to assign, in either mode
+    bool changed = false;
     int next_index = 0;
     // the node whose edges are being reported
     int current = -1;
@@ -615,8 +643,11 @@ private:
     // commit transaction
     DLLLOCAL void commit();
 
-    // rollback transaction due to lock error
-    DLLLOCAL void rollback();
+    // rollback transaction due to a lock error, or to start over with exclusive rsections
+    DLLLOCAL void rollback(bool yield = true);
+
+    //! Releases the rsection that the scan took for an object, in the mode it took it in
+    DLLLOCAL void unlockNode(const ScanNode& n);
 
     //! Releases the temporary references held for the edges of private data containers
     DLLLOCAL void releaseHeld();

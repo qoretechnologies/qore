@@ -446,7 +446,8 @@ int qore_object_private::checkMemberAccess(const char* mem, const qore_class_pri
 // returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
 // held when this function is called
 bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata) {
-    assert(rml.checkRSectionExclusive());
+    // a scan that changes nothing holds the rsection in shared mode; either mode keeps the members stable
+    assert(rml.checkRSectionHeld());
 
     // A scan initiated elsewhere must follow this object's edges even if it has real references.
     // Otherwise a shared container can hide its live owner from the cycle. The r-section protects the

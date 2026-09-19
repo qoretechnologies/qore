@@ -85,7 +85,7 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
     rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
     // record the reference count the scan saw, so a later canDelete() can tell a stale snapshot from a genuine
     // external reference
-    scan_refs = references;
+    scan_refs.store(references.load(std::memory_order_relaxed), std::memory_order_relaxed);
 #ifdef DEBUG
     if (rcount > references) {
         printd(0, "RObject::setRSet() this: %p '%s' cannot set rcount %d > references %d\n", this, getName(), rcount,
@@ -477,7 +477,7 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
                 if ((*i)->rcount != r) {
                     printd(QRO_LVL, "RSet::canDelete() this: %p cannot delete graph obj %p '%s' rcount: %d "
                         "refs: %d (scan_refs: %d)\n", this, *i, (*i)->getName(), (*i)->rcount, r,
-                        (*i)->scan_refs);
+                        (*i)->scan_refs.load());
                     // rcount < refs normally means a live reference from outside the rset.  But rcount is a
                     // snapshot taken when the rset was built, and a reference the scan DID count can be dropped
                     // afterwards without invalidating the rset -- a container holding the object can lose its
@@ -486,7 +486,8 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
                     // delete" never triggers another scan.  Whenever a member has lost references since the
                     // scan, the snapshot no longer describes the graph: rescan instead of trusting it.  After
                     // the rescan scan_refs matches again, so this cannot loop.
-                    if ((*i)->scan_refs >= 0 && r < (*i)->scan_refs) {
+                    int member_scan_refs = (*i)->scan_refs.load(std::memory_order_relaxed);
+                    if (member_scan_refs >= 0 && r < member_scan_refs) {
                         need_rescan = true;
                         break;
                     }
@@ -640,7 +641,13 @@ int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
     RObject& obj = *static_cast<RObject*>(ptr);
     // an rsection held by this thread before the scan is not released by the scan
     bool had_lock = obj.rml.hasRSectionLock();
-    if (obj.rml.tryRSectionLockNotifyWaitRead(&notifier)) {
+    // a pass that changes nothing only needs the graph to hold still, so it shares the rsection with other
+    // scans; a pass that has to change a recursive set takes it to itself
+    bool shared = false;
+    int rc = exclusive
+        ? obj.rml.tryRSectionLockNotifyWaitRead(&notifier)
+        : obj.rml.tryRSectionLockSharedNotifyWaitRead(&notifier, shared);
+    if (rc) {
         printd(QRO_LVL, "RSetHelper::getNode() obj %p '%s' cannot enter rsection: rsection tid: %d\n", &obj,
             obj.getName(), obj.rml.rSectionTid());
         lock_error = true;
@@ -653,7 +660,11 @@ int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
     // do not scan invalid objects or objects being deleted
     if (!obj.isValid()) {
         if (!had_lock) {
-            obj.rml.rSectionUnlock();
+            if (shared) {
+                obj.rml.rSectionUnlockShared();
+            } else {
+                obj.rml.rSectionUnlock();
+            }
             deccnt();
         }
         node_map.emplace(ptr, -1);
@@ -667,6 +678,7 @@ int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
     nodes.emplace_back(ptr, kind);
     ScanNode& n = nodes.back();
     n.unlock = !had_lock;
+    n.unlock_shared = shared;
     // an object that cannot reference other objects is not part of any cycle
     n.leaf = !obj.needsScan(true);
     // an object whose private data container can be changed without a scan cannot be part of a closed set
@@ -808,6 +820,19 @@ bool RSetHelper::scan(RObject& root) {
     countInternalReferences();
     findClosedComponents();
     findUnchangedComponents();
+    changed = false;
+    for (char unchanged : component_unchanged) {
+        if (!unchanged) {
+            changed = true;
+            break;
+        }
+    }
+    if (changed && !exclusive) {
+        // the scan has to assign a recursive set, which needs the rsection of every object it enters to
+        // itself; the caller starts the scan over in exclusive mode
+        need_exclusive = true;
+        return false;
+    }
     return prepareCommit();
 }
 
@@ -1068,6 +1093,10 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
 
     printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p %s) ENTER\n", this, &obj, obj.getName());
 
+    // a scan that changes nothing shares the rsection of the objects it enters with other scans; guessing
+    // that from the last scan made here avoids walking the graph twice when it does have to change a set
+    exclusive = obj.scan_wrote.load(std::memory_order_relaxed);
+
     RScanHelper rsh(obj);
 
     // The scan lock serializes scans of this object, so threads that arrive while a scan is in flight
@@ -1100,10 +1129,23 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
             continue;
         }
 
+        if (need_exclusive) {
+            // the pass in shared mode found a recursive set that it has to change; nothing was changed, so
+            // the scan simply starts over with the rsections it needs for that
+            printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p: %s) RESTARTING WITH EXCLUSIVE RSECTIONS\n",
+                this, &obj, obj.getName());
+            rollback(false);
+            exclusive = true;
+            continue;
+        }
+
         break;
     }
 
     commit();
+
+    // record what this scan had to do, so the next scan started here picks the mode that fits
+    obj.scan_wrote.store(changed, std::memory_order_relaxed);
 
     printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p) EXIT\n", this, &obj);
 }
@@ -1205,19 +1247,29 @@ void RSetHelper::commit() {
 
     for (const ScanNode& n : nodes) {
         if (n.kind == NodeKind::Object && n.unlock) {
-            static_cast<RObject*>(n.ptr)->rml.rSectionUnlock();
-            deccnt();
+            unlockNode(n);
         }
     }
 
     assert(!lcnt);
 }
 
-void RSetHelper::rollback() {
+void RSetHelper::unlockNode(const ScanNode& n) {
+    assert(n.kind == NodeKind::Object);
+    assert(n.unlock);
+    RObject* obj = static_cast<RObject*>(n.ptr);
+    if (n.unlock_shared) {
+        obj->rml.rSectionUnlockShared();
+    } else {
+        obj->rml.rSectionUnlock();
+    }
+    deccnt();
+}
+
+void RSetHelper::rollback(bool yield) {
     for (const ScanNode& n : nodes) {
         if (n.kind == NodeKind::Object && n.unlock) {
-            static_cast<RObject*>(n.ptr)->rml.rSectionUnlock();
-            deccnt();
+            unlockNode(n);
         }
     }
 
@@ -1240,6 +1292,8 @@ void RSetHelper::rollback() {
     component_closed.clear();
     component_unchanged.clear();
     root_rset = nullptr;
+    need_exclusive = false;
+    changed = false;
     next_index = 0;
     current = -1;
     tr_out.clear();
@@ -1247,6 +1301,9 @@ void RSetHelper::rollback() {
     // the held values are released by the destructor, after the scan lock of the object that the scan started at
 
 #ifdef _POSIX_PRIORITY_SCHEDULING
-    sched_yield();
+    // a rollback made to start over with exclusive rsections is not waiting for another thread
+    if (yield) {
+        sched_yield();
+    }
 #endif
 }

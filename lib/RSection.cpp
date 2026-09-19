@@ -60,13 +60,26 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
         return 0;
     }
 
-    // If another thread owns the write lock or rsection, abort this scan and
-    // retry after that owner releases it.  RSet scanning calls this while
-    // holding RSet read locks; blocking here can deadlock with a writer that
-    // needs to invalidate the same RSet.
-    if (write_tid != -1 || rs_tid != -1) {
-        setNotificationIntern(rn);
-        return -1;
+    while (true) {
+        // If another thread owns the write lock or the rsection, abort this scan and retry after that owner
+        // releases it.  RSet scanning calls this while holding RSet read locks; blocking for one of those
+        // owners can deadlock with a writer that needs to invalidate the same RSet.
+        if (write_tid != -1 || rs_tid != -1) {
+            setNotificationIntern(rn);
+            return -1;
+        }
+
+        if (!rs_shared) {
+            break;
+        }
+
+        // Shared holders are scans, and a scan never blocks: it releases every lock it holds before waiting,
+        // and it never takes an RSet write lock, so waiting for the shared holders to leave always ends.
+        // Waiting is also what keeps a scan that has to change a recursive set from being starved: while
+        // rsection_waiting is set, tryRSectionLockSharedNotifyWaitRead() admits no new scan.
+        ++rsection_waiting;
+        rsection_cond.wait(l);
+        --rsection_waiting;
     }
 
     // grab the read lock
@@ -74,5 +87,42 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
 
     // grab the rsection
     rs_tid = tid;
+    return 0;
+}
+
+// does not block if the rsection cannot be taken in shared mode, returns -1 and sets a notification
+int qore_rsection_priv::tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared) {
+    assert(has_notify);
+
+    int tid = q_gettid();
+    shared = false;
+
+    AutoLocker al(l);
+
+    // an rsection that this thread already holds is not taken again, and the caller does not release it
+    if (rs_tid == tid) {
+        return 0;
+    }
+
+    // a write lock held by this thread is stronger than the rsection; see
+    // tryRSectionLockNotifyWaitRead() for why the rsection is granted directly rather than waited for
+    if (write_tid == tid) {
+        ++readers;
+        rs_tid = tid;
+        return 0;
+    }
+
+    // A shared holder excludes a writer and an exclusive rsection holder, so a thread already waiting for
+    // the rsection must not be overtaken by an unbounded stream of scans: a dereference deciding whether a
+    // recursive set can be collected waits there, and starving it would stop collection altogether.
+    if (write_tid != -1 || rs_tid != -1 || rsection_waiting) {
+        setNotificationIntern(rn);
+        return -1;
+    }
+
+    // grab the read lock and the rsection in shared mode
+    ++readers;
+    ++rs_shared;
+    shared = true;
     return 0;
 }

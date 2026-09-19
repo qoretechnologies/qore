@@ -523,9 +523,9 @@ public:
 
     DLLLOCAL virtual bool scanMembers(RSetHelper& rsh);
 
-    // always called in the rsection lock
+    // always called in the rsection lock, which a scan that changes nothing holds in shared mode
     DLLLOCAL virtual bool needsScan(bool scan_now) {
-        assert(rml.hasRSectionLock());
+        assert(rml.checkRSectionHeld());
         printd(5, "qore_object_private::needsScan() scan_count: %d scan_private_data: %d scan_now: %d\n",
             getScanCount(), scan_private_data, scan_now);
 
