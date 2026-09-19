@@ -18,6 +18,10 @@ class DocumentAiWireHandler inherits AbstractHttpRequestHandler {
         list<hash<auto>> calls = ();
         list<hash<auto>> responses = ();
         hash<auto> response = {};
+        *hash<auto> location_response;
+        int location_delay_ms = 0;
+        *Counter location_entered;
+        *Counter location_release;
     }
 
     hash handleRequest(hash cx, hash hdr, *data body) {
@@ -30,6 +34,12 @@ class DocumentAiWireHandler inherits AbstractHttpRequestHandler {
             "body": body.val() ? parse_json(body.toString()) : NOTHING};
         if (hdr.authorization != "Bearer document-ai-wire-fixture" || hdr."x-goog-user-project" != "fixture-quota") {
             return makeResponse({"Content-Type": "application/json"}, 401, make_json({"error": {"code": 401}}));
+        }
+        if (cx.raw_path == "/v1/projects/fixture-project/locations/us" && location_response) {
+            if (location_entered) { location_entered.dec(); remove location_entered; }
+            if (location_release) { location_release.waitForZero(2s); }
+            if (location_delay_ms) { usleep(location_delay_ms * 1000); }
+            return makeResponse({"Content-Type": "application/json"}, 200, make_json(location_response));
         }
         return makeResponse({"Content-Type": "application/json"}, 200,
             make_json(responses.size() ? shift responses : response));
@@ -53,6 +63,7 @@ class DocumentAiWireTest inherits QUnit::Test {
         addTestCase("online bytes options version and complete response types", \processTest());
         addTestCase("source boundaries reject conflicts null and empty before transport", \sourcesTest());
         addTestCase("resource names are scoped and path segments cannot inject", \identityTest());
+        addTestCase("canonical project numbers are verified lazily without weakening scope", \projectAliasTest());
         addTestCase("schema and beta requests preserve empty false zero and value fields", \schemaTest());
         addTestCase("batch source validation and typed operation results", \batchTest());
         addTestCase("dependent references paginate with encoded and repeated tokens", \referencesTest());
@@ -139,6 +150,98 @@ class DocumentAiWireTest inherits QUnit::Test {
         assertEq(count, handler.calls.size());
     }
 
+    private projectAliasTest() {
+        string canonical = "projects/123456789012/locations/us";
+        string processor = canonical + "/processors/processor-1";
+        handler.location_response = {"name": canonical};
+        handler.response = {"name": processor};
+        int count = handler.calls.size();
+        AbstractDataProvider get_processor = action("get-processor");
+        get_processor.getRequestType();
+        assertEq(count, handler.calls.size(), "static metadata does not resolve the project");
+        assertEq(processor, get_processor.doRequest({"processor_id": processor}).name);
+        assertEq(count + 2, handler.calls.size(), "one authenticated lookup and one action request");
+        assertEq("/v1/" + Base, handler.calls[count].path);
+        assertEq("/v1/" + Processor, last().path, "transport keeps the configured project ID");
+        string version = processor + "/processorVersions/v1";
+        handler.response = {"name": version};
+        action("get-processor-version").doRequest({"processor_id": processor, "processor_version_id": version});
+        assertEq(count + 3, handler.calls.size(), "dependent full names reuse the verified alias");
+        assertEq("/v1/" + Processor + "/processorVersions/v1", last().path);
+        handler.response = {"processors": ({"name": processor, "displayName": "Canonical processor"},)};
+        auto choices = get_processor.getReferenceData("processors");
+        assertEq(processor, choices[0].value);
+        assertEq("Canonical processor", choices[0].display_name);
+        string operation = canonical + "/operations/job-1";
+        handler.response = {"name": operation, "done": True, "response": {}};
+        assertEq(operation, action("wait-for-operation").doRequest({"operation_id": operation}).name);
+        assertEq(operation, action("wait-for-operation").doRequest({"operation_id": "job-1"}).name);
+        count = handler.calls.size();
+        foreach string invalid in (("projects/999999999999/locations/us/processors/processor-1",
+                canonical + "/processors/processor-2/processorVersions/v1",
+                "projects/123456789012/locations/eu/processors/processor-1")) {
+            assertThrows("GOOGLE-DOCUMENTAI-REQUEST-ERROR", sub () {
+                get_processor.doRequest({"processor_id": invalid});
+            });
+        }
+        assertEq(count, handler.calls.size(), "unrelated numeric projects and parent scopes are rejected");
+
+        GoogleDocumentAiRestClientIo fresh({"url": endpoint, "gcp_sa_json_path": credentials});
+        handler.location_response = {"name": "projects/unrelated-name/locations/us"};
+        assertThrows("GOOGLE-DOCUMENTAI-CONFIG-ERROR", sub () {
+            fresh.getCanonicalProject("fixture-project", "us");
+        });
+        handler.location_response = {"name": canonical};
+        assertEq("123456789012", fresh.getCanonicalProject("fixture-project", "us"),
+            "a rejected response does not poison the cache");
+        count = handler.calls.size();
+        GoogleDocumentAiRestClientIo copied = cast<GoogleDocumentAiRestClientIo>(fresh.copyWithUrl(endpoint));
+        assertEq("123456789012", copied.getCanonicalProject("fixture-project", "us"));
+        assertEq(count + 1, handler.calls.size(), "same-origin copies establish their own verified alias cache");
+
+        GoogleDocumentAiDataProvider timeout_root({"gcp_project_id": "fixture-project", "url": endpoint,
+            "gcp_sa_json_path": credentials});
+        handler.location_delay_ms = 200;
+        try {
+            timeout_root.getChildProvider("wait-for-operation").doRequest({"operation_id": operation,
+                "operation_timeout": 30ms, "poll_interval": 1ms});
+            assertTrue(False, "expected project-resolution timeout");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", ex.err);
+            assertEq(operation, ex.arg.job_id);
+        }
+        handler.location_delay_ms = 0;
+
+        # A slow first lookup must not hold a cache lock over a caller with a
+        # shorter deadline. Gate the server response until the short caller returns.
+        GoogleDocumentAiRestClientIo concurrent({"url": endpoint, "gcp_sa_json_path": credentials});
+        Counter entered(1);
+        Counter release(1);
+        Counter finished(1);
+        handler.location_entered = entered;
+        handler.location_release = release;
+        string primary;
+        background sub () {
+            try { primary = concurrent.getCanonicalProject("fixture-project", "us", 3000); }
+            catch (hash<ExceptionInfo> ex) { primary = ex.err; }
+            finished.dec();
+        }();
+        int arrived = entered.waitForZero(2s);
+        bool timed_out = False;
+        if (!arrived) {
+            try { concurrent.getCanonicalProject("fixture-project", "us", 30); }
+            catch (hash<ExceptionInfo> ex) { timed_out = ex.err =~ /TIMEOUT/; }
+        }
+        release.dec();
+        int completed = finished.waitForZero(4s);
+        handler.location_entered = NOTHING;
+        handler.location_release = NOTHING;
+        assertEq(0, arrived);
+        assertTrue(timed_out, "a concurrent lookup honors its own deadline");
+        assertEq(0, completed);
+        assertEq("123456789012", primary);
+    }
+
     private schemaTest() {
         handler.response = {"name": Base + "/schemas/s", "displayName": "Schema"};
         action("update-schema").doRequest({"schema_id": "s", "labels": {}, "updateMask": "labels"});
@@ -194,6 +297,10 @@ class DocumentAiWireTest inherits QUnit::Test {
             {"name": Operation, "done": True, "error": {"code": 7, "message": "Fixture permission failure"}});
         auto result = action("wait-for-operation").doRequest({"operation_id": Operation, "poll_interval": 1ms});
         assertEq(7, result.error.code);
+        handler.response = {"name": "job-1", "done": True, "response": {}};
+        assertThrows("GOOGLE-DOCUMENTAI-OPERATION-ERROR", sub () {
+            action("wait-for-operation").doRequest({"operation_id": Operation});
+        });
         handler.response = {"name": Operation, "done": False};
         try {
             action("wait-for-operation").doRequest({"operation_id": "job-1", "operation_timeout": 150ms, "poll_interval": 40ms});

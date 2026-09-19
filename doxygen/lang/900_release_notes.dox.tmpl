@@ -2529,6 +2529,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
       - authenticates synchronous, asynchronous, raw, copied, and generic requests through GcpAuth;
         verifies authentication with processor-list ping and supports separate resource/quota projects
+      - verifies canonical numeric project names through the location API so project-ID connections
+        accept returned processor/version/operation names while preserving resource scope checks
 
     - @ref googledrivedataproviderintro "GoogleDriveDataProvider" module
       - new module providing a data provider API for <a href="https://www.google.com/drive/">Google Drive</a>

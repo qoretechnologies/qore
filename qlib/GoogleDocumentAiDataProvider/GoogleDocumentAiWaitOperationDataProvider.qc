@@ -59,13 +59,24 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
     private *AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        timeout overall = req.operation_timeout ?? 5m;
+        if (overall <= 0 || (exists req.poll_interval && req.poll_interval <= 0)) {
+            throw "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", "overall timeout and poll interval must be positive";
+        }
+        date start = now_us();
         string base = GoogleDocumentAiResources::prefix(project_id, region) + "/operations/";
-        string id = GoogleDocumentAiResources::id(req.operation_id, base);
-        string resource = base + id;
+        string id;
+        try { id = GoogleDocumentAiResources::id(req.operation_id, base, rest, int(overall)); }
+        catch (hash<ExceptionInfo> ex) {
+            if (ex.err =~ /TIMEOUT/) {
+                throw "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", "resource resolution exceeded the wait deadline",
+                    {"job_id": req.operation_id, "last_status": NOTHING};
+            }
+            rethrow;
+        }
+        string resource = req.operation_id.find("/") >= 0 ? req.operation_id : base + id;
         string path = "/" + (req.api_version ?? "v1") + "/projects/" + encode_url(project_id, True)
             + "/locations/" + encode_url(region, True) + "/operations/" + encode_url(id, True);
-        timeout overall = req.operation_timeout ?? 5m;
-        date start = now_us();
         GoogleDocumentAiRestClientIo client = rest;
         *hash<auto> last_status;
         QoreAsyncJobUtils::AsyncJobPoller poller(hash<auto> sub (string job) {
@@ -73,6 +84,13 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
             auto body;
             try {
                 body = client.restDoRequestWithTimeout("GET", path, NOTHING, NOTHING, remaining).body;
+                if (body.typeCode() == NT_HASH && body.name.typeCode() == NT_STRING) {
+                    remaining = max(1, int(overall) - get_duration_milliseconds(now_us() - start));
+                    if (GoogleDocumentAiResources::id(body.name, base, client, remaining) != id) {
+                        throw "GOOGLE-DOCUMENTAI-OPERATION-ERROR", "operation status has a different identity",
+                            {"job_id": job};
+                    }
+                }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err =~ /TIMEOUT/) {
                     throw "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", "operation status request exceeded the wait deadline",
@@ -80,7 +98,7 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
                 }
                 rethrow;
             }
-            if (body.typeCode() != NT_HASH || body.name != job
+            if (body.typeCode() != NT_HASH || body.name.typeCode() != NT_STRING || body.name.find("/") < 0
                     || (body.hasKey("done") && body.done.typeCode() != NT_BOOLEAN)
                     || (body.hasKey("error") && body.error.typeCode() != NT_HASH)
                     || (body.hasKey("response") && body.response.typeCode() != NT_HASH)
@@ -94,7 +112,12 @@ public class GoogleDocumentAiWaitOperationDataProvider inherits GoogleDocumentAi
             "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT");
         # Final service errors are data, alongside successful outcomes and per-document batch statuses.
         # This preserves the complete job record for workflow branching and failure analysis.
-        return poller.poll(resource, overall, req.poll_interval);
+        int remaining = int(overall) - get_duration_milliseconds(now_us() - start);
+        if (remaining <= 0) {
+            throw "GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", "resource resolution exceeded the wait deadline",
+                {"job_id": resource, "last_status": NOTHING};
+        }
+        return poller.poll(resource, remaining, req.poll_interval);
     }
 }
 }

@@ -165,7 +165,14 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         auto version = prov.getChildProvider("get-processor-version").doRequest({
             "processor_id": processor_id, "processor_version_id": processor.defaultProcessorVersion});
         assertEq(processor.defaultProcessorVersion, version.name);
+        auto processors = pd.getReferenceData("processors");
+        assertTrue(inlist(processor.name, (map $1.value, processors)), "processor choices retain canonical names");
+        auto version_choices = pd.getReferenceData("processor-versions", {"processor_id": processor.name});
+        assertTrue(inlist(processor.defaultProcessorVersion, (map $1.value, version_choices)),
+            "dependent version choices accept the canonical processor name");
+        AbstractDataProviderType restored = Serializable::deserialize(pd.getResponseType().serialize());
         string fixture = get_script_dir() + "/../AwsTextractDataProvider/synthetic-invoice.pdf";
+        int input_index = 0;
         foreach hash<auto> input in ((
                 {"document_bytes": File::readBinaryFile(fixture)},
                 {"document_path": fixture, "imageless_mode": True,
@@ -179,6 +186,25 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
                 assertTrue(result.document.text.find(expected) >= 0, "expected synthetic content: " + expected);
             }
             assertEq(1, result.document.pages[0].pageNumber);
+            assertEq(result.document.text, restored.acceptsValue(result).document.text,
+                "the complete live response satisfies the serialized output contract");
+            if (input_index == 0) {
+                auto page = result.document.pages[0];
+                assertTrue(page.dimension.width > 0 && page.dimension.height > 0);
+                assertTrue(page.tokens.size() > 0);
+                auto layout = page.tokens[0].layout;
+                assertEq(NT_STRING, layout.textAnchor.textSegments[0].endIndex.typeCode(),
+                    "live protobuf int64 offsets remain strings");
+                assertTrue(layout.confidence >= 0 && layout.confidence <= 1);
+                assertTrue(layout.boundingPoly.normalizedVertices.size() > 0);
+            } else if (input_index == 1) {
+                assertFalse(result.document.pages[0].hasKey("image"), "imageless mode omits page images");
+                assertEq(1, result.document.pages.size(), "the selected page is returned");
+            } else {
+                assertEq(("pages", "text"), sort(keys result.document), "the output field mask is honored");
+                assertEq(("pageNumber",), keys result.document.pages[0]);
+            }
+            ++input_index;
         }
     }
 }

@@ -29,12 +29,13 @@ public class GoogleDocumentAiActionDataProvider inherits RestSchemaActionDataPro
     private *AbstractDataProviderType getRequestTypeImpl() { return request_type; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = GoogleDocumentAiResources::normalize(req, project, location);
+        GoogleDocumentAiRestClientIo client = cast<GoogleDocumentAiRestClientIo>(rest);
+        req = GoogleDocumentAiResources::normalize(req, project, location, client);
         string base = GoogleDocumentAiResources::prefix(project, location);
         if (op.getAction() == "set-default-version") {
             req.defaultProcessorVersion = base + "/processors/" + req.processor_id + "/processorVersions/"
                 + GoogleDocumentAiResources::id(req.defaultProcessorVersion,
-                    base + "/processors/" + req.processor_id + "/processorVersions/");
+                    base + "/processors/" + req.processor_id + "/processorVersions/", client);
         }
         if (op.getAction() == "update-schema" || op.getAction() == "update-schema-version") {
             string name = base + "/schemas/" + req.schema_id;
@@ -94,15 +95,26 @@ public class GoogleDocumentAiResources {
     #! Accepts an ID or a matching full resource name
     /** @param value caller's identifier
         @param prefix required scope and collection, ending in a slash
+        @param client optional authenticated client for project ID/number equivalence
+        @param timeout_ms optional remaining lookup deadline in milliseconds
         @return an unescaped single ID; the shared transport escapes it once
         @throw GOOGLE-DOCUMENTAI-REQUEST-ERROR invalid or differently scoped identity
     */
-    static string id(auto value, string prefix) {
+    static string id(auto value, string prefix, *GoogleDocumentAiRestClientIo client, *int timeout_ms) {
         if (value.typeCode() != NT_STRING) {
             throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "resource identifiers must be strings";
         }
         string result = value;
         if (result.find("/") >= 0) {
+            if (result.substr(0, prefix.size()) != prefix && client && result =~ /^projects\/[0-9]+\//) {
+                *list<string> parts = (prefix =~ x/^projects\/([^\/]+)\/locations\/([^\/]+)\//);
+                if (parts && parts[0] !~ /^[0-9]+$/) {
+                    # Only the authenticated location endpoint can establish an alias.
+                    # Numeric input alone is never evidence of project membership.
+                    string canonical = client.getCanonicalProject(parts[0], parts[1], timeout_ms);
+                    prefix = "projects/" + canonical + prefix.substr(9 + parts[0].size());
+                }
+            }
             if (result.substr(0, prefix.size()) != prefix) {
                 throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "resource name does not belong to the selected scope";
             }
@@ -118,27 +130,29 @@ public class GoogleDocumentAiResources {
     /** @param request action fields
         @param project connection project
         @param region connection location
+        @param client optional authenticated client for canonical resource names
         @return a copy containing only segment IDs
     */
-    static hash<auto> normalize(hash<auto> request, string project, string region) {
+    static hash<auto> normalize(hash<auto> request, string project, string region,
+            *GoogleDocumentAiRestClientIo client) {
         string base = prefix(project, region);
         foreach hash<auto> field in (({"key": "processor_id", "prefix": base + "/processors/"},
                 {"key": "processor_type", "prefix": base + "/processorTypes/"},
                 {"key": "operation_id", "prefix": base + "/operations/"},
                 {"key": "schema_id", "prefix": base + "/schemas/"})) {
-            if (request.hasKey(field.key)) { request{field.key} = id(request{field.key}, field.prefix); }
+            if (request.hasKey(field.key)) { request{field.key} = id(request{field.key}, field.prefix, client); }
         }
         if (request.hasKey("processor_version_id")) {
             request.processor_version_id = id(request.processor_version_id,
-                base + "/processors/" + request.processor_id + "/processorVersions/");
+                base + "/processors/" + request.processor_id + "/processorVersions/", client);
         }
         if (request.hasKey("evaluation_id")) {
             request.evaluation_id = id(request.evaluation_id, base + "/processors/" + request.processor_id
-                + "/processorVersions/" + request.processor_version_id + "/evaluations/");
+                + "/processorVersions/" + request.processor_version_id + "/evaluations/", client);
         }
         if (request.hasKey("schema_version_id")) {
             request.schema_version_id = id(request.schema_version_id,
-                base + "/schemas/" + request.schema_id + "/schemaVersions/");
+                base + "/schemas/" + request.schema_id + "/schemaVersions/", client);
         }
         return request;
     }
@@ -193,7 +207,7 @@ public class GoogleDocumentAiResources {
         }
         RestSchemaActionSet set = GoogleDocumentAiSchema::getActionSets()[0];
         GoogleDocumentAiActionDataProvider lister(set, set.getOperationEx(declaration.action), client, project, region);
-        hash<auto> parents = normalize(request, project, region);
+        hash<auto> parents = normalize(request, project, region, client);
         string resource_prefix = prefix(project, region);
         if (kind == "processor-versions" || kind == "evaluations") {
             resource_prefix += "/processors/" + parents.processor_id;
@@ -217,10 +231,10 @@ public class GoogleDocumentAiResources {
                     throw "GOOGLE-DOCUMENTAI-REFERENCE-ERROR", "resource listing contains an invalid identifier";
                 }
                 string value = record{declaration.value_field};
-                if (kind != "processor-types" && value.substr(0, resource_prefix.size()) != resource_prefix) {
+                if (kind != "processor-types" && value.find("/") < 0) {
                     throw "GOOGLE-DOCUMENTAI-REFERENCE-ERROR", "a listed resource belongs to another scope";
                 }
-                id(value, resource_prefix);
+                id(value, resource_prefix, client);
                 if (ids{value}) { continue; }
                 ids{value} = True;
                 string label = record{declaration.display_field}.val() ? record{declaration.display_field} : value;

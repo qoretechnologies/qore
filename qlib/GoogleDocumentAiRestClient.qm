@@ -68,6 +68,11 @@ module GoogleDocumentAiRestClient {
     Endpoints default to the selected location. Explicit HTTPS origins are trusted configuration;
     HTTP is accepted only for loopback tests. Redirects and copies to another origin are rejected.
 
+    Google returns numeric project names even when the connection uses a project ID. When a scoped
+    action encounters such a name, the async client verifies the equivalence through the authenticated
+    location endpoint and caches it. Project lookup occurs during requests or reference-data retrieval,
+    never during static metadata discovery.
+
     The main classes are:
     - @ref GoogleDocumentAiRestClient::GoogleDocumentAiRestClient — sync client
     - @ref GoogleDocumentAiRestClient::GoogleDocumentAiRestClientIo — async client
@@ -95,6 +100,7 @@ printf("Text: %s\n", resp.body.document.text);
     - authenticated synchronous, asynchronous, raw, copied, and generic API requests through GcpAuth
     - added service-authenticated ping, quota-project handling, regional choices, and app association
     - corrected constructor parity, regional URL persistence, and sensitive credential options
+    - verified project ID/number aliases for canonical resource names without relaxing parent scope
 
     @subsection GoogleDocumentAiRestClientv1_0 GoogleDocumentAiRestClient v1.0
     - the initial version of the %GoogleDocumentAiRestClient module
@@ -274,6 +280,11 @@ public class GoogleDocumentAiRestClient inherits RestClient::RestClient,
 #! Async REST client for Google Document AI
 public class GoogleDocumentAiRestClientIo inherits RestClientIo::RestClientIo,
         GoogleDocumentAiRestClientBase {
+    private {
+        Mutex project_lock();
+        hash<string, string> canonical_projects;
+    }
+
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : GoogleDocumentAiRestClientBase(opts),
             RestClientIo(GoogleDocumentAiRestClientBase::getOptions(opts), shared_mgr) {
@@ -295,6 +306,47 @@ public class GoogleDocumentAiRestClientIo inherits RestClientIo::RestClientIo,
 
     AbstractRestClient copyWithUrl(string new_url) {
         return RestClientIo::copyWithUrl(checkedCopyUrl(new_url));
+    }
+
+    #! Resolves a project ID to the canonical project number used in service resource names
+    /** @param project configured resource project ID or number
+        @param region resource location
+        @param timeout_ms optional request deadline in milliseconds; defaults to 30 seconds
+        @return the authenticated location response's project number, or the unchanged project
+        @throw GOOGLE-DOCUMENTAI-CONFIG-ERROR malformed or differently scoped location response
+        @throw HTTP-CLIENT-RECEIVE-ERROR location lookup fails
+        @note Lookup is lazy and cached per client/project/location. Metadata discovery never calls it.
+    */
+    string getCanonicalProject(string project, string region, *int timeout_ms) {
+        if (project !~ /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/ || region !~ /^[a-z][a-z0-9-]*$/) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "invalid project or location";
+        }
+        if (exists timeout_ms && timeout_ms <= 0) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "project lookup timeout must be positive";
+        }
+        if (project =~ /^[0-9]+$/) { return project; }
+        string key = project + "/" + region;
+        {
+            AutoLock lock(project_lock);
+            if (canonical_projects{key}) { return canonical_projects{key}; }
+        }
+        # Do not hold the cache lock across I/O: another caller can have a much
+        # shorter operation deadline. Concurrent initial lookups may overlap.
+        auto body = restDoRequestWithTimeout("GET", "/v1/projects/" + encode_url(project, True)
+            + "/locations/" + encode_url(region, True), NOTHING, NOTHING, timeout_ms ?? 30000).body;
+        if (body.typeCode() != NT_HASH || body.name.typeCode() != NT_STRING) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "project resolution requires a location resource name";
+        }
+        *list<string> parts = (body.name =~ x/^projects\/([^\/]+)\/locations\/([^\/]+)$/);
+        if (!parts || parts[1] != region || (parts[0] != project && parts[0] !~ /^[0-9]+$/)) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "project resolution returned an invalid location scope";
+        }
+        AutoLock lock(project_lock);
+        if (canonical_projects{key} && canonical_projects{key} != parts[0]) {
+            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR", "project resolution returned inconsistent project identities";
+        }
+        canonical_projects{key} = parts[0];
+        return parts[0];
     }
 }
 
