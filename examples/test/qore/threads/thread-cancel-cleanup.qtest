@@ -1,0 +1,736 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ThreadCancelCleanupTest
+
+#! ownership held by one thread that other threads wait for
+/** This is the shape the cleanup contract exists for: a mutex-protected ownership record plus a
+    condition that waiting threads block on.  If the owner's cleanup cannot take the lock, the
+    ownership is never cleared and every waiter blocks forever.
+*/
+class Reservation {
+    private {
+        Mutex m();
+        Condition cond();
+        bool owned = True;
+    }
+
+    #! releases the ownership in a cleanup critical section that survives cancellation
+    release() {
+        defer_thread_cancel(sub () {
+            m.lock();
+            on_exit m.unlock();
+            owned = False;
+            cond.broadcast();
+        });
+    }
+
+    #! releases the ownership with the plain on_exit idiom, which a pending cancellation aborts
+    releaseUnprotected() {
+        m.lock();
+        on_exit m.unlock();
+        owned = False;
+        cond.broadcast();
+    }
+
+    #! clears the ownership; the caller must already hold the ownership lock
+    releaseHeld() {
+        owned = False;
+        cond.broadcast();
+    }
+
+    #! takes the ownership lock; used to force contention on the cleanup's acquisition
+    lock() {
+        m.lock();
+    }
+
+    unlock() {
+        m.unlock();
+    }
+
+    #! blocks until the ownership is released; returns False if \a to elapses first
+    bool waitForRelease(timeout to) {
+        m.lock();
+        on_exit m.unlock();
+        while (owned) {
+            if (cond.wait(m, to)) {
+                return False;
+            }
+        }
+        return True;
+    }
+
+    bool isOwned() {
+        m.lock();
+        on_exit m.unlock();
+        return owned;
+    }
+}
+
+public class ThreadCancelCleanupTest inherits QUnit::Test {
+    public {
+        const CancelReason = "cleanup contract test";
+        const WaitTimeout = 30s;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("ThreadCancelCleanupTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        # the leak this contract exists to prevent
+        addTestCase("unprotected cleanup leaks ownership when cancelled", \testUnprotectedCleanupLeaks());
+        addTestCase("deferred cleanup releases ownership when cancelled", \testDeferredCleanupOnCancel());
+        addTestCase("waiters make progress after a cancelled owner cleans up", \testWaiterProgress());
+
+        # the cancellation request must survive the cleanup intact
+        addTestCase("cancellation stays pending with the original reason", \testCancellationStaysPending());
+        addTestCase("thread_cancelled() is true inside the deferral", \testFlagVisibleInsideDeferral());
+
+        # acquisition timing
+        addTestCase("cancellation pending before a contended acquisition", \testCancelBeforeAcquisition());
+        addTestCase("cancellation arriving during a contended acquisition", \testCancelDuringAcquisition());
+
+        # other exit paths
+        addTestCase("ownership released on normal completion", \testNormalCompletion());
+        addTestCase("ownership released on an arbitrary error", \testArbitraryError());
+        addTestCase("program interruption does not abort the cleanup", \testProgramInterruptDeferred());
+
+        # the deferral itself
+        addTestCase("the deferral ends when the cleanup throws", \testCleanupExceptionEndsDeferral());
+        addTestCase("deferrals nest", \testNestedDeferral());
+        addTestCase("arguments and the return value are passed through", \testCallSemantics());
+        addTestCase("ordinary locks remain interruptible", \testOrdinaryLocksRemainInterruptible());
+        addTestCase("THREAD_CONTROL is required to defer", \testThreadControlRequired());
+
+        # the production shape
+        addTestCase("deferred cleanup on a pooled worker", \testPooledWorkerCleanup());
+
+        # every execution mode
+        addTestCase("the contract holds in AST, IR, tiered and JIT", \testExecutionModes());
+        addTestCase("the contract holds in AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    #! runs \a task on a background thread, cancels it once it signals \a ready, and waits for it
+    /** The worker catches the cancellation and clears its own flag last, so the test can observe
+        both the flag and the exception without the exception reaching the thread's top level.
+
+        @return a hash of \c tid, \c ex (the exception the worker caught, if any), and
+        \c flag_retained (whether the cancellation flag was still set when the worker caught it)
+    */
+    private hash<auto> cancelWorker(code task) {
+        Counter ready(1);
+        Counter done(1);
+        int tid;
+        *hash<ExceptionInfo> ex;
+        bool flag_retained;
+
+        code worker = sub () {
+            on_exit done.dec();
+            tid = gettid();
+            try {
+                task(ready);
+            } catch (hash<ExceptionInfo> ex1) {
+                flag_retained = thread_cancelled();
+                ex = ex1;
+                clear_thread_cancel();
+            }
+        };
+        background worker();
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "worker signalled that it is ready");
+        assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        assertEq(0, done.waitForZero(WaitTimeout), "worker finished");
+
+        return {
+            "tid": tid,
+            "ex": ex,
+            "flag_retained": flag_retained,
+        };
+    }
+
+    #------------------------------------------------------------------
+    # the leak
+    #------------------------------------------------------------------
+
+    testUnprotectedCleanupLeaks() {
+        Reservation r();
+        Counter blocked(1);
+
+        hash<auto> info = cancelWorker(sub (Counter ready) {
+            on_exit r.releaseUnprotected();
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        # the cleanup's own Mutex::lock() is a cancellation check point, so it throws before the
+        # ownership is cleared; this is the behavior defer_thread_cancel() exists to avoid
+        assertEq("THREAD-CANCELLED", info.ex.err, "the unprotected cleanup was itself cancelled");
+        assertTrue(r.isOwned(), "the unprotected cleanup leaked the ownership");
+        # the reservation is still owned, so a waiter would block forever
+        assertFalse(r.waitForRelease(250ms), "a waiter cannot make progress after the leak");
+    }
+
+    testDeferredCleanupOnCancel() {
+        Reservation r();
+        Counter blocked(1);
+
+        hash<auto> info = cancelWorker(sub (Counter ready) {
+            on_exit r.release();
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        assertEq("THREAD-CANCELLED", info.ex.err, "the worker itself was cancelled");
+        assertFalse(r.isOwned(), "the deferred cleanup released the ownership");
+    }
+
+    testWaiterProgress() {
+        Reservation r();
+        Counter blocked(1);
+        Counter waiting(1);
+        Counter released(1);
+        bool progressed = False;
+
+        code waiter = sub () {
+            waiting.dec();
+            progressed = r.waitForRelease(WaitTimeout);
+            released.dec();
+        };
+        background waiter();
+        assertEq(0, waiting.waitForZero(WaitTimeout), "the waiter started");
+
+        cancelWorker(sub (Counter ready) {
+            on_exit r.release();
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        assertEq(0, released.waitForZero(WaitTimeout), "the waiter was woken");
+        assertTrue(progressed, "the waiter made progress after the cancelled owner cleaned up");
+    }
+
+    #------------------------------------------------------------------
+    # the request survives the cleanup
+    #------------------------------------------------------------------
+
+    testCancellationStaysPending() {
+        Reservation r();
+        Counter blocked(1);
+        *hash<ExceptionInfo> after_cleanup;
+
+        hash<auto> info = cancelWorker(sub (Counter ready) {
+            on_exit {
+                r.release();
+                # the request must still be pending here: the very next check point raises it
+                # again, with the original reason
+                try {
+                    r.lock();
+                    r.unlock();
+                } catch (hash<ExceptionInfo> ex) {
+                    after_cleanup = ex;
+                }
+            }
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        assertFalse(r.isOwned(), "the deferred cleanup released the ownership");
+        assertTrue(info.flag_retained, "the cancellation flag was still set after the cleanup");
+        assertEq("THREAD-CANCELLED", after_cleanup.err,
+            "the next check point after the deferral raised the cancellation again");
+        assertTrue(after_cleanup.desc =~ /cleanup contract test/,
+            sprintf("the original cancellation reason was preserved: %y", after_cleanup.desc));
+        assertTrue(after_cleanup.desc =~ /thread [0-9]+ cancelled/,
+            sprintf("the cancelled thread is still identified: %y", after_cleanup.desc));
+        # only the operation name differs; the reason and the target are carried over unchanged
+        assertEq(regex_extract(info.ex.desc, "(thread [0-9]+ cancelled: .*)")[0],
+            regex_extract(after_cleanup.desc, "(thread [0-9]+ cancelled: .*)")[0],
+            "the diagnostics are unchanged by the cleanup");
+    }
+
+    testFlagVisibleInsideDeferral() {
+        Counter blocked(1);
+        bool seen_inside = False;
+        bool seen_before_lock = False;
+
+        cancelWorker(sub (Counter ready) {
+            on_exit {
+                defer_thread_cancel(sub () {
+                    seen_before_lock = thread_cancelled();
+                    Mutex m();
+                    m.lock();
+                    on_exit m.unlock();
+                    seen_inside = thread_cancelled();
+                });
+            }
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        assertTrue(seen_before_lock, "thread_cancelled() reports the pending request inside the deferral");
+        assertTrue(seen_inside, "the request is still observable after the cleanup takes its lock");
+    }
+
+    #------------------------------------------------------------------
+    # acquisition timing under contention
+    #------------------------------------------------------------------
+
+    #! drives a contended cleanup acquisition and returns the observed state
+    /** The test thread holds the ownership lock for the whole acquisition, so the cleanup cannot
+        complete until it is released.  The worker signals \c acquiring from inside the deferral,
+        immediately before the contended acquisition, which makes the ordering deterministic: when
+        the signal is observed, the worker is in the acquisition path and cannot already hold the
+        lock.
+
+        @param cancel_first when True the cancellation request is delivered while the worker is
+        still blocked before the cleanup (the request is already pending when the acquisition
+        starts); when False the worker reaches the contended acquisition uncancelled and the request
+        is delivered while it is blocked there
+    */
+    private hash<auto> contendedCleanup(Reservation r, bool cancel_first) {
+        Counter ready(1);
+        Counter blocked(1);
+        Counter acquiring(1);
+        Counter done(1);
+        int tid;
+        bool flag_retained = False;
+
+        # hold the ownership lock so the cleanup's acquisition must block
+        r.lock();
+
+        code worker = sub () {
+            on_exit done.dec();
+            try {
+                on_exit {
+                    defer_thread_cancel(sub () {
+                        acquiring.dec();
+                        r.lock();
+                        on_exit r.unlock();
+                        r.releaseHeld();
+                    });
+                    flag_retained = thread_cancelled();
+                    clear_thread_cancel();
+                }
+                tid = gettid();
+                ready.dec();
+                blocked.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation that unwound the worker; already cleared above
+            }
+        };
+        background worker();
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "the worker started");
+        if (cancel_first) {
+            assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        } else {
+            blocked.dec();
+        }
+        assertEq(0, acquiring.waitForZero(WaitTimeout), "the worker reached the contended acquisition");
+        if (!cancel_first) {
+            assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        }
+
+        # release the ownership lock only now, so the acquisition above was genuinely contended
+        r.unlock();
+
+        assertEq(0, done.waitForZero(WaitTimeout), "the worker finished");
+        return {"flag_retained": flag_retained};
+    }
+
+    testCancelBeforeAcquisition() {
+        Reservation r();
+        hash<auto> info = contendedCleanup(r, True);
+        assertFalse(r.isOwned(), "the contended cleanup released the ownership");
+        assertTrue(info.flag_retained, "the cancellation was still pending after the cleanup");
+    }
+
+    testCancelDuringAcquisition() {
+        Reservation r();
+        hash<auto> info = contendedCleanup(r, False);
+        assertFalse(r.isOwned(), "the contended acquisition completed and released the ownership");
+        assertTrue(info.flag_retained,
+            "a cancellation delivered during the acquisition is still pending afterwards");
+    }
+
+    #------------------------------------------------------------------
+    # other exit paths
+    #------------------------------------------------------------------
+
+    testNormalCompletion() {
+        Reservation r();
+        Counter done(1);
+
+        code worker = sub () {
+            on_exit done.dec();
+            on_exit r.release();
+        };
+        background worker();
+
+        assertEq(0, done.waitForZero(WaitTimeout), "the worker finished");
+        assertFalse(r.isOwned(), "the ownership was released on normal completion");
+        assertTrue(r.waitForRelease(WaitTimeout), "a waiter sees the release immediately");
+    }
+
+    testArbitraryError() {
+        Reservation r();
+        Counter done(1);
+        *hash<ExceptionInfo> ex_info;
+
+        code worker = sub () {
+            on_exit done.dec();
+            try {
+                on_exit r.release();
+                throw "UNRELATED-ERROR", "an arbitrary failure in the owning thread";
+            } catch (hash<ExceptionInfo> ex) {
+                ex_info = ex;
+            }
+        };
+        background worker();
+
+        assertEq(0, done.waitForZero(WaitTimeout), "the worker finished");
+        assertEq("UNRELATED-ERROR", ex_info.err, "the original error propagated");
+        assertFalse(r.isOwned(), "the ownership was released on an arbitrary error");
+    }
+
+    testProgramInterruptDeferred() {
+        SandboxManager sm();
+
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        p.setSandboxManager(sm);
+        p.parse("
+%modern
+hash<auto> sub run() {
+    Mutex m();
+    bool owned = True;
+    bool released_after_interrupt = False;
+    *hash<ExceptionInfo> ex_info;
+
+    defer_thread_cancel(sub () {
+        m.lock();
+        on_exit m.unlock();
+        owned = False;
+    });
+    released_after_interrupt = !owned;
+
+    # the interrupt is still pending: the next check point raises it
+    try {
+        m.lock();
+        m.unlock();
+    } catch (hash<ExceptionInfo> ex) {
+        ex_info = ex;
+    }
+    return {\"released\": released_after_interrupt, \"err\": ex_info.err};
+}
+", "cleanup_interrupt_test");
+
+        # the interrupt is pending before the cleanup starts
+        sm.requestInterrupt();
+        on_exit sm.clearInterrupt();
+
+        hash<auto> res = p.callFunction("run");
+        assertTrue(res.released, "the cleanup completed with a program interrupt pending");
+        assertEq("PROGRAM-INTERRUPTED", res.err, "the interrupt is still raised after the cleanup");
+    }
+
+    #------------------------------------------------------------------
+    # the deferral itself
+    #------------------------------------------------------------------
+
+    testCleanupExceptionEndsDeferral() {
+        Counter blocked(1);
+        *hash<ExceptionInfo> from_cleanup;
+        *hash<ExceptionInfo> after_cleanup;
+
+        cancelWorker(sub (Counter ready) {
+            on_exit {
+                try {
+                    defer_thread_cancel(sub () {
+                        throw "CLEANUP-ERROR", "the cleanup itself failed";
+                    });
+                } catch (hash<ExceptionInfo> ex) {
+                    from_cleanup = ex;
+                }
+                # the deferral must have been released even though the cleanup threw
+                try {
+                    Mutex m();
+                    m.lock();
+                    m.unlock();
+                } catch (hash<ExceptionInfo> ex) {
+                    after_cleanup = ex;
+                }
+            }
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        assertEq("CLEANUP-ERROR", from_cleanup.err, "the cleanup's exception propagated");
+        assertEq("THREAD-CANCELLED", after_cleanup.err,
+            "the deferral was released even though the cleanup threw");
+    }
+
+    testNestedDeferral() {
+        Counter blocked(1);
+        bool inner_ok = False;
+        bool outer_ok = False;
+        *hash<ExceptionInfo> after_cleanup;
+
+        cancelWorker(sub (Counter ready) {
+            on_exit {
+                defer_thread_cancel(sub () {
+                    defer_thread_cancel(sub () {
+                        Mutex m();
+                        m.lock();
+                        m.unlock();
+                        inner_ok = True;
+                    });
+                    # the outer deferral is still in effect after the inner one is released
+                    Mutex m2();
+                    m2.lock();
+                    m2.unlock();
+                    outer_ok = True;
+                });
+                try {
+                    Mutex m3();
+                    m3.lock();
+                    m3.unlock();
+                } catch (hash<ExceptionInfo> ex) {
+                    after_cleanup = ex;
+                }
+            }
+            ready.dec();
+            blocked.waitForZero();
+        });
+
+        assertTrue(inner_ok, "the inner deferral completed");
+        assertTrue(outer_ok, "the outer deferral is still in effect after the inner one ends");
+        assertEq("THREAD-CANCELLED", after_cleanup.err,
+            "only the outermost deferral restores cancellation delivery");
+    }
+
+    testCallSemantics() {
+        assertEq(42, defer_thread_cancel(int sub () { return 42; }), "the return value is passed through");
+        assertEq(42, defer_thread_cancel(int sub (int x, int y) { return x + y; }, 20, 22),
+            "arguments are passed through");
+        assertNothing(defer_thread_cancel(sub () {}), "a cleanup with no return value returns nothing");
+        assertThrows("CLEANUP-ERROR", "cleanup failed",
+            sub () { defer_thread_cancel(sub () { throw "CLEANUP-ERROR", "cleanup failed"; }); },
+            NOTHING, "an exception from the cleanup propagates");
+    }
+
+    testOrdinaryLocksRemainInterruptible() {
+        Counter blocked(1);
+        *hash<ExceptionInfo> uncontended;
+
+        # an uncontended lock acquisition on a cancelled thread still fails outside a deferral
+        cancelWorker(sub (Counter ready) {
+            on_exit {
+                try {
+                    Mutex m();
+                    m.lock();
+                    m.unlock();
+                } catch (hash<ExceptionInfo> ex) {
+                    uncontended = ex;
+                }
+            }
+            ready.dec();
+            blocked.waitForZero();
+        });
+        assertEq("THREAD-CANCELLED", uncontended.err,
+            "an ordinary uncontended lock acquisition is still a cancellation check point");
+
+        # a contended acquisition outside a deferral is still interrupted by a cancellation
+        Mutex held();
+        held.lock();
+        Counter ready(1);
+        Counter done(1);
+        int tid;
+        *hash<ExceptionInfo> contended;
+
+        code worker = sub () {
+            on_exit done.dec();
+            tid = gettid();
+            try {
+                ready.dec();
+                held.lock();
+                held.unlock();
+            } catch (hash<ExceptionInfo> ex) {
+                contended = ex;
+                clear_thread_cancel();
+            }
+        };
+        background worker();
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "the worker started");
+        assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        assertEq(0, done.waitForZero(WaitTimeout), "the blocked worker was interrupted");
+        held.unlock();
+        assertEq("THREAD-CANCELLED", contended.err,
+            "an ordinary contended lock acquisition is still interrupted");
+    }
+
+    testThreadControlRequired() {
+        Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_THREAD_CONTROL);
+        assertThrows("PARSE-EXCEPTION", "do not allow access to builtin function 'defer_thread_cancel",
+            sub () {
+                p.parse("
+%modern
+sub run() {
+    defer_thread_cancel(sub () {});
+}
+", "no_thread_control_test");
+            },
+            NOTHING, "PO_NO_THREAD_CONTROL code cannot defer cancellation");
+
+        # the same code parses in a program that has the domain
+        Program ok(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        ok.parse("
+%modern
+bool sub run() {
+    bool done = False;
+    defer_thread_cancel(sub () { done = True; });
+    return done;
+}
+", "thread_control_test");
+        assertTrue(ok.callFunction("run"), "the same cleanup runs with the THREAD_CONTROL domain");
+    }
+
+    #------------------------------------------------------------------
+    # native thread lifecycle cleanup
+    #------------------------------------------------------------------
+
+    testPooledWorkerCleanup() {
+        # the production shape: the owning code runs on a pooled worker that is cancelled while
+        # blocked, and its on_exit cleanup has to release the ownership before unwinding
+        ThreadPool pool(1, 1, 1, 60s);
+        on_exit pool.stopWait();
+
+        Reservation r();
+        Counter ready(1);
+        Counter blocked(1);
+        Counter done(1);
+        int tid;
+        bool flag_retained = False;
+
+        pool.submit(sub () {
+            on_exit done.dec();
+            tid = gettid();
+            try {
+                on_exit r.release();
+                ready.dec();
+                blocked.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                flag_retained = thread_cancelled();
+                assertEq("THREAD-CANCELLED", ex.err, "the task was cancelled");
+            }
+        });
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "the task started");
+        assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        assertEq(0, done.waitForZero(WaitTimeout), "the task finished");
+        assertFalse(r.isOwned(), "the deferred cleanup released the ownership on a pooled worker");
+        assertTrue(flag_retained, "the cancellation was still pending after the cleanup");
+        assertTrue(r.waitForRelease(WaitTimeout), "a waiter makes progress");
+    }
+
+    #------------------------------------------------------------------
+    # execution modes
+    #------------------------------------------------------------------
+
+    private string modeScript() {
+        return "%modern
+class Reservation {
+    private { Mutex m(); bool owned = True; }
+    release() {
+        defer_thread_cancel(sub () {
+            m.lock();
+            on_exit m.unlock();
+            owned = False;
+        });
+    }
+    bool isOwned() { m.lock(); on_exit m.unlock(); return owned; }
+}
+
+Reservation r();
+Counter ready(1);
+Counter blocked(1);
+Counter done(1);
+int tid;
+bool flag_retained = False;
+*hash<ExceptionInfo> ex_info;
+
+code worker = sub () {
+    on_exit done.dec();
+    tid = gettid();
+    try {
+        on_exit r.release();
+        ready.dec();
+        blocked.waitForZero();
+    } catch (hash<ExceptionInfo> ex) {
+        flag_retained = thread_cancelled();
+        ex_info = ex;
+        clear_thread_cancel();
+    }
+};
+background worker();
+
+ready.waitForZero(30s);
+cancel_thread(tid, \"exec mode cleanup\");
+done.waitForZero(30s);
+printf(\"%y %y %y\\n\", r.isOwned(), flag_retained, ex_info.err);
+";
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    testExecutionModes() {
+        TmpFile tf("qore-thread-cancel-cleanup-", ".qr");
+        tf.file.write(modeScript());
+        tf.file.close();
+
+        string expected = "False True \"THREAD-CANCELLED\"\n";
+        foreach string mode in (("ast", "ir", "tiered", "jit")) {
+            assertEq(expected, run(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, tf.path)),
+                sprintf("the cleanup contract holds in %s mode", mode));
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin)) {
+            testSkip("qcc is not available at " + qcc_bin);
+        }
+        TmpDir tmp("qore-thread-cancel-cleanup-aot-");
+        string source = tmp.path + "/cleanup.qr";
+        {
+            File f();
+            f.open2(source, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(modeScript());
+        }
+        string exe = tmp.path + "/cleanup";
+        string out = run(sprintf("%s %s -O3 -o %s %s", env, qcc_bin, exe, source));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + out);
+        assertEq("False True \"THREAD-CANCELLED\"\n", run(sprintf("%s %s", env, exe)),
+            "the cleanup contract holds in AOT");
+    }
+}

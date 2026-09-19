@@ -204,6 +204,8 @@ queue.push(value: "wrong");  # PARSE-TYPE-ERROR
     |!Function|!Description
     |@ref Qore::cancel_thread() "cancel_thread()"|Requests cooperative cancellation of another thread
     |@ref Qore::clear_thread_cancel() "clear_thread_cancel()"|Clears the cancellation flag for the current thread
+    |@ref Qore::defer_thread_cancel() "defer_thread_cancel()"|Runs a cleanup critical section with cancellation \
+        deferred, so that it completes with the cancellation request left pending
     |@ref Qore::delete_all_thread_data() "delete_all_thread_data()"|Deletes the entire thread-local data hash
     |@ref Qore::delete_thread_data() "delete_thread_data()"|Delete the value of a key in the thread-local data hash
     |@ref Qore::get_all_thread_data() "get_all_thread_data()"|Retrieves the entire thread-local hash
@@ -303,10 +305,14 @@ queue.push(value: "wrong");  # PARSE-TYPE-ERROR
         current thread; this is a lightweight check (one atomic load) that does not raise an exception
     |@ref Qore::clear_thread_cancel() "clear_thread_cancel()"|Clears the cancellation flag for the current thread, \
         allowing the thread to continue running and pass through check points without triggering the exception again
+    |@ref Qore::defer_thread_cancel() "defer_thread_cancel(code cleanup, ...)"|Calls \a cleanup with cancellation and \
+        program interruption deferred, so that a @ref cancel_cleanup "cleanup critical section" can complete; the \
+        request is left pending and is raised again at the first check point after the call returns
 
-    @ref Qore::cancel_thread() "cancel_thread()" and @ref Qore::clear_thread_cancel() "clear_thread_cancel()" require
-    the \c THREAD_CONTROL functional domain. @ref Qore::thread_cancelled() "thread_cancelled()" only requires
-    \c THREAD_INFO, so any code can poll its own cancellation status.
+    @ref Qore::cancel_thread() "cancel_thread()", @ref Qore::clear_thread_cancel() "clear_thread_cancel()", and
+    @ref Qore::defer_thread_cancel() "defer_thread_cancel()" require the \c THREAD_CONTROL functional domain.
+    @ref Qore::thread_cancelled() "thread_cancelled()" only requires \c THREAD_INFO, so any code can poll its own
+    cancellation status.
 
     @note Attempting to cancel the current thread raises a \c THREAD-CANCEL-ERROR exception. Cancelling an
     already-cancelled thread updates the reason string.
@@ -333,7 +339,9 @@ queue.push(value: "wrong");  # PARSE-TYPE-ERROR
     - <b>I/O operations:</b> pipe reads/writes, file locking, and backquote command execution
 
     Blocking check points (threading primitives, I/O) use a 500ms polling interval; the thread does not respond to
-    cancellation instantly but will detect it within 500ms of the flag being set.
+    cancellation instantly but will detect it within 500ms of the flag being set.  Inside a
+    @ref cancel_cleanup "cleanup critical section" no cancellation can be delivered, so lock acquisitions there wait
+    without polling.
 
     @subsection cancel_handling Handling Cancellation
 
@@ -365,24 +373,67 @@ cancel_thread(tid, "timeout");
 done.waitForZero();
     @endcode
 
-    @par Example: Cleanup after cancellation
+    @par Example: Abandoning the cancellation to keep running
     @code{.py}
 %modern
 try {
-    mutex.lock();
-    on_exit {
-        mutex.unlock();
-    }
     process_data();
 } catch (hash<auto> ex) {
     if (ex.err == "THREAD-CANCELLED") {
-        # clear the flag so cleanup code can use check points without re-triggering
+        # clear the flag so this thread can continue; the request is discarded and cannot be restored
         clear_thread_cancel();
         save_partial_results();
         close_connections();
     }
 }
     @endcode
+
+    @anchor cancel_cleanup
+    @subsection cancel_cleanup_section Cleanup Critical Sections
+
+    Releasing ownership on the way out of a cancelled operation is the one case that needs more than a
+    \c try / \c catch.  The natural @ref on_exit "on_exit" idiom below is <b>broken</b> on a cancelled thread,
+    because the cleanup's own @ref Qore::Thread::Mutex::lock() "Mutex::lock()" is itself a check point:
+
+    @code{.py}
+%modern
+release() {
+    # BROKEN: on a cancelled thread lock() throws THREAD-CANCELLED, "owned" is never cleared, and
+    # every thread waiting for this ownership blocks forever
+    m.lock();
+    on_exit m.unlock();
+    owned = False;
+    cond.broadcast();
+}
+    @endcode
+
+    Use @ref Qore::defer_thread_cancel() "defer_thread_cancel()" for the critical section instead.  Cancellation
+    delivery is suspended for the duration of the call, so the lock is acquired and the ownership is released, and the
+    request itself is left completely intact - the flag, its reason, and its program scope all survive, and the first
+    check point after the call raises \c THREAD-CANCELLED again with the original reason:
+
+    @code{.py}
+%modern
+release() {
+    defer_thread_cancel(sub () {
+        m.lock();
+        on_exit m.unlock();
+        owned = False;
+        cond.broadcast();
+    });
+}
+    @endcode
+
+    This is what distinguishes it from @ref Qore::clear_thread_cancel() "clear_thread_cancel()", which discards the
+    request irrecoverably: a thread cannot re-cancel itself.  Keep the section small and bounded - a cancellation
+    request cannot break a deadlock inside it, so it must not perform remote I/O and must not wait on anything that
+    can only be released by a thread that is itself waiting for this thread.
+
+    @note A cancellation request applies to the code it was aimed at, and no further.  Cleanup that the runtime itself
+    runs after that code has returned - thread-resource cleanup, object destructors, and thread-local data deletion at
+    thread teardown, and the same work when a @ref Qore::Thread::ThreadPool "ThreadPool" or async I/O worker finishes a
+    task - runs with the request already ended, so it cannot be aborted part-way through, and a request aimed at one
+    pooled task never cancels an unrelated later task on the same worker thread.
 
     @subsection cancel_security Cancellation and Sandboxing
 
@@ -394,8 +445,10 @@ try {
     executing in that program will receive a \c PROGRAM-INTERRUPTED exception at the next check point.
 
     Sandboxed code that does not have the \c THREAD_CONTROL functional domain cannot call
-    @ref Qore::clear_thread_cancel() "clear_thread_cancel()", making cancellation effectively unavoidable. This is
-    intentional: it ensures that untrusted code cannot ignore cancellation requests from the host environment.
+    @ref Qore::clear_thread_cancel() "clear_thread_cancel()" or @ref Qore::defer_thread_cancel()
+    "defer_thread_cancel()", making cancellation effectively unavoidable. This is intentional: it ensures that
+    untrusted code cannot ignore cancellation requests from the host environment.  Trusted code that can defer still
+    cannot make a thread permanently uncancellable, because the deferral ends when the cleanup call returns.
 
     @since %Qore 3.0
 */

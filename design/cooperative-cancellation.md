@@ -53,7 +53,22 @@ DLLEXPORT int qore_cancel_thread(int tid, const char* reason = nullptr);
 
 // Clear the cancellation flag for the current thread.
 DLLEXPORT void qore_clear_thread_cancel();
+
+// Defer delivery of cancellation and program interrupt on the current thread while a bounded
+// cleanup critical section runs; the pending request is left untouched.  Returns 0 if pushed,
+// -1 if the current thread has no thread data (do not pop in that case).
+DLLEXPORT int qore_push_cancel_deferral();
+DLLEXPORT void qore_pop_cancel_deferral();
+
+// True while delivery is deferred; blocking primitives use this to wait without polling.
+DLLEXPORT bool qore_is_cancel_deferred();
+
+// RAII wrapper (header-inline); use this rather than the raw push/pop.
+class QoreCancelDeferralHelper;
 ```
+
+See [Cleanup Critical Sections](#cleanup-critical-sections) for what this is for and what it
+guarantees.
 
 ### Lower-Level APIs
 
@@ -365,11 +380,21 @@ bool thread_cancelled();
 
 #! Clears the cancellation flag for the current thread
 /** Call this after catching a THREAD-CANCELLED exception if the thread
-    should continue running (e.g., to complete cleanup operations).
+    should continue running.  The request is discarded and cannot be restored:
+    a thread cannot re-cancel itself.
 
     @since Qore 3.0
 */
 nothing clear_thread_cancel();
+
+#! Calls the given code with cancellation and program interruption deferred
+/** For a short cleanup critical section that must complete on a cancelled thread.
+    The pending request survives the call untouched and is raised again at the first
+    cancellation point after it returns.  Requires THREAD_CONTROL.
+
+    @since Qore 3.0
+*/
+auto defer_thread_cancel(code cleanup, ...);
 ```
 
 ### Program Interrupt (Existing)
@@ -610,14 +635,114 @@ the exception again. Call `clear_thread_cancel()` to continue running.
 If the exception propagates uncaught to the background thread's top level, it's logged
 to stderr (existing behavior for unhandled background thread exceptions).
 
-### Thread Cleanup
+### Cleanup Critical Sections
 
-When a cancelled thread's exception propagates to the top of `op_background_thread()`,
-the existing cleanup path handles everything — no special cleanup path is needed:
-- `purge_thread_resources()` — thread resources
-- `td->del()` — thread data
-- `xsink.handleExceptions()` — logs unhandled exception
-- `thread_list.deleteDataRelease()` — releases TID slot (clears cancel flag)
+A cancellation request is **sticky**: it stays set until it is cleared, so every cancellation
+point raises again — including the cancellation points inside the *cleanup* that runs while
+unwinding from the cancellation that was just delivered.  That makes the ordinary `on_exit`
+ownership-release idiom unsafe on a cancelled thread:
+
+```qore
+release() {
+    # BROKEN on a cancelled thread: Mutex::lock() is itself a cancellation point, so it throws
+    # before "owned" is cleared; the ownership leaks and every waiter blocks forever
+    m.lock();
+    on_exit m.unlock();
+    owned = False;
+    cond.broadcast();
+}
+```
+
+`clear_thread_cancel()` is not a fix: it discards the flag, the reason, and the scope, and the
+thread cannot restore them afterwards — `cancel_thread(gettid())` is rejected, because
+self-cancellation is an error.  So the cleanup would have to choose between failing and silently
+swallowing the cancellation.
+
+The supported primitive is a **deferral**: a per-thread nesting depth
+(`ThreadData::cancel_defer_count`) that makes `qore_check_cancel()` report "not cancelled"
+*without touching the pending request*.
+
+```cpp
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = thread_data.get();
+    if (td && td->cancel_defer_count) {
+        return false;
+    }
+    ...
+}
+```
+
+Properties this gives the contract:
+
+- **Both levels are deferred.** The early return precedes the program-interrupt check as well,
+  so a cleanup section also completes under `SandboxManager::requestInterrupt()`.
+- **Nothing is lost.** The flag, the reason string, and the scope program ID are untouched, so
+  the first cancellation point after the depth returns to zero raises `THREAD-CANCELLED` (or
+  `PROGRAM-INTERRUPTED`) with the original diagnostics.
+- **Observation is unaffected.** `thread_cancelled()` / `qore_is_thread_cancel_requested()` do
+  not consult the depth, so cleanup code can still see that its caller was cancelled.
+- **No atomics.** Only the owning thread reads or writes the counter.
+- **No polling.** The lock-acquisition primitives call `qore_is_cancel_deferred()` and wait
+  without a poll interval, since no cancellation can be delivered while a deferral is active.
+  With a caller-supplied timeout they wait out the whole remaining timeout in one wait.
+
+The Qore-level API is a call, not an object, so the deferral is *structurally* bounded — it
+cannot be stored in a member and outlive the cleanup, and it is released when the closure throws:
+
+```qore
+release() {
+    defer_thread_cancel(sub () {
+        m.lock();
+        on_exit m.unlock();
+        owned = False;
+        cond.broadcast();
+    });
+}
+```
+
+It carries the `THREAD_CONTROL` functional domain, like `clear_thread_cancel()`, so a
+`PO_NO_THREAD_CONTROL` program cannot defer at all.  In C++, use the header-inline RAII
+`QoreCancelDeferralHelper` rather than the raw push/pop.
+
+The deferral is only for cleanup that runs **while the cancelled code is still on the stack**.
+Cleanup the runtime runs *after* that code has returned uses the stronger rule below.
+
+### Thread Cleanup and Worker Recycling
+
+A cancellation request applies to the code it was aimed at, and no further.  Once that code has
+returned, `end_thread_cancellation()` clears the request outright — deferring it would be wrong,
+because there is nothing left that should observe it, and leaving it set breaks two things:
+
+1. **Teardown is Qore code.** `purge_thread_resources()`, `ThreadData::del()` (which discards
+   `thread_local` values, running their destructors), and the debugger detach handlers all hit
+   cancellation points.  With the flag still set, a destructor that takes a lock to release
+   ownership throws instead — the same leak, moved into thread teardown.
+2. **Pooled workers outlive their tasks.** A `ThreadPool` or async I/O worker is reused, so a
+   request aimed at one task would cancel the next, unrelated task on the same thread at its
+   first check point, with a stale reason.
+
+Call sites, each placed immediately after the targeted code returns.  `terminating` sites also
+push a cancellation deferral that is never popped, so a request delivered *while* teardown is
+already running cannot abort it either; the deferral lives in the thread data and dies with it.  A
+pooled worker must stay cancellable for its next task, so its per-task sites clear only.
+
+| Site | Covers | `terminating` |
+|---|---|---|
+| `op_background_thread()`, after `btp->exec()` | `background` threads | yes |
+| `q_run_thread()`, after `ta->run()` | `q_start_thread()` threads (including pool worker threads) | yes |
+| `q_deregister_foreign_thread()` | foreign threads | yes |
+| `q_deregister_reserved_foreign_thread()` | foreign threads keeping a reserved TID | yes |
+| `delete_thread_local_data()` | the initial thread at process exit | yes |
+| `clear_all_program_thread_local_data()` | worker recycling (backstop for both pools) | no |
+| `ThreadPoolThread::worker()`, after the task's `handleExceptions()` | `ThreadPool` tasks | no |
+| `QoreCallDispatcher::workerLoop()`, after the dispatch | async I/O work items | no |
+
+`ThreadEntry::activate()` additionally clears the state on every activation.  A `QTS_RESERVED`
+entry is reactivated *without* passing through `ThreadEntry::cleanup()`, so without this a
+request delivered during one activation would leak into the next thread to use that TID.
+
+After teardown, `thread_list.deleteDataRelease()` releases the TID slot, whose
+`ThreadEntry::cleanup()` clears the state again.
 
 ### Program Scope: Who Can Cancel Whom?
 
@@ -834,7 +959,7 @@ do_io_operation();  # Works normally, no overhead
 
 1. **Naming**: `cancel_thread()` vs `interrupt_thread()`? Using "cancel" is clearer than "interrupt" (avoids confusion with OS signals) and matches `pthread_cancel` terminology while being safe/cooperative.
 
-2. **Mutex/RWLock cancellation**: Should `cancel_thread()` wake threads blocked in `Mutex::lock()`? With broadcast-on-cancel (Qore 3.0), this no longer requires timed waits — SmartMutex/RWLock can register `waiting_on` around their internal `wait()` calls and be woken by broadcast.  Deferred to a future phase.
+2. **Mutex/RWLock cancellation**: Should `cancel_thread()` wake threads blocked in `Mutex::lock()`? With broadcast-on-cancel (Qore 3.0), this no longer requires timed waits — SmartMutex/RWLock can register `waiting_on` around their internal `wait()` calls and be woken by broadcast.  Deferred to a future phase; until then these primitives detect cancellation within one 500ms poll interval.  (Inside a cleanup deferral they already wait without polling, since no cancellation can be delivered there.)
 
 3. **`join_thread(tid)`**: Currently there's no way to wait for a background thread to finish. `cancel_thread()` is more useful when paired with a join. Could be implemented separately using a per-thread condition variable signaled at thread exit.
 
@@ -846,4 +971,6 @@ do_io_operation();  # Works normally, no overhead
 
 - **Qore 2.0**: Initial implementation of program interrupt infrastructure
 - **Qore 2.1**: Added `QoreSandboxManagerHelper` RAII class for safe access; removed raw `QoreSandboxManager*` from public API to prevent use-after-free; modules audited and updated for interruptible I/O and sandboxing
-- **Qore 3.0**: Unified cancellation API (`qore_check_cancel`); added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable; replaced the same-program restriction on `cancel_thread()` with the target-evaluated program scope rule (see [Program Scope](#program-scope-who-can-cancel-whom)), making a thread blocked inside a child program cancellable by the program that called into it
+- **Qore 3.0**: Unified cancellation API (`qore_check_cancel`); added cleanup critical sections
+  (`defer_thread_cancel()` / `qore_push_cancel_deferral()`) and made thread teardown and pooled
+  worker recycling end the request rather than run under it; added per-thread cancellation (`cancel_thread`, `thread_cancelled`, `clear_thread_cancel`); replaced 500ms polling in `QoreCondition::waitWithInterrupt` with broadcast-on-cancel (`ThreadEntry::waiting_on`), eliminating O(N) wakeup contention when many threads share a single condition variable; replaced the same-program restriction on `cancel_thread()` with the target-evaluated program scope rule (see [Program Scope](#program-scope-who-can-cancel-whom)), making a thread blocked inside a child program cancellable by the program that called into it

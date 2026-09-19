@@ -411,6 +411,24 @@ DLLLOCAL VLock* getVLock();
 DLLLOCAL void end_signal_thread(ExceptionSink* xsink);
 DLLLOCAL void delete_thread_local_data();
 
+//! Ends cancellation for a thread that has stopped running the code a cancellation request targeted
+/** Call this as soon as the targeted code has returned - at the start of thread teardown, or when a
+    pooled worker finishes a task - so that the cleanup that follows (destructors, thread-resource
+    callbacks, thread-local data deletion) cannot be aborted at one of its own cancellation check
+    points, and so that a request aimed at one task cannot cancel unrelated later tasks scheduled on
+    the same worker thread.
+
+    Cleanup that runs while the targeted code is still on the stack must use
+    @ref qore_push_cancel_deferral() instead, so that the request survives the cleanup.
+
+    @param terminating true if the thread itself is finishing, in which case cancellation is also
+    deferred for the rest of the thread's life, so that a request delivered while teardown is
+    already running cannot abort it either.  That deferral needs no matching pop: it lives in the
+    thread data, which is deleted as the thread finishes.  Pass false for a pooled worker that will
+    go on to run further tasks and must stay cancellable.
+*/
+DLLLOCAL void end_thread_cancellation(bool terminating = false);
+
 //! Clears all Qore program-level thread-local data on the calling thread without
 //! destroying thread registration
 /** Called by worker pool threads (ThreadPool, AsyncIoController) between tasks to

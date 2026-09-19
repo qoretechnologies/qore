@@ -132,6 +132,19 @@ public:
 
     DLLLOCAL void cleanup();
 
+    //! Clears any pending cancellation request and its reason; must be called with thread_list.lck held
+    /** The lock serializes the reason string against a concurrent cancelThread() call, which would
+        otherwise be able to replace (and deref) it between the read and the deref here.
+    */
+    DLLLOCAL void clearCancelState() {
+        cancel_requested.store(false, std::memory_order_release);
+        cancel_scope_pgm_id.store(0, std::memory_order_release);
+        if (cancel_reason) {
+            cancel_reason->deref();
+            cancel_reason = nullptr;
+        }
+    }
+
     DLLLOCAL void allocate(tid_node* tn, int stat = QTS_NA);
 
     DLLLOCAL void activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign = false,
@@ -384,12 +397,7 @@ public:
 protected:
     //! Clears all cancellation state for the given thread; lck must be held
     DLLLOCAL void clearCancelIntern(int tid) {
-        entry[tid].cancel_requested.store(false, std::memory_order_release);
-        entry[tid].cancel_scope_pgm_id.store(0, std::memory_order_release);
-        if (entry[tid].cancel_reason) {
-            entry[tid].cancel_reason->deref();
-            entry[tid].cancel_reason = nullptr;
-        }
+        entry[tid].clearCancelState();
     }
 
     // lock for reading the thread list

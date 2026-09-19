@@ -1170,6 +1170,88 @@ nothing clear_thread_cancel() [dom=THREAD_CONTROL] {
     qore_clear_thread_cancel();
 }
 
+//! Calls the given @ref call_reference "call reference" or @ref closure "closure" with thread cancellation and program interruption deferred, and returns the result
+/** Use this function for a short cleanup critical section that must complete even though the
+    current thread has already been cancelled or its @ref Qore::Program "Program" has been
+    interrupted: acquire a lock, release the ownership the thread holds, signal waiters, unlock.
+
+    Without it, the cleanup's own lock acquisition is a cancellation check point and throws
+    \c THREAD-CANCELLED before the ownership is released, so the ownership is leaked and threads
+    waiting for it block forever.  This is the failure mode of the common
+    @ref on_exit "on_exit statement" cleanup idiom:
+    @code{.py}
+release() {
+    # BROKEN when the calling thread has already been cancelled: lock() throws and "owned"
+    # is never cleared
+    m.lock();
+    on_exit m.unlock();
+    owned = False;
+    cond.broadcast();
+}
+    @endcode
+
+    @par Cancellation is deferred, not discarded
+    The pending cancellation request is left completely untouched: the flag, its reason, and its
+    @ref Qore::cancel_thread() "program scope" all survive, thread_cancelled() keeps returning
+    @ref True inside \a cleanup, and the first cancellation check point after this function returns
+    raises \c THREAD-CANCELLED again with the original reason.  This is what distinguishes this
+    function from clear_thread_cancel(), which discards the request irrecoverably: a thread cannot
+    re-cancel itself.
+
+    The deferral is released when \a cleanup returns, including when it throws, and calls nest.
+
+    @param cleanup the @ref call_reference "call reference" or @ref closure "closure" to call with
+    cancellation deferred
+    @param ... any optional arguments to \a cleanup
+
+    @return the value returned by \a cleanup
+
+    @par Example:
+    @code{.py}
+release() {
+    defer_thread_cancel(sub () {
+        m.lock();
+        on_exit m.unlock();
+        owned = False;
+        cond.broadcast();
+    });
+}
+    @endcode
+
+    @warning Keep the scope small and bounded.  A cancellation request cannot break a deadlock
+    inside a deferral, so \a cleanup must not perform remote I/O and must not wait on anything
+    that can only be released by a thread that is itself waiting for this thread.
+
+    @note Requires the \c THREAD_CONTROL functional domain, like clear_thread_cancel(); untrusted
+    code in a @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" program cannot defer
+    cancellation and therefore cannot use this to escape a cancellation or interrupt request.
+    Unlike clear_thread_cancel(), the deferral also ends by itself when \a cleanup returns, so even
+    trusted code cannot use it to make a thread permanently uncancellable.
+
+    @throw THREAD-CANCELLED not thrown by this function, but thrown by the next cancellation check
+    point reached after it returns, if the thread is still cancelled
+
+    @since %Qore 3.0
+
+    @see
+    - cancel_thread()
+    - thread_cancelled()
+    - clear_thread_cancel()
+*/
+auto defer_thread_cancel(code cleanup, ...) [dom=THREAD_CONTROL] {
+    // declared first so that it is destroyed last: the deferral covers the argument list's own
+    // teardown, which can run destructors.  The helper's destructor releases it on every path,
+    // including when the call throws.
+    QoreCancelDeferralHelper cdh;
+    ReferenceHolder<QoreListNode> vargs(xsink);
+    // if there are arguments to pass, create the argument list by copying the current list after
+    // the callable
+    if (num_args(args) > 1) {
+        vargs = args->copyListFrom(1);
+    }
+    return cleanup->execValue(*vargs, xsink);
+}
+
 //! Calls the given code in a background thread and returns a Future for the result
 /** This function creates a Promise, spawns a background thread that calls the given function
     with the given arguments, and returns the associated Future. If the function throws an exception,

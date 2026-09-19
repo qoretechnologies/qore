@@ -100,8 +100,9 @@ qclass AutoSemaphore [dom=THREAD_CLASS; arg=QoreAutoSemaphore* as; ns=Qore::Thre
     @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the constructor is blocked
  */
 AutoSemaphore::constructor(Semaphore[QoreSemaphore] semaphore) [flags=NAMED_ARGS] {
-    // Acquire the semaphore with polling for cancellation support
-    const int poll_ms = 500;
+    // no cancellation can be delivered while cancellation is deferred, so the wait is
+    // made without polling: a timeout of 0 means "wait indefinitely"
+    const int64 poll_ms = qore_is_cancel_deferred() ? 0 : 500;
     while (true) {
         if (qore_check_cancel(xsink, "semaphore acquire")) {
             return;

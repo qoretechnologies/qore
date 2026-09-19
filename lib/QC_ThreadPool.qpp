@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/ThreadPool.h"
 #include "qore/intern/QoreThreadList.h"
+#include "qore/intern/qore_thread_intern.h"
 
 static void tpt_start_thread(ExceptionSink* xsink, ThreadPoolThread* tpt) {
    tpt->worker(xsink);
@@ -64,6 +65,9 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // next ThreadTask::run() sees *xsink == true in the program-context check
         // and silently skips execution.
         xsink->handleExceptions();
+        // the task has finished: end any cancellation aimed at it before running its destructors,
+        // and so that the request cannot carry over to the next, unrelated task on this worker
+        end_thread_cancellation();
         sl.lock();
         task->del(xsink);
         task = 0;

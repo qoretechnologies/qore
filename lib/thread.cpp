@@ -416,6 +416,16 @@ public:
     // own manager, so re-entering sandboxed code (a callback) stays sandboxed.
     unsigned sandbox_policy_barrier = 0;
 
+    // cancellation-deferral depth; while non-zero, qore_check_cancel() reports "not cancelled"
+    // without touching the pending request, so that a bounded cleanup critical section (acquire a
+    // lock, release ownership, signal waiters, unlock) can run to completion on a thread that has
+    // already been cancelled or whose Program has been interrupted.  The request itself - the
+    // flag, its reason, and its scope - is left exactly as delivered, so the first cancellation
+    // point after the depth returns to zero raises it again with the original diagnostics.  Only
+    // the owning thread reads or writes this counter, so no atomics are required.
+    // See design/cooperative-cancellation.md
+    unsigned cancel_defer_count = 0;
+
     // the sandbox context of the thread that started the operation that this thread is continuing; when set, it
     // replaces the sandbox manager resolution below (see QoreSandboxContextHelper)
     const QoreSandboxContext* sandbox_context = nullptr;
@@ -746,6 +756,10 @@ void ThreadEntry::allocate(tid_node* tn, int stat) {
 
 void ThreadEntry::activate(int tid, pthread_t n_ptid, QoreProgram* p, bool foreign, int flags) {
     assert(status == QTS_NA || status == QTS_RESERVED);
+    // a QTS_RESERVED entry is reactivated without passing through cleanup(), so a cancellation
+    // request delivered during the previous activation would otherwise leak into the new thread and
+    // cancel it at its first check point with a stale reason
+    clearCancelState();
     ptid = n_ptid;
     // The native reaper owns external-lifecycle threads until pthread_join() completes.
     // Set this on activation, before the thread can release/reuse its Qore TID.
@@ -776,12 +790,7 @@ void ThreadEntry::cleanup() {
     }
 
     // clear per-thread cancellation state
-    cancel_requested.store(false, std::memory_order_relaxed);
-    cancel_scope_pgm_id.store(0, std::memory_order_relaxed);
-    if (cancel_reason) {
-        cancel_reason->deref();
-        cancel_reason = nullptr;
-    }
+    clearCancelState();
     // a thread in waitWithInterrupt clears waiting_on before returning, so it must be null here,
     // but be defensive against any future code path that exits without clearing
     waiting_on.store(nullptr, std::memory_order_relaxed);
@@ -3149,6 +3158,15 @@ void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign, int 
     thread_list.activate(tid, ptid, p, foreign, flags);
 }
 
+void end_thread_cancellation(bool terminating) {
+    thread_list.clearCancel(q_gettid());
+    if (terminating) {
+        // no request delivered from here on can take effect either; the deferral needs no matching
+        // pop because it lives in the thread data, which is deleted as the thread finishes
+        qore_push_cancel_deferral();
+    }
+}
+
 static void qore_thread_cleanup(void* n = nullptr) {
 #ifdef HAVE_MPFR_BUILDOPT_TLS_P
     // only call mpfr_free_cache if MPFR uses TLS
@@ -3186,6 +3204,9 @@ int q_deregister_foreign_thread() {
     if (!td || !td->foreign) {
         return -1;
     }
+
+    // the thread is terminating; cleanup below must not be aborted by a cancellation
+    end_thread_cancellation(true);
 
     // set thread entry as not available while it's being deleted
     thread_list.setStatus(td->tid, QTS_NA);
@@ -3242,6 +3263,10 @@ int q_deregister_reserved_foreign_thread() {
     if (!td || !td->foreign) {
         return -1;
     }
+
+    // the thread is terminating; cleanup below must not be aborted by a cancellation, and the TID
+    // entry stays QTS_RESERVED, so a request left set here would leak into its next use
+    end_thread_cancellation(true);
 
     // set thread entry as RESERVED immediately
     thread_list.setStatus(td->tid, QTS_RESERVED);
@@ -3470,6 +3495,8 @@ namespace {
                     tlpd->dbgAttach(&xsink);
                 }
                 ta->run(&xsink);
+                // the thread function has returned; everything from here on is teardown
+                end_thread_cancellation(true);
                 if (tlpd) {
                     QoreValue val((AbstractQoreNode*)nullptr);
                     tlpd->dbgExit(nullptr, val, &xsink);
@@ -3554,6 +3581,8 @@ namespace {
                     }
                     // run thread expression
                     rv = btp->exec(&xsink);
+                    // the thread expression has returned; everything from here on is teardown
+                    end_thread_cancellation(true);
                     if (tlpd) {
                         // notify return value and notify thread detach to program
                         tlpd->dbgExit(nullptr, rv, &xsink);
@@ -3976,6 +4005,11 @@ void clear_all_program_thread_local_data() {
         return;
     }
 
+    // the task this worker was running has finished: end any cancellation aimed at it, both so the
+    // destructors and thread-resource cleanup below cannot be aborted, and so the request does not
+    // carry over and immediately cancel the next, unrelated task scheduled on this worker
+    end_thread_cancellation();
+
     // NOTE: do NOT clear td->runtime_loc here — it is needed for exception call stack
     // generation if subsequent cleanup code (e.g. object destructors) throws
 
@@ -4004,6 +4038,9 @@ void clear_all_program_thread_local_data() {
 
 void delete_thread_local_data() {
     ThreadData* td = thread_data.get();
+
+    // the thread is terminating; cleanup below must not be aborted by a cancellation
+    end_thread_cancellation(true);
 
     // clear runtime location
     td->runtime_loc = nullptr;
@@ -4443,9 +4480,18 @@ static bool check_cancel_in_scope(int tid) {
 }
 
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
+    ThreadData* td = thread_data.get();
+    // a cleanup critical section must be able to complete on a cancelled or interrupted thread;
+    // the pending request is deliberately left untouched here, so the first cancellation point
+    // after the deferral scope ends raises it with the original reason and scope
+    if (td && td->cancel_defer_count) {
+        return false;
+    }
     // check thread-level cancellation first (cheap: one atomic load); the scope of a pending
     // request is only evaluated in the rare case that a request is actually pending
-    int tid = q_gettid();
+    // NOTE: when destroying objects in the static namespace this can run after the thread data has
+    // been destroyed, in which case q_gettid() reports TID 0, which is never cancel-requested
+    int tid = td ? td->tid : 0;
     if (thread_list.isCancelRequested(tid) && check_cancel_in_scope(tid)) {
         if (xsink) {
             // hold a reference while formatting; a concurrent cancelThread() call would otherwise
@@ -4487,6 +4533,32 @@ int qore_cancel_thread(int tid, const char* reason) {
 
 void qore_clear_thread_cancel() {
     thread_list.clearCancel(q_gettid());
+}
+
+int qore_push_cancel_deferral() {
+    ThreadData* td = thread_data.get();
+    if (!td) {
+        return -1;
+    }
+    ++td->cancel_defer_count;
+    return 0;
+}
+
+void qore_pop_cancel_deferral() {
+    ThreadData* td = thread_data.get();
+    if (td) {
+        // an unbalanced pop would wrap the counter and leave the thread permanently uncancellable,
+        // so the underflow is refused in release builds as well
+        assert(td->cancel_defer_count);
+        if (td->cancel_defer_count) {
+            --td->cancel_defer_count;
+        }
+    }
+}
+
+bool qore_is_cancel_deferred() {
+    ThreadData* td = thread_data.get();
+    return td && td->cancel_defer_count;
 }
 
 bool qore_is_thread_cancel_requested() {

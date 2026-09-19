@@ -119,8 +119,9 @@ rwl.readLock();
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
 nothing RWLock::readLock() {
-    // Always poll for cancel/interrupt checking
-    const int poll_ms = 500;  // 500ms polling interval
+    // no cancellation can be delivered while cancellation is deferred, so the wait is
+    // made without polling: a timeout of 0 means "wait indefinitely"
+    const int64 poll_ms = qore_is_cancel_deferred() ? 0 : 500;
     while (true) {
         if (qore_check_cancel(xsink, "read lock")) {
             return QoreValue();
@@ -159,8 +160,9 @@ if (rwl.readLock(timeout_ms: 1500ms))
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 int RWLock::readLock(timeout timeout_ms) [flags=NAMED_ARGS] {
-    // Always poll for cancel/interrupt checking
-    const int poll_ms = 500;  // 500ms polling interval
+    // no cancellation can be delivered while cancellation is deferred, so the wait is
+    // made without polling: a timeout of 0 means "wait indefinitely"
+    const int64 poll_ms = qore_is_cancel_deferred() ? 0 : 500;
     int64 remaining = timeout_ms;
     bool infinite = (timeout_ms <= 0);
 
@@ -169,11 +171,14 @@ int RWLock::readLock(timeout timeout_ms) [flags=NAMED_ARGS] {
             return -1;
         }
 
-        int this_timeout;
+        int64 this_timeout;
         if (infinite) {
             this_timeout = poll_ms;
+        } else if (!poll_ms) {
+            // deferred: honor the caller's timeout exactly in a single wait
+            this_timeout = remaining;
         } else {
-            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+            this_timeout = (remaining > poll_ms) ? poll_ms : remaining;
         }
 
         int rc = rwl->readLock(xsink, this_timeout);
@@ -229,8 +234,9 @@ if (rwl.writeLock(timeout_ms: 1500ms))
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 int RWLock::writeLock(timeout timeout_ms) [flags=NAMED_ARGS] {
-    // Always poll for cancel/interrupt checking
-    const int poll_ms = 500;  // 500ms polling interval
+    // no cancellation can be delivered while cancellation is deferred, so the wait is
+    // made without polling: a timeout of 0 means "wait indefinitely"
+    const int64 poll_ms = qore_is_cancel_deferred() ? 0 : 500;
     int64 remaining = timeout_ms;
     bool infinite = (timeout_ms <= 0);
 
@@ -239,11 +245,14 @@ int RWLock::writeLock(timeout timeout_ms) [flags=NAMED_ARGS] {
             return -1;
         }
 
-        int this_timeout;
+        int64 this_timeout;
         if (infinite) {
             this_timeout = poll_ms;
+        } else if (!poll_ms) {
+            // deferred: honor the caller's timeout exactly in a single wait
+            this_timeout = remaining;
         } else {
-            this_timeout = (remaining > poll_ms) ? poll_ms : (int)remaining;
+            this_timeout = (remaining > poll_ms) ? poll_ms : remaining;
         }
 
         int rc = rwl->grab(xsink, this_timeout);
@@ -277,8 +286,9 @@ rwl.writeLock();
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 nothing RWLock::writeLock() {
-    // Always poll for cancel/interrupt checking
-    const int poll_ms = 500;  // 500ms polling interval
+    // no cancellation can be delivered while cancellation is deferred, so the wait is
+    // made without polling: a timeout of 0 means "wait indefinitely"
+    const int64 poll_ms = qore_is_cancel_deferred() ? 0 : 500;
     while (true) {
         if (qore_check_cancel(xsink, "write lock")) {
             return QoreValue();

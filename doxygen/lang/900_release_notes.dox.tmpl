@@ -889,10 +889,17 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - <b>Cooperative thread cancellation</b> with @ref Qore::cancel_thread() "cancel_thread()" (request
       cancellation of another thread by TID with an optional reason),
       @ref Qore::thread_cancelled() "thread_cancelled()" (lightweight poll of the current thread's flag),
-      and @ref Qore::clear_thread_cancel() "clear_thread_cancel()".  The target is never forcefully
+      @ref Qore::clear_thread_cancel() "clear_thread_cancel()", and
+      @ref Qore::defer_thread_cancel() "defer_thread_cancel()" (run a
+      @ref cancel_cleanup "cleanup critical section" - acquire a lock, release ownership, signal waiters -
+      that completes on an already-cancelled thread while leaving the request pending with its original
+      reason).  The target is never forcefully
       terminated; a \c THREAD-CANCELLED exception is raised at the next check point, and check points are
       built into language-level loops, sleeps, every threading primitive, pipe I/O, file locking, and
-      backquote operations.  Cancellation shares one internal check with the
+      backquote operations.  A request applies only to the code it was aimed at: thread teardown, object
+      destructors, and @ref Qore::Thread::ThreadPool "ThreadPool" / async I/O worker recycling all run with
+      the request already ended, so cleanup cannot be aborted part-way through and a request aimed at one
+      pooled task never cancels an unrelated later task.  Cancellation shares one internal check with the
       @ref Qore::SandboxManager "SandboxManager" interrupt mechanism, requires the \c THREAD_CONTROL
       functional domain to request or clear (so sandboxed code cannot escape it), and is scoped by
       @ref Qore::Program "Program": a sandboxed @ref Qore::Program "Program" can cancel only threads executing in it or in a
@@ -1032,6 +1039,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         aliases; use these functions instead of @ref Qore::sprintf() "sprintf()" and
         @ref Qore::vsprintf() "vsprintf()" when formatting values that can be arbitrarily large, such as when
         logging values that reach live internal data structures
+      - @ref Qore::defer_thread_cancel() "defer_thread_cancel()": calls a closure with thread cancellation and
+        program interruption deferred, so that a @ref cancel_cleanup "cleanup critical section" can release
+        ownership on a cancelled thread; the request is left pending with its original reason
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (<a href="https://datatracker.ietf.org/doc/html/rfc1951">RFC 1951</a>) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::getaddrinfo_async() "getaddrinfo_async()": Future-returning async DNS address lookup backed by

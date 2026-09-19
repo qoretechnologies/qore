@@ -1543,6 +1543,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             }
         }
 
+        // the dispatched work item has finished: end any cancellation aimed at it before the
+        // derefs below run their destructors, and so that the request cannot carry over to the
+        // next, unrelated work item on this worker
+        end_thread_cancellation();
+
         if (work_xsink) {
             QoreStringValueHelper err_str(work_xsink.getExceptionErr());
             QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());

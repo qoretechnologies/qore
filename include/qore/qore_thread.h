@@ -513,11 +513,92 @@ DLLEXPORT void qore_clear_thread_cancel();
 //! Returns true if cancellation has been requested for the current thread
 /** Non-throwing check — allows code to detect cancellation without triggering an exception.
 
+    @note this is an observation of the pending request and is therefore not affected by an active
+    cancellation deferral (see @ref qore_push_cancel_deferral()); cleanup code can use it to detect
+    that its caller was cancelled while the cleanup itself is protected
+
     @return true if cancellation has been requested
 
     @since %Qore 2.2
 */
 DLLEXPORT bool qore_is_thread_cancel_requested();
+
+//! Defers cancellation and program-interrupt delivery on the current thread
+/** Use this to run a short cleanup critical section — acquire a lock, release ownership, signal
+    waiters, unlock — that must complete even though the thread has already been cancelled or its
+    %Program has been interrupted.  Without it, the cleanup's own lock acquisition is a cancellation
+    point and raises \c THREAD-CANCELLED before the ownership is released, so the ownership is
+    leaked and later waiters block forever.
+
+    While a deferral is active, @ref qore_check_cancel() reports "not cancelled" without altering
+    the pending request: the flag, its reason, and its scope survive untouched, so the first
+    cancellation point after the deferral ends raises the exception with the original diagnostics.
+    This is what distinguishes deferral from qore_clear_thread_cancel(), which discards the request
+    irrecoverably — a thread cannot re-cancel itself.
+
+    Deferrals nest; each successful call must be matched by exactly one call to
+    @ref qore_pop_cancel_deferral().  Use @ref QoreCancelDeferralHelper for exception safety.
+
+    @warning the scope must be bounded and must not block on anything that can only be released by
+    a thread that is itself waiting for this thread: a cancellation request cannot break a deadlock
+    inside a deferral scope.  Never wrap remote I/O or an unbounded wait in a deferral.
+
+    @return 0 if the deferral was pushed, -1 if the current thread has no thread data (in which case
+    @ref qore_pop_cancel_deferral() must not be called)
+
+    @since %Qore 3.0
+
+    @see QoreCancelDeferralHelper
+*/
+DLLEXPORT int qore_push_cancel_deferral();
+
+//! Pops a cancellation deferral pushed with @ref qore_push_cancel_deferral()
+/** @since %Qore 3.0
+*/
+DLLEXPORT void qore_pop_cancel_deferral();
+
+//! Returns true if cancellation delivery is currently deferred on this thread
+/** Allows blocking primitives to skip their cancellation poll interval and wait without polling,
+    since no cancellation can be delivered while a deferral is active.
+
+    @since %Qore 3.0
+*/
+DLLEXPORT bool qore_is_cancel_deferred();
+
+//! Defers cancellation delivery on the current thread for the lifetime of the object
+/** Exception-safe RAII wrapper for @ref qore_push_cancel_deferral() /
+    @ref qore_pop_cancel_deferral().
+
+    @code{.cpp}
+// release ownership even if this thread has already been cancelled
+{
+    QoreCancelDeferralHelper cdh;
+    AutoLocker al(lck);
+    owners.erase(id);
+    cond.broadcast();
+}
+// the pending cancellation is raised again at the next cancellation point here
+    @endcode
+
+    @since %Qore 3.0
+*/
+class QoreCancelDeferralHelper {
+public:
+    DLLLOCAL QoreCancelDeferralHelper() : active(!qore_push_cancel_deferral()) {
+    }
+
+    DLLLOCAL ~QoreCancelDeferralHelper() {
+        if (active) {
+            qore_pop_cancel_deferral();
+        }
+    }
+
+    DLLLOCAL QoreCancelDeferralHelper(const QoreCancelDeferralHelper&) = delete;
+    DLLLOCAL QoreCancelDeferralHelper& operator=(const QoreCancelDeferralHelper&) = delete;
+
+private:
+    bool active;
+};
 
 ///@}
 

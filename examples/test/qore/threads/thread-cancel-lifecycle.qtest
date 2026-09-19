@@ -1,0 +1,188 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ThreadCancelLifecycleTest
+
+#! releases an ownership from its destructor, the way a scope guard object does
+class TeardownRelease {
+    private {
+        *code release;
+    }
+
+    constructor(code n_release) {
+        release = n_release;
+    }
+
+    destructor() {
+        call_function(release);
+    }
+}
+
+thread_local *TeardownRelease teardown_release;
+
+#! ownership that other threads wait for, protected by a lock the cleanup has to acquire
+class Reservation {
+    private {
+        Mutex m();
+        Condition cond();
+        bool owned = True;
+    }
+
+    release() {
+        m.lock();
+        on_exit m.unlock();
+        owned = False;
+        cond.broadcast();
+    }
+
+    #! blocks until the ownership is released; returns False if \a to elapses first
+    bool waitForRelease(timeout to) {
+        m.lock();
+        on_exit m.unlock();
+        while (owned) {
+            if (cond.wait(m, to)) {
+                return False;
+            }
+        }
+        return True;
+    }
+}
+
+#! A cancellation request applies to the code it was aimed at, and to nothing after it.
+/** Cleanup the runtime itself runs once that code has returned - thread-resource cleanup, object
+    destructors, and thread-local data deletion at thread teardown, plus the same work when a
+    pooled worker finishes a task - contains cancellation check points of its own.  If the request
+    were still set there, that cleanup would be aborted part-way through and would leak exactly the
+    ownership it exists to release; on a pooled worker the request would additionally carry over and
+    cancel the next, unrelated task.
+*/
+public class ThreadCancelLifecycleTest inherits QUnit::Test {
+    public {
+        const CancelReason = "thread lifecycle test";
+        const WaitTimeout = 30s;
+    }
+
+    constructor() : QUnit::Test("ThreadCancelLifecycleTest", "1.0", \ARGV) {
+        addTestCase("thread teardown runs destructors uncancelled", \testThreadTeardownCleanup());
+        addTestCase("a cancelled pool task does not cancel later tasks", \testPoolWorkerNotPoisoned());
+        addTestCase("pool task cleanup runs uncancelled", \testPoolTaskCleanup());
+
+        set_return_value(main());
+    }
+
+    testThreadTeardownCleanup() {
+        Reservation r();
+        Counter ready(1);
+        Counter blocked(1);
+        Counter done(1);
+        int tid;
+
+        # the ownership is released by a thread-local object's destructor, which the runtime runs
+        # during thread teardown - after the cancellation has been delivered
+        code worker = sub () {
+            teardown_release = new TeardownRelease(sub () { r.release(); });
+            tid = gettid();
+            try {
+                ready.dec();
+                blocked.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("THREAD-CANCELLED", ex.err, "the worker was cancelled");
+                # deliberately leave the cancellation flag set: teardown must cope with it
+            }
+            done.dec();
+        };
+        background worker();
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "the worker started");
+        assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        assertEq(0, done.waitForZero(WaitTimeout), "the worker returned with the flag still set");
+        assertTrue(r.waitForRelease(WaitTimeout),
+            "the thread-local destructor acquired the lock and released the ownership at teardown");
+    }
+
+    testPoolWorkerNotPoisoned() {
+        # one worker thread, kept alive between tasks
+        ThreadPool pool(1, 1, 1, 60s);
+        on_exit pool.stopWait();
+
+        Counter ready(1);
+        Counter blocked(1);
+        Counter first_done(1);
+        int tid;
+
+        pool.submit(sub () {
+            on_exit first_done.dec();
+            tid = gettid();
+            try {
+                ready.dec();
+                blocked.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                # the flag is deliberately NOT cleared: the pool must not carry it to the next task
+                assertEq("THREAD-CANCELLED", ex.err, "the first task was cancelled");
+            }
+        });
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "the first task started");
+        assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        assertEq(0, first_done.waitForZero(WaitTimeout), "the first task finished");
+
+        # the same worker thread must run the next, unrelated task normally
+        Counter second_done(1);
+        int reused_tid;
+        bool cancelled_in_second = True;
+        *hash<ExceptionInfo> second_ex;
+
+        pool.submit(sub () {
+            on_exit second_done.dec();
+            reused_tid = gettid();
+            cancelled_in_second = thread_cancelled();
+            try {
+                Mutex m();
+                m.lock();
+                m.unlock();
+            } catch (hash<ExceptionInfo> ex) {
+                second_ex = ex;
+            }
+        });
+
+        assertEq(0, second_done.waitForZero(WaitTimeout), "the second task finished");
+        assertEq(tid, reused_tid, "the second task ran on the same pooled worker thread");
+        assertFalse(cancelled_in_second, "the cancellation did not carry over to the next task");
+        assertNothing(second_ex, "the next task was not cancelled by the previous task's request");
+    }
+
+    testPoolTaskCleanup() {
+        ThreadPool pool(1, 1, 1, 60s);
+        on_exit pool.stopWait();
+
+        Reservation r();
+        Counter ready(1);
+        Counter blocked(1);
+        Counter done(1);
+        int tid;
+
+        # the task's closure holds the only reference to the guard object, so its destructor runs
+        # as part of the pool's per-task cleanup, after the task's own code has returned
+        pool.submit(sub () {
+            on_exit done.dec();
+            teardown_release = new TeardownRelease(sub () { r.release(); });
+            tid = gettid();
+            try {
+                ready.dec();
+                blocked.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("THREAD-CANCELLED", ex.err, "the task was cancelled");
+            }
+        });
+
+        assertEq(0, ready.waitForZero(WaitTimeout), "the task started");
+        assertTrue(cancel_thread(tid, CancelReason), "cancellation request delivered");
+        assertEq(0, done.waitForZero(WaitTimeout), "the task finished");
+        assertTrue(r.waitForRelease(WaitTimeout),
+            "the pool's per-task cleanup released the ownership");
+    }
+}

@@ -75,8 +75,9 @@ AutoGate ag(gate);
     @since %Qore 3.0 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
 AutoGate::constructor(Gate[QoreGate] gate) [flags=NAMED_ARGS] {
-    // Always poll for cancel/interrupt checking
-    const int poll_ms = 500;  // 500ms polling interval
+    // no cancellation can be delivered while cancellation is deferred, so the wait is
+    // made without polling: a timeout of 0 means "wait indefinitely"
+    const int64 poll_ms = qore_is_cancel_deferred() ? 0 : 500;
     while (true) {
         if (qore_check_cancel(xsink, "gate enter")) {
             return;
