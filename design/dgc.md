@@ -136,8 +136,13 @@ when `deferred_scan` was set). The cycle is then stranded for the life of the pr
 
 `RObject::scan_refs` records what `references` was when `rcount` was assigned (`RObject::setRSet()`). When
 `canDelete()` finds a member with `rcount != references` *and* that member has lost references since the scan,
-the snapshot no longer describes the graph, so it invalidates the rset and asks for a rescan instead of trusting
-it. Members whose reference count is unchanged still return 0 immediately, so this costs no extra scans in the
+the snapshot no longer describes the graph, so it asks for a rescan instead of trusting it. It leaves the set
+in place while doing so: the scan recomputes the components from the live graph and, when they are the ones
+already recorded, confirms the set and records the reference count it saw, which is all the verdict was
+missing. Throwing the set away first would make that scan build an identical one — and since evaluating an
+object into an lvalue holds a temporary reference that is released *after* the scan has recorded its count,
+the next dereference asked for the same rescan again: one assignment of an object in a cycle cost five walks
+of the graph and four discarded sets. Members whose reference count is unchanged still return 0 immediately, so this costs no extra scans in the
 ordinary "something outside still holds it" case, and after a rescan `scan_refs` matches again, so it cannot
 loop.
 

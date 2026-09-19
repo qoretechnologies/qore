@@ -74,6 +74,7 @@ class DgcUnchangedSetsTest inherits QUnit::Test {
         addTestCase("A new cycle still gets a recursive set", \newCycleGetsASet());
         addTestCase("A set left in place is still collected", \unchangedSetIsCollected());
         addTestCase("A set left in place keeps its node watch", \unchangedSetKeepsItsNodeWatch());
+        addTestCase("Assigning a cycle member does not rebuild its set", \assigningACycleMemberKeepsTheSet());
         set_return_value(main());
     }
 
@@ -148,6 +149,34 @@ class DgcUnchangedSetsTest inherits QUnit::Test {
         assertEq(0, ListNode::destroyed, "the list held outside the set keeps the cycle");
         remove c.shared;
         assertEq(2, ListNode::destroyed, "releasing the list collects the cycle");
+    }
+
+    assigningACycleMemberKeepsTheSet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive set counts require a debug build");
+        }
+        hash<string, auto> c = makeOpenCycle(CycleSize);
+        c.holder = new ValueHolder();
+        # Evaluating the object takes a temporary reference that is released after the scan has recorded the
+        # reference count it saw, so the count the set holds for that object looks stale at the next
+        # dereference.  That asks for a rescan, which must confirm the set rather than build an identical one:
+        # rebuilding left the same temporary-reference trail behind and asked for the same rescan again.
+        c.holder.value = c.head;
+
+        int sets = rsetCreateCount();
+        int entered = scanObjectCount();
+        c.holder.value = c.head;
+        int created = rsetCreateCount() - sets;
+        int walked = scanObjectCount() - entered;
+        if (m_options.verbose) {
+            printf("assigning a cycle member: objects entered: %d; recursive sets created: %d\n", walked,
+                created);
+        }
+        assertEq(0, created, "the cycle's recursive set is not rebuilt");
+        # the transient references still make the recorded counts look stale, so the graph is still walked
+        # more than once; what must not happen is that each of those walks throws the set away and builds an
+        # identical one
+        assertGt(CycleSize, walked, "the scan still enters the cycle");
     }
 
     #! Returns a hash holding a cycle of \a n objects that also reference one object outside the cycle

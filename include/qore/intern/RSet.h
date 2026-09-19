@@ -374,7 +374,8 @@ public:
     }
 
     /* return values:
-        -1: error, rset invalid
+        -1: the set cannot be trusted for this decision and the caller must rescan; the set is left in place
+            unless it was already invalid
         0: cannot delete
         1: the rset has been invalidated already, the object can be deleted
     */

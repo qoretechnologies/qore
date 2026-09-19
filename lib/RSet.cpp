@@ -523,11 +523,14 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
     }
 
     if (need_rescan) {
-        // invalidate rset and signal caller to rescan
-        QoreAutoRWWriteLocker al(rwl);
-        if (!valid)
-            return -1;
-        invalidateIntern();
+        // Ask the caller to rescan, and leave the set in place: the scan recomputes the components from the
+        // live graph, and when they are the ones already recorded it confirms the set and records the
+        // reference count it saw, which is all this verdict was missing.  Throwing the set away first would
+        // make that scan build an identical one, and because evaluating an object into an lvalue holds a
+        // temporary reference that is released after the scan has recorded its count, the next dereference
+        // asks for the same rescan again: one assignment of an object in a cycle cost five walks of the
+        // graph and four discarded sets.  A scan that finds the graph really has changed replaces the set
+        // as it always did.
         return -1;
     }
 
