@@ -759,6 +759,7 @@ bool RSetHelper::scan(RObject& root) {
     if (root_id < 0) {
         return false;
     }
+    root_obj = &root;
     // the object's rsection is held, so its recursive set cannot be replaced while the scan runs
     root_rset = root.rset;
 
@@ -1175,6 +1176,27 @@ void RSetHelper::releaseHeld() {
 }
 
 void RSetHelper::commit() {
+    if (!changed) {
+        // The scan found every recursive set it would have assigned already in place, so there is nothing to
+        // invalidate, nothing to create and nothing to replace: confirm each object and release it.  Only the
+        // object the scan started at advances its generation; see RObject::confirmRSet().
+        assert(tr_invalidate.empty());
+        assert(tr_out.empty());
+        for (const ScanNode& n : nodes) {
+            if (n.kind != NodeKind::Object) {
+                continue;
+            }
+            RObject* obj = static_cast<RObject*>(n.ptr);
+            assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
+            obj->confirmRSet(obj == root_obj);
+            if (n.unlock) {
+                unlockNode(n);
+            }
+        }
+        assert(!lcnt);
+        return;
+    }
+
     // invalidate rsets
     for (rs_set_t::iterator i = tr_invalidate.begin(), e = tr_invalidate.end(); i != e; ++i) {
         (*i)->invalidate();
@@ -1221,10 +1243,11 @@ void RSetHelper::commit() {
         RObject* obj = static_cast<RObject*>(n.ptr);
         assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
         if (component_unchanged[n.component]) {
-            // the object already has exactly this recursive set; only the scan generation advances
+            // the object already has exactly this recursive set; the generation still advances, because this
+            // scan changed another component and holds the rsection exclusively
             printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
                 obj->rset);
-            obj->confirmRSet();
+            obj->confirmRSet(true);
             continue;
         }
         RSet* rs = rsets[n.component];
@@ -1291,6 +1314,7 @@ void RSetHelper::rollback(bool yield) {
     component_cyclic.clear();
     component_closed.clear();
     component_unchanged.clear();
+    root_obj = nullptr;
     root_rset = nullptr;
     need_exclusive = false;
     changed = false;

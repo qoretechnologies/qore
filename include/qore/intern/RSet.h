@@ -177,17 +177,26 @@ public:
     DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed);
 
     //! Records that a scan found the recursive set that is already in place, without changing it
-    /** The scan generation still advances, so a scan waiting for this object skips its own scan: the set it
-        would compute is current.  The set itself and rcount are left alone, so a scan of an unchanged graph
-        does not replace a set with an identical one.
+    /** @param advance_generation whether to advance the scan generation as a committed scan does
 
-        The reference-count snapshot is still refreshed, and only when it has actually moved.
+        The set itself and rcount are left alone, so a scan of an unchanged graph does not replace a set with
+        an identical one.
+
+        RScanHelper samples the scan generation of the object a scan starts at and of no other, so only that
+        object's generation has to advance for a scan waiting there to see that its set is current.  A scan
+        that changed something advances the generation of every object it entered anyway: that is what stops
+        scans waiting on those objects from repeating work and making every scan in flight restart, and such a
+        scan is holding the rsection exclusively in any case.  A scan that changed nothing conflicts with no
+        other scan, so paying a contended write on every object of a shared graph, in every scan, would buy
+        only the odd avoided rescan.
+
+        The reference-count snapshot is refreshed either way, and only when it has actually moved.
         RSet::canDelete() compares a member's live reference count with the count observed when its rcount was
         assigned, to tell a stale verdict from a genuine reference from outside the set; a snapshot left behind
         by an earlier scan makes that test read the wrong graph and can leave a set that has become
         collectable stranded.
     */
-    DLLLOCAL void confirmRSet() {
+    DLLLOCAL void confirmRSet(bool advance_generation) {
         // a scan that changes nothing holds the rsection in shared mode
         assert(rml.checkRSectionHeld());
         if (rset) {
@@ -196,7 +205,9 @@ public:
                 scan_refs.store(refs, std::memory_order_relaxed);
             }
         }
-        ++rcycle;
+        if (advance_generation) {
+            ++rcycle;
+        }
     }
 
     // check if we should defer the scan, marks the object for a deferred scan if necessary
@@ -569,6 +580,8 @@ private:
     std::vector<char> component_closed;
     // whether the component's objects already have exactly the recursive set that this scan would assign
     std::vector<char> component_unchanged;
+    // the object the scan started at; only its scan generation has to advance when nothing changed
+    RObject* root_obj = nullptr;
     // the recursive set of the object the scan started at, which the scan always enters
     RSet* root_rset = nullptr;
     // true when the scan takes the rsection of every object it enters to itself, which it has to do to

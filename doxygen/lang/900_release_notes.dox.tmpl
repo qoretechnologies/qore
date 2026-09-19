@@ -3203,6 +3203,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       key or a list element; the object's recursive set then still counted the reference that the removal took
       out, and a later dereference of any of its members could destroy the whole set although its objects were
       still referenced from outside it
+    - Fixed a recursive reference scan that changes nothing writing to every object it walked; only the object
+      the scan started at now advances its scan generation, which is the only one that any waiting scan reads,
+      so scans of a shared graph no longer contend for a cache line on each of its objects
     - Fixed recursive reference scans of one shared object graph excluding each other; a scan that changes no
       recursive set now takes the r-section of the objects it walks in shared mode, so scans of the same
       unchanged graph run at the same time instead of aborting and restarting each other, while a scan that has

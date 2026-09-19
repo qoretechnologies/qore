@@ -281,7 +281,18 @@ genuine reference from outside the set, and a snapshot left behind by an earlier
 graph that no longer exists.
 
 `prepareCommit()` skips a component that is left in place: the members of a set that is not being replaced do
-not have to be locked for an invalidation that will not happen.
+not have to be locked for an invalidation that will not happen. When *no* component changed, `commit()` has
+nothing to invalidate, create or replace, so it confirms and releases each object in one pass instead of the
+four it makes when it has sets to assign.
+
+**Only the object a scan started at advances its scan generation when nothing changed.** `RScanHelper` samples
+the generation of the scan's own root and of no other object, so that is the only one a waiting scan reads. A
+scan that changed something still advances the generation of every object it entered — that is what stops the
+scans waiting on those objects from repeating work and making every scan in flight restart, and such a scan
+holds the r-section exclusively anyway. A scan that changed nothing conflicts with no other scan, so writing
+the generation of every object of a shared graph, in every scan, would buy only the occasional avoided rescan
+while costing a contended cache line per object per scan. That write was 21% of an eight-thread read-only
+scan before it was removed.
 
 Debug builds count the recursive sets that scans have created (`dbg_get_rset_create_count()`), and
 `examples/test/qore/misc/dgc-unchanged-sets.qtest` uses it to check that a second scan of an unchanged graph
