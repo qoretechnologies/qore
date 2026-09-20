@@ -249,6 +249,25 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par HTTP Response Bodies Follow the Media Type
+    @parblock
+    The media type of an HTTP response now decides the type of its body in one place, for both the blocking and
+    the polling APIs: a text media type is delivered as a string in the character encoding the message declares,
+    and any other type keeps its octets and is delivered as @ref binary_type "binary".  Previously the blocking
+    API delivered every body as a string, so \c application/octet-stream, \c image/png and \c application/pdf
+    responses were all returned as strings; the octets survived, so the problem was invisible until a caller
+    asked the value what it was.  A body that carries a content encoding decodes to the form its media type
+    calls for, so a compressed text body decodes to a string and a compressed binary body to binary, and with
+    \c encoding_passthru the encoded octets are returned as they arrived, as binary.  A response that declares
+    no media type is still delivered as a string.
+
+    Accordingly @ref Qore::HTTPClient::get() "HTTPClient::get()" and both
+    @ref Qore::HTTPClient::post() "HTTPClient::post()" variants now declare a return type of
+    \c *data instead of \c *string, since either a string or binary can be returned.  Code that assigns the
+    result to a \c string variable continues to parse, but will raise a \c RUNTIME-TYPE-ERROR if the response
+    body is binary; assign to \c data (or \c auto) where a non-text response is possible.
+    @endparblock
+
     @par Parse Depth Limit
     @parblock
     The parser supports up to 1000 nested syntax elements, counting each operator in an expression, and raises a

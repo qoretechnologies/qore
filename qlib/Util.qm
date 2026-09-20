@@ -2481,7 +2481,9 @@ public data sub get_file_from_ftp(string url, string path, *hash<UrlRetrievalOpt
 */
 public data sub get_file_from_http(string url, *string path, *hash<UrlRetrievalOptions> options) {
     HTTPClient http({"url": url});
-    string body = http.get(path ? path : "/", {"Accept": "*"} + options.http_headers);
+    # the media type of the response decides whether the body is a string or binary; a binary body
+    # must not be forced to a string here, or its octets are reinterpreted as character data
+    data body = http.get(path ? path : "/", {"Accept": "*"} + options.http_headers);
     return options.as_binary ? binary(body) : body;
 }
 
