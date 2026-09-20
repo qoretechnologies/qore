@@ -9632,7 +9632,13 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                no_inst->object_type_info = qore_substitute_type_params_if_needed(no_inst->object_type_info);
+                // The substitution resolves against the calling context's type-parameter
+                // instantiation, so its result belongs to this execution, not to the instruction:
+                // every thread running this function shares one QoreIRNewObjectInstruction.  Writing
+                // it back raced with the other threads reading it and could construct an object with
+                // the type another thread's instantiation had resolved.
+                const QoreTypeInfo* object_type_info =
+                    qore_substitute_type_params_if_needed(no_inst->object_type_info);
                 // Build NaN-boxed arg array from pre-computed IR operand values
                 int nargs = static_cast<int>(no_inst->operands.size());
                 constexpr int SMALL_BUF = 8;
@@ -9642,7 +9648,7 @@ load_local_done:
                     nb_args[i] = toBits(getIRValue(values, no_inst->operands[i]));
                 }
                 // Dispatch via the shared no-AST runtime helper
-                uint64_t rv = qore_rt_new_object_nb(qc, variant, no_inst->object_type_info, nb_args, nargs, xsink);
+                uint64_t rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
