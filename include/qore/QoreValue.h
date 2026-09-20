@@ -72,6 +72,9 @@ class QoreTypeInfo;
 class QoreValue;
 class RuntimeConfig;
 class QoreEnumMember;
+class QoreObject;
+class QoreHashNode;
+class QoreListNode;
 
 //! this is the union that stores values in QoreLValue (legacy - kept for QoreLValue compatibility)
 /** The may_alias attribute tells the compiler that pointers to this type may alias with any other
@@ -313,6 +316,10 @@ private:
     static constexpr uint16_t TAG12_SHORTSTR    = 0xFFC;
     static constexpr uint16_t TAG16_SHORTSTR_FIRST = 0xFFC0;
     static constexpr uint16_t TAG16_SHORTSTR_LAST  = 0xFFCF;
+    //! opaque references: 0xFFD + (kind in bits 48-51), so 0xFFD0-0xFFD2 are used
+    static constexpr uint16_t TAG12_OPAQUE      = 0xFFD;
+    static constexpr uint16_t TAG16_OPAQUE_FIRST = 0xFFD0;
+    static constexpr uint16_t TAG16_OPAQUE_LAST  = 0xFFDF;
     static constexpr uint16_t TAG16_PLUGIN_IMMEDIATE_FIRST = 0xFFFE;
     static constexpr uint16_t TAG16_PLUGIN_IMMEDIATE_LAST  = 0xFFFF;
 
@@ -324,9 +331,24 @@ private:
     static constexpr uint64_t TAG_SHORTSTR_BASE = static_cast<uint64_t>(TAG12_SHORTSTR) << 52;
     //! Enum values: stores pointer to QoreEnumMember, zero allocation, zero ref-counting
     static constexpr uint64_t TAG_ENUM          = static_cast<uint64_t>(TAG16_ENUM) << 48;
+    //! Opaque references: stores the referenced node inline; a strong reference the DGC scanner
+    //! does not follow.  Unlike every other inline tag, this one OWNS its payload.
+    static constexpr uint64_t TAG_OPAQUE_BASE   = static_cast<uint64_t>(TAG12_OPAQUE) << 52;
+    //! the opaque kind occupies bits 48-51
+    static constexpr unsigned OPAQUE_KIND_SHIFT = 48;
+    static constexpr uint64_t OPAQUE_KIND_OBJECT = 0;
+    static constexpr uint64_t OPAQUE_KIND_HASH   = 1;
+    static constexpr uint64_t OPAQUE_KIND_LIST   = 2;
+    static constexpr uint64_t TAG_OPAQUE_OBJECT = TAG_OPAQUE_BASE | (OPAQUE_KIND_OBJECT << OPAQUE_KIND_SHIFT);
+    static constexpr uint64_t TAG_OPAQUE_HASH   = TAG_OPAQUE_BASE | (OPAQUE_KIND_HASH << OPAQUE_KIND_SHIFT);
+    static constexpr uint64_t TAG_OPAQUE_LIST   = TAG_OPAQUE_BASE | (OPAQUE_KIND_LIST << OPAQUE_KIND_SHIFT);
 
     static_assert(TAG16_SHORTSTR_LAST < TAG16_INT48,
         "short-string tag family must remain below the non-double value tag boundary");
+    static_assert(TAG16_OPAQUE_FIRST > TAG16_SHORTSTR_LAST,
+        "opaque tag family must not overlap the short-string tag family");
+    static_assert(TAG16_OPAQUE_LAST < TAG16_INT48,
+        "opaque tag family must remain below the non-double value tag boundary");
     static_assert(TAG16_INT48 < TAG16_PLUGIN_IMMEDIATE_FIRST,
         "inline integer tag must not collide with plugin immediate tags");
     static_assert(TAG16_POINTER < TAG16_PLUGIN_IMMEDIATE_FIRST,
@@ -374,11 +396,33 @@ private:
         return reinterpret_cast<AbstractQoreNode*>(payload());
     }
 
+    //! Returns the node owned by this value, whether held as a pointer or as an opaque reference
+    /** Returns nullptr for every other representation.  This is the single place that knows an
+        opaque reference owns its payload, so that all of QoreValue's reference-counting paths
+        treat opaque references exactly like pointers; only the DGC-visible accessors
+        (isPointer(), getInternalNode()) deliberately do not see through them.
+    */
+    DLLLOCAL AbstractQoreNode* getOwnedNodeIntern() const {
+        if (isPointer()) {
+            return reinterpret_cast<AbstractQoreNode*>(payload());
+        }
+        return nullptr;
+    }
+
     //! Sets a large integer value (allocates QoreBigIntNode)
     DLLEXPORT void setLargeInt(int64 i);
 
     //! Returns the internal node pointer without reference count change
     DLLLOCAL AbstractQoreNode* takeNodeIntern();
+
+    //! Encodes a node as an opaque reference of the given kind, taking a reference to the node
+    DLLLOCAL static QoreValue makeOpaqueIntern(AbstractQoreNode* n, uint64_t opaque_tag);
+
+    //! Records one more strong reference held through this opaque value with its Program
+    DLLLOCAL void opaqueRegister() const;
+
+    //! Records that one strong reference held through this opaque value has been released
+    DLLLOCAL void opaqueDeregister() const;
 
     //! Aborts in debug builds if a string-typed get<T>() is applied to an inline short string
     /** An inline short string has no AbstractQoreNode, so get<T>() must return nullptr for it even
@@ -450,7 +494,9 @@ public:
         // Encoded doubles are below DOUBLE_BOUNDARY, but we must exclude:
         // - bits=0 (NOTHING)
         // - short strings (tag 0xFFC)
-        return bits != 0 && bits < DOUBLE_BOUNDARY && (bits >> 52) != 0xFFC;
+        // - opaque references (tag 0xFFD)
+        uint64_t prefix = bits >> 52;
+        return bits != 0 && bits < DOUBLE_BOUNDARY && prefix != TAG12_SHORTSTR && prefix != TAG12_OPAQUE;
     }
 
     //! Returns true if the value is an inline 48-bit integer
@@ -458,9 +504,15 @@ public:
         return tag() == TAG_INT48;
     }
 
-    //! Returns true if the value is a pointer to AbstractQoreNode
+    //! Returns true if the value holds a pointer to an AbstractQoreNode
+    /** This is true for an opaque reference as well: an opaque reference differs from an ordinary
+        pointer value only in that the deterministic garbage collector does not follow it, so it
+        behaves like a pointer value everywhere else — ownership, type queries, evaluation and
+        every consumer that walks a container.  Use isOpaque() to tell them apart; the collector is
+        the only code that needs to.
+    */
     DLLLOCAL bool isPointer() const {
-        return tag() == TAG_POINTER;
+        return tag() == TAG_POINTER || isOpaque();
     }
 
     //! Returns true if the value is a short string stored inline
@@ -476,6 +528,36 @@ public:
     //! Returns true if the value is an inline Unicode character.
     DLLLOCAL bool isChar() const {
         return tag() == TAG_CHAR;
+    }
+
+    //! Returns true if the value is an opaque reference of any kind
+    /** An opaque reference is a strong reference that the deterministic garbage collector does not
+        follow; see @ref opaque_assignment_operator.  It is not a pointer value: isPointer() and
+        getInternalNode() deliberately do not see through it, which is what keeps it out of the
+        collector's graph.  Use resolveIndirect() to obtain the referenced value.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL bool isOpaque() const {
+        return (bits >> 52) == TAG12_OPAQUE;
+    }
+
+    //! Returns true if the value is an opaque reference to an object
+    /** @since %Qore 3.0 */
+    DLLLOCAL bool isOpaqueObject() const {
+        return tag() == TAG_OPAQUE_OBJECT;
+    }
+
+    //! Returns true if the value is an opaque reference to a hash
+    /** @since %Qore 3.0 */
+    DLLLOCAL bool isOpaqueHash() const {
+        return tag() == TAG_OPAQUE_HASH;
+    }
+
+    //! Returns true if the value is an opaque reference to a list
+    /** @since %Qore 3.0 */
+    DLLLOCAL bool isOpaqueList() const {
+        return tag() == TAG_OPAQUE_LIST;
     }
 
     //! Returns true if the value is a boolean (true or false)
@@ -529,6 +611,7 @@ public:
             || tag == TAG16_SPECIAL
             || tag == TAG16_CHAR
             || (tag >= TAG16_SHORTSTR_FIRST && tag <= TAG16_SHORTSTR_LAST)
+            || (tag >= TAG16_OPAQUE_FIRST && tag <= TAG16_OPAQUE_LAST)
             || tag == TAG16_ENUM;
     }
 
@@ -666,6 +749,93 @@ public:
     //! Create a one-character string from a Unicode codepoint.
     DLLEXPORT static QoreStringNode* makeCharString(unsigned codepoint, const QoreEncoding* enc,
             ExceptionSink* xsink);
+
+    //! Creates an opaque reference to an object; takes a reference to the object
+    /** The returned value owns a strong reference to \a o that the deterministic garbage collector
+        does not follow.  A cycle running through an opaque reference cannot be collected by cycle
+        detection; it is broken only by the holder releasing the reference or by the owning
+        QoreProgram being torn down.
+
+        @param o the object to reference; must not be nullptr
+
+        @return a value holding an opaque reference to \a o
+
+        @note this is the C++ equivalent of the @ref opaque_assignment_operator "@= operator"
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static QoreValue makeOpaqueObject(QoreObject* o);
+
+    //! Creates an opaque reference to a hash; takes a reference to the hash
+    /** @param h the hash to reference; must not be nullptr
+
+        @return a value holding an opaque reference to \a h
+
+        @see makeOpaqueObject()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static QoreValue makeOpaqueHash(QoreHashNode* h);
+
+    //! Creates an opaque reference to a list; takes a reference to the list
+    /** @param l the list to reference; must not be nullptr
+
+        @return a value holding an opaque reference to \a l
+
+        @see makeOpaqueObject()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT static QoreValue makeOpaqueList(QoreListNode* l);
+
+    //! Returns the object referenced by an opaque object reference; asserts if not one
+    /** @return the referenced object; no reference is returned
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreObject* getOpaqueObject() const;
+
+    //! Returns the hash referenced by an opaque hash reference; asserts if not one
+    /** @return the referenced hash; no reference is returned
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* getOpaqueHash() const;
+
+    //! Returns the list referenced by an opaque list reference; asserts if not one
+    /** @return the referenced list; no reference is returned
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreListNode* getOpaqueList() const;
+
+    //! Returns the target of a weak or opaque reference; any other value is returned unchanged
+    /** %Qore stores a value assigned with the @ref weak_assignment_operator "weak assignment
+        operator (:=)" as a node that holds its target indirectly.  Reading such a value through
+        the language unwraps it, but code that walks a hash or a list itself sees the stored node,
+        and a \c switch on QoreValue::getType() that only handles \c NT_OBJECT, \c NT_HASH and
+        \c NT_LIST silently misses it.  A value assigned with the
+        @ref opaque_assignment_operator "opaque assignment operator (\@=)" needs no unwrapping —
+        it already reports its target's type and node — so this is safe to call on any value.
+
+        Binary modules that iterate containers should call this on each value before dispatching on
+        its type:
+
+        @code
+        QoreValue v = i.get().resolveIndirect();
+        switch (v.getType()) {
+            case NT_OBJECT: ...
+        }
+        @endcode
+
+        @return the referenced value for a weak or opaque reference, otherwise the value itself; no
+        reference is returned in either case
+
+        @note a weak reference whose target has already been deleted resolves to NOTHING
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreValue resolveIndirect() const;
 
     //! Get length of short string (asserts if not a short string)
     DLLLOCAL size_t shortStringLen() const {

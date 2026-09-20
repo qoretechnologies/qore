@@ -516,7 +516,7 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                     out << " @" << local_inst->local->getName();
                     if ((inst->opcode == QoreIROpcode::StoreLocal
                             || inst->opcode == QoreIROpcode::StoreClosure)
-                            && local_inst->weak) {
+                            && local_inst->mode != AssignmentMode::Normal) {
                         out << " weak";
                     }
                 }

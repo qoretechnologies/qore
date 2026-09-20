@@ -21,10 +21,10 @@ hashdecl Parent {
 hash<Parent> p = new hash<Parent>(parse_json('{"parts": [{"value": "a", "format": "f"}]}'));
 ```
 
-Plain lvalue assignment deliberately does no such conversion; `hash<Leaf> l = some_plain_hash;`
-raises `RUNTIME-TYPE-ERROR`. The fold path is more permissive on purpose, because a container
-being assigned to a declared type carries the declaration that says what its elements are meant
-to be.
+What is converted is a container's *elements*. Assigning a plain hash directly to a hashdecl
+lvalue is not a fold and deliberately does no conversion: `hash<Leaf> l = some_plain_hash;` is
+refused. The fold path is more permissive on purpose, because a container being assigned to a
+declared type carries the declaration that says what its elements are meant to be.
 
 ## Eligibility
 
@@ -51,6 +51,55 @@ the adoption of generic data, and lvalue assignment rejects it too. They remain 
 `QoreTypeInfo::getComplexHashValueType()` returns `nullptr` for `QTS_HASHDECL`, so they do not
 reach the hash branch. Scalar element types are excluded by the base-type check, so widening the
 gate cannot make a `list<int>` accept a `list<string>`.
+
+## One verdict, reached in one place
+
+The fold runs for *every* container assignment -- a variable, a function argument, a return value, a
+member initializer -- so the checks that run before it must not reject a value it would go on to
+accept. Three places ask the question, and all three answer it with the same eligibility rule:
+
+| Check | Where | How |
+|---|---|---|
+| parse-time type match | `match_container_element_type()`, `lib/QoreTypeInfo.cpp` | a foldable element pair is `QTI_AMBIGUOUS` with `may_need_filter` and `may_not_match` set, not `QTI_NOT_EQUAL` |
+| runtime variant selection | `QoreTypeSpec::runtimeAcceptsValue()`, cases `QTS_COMPLEXHASH`/`QTS_COMPLEXLIST` | a foldable value is `QTI_AMBIGUOUS` |
+| the conversion itself | `acceptInputComplexHash()`/`acceptInputComplexList()` | `qore_container_value_may_convert_to()` |
+
+`match_container_element_type()` wraps `match_type()`, the element matcher every complex container
+parse check funnels through, so reporting the fold there covers assignment, argument binding, return
+values and member initializers at once; there is no per-site list to keep in step. The match handlers
+in `lib/QoreTypeSpecMatchHandlers.cpp` call it exactly where the source is itself a container whose
+elements the loops convert one at a time -- complex hash from complex hash, complex list from complex
+or soft list.
+
+The distinction matters for a soft list, which has a second conversion: it wraps a single value into
+a one-element list. That value is matched against the element type through `match_type()` directly,
+because nothing folds it, and `softlist<hash<Leaf>> s = {"value": "x"};` is refused by parse time and
+assignment alike -- as a plain hash assigned to a hashdecl always is. Asking the fold question there
+would accept at parse time what assignment then refuses, which is the very divergence this is meant
+to remove.
+
+Where these disagreed, acceptance turned on whether the value's type happened to be known
+statically. The identical literal was a parse error where it was written out and folded silently
+where it arrived through an `auto` expression:
+
+```qore
+list<hash<Leaf>> parts = ({"value": "x", "format": "f"},);   # was PARSE-TYPE-ERROR
+auto v = ({"value": "x", "format": "f"},);
+list<hash<Leaf>> parts = v;                                  # ... folded
+```
+
+and an argument the parser accepted was then refused by `runtimeFindVariant()` with
+`RUNTIME-OVERLOAD-ERROR` before binding could convert it.
+
+A fold is reported as `QTI_AMBIGUOUS`, which is weaker than any match that needs no conversion, so
+a variant that accepts an argument as it stands still outranks one that has to fold it and existing
+calls keep the variant they had. Among candidates that can only be reached by folding, the ordinary
+scoring rules decide, as they do for any other ambiguous match.
+
+What is *not* a container fold is unchanged, and is refused by parse time and runtime alike: a
+scalar element type (`list<int>` from `list<string>`), a hashdecl source for a different hashdecl,
+and a plain hash assigned directly to a hashdecl lvalue (`hash<Leaf> l = some_plain_hash;`), which
+is an lvalue assignment rather than the conversion of a container's elements.
 
 ## The parse-time check
 
@@ -104,3 +153,12 @@ element types, shared and unshared sources, JSON-derived input, fully resolved i
 parse-time path, and the two parse-time negative cases (a scalar element type, and a hashdecl
 source for a different hashdecl).
 `testGenericContainerHashDeclFolding()` covers the `hash<auto>`/`list<auto>` cases.
+
+`testContainerFoldingParseRuntimeAgreement()` covers the agreement above: resolved literals in
+variable declarations and assignments, function and method arguments, return values and member
+initializers, each paired with the same value routed through an `auto` expression so both paths are
+compared directly; nested and recursive literals; empty containers; overload resolution (an exact
+variant outranks a folded one, and a folded variant is still selected when it is the only
+candidate); a bound source left unretyped and unchanged; an invalid field value and an unknown key
+reported at runtime against the key; a soft list, which folds the elements of a list it is given but
+does not fold a single value wrapped into one; and the parse-time negatives that must stay rejected.

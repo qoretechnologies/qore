@@ -99,7 +99,19 @@ public:
     //! Configuration options for the manager.
     struct Options {
         //! Protocol selection: P3 only honors H1; H2/H3 raise on acquireConnection
+        /** The protocol is chosen from the client's configuration, but every request names its own
+            target, and a target's transport decides which protocols can serve it; see @ref protocol_required
+        */
         HttpClientProtocol protocol = HttpClientProtocol::H1;
+
+        //! True if @ref protocol is a requirement rather than a preference
+        /** A manager serves requests to any target, and a redirect or a request-local target URL can name a
+            plaintext origin on a manager created for a TLS one.  HTTP/3 runs only over QUIC and ALPN runs only
+            over TLS, so a plaintext target cannot use either: with this flag a target that cannot use
+            @ref protocol raises an exception, and without it the target falls back to HTTP/1, as an
+            opportunistic HTTP/3 upgrade from an @c Alt-Svc advertisement does.
+        */
+        bool protocol_required = false;
 
         //! Per-host connection cap; 0 = unlimited.
         int max_connections_per_host = 0;

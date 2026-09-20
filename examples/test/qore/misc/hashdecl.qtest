@@ -90,6 +90,58 @@ public hashdecl FoldScalarParent {
     list<int> numbers;
 }
 
+#! Takes a declared list container, so that argument binding is checked against a resolved literal
+list<hash<FoldLeaf>> sub fold_list_arg(list<hash<FoldLeaf>> parts) {
+    return parts;
+}
+
+#! Takes a declared hash container, covering the complex-hash gate in argument position
+hash<string, hash<FoldLeaf>> sub fold_hash_arg(hash<string, hash<FoldLeaf>> parts) {
+    return parts;
+}
+
+#! Returns a declared container built from an ordinary literal
+list<hash<FoldLeaf>> sub fold_list_return() {
+    return ({"value": "returned", "format": "f"},);
+}
+
+#! Overloaded variants: a source the target accepts as-is must outrank one that has to be folded
+string sub fold_overload(list<hash<FoldLeaf>> parts) {
+    return "folded";
+}
+
+#! ... the exact variant for an all-string literal
+string sub fold_overload(list<hash<string, string>> parts) {
+    return "exact";
+}
+
+#! Takes a soft list of hashdecls, to check the single-value wrap against the element type
+softlist<hash<FoldLeaf>> sub fold_softlist_arg(softlist<hash<FoldLeaf>> parts) {
+    return parts;
+}
+
+#! Overload set in which only the container variant can accept the call at all
+string sub fold_only_overload(list<hash<FoldLeaf>> parts) {
+    return "folded";
+}
+
+#! ... the variant that no container argument can reach
+string sub fold_only_overload(string str) {
+    return "string";
+}
+
+#! Declared containers initialized from ordinary literals in member declarations and bound as arguments
+class FoldMemberHolder {
+    public {
+        list<hash<FoldLeaf>> parts = ({"value": "member", "format": "f"},);
+        hash<string, hash<FoldLeaf>> member_map = {"a": {"value": "member-map"}};
+    }
+
+    list<hash<FoldLeaf>> take(list<hash<FoldLeaf>> parts) {
+        return parts;
+    }
+}
+
 public hashdecl OverrideCastInfo {
     *string value = "default";
 }
@@ -160,6 +212,7 @@ class HashDeclTest inherits QUnit::Test {
         addTestCase("complex type defaults", \testComplexTypeDefaults());
         addTestCase("generic container hashdecl folding", \testGenericContainerHashDeclFolding());
         addTestCase("homogeneous container hashdecl folding", \testHomogeneousContainerHashDeclFolding());
+        addTestCase("container folding parse/runtime agreement", \testContainerFoldingParseRuntimeAgreement());
         addTestCase("typed hash cast with overrides", \testTypedHashCastWithOverrides());
         addTestCase("typed container runtime assignment", \testTypedContainerRuntimeAssignment());
         set_return_value(main());
@@ -1374,6 +1427,161 @@ class HashDeclTest inherits QUnit::Test {
         assertEq(True, from_json.parts[0] instanceof hash<FoldTree>, "JSON-derived child folded");
         assertEq("b", from_json.parts[0].value, "JSON-derived child value");
 %endif
+    }
+
+    #! The parse-time verdict on a foldable container must match what the runtime does with it
+    /** The fold loops in QoreTypeSpec::acceptInputComplexHash()/acceptInputComplexList() convert a
+        container element by element for every container assignment, so a value whose element type the
+        fold path can convert is accepted at runtime.  The parse-time checks and runtime variant
+        selection must reach that same verdict, or acceptance turns on whether the value's type happened
+        to be known statically: the identical literal was a parse error where it was written out and
+        folded silently where it arrived through an "auto" expression, and an argument the parser
+        accepted was then refused by overload resolution before binding could convert it.
+
+        Every positive case here is written as a resolved literal, so it is decided at parse time, and
+        paired with the same value routed through auto_value() so that both paths are compared
+        directly.  See design/container-element-folding.md.
+    */
+    testContainerFoldingParseRuntimeAgreement() {
+        # a declared container initialized from an ordinary literal: the parse-time path
+        list<hash<FoldLeaf>> parts = ({"value": "hello", "format": "content:a"},);
+        assertEq(True, parts[0] instanceof hash<FoldLeaf>, "literal list child folded at parse time");
+        assertEq("hello", parts[0].value, "literal list child value");
+        assertEq("list<hash<FoldLeaf>>", parts.fullType(), "folded list carries the declared type");
+
+        # ... and the same value through the runtime gate must agree, element type included
+        list<hash<FoldLeaf>> runtime_parts = auto_value(({"value": "hello", "format": "content:a"},));
+        assertEq(parts, runtime_parts, "parse-time and runtime paths produce the same value");
+        assertEq(parts.fullType(), runtime_parts.fullType(), "both paths produce the same type");
+
+        # ... and a literal whose values do not share a type, which infers a different element type,
+        # takes the same path
+        list<hash<FoldLeaf>> mixed = ({"value": 1, "format": "content:a"},);
+        assertEq(1, mixed[0].value, "heterogeneous literal folded at parse time");
+
+        # assignment to an already declared variable takes the same path as the declaration
+        parts = ({"value": "assigned"},);
+        assertEq("assigned", parts[0].value, "literal assigned to a declared container");
+        assertEq(True, parts[0] instanceof hash<FoldLeaf>, "assigned literal child folded");
+
+        # the complex-hash gate, not just the list one
+        hash<string, hash<FoldLeaf>> keyed = {"a": {"value": "hello", "format": "content:a"}};
+        assertEq(True, keyed.a instanceof hash<FoldLeaf>, "literal hash child folded at parse time");
+        assertEq(keyed, cast<hash<string, hash<FoldLeaf>>>(auto_value({"a": {"value": "hello",
+            "format": "content:a"}})), "hash container agrees with the runtime path");
+
+        # nested and recursive element types fold at every level
+        list<list<hash<FoldLeaf>>> nested = (({"value": "deep"},),);
+        assertEq(True, nested[0][0] instanceof hash<FoldLeaf>, "nested list child folded");
+        hash<FoldTree> tree = new hash<FoldTree>({
+            "value": "a",
+            "parts": ({"value": "b", "parts": ({"value": "c"},)},),
+        });
+        assertEq("c", tree.parts[0].parts[0].value, "recursive literal folded at parse time");
+
+        # empty containers have nothing to convert but must still be accepted and retyped
+        list<hash<FoldLeaf>> empty_parts = ();
+        assertEq((), empty_parts, "empty list literal accepted");
+        hash<string, hash<FoldLeaf>> empty_map = {};
+        assertEq({}, empty_map, "empty hash literal accepted");
+
+        # argument binding: the parser accepts these, so variant selection must find them too
+        assertEq("hello", fold_list_arg(({"value": "hello", "format": "content:a"},))[0].value,
+            "literal bound to a declared list parameter");
+        assertEq(True, fold_list_arg(({"value": "hello"},))[0] instanceof hash<FoldLeaf>,
+            "bound list parameter carries the declared element type");
+        assertEq("hello", fold_hash_arg({"a": {"value": "hello"}}).a.value,
+            "literal bound to a declared hash parameter");
+        assertEq("hello", fold_list_arg(auto_value(({"value": "hello"},)))[0].value,
+            "runtime argument reaches the same variant");
+
+        # the same in method position
+        FoldMemberHolder holder();
+        assertEq("hello", holder.take(({"value": "hello"},))[0].value,
+            "literal bound to a declared method parameter");
+
+        # member initializers are resolved at parse time as well
+        assertEq("member", holder.parts[0].value, "member initializer literal folded");
+        assertEq(True, holder.parts[0] instanceof hash<FoldLeaf>, "member initializer child folded");
+        assertEq("member-map", holder.member_map.a.value, "hash member initializer literal folded");
+
+        # ... as are return values
+        assertEq("returned", fold_list_return()[0].value, "returned literal folded");
+        assertEq(True, fold_list_return()[0] instanceof hash<FoldLeaf>, "returned child folded");
+
+        # a source that needs no conversion must still outrank one that does, so admitting foldable
+        # containers to variant matching cannot change which variant an existing call selects
+        assertEq("exact", fold_overload(({"value": "x", "format": "f"},)),
+            "an exactly matching variant wins over a folded one");
+        assertEq("folded", fold_only_overload(({"value": 1, "format": "f"},)),
+            "the folded variant is selected when it is the only candidate");
+        assertEq("string", fold_only_overload("x"), "the other variant is still reachable");
+
+        # binding must not retype or otherwise disturb the caller's value
+        list<hash<string, string>> source = ({"value": "hello", "format": "content:a"},);
+        list<hash<string, string>> source_before = source;
+        assertEq("hello", fold_list_arg(source)[0].value, "declared source bound by folding");
+        assertEq(source_before, source, "bound source unchanged");
+        assertEq("list<hash<string, string>>", source.fullType(), "bound source not retyped in place");
+
+        # an invalid field value is reported against the key, at runtime, from either path
+        Program bad_value_pgm(PO_NEW_STYLE);
+        bad_value_pgm.parse('hashdecl PLeaf { auto value; *string format; }
+            auto sub t() { list<hash<PLeaf>> l = ({"value": "x", "format": 1},); return l; }', "");
+        assertThrows("RUNTIME-TYPE-ERROR", "key \'format\' expects type \'\\*string\'",
+            \bad_value_pgm.callFunction(), "t", "resolved literal with an invalid field value rejected");
+
+        # ... and so is an unknown field
+        Program unknown_key_pgm(PO_NEW_STYLE);
+        unknown_key_pgm.parse('hashdecl PLeaf { auto value; *string format; }
+            auto sub t() { list<hash<PLeaf>> l = ({"value": "x", "bogus": "y"},); return l; }', "");
+        assertThrows("HASHDECL-INIT-ERROR", "unknown key \'bogus\'", \unknown_key_pgm.callFunction(), "t",
+            "resolved literal with an unknown field rejected");
+
+        # a scalar element type cannot fold, so it is still rejected outright at parse time
+        Program scalar_pgm(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "expects list<int>", \scalar_pgm.parse(), (
+            'sub t() { list<int> l = ("a", "b"); delete l; }', ""),
+            "scalar element type still rejected at parse time");
+
+        # one declared structure is still not reinterpreted as another
+        Program hashdecl_pgm(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "expects list<hash<PB>>", \hashdecl_pgm.parse(), (
+            'hashdecl PA { int i; }
+             hashdecl PB { int i; }
+             sub t() { list<hash<PB>> l = (new hash<PA>({"i": 1}),); delete l; }', ""),
+            "hashdecl source still rejected at parse time");
+
+        # a soft list folds the elements of a list it is given ...
+        softlist<hash<FoldLeaf>> soft = ({"value": "soft"},);
+        assertEq(True, soft[0] instanceof hash<FoldLeaf>, "soft list folds a list literal");
+        assertEq("soft", fold_softlist_arg(({"value": "soft"},))[0].value,
+            "soft list parameter folds a list literal");
+
+        # ... but wrapping a single value into a one-element list is not a fold: nothing converts that
+        # value, so it is refused by both paths rather than accepted at parse time and refused on
+        # assignment
+        Program soft_pgm(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "expects softlist<hash<PLeaf>>", \soft_pgm.parse(), (
+            'hashdecl PLeaf { auto value; *string format; }
+             sub t() { softlist<hash<PLeaf>> s = {"value": "x"}; delete s; }', ""),
+            "single hash not wrapped into a soft list of hashdecls at parse time");
+        assertThrows("RUNTIME-TYPE-ERROR", "softlist<hash<FoldLeaf>>", sub () {
+            softlist<hash<FoldLeaf>> bad = auto_value({"value": "x"});
+            delete bad;
+        }, NOTHING, "single hash not wrapped into a soft list of hashdecls at runtime");
+
+        # a plain hash assigned directly to a hashdecl lvalue is not a container fold, and is refused
+        # by both paths
+        Program direct_pgm(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "expects hash<PLeaf>", \direct_pgm.parse(), (
+            'hashdecl PLeaf { auto value; *string format; }
+             sub t() { hash<PLeaf> h = {"value": "x", "format": "f"}; delete h; }', ""),
+            "plain hash still not assignable to a hashdecl lvalue at parse time");
+        assertThrows("RUNTIME-TYPE-ERROR", "hash<FoldLeaf>", sub () {
+            hash<FoldLeaf> bad = auto_value({"value": "x", "format": "f"});
+            delete bad;
+        }, NOTHING, "plain hash still not assignable to a hashdecl lvalue at runtime");
     }
 
     testTypedHashCastWithOverrides() {

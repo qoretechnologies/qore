@@ -82,6 +82,7 @@
     |@ref streaming_takeuntil "takeuntil"|\c 23|@ref streaming_takeuntil "takeuntil streaming operator"|@code{.py} takeuntil $1 == "", lines@endcode
     |@ref assignment_operator "="|\c 24|@ref assignment_operator "assignment operator"|@code{.py} var = 1@endcode
     |@ref weak_assignment_operator ":="|\c 24|@ref weak_assignment_operator "weak assignment operator"|@code{.py} var := obj@endcode
+    |@ref opaque_assignment_operator "\@="|\c 24|@ref opaque_assignment_operator "opaque assignment operator"|@code{.py} var @= obj@endcode
     |@ref plus_equals_operator "+="|\c 24|@ref plus_equals_operator "plus-equals (add-to) operator"|@code{.py} var += 5@endcode
     |@ref minus_equals_operator "-="|\c 24|@ref minus_equals_operator "minus-equals (subtract-from) operator"|@code{.py} var -= 5@endcode
     |@ref and_equals_operator "&="|\c 24|@ref and_equals_operator "and-equals operator"|@code{.py} var &= 0x2000@endcode
@@ -2250,6 +2251,47 @@ if (x || y)
     <b>Arguments Processed by :=</b>
     |!Argument|!Processing
     |All|Assigns the value of \a expression to \a lvalue and returns the value assigned; if <em>@ref expressions "rvalue_expression"</em> is an object, a weak reference is assigned instead of a strong reference
+
+    <hr>
+    @subsection opaque_assignment_operator Opaque Reference Assignment Operator (\@=)
+
+    @par Synopsis
+    Identical to the @ref assignment_operator "assignment operator" except that the reference assigned is
+    not followed by the garbage collector.  The reference is a normal <b>strong</b> reference, so it keeps
+    its target alive exactly as \c = does and can never dangle; what differs is that a cycle running through
+    it cannot be detected, and therefore cannot be collected.\n<br>
+    This makes it the opposite trade from the @ref weak_assignment_operator "weak assignment operator (:=)":
+    \c := gives up ownership so the collector need not consider the reference at all, while \c \@= keeps
+    ownership and asks the collector to ignore the reference.  A mistake with \c := loses an object that is
+    still in use; a mistake with \c \@= leaks one.
+
+    @par Warning
+    <b>This operator must be used very carefully.</b>  Use it only where it can be shown that the value
+    assigned does not reference the holder back, or where the resulting leak is bounded and intended.  A
+    cycle created through an opaque reference is <b>unrecoverable</b> by cycle detection; it is released
+    only when the holder releases the reference, or when the @ref Qore::Program "Program" that created it
+    is destroyed.  It is intended for breaking up the cost of scanning large object graphs — such as a
+    registry that holds many live entries — and is only allowed when the
+    @ref allow-opaque-references "%allow-opaque-references" sandbox permission is set.
+
+    @par Syntax
+    \a lvalue <tt>\@=</tt> <em>@ref expressions "rvalue_expression"</em>
+
+    @par Return Type
+    @ref any_type "any"
+
+    @par Example
+    @code{.py}connections{id} @= conn;@endcode
+
+    <b>Arguments Processed by \@=</b>
+    |!Argument|!Processing
+    |All|Assigns the value of \a expression to \a lvalue and returns the value assigned; if <em>@ref expressions "rvalue_expression"</em> is an object, a hash, or a list, the reference stored is one the garbage collector does not follow
+
+    @note A value read back through an opaque reference is indistinguishable from the target itself: it
+    reports the target's type, compares equal to it, and can be used in every way the target can.  Only
+    the garbage collector treats it differently.
+
+    @since %Qore 3.0
 
     <hr>
     @subsection plus_equals_operator Plus Equals Operator (+=)

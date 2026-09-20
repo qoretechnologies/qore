@@ -938,6 +938,18 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         (parse directive: @ref no-namespace-defs "%no-namespace-defs")
       - @ref Qore::PO_NO_NEW "PO_NO_NEW": prevents use of the @ref new "new" operator
         (parse directive: @ref no-new "%no-new")
+      .
+      These options lie beyond bit 63, so their integer constants cannot carry them; set them with
+      @ref Qore::ParseOptions, with the parse directives above, or with the corresponding command-line
+      options (see @ref qore_3_0_0_deprecated)
+    - new @ref opaque_assignment_operator "opaque reference assignment operator (\@=)", enabled with the
+      @ref allow-opaque-references "%allow-opaque-references" parse directive: assigns a strong reference
+      that the garbage collector does not follow, so that a large object graph such as a registry of live
+      connections is not walked on every scan rooted at its holder.  The reference keeps its target alive
+      and can never dangle, but a cycle created through one cannot be detected and therefore cannot be
+      collected; such a cycle is released only when the holder releases the reference or when the
+      @ref Qore::Program "Program" that created it is destroyed.  Use it only where the value assigned can
+      be shown not to reference its holder back
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
       - new @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
@@ -1549,12 +1561,17 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     @endparblock
 
     @subsection qore_3_0_0_deprecated Deprecated Features
-    - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
-      produce a warning when used, as the underlying parse options were never enforced:
-      - \c --no-class-defs (@ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS") - would have disallowed class definitions
-    - Note: @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS", @ref Qore::PO_NO_CONSTANT_DEFS "PO_NO_CONSTANT_DEFS", @ref Qore::PO_NO_NAMESPACE_DEFS "PO_NO_NAMESPACE_DEFS", and @ref Qore::PO_NO_NEW "PO_NO_NEW" are
-      now defined as 0 (no-op). These parse options were documented but never enforced in the parser. Code that
-      set these options will continue to work but the restrictions will not be applied.
+    - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
+      @ref Qore::ParseOptions, because an integer cannot express the full 128-bit width of the parse
+      option space.  Any option that lies beyond bit 63 has its constant defined as \c 0 and is
+      therefore <b>non-functional</b>: passing such a constant to @ref Qore::Program "Program" silently
+      applies no option at all.  This affects @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS",
+      @ref Qore::PO_NO_CONSTANT_DEFS "PO_NO_CONSTANT_DEFS",
+      @ref Qore::PO_NO_NAMESPACE_DEFS "PO_NO_NAMESPACE_DEFS" and @ref Qore::PO_NO_NEW "PO_NO_NEW", which
+      are retained for backwards compatibility only.  The options themselves are fully enforced at parse
+      time; set them with @ref Qore::ParseOptions using their string names, with the corresponding parse
+      directives, or with the corresponding command-line options.  Options added beyond bit 63 from
+      %Qore 3.0 onwards have no integer constant at all
 
     @subsection qore_3_0_0_known_limitations Known Limitations
     - The integrated REPL in the \c qore binary provides line editing via the built-in
@@ -3230,6 +3247,32 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       also held an object, even when the removed value was a scalar or did not exist; the scan blocked
       dereferences of every object that it reached, so a large graph stalled all threads using those objects.
       Such a removal no longer makes a recursive reference scan
+    - Fixed @ref remove "remove" and @ref delete "delete" of an object member making no recursive reference scan
+      at all when nothing in the lvalue's path is an object, as when the object is reached as the value of a hash
+      key or a list element; the object's recursive set then still counted the reference that the removal took
+      out, and a later dereference of any of its members could destroy the whole set although its objects were
+      still referenced from outside it
+    - Fixed assigning an object that takes part in a reference cycle into a variable or member costing several
+      scans of the object graph instead of one; the dereference of the temporary reference that evaluating the
+      object takes made the cycle's recorded reference counts look stale, which threw the recursive set away
+      and rebuilt an identical one, every time.  Such a rescan now leaves the set in place and the scan
+      confirms it
+    - Fixed a recursive reference scan that changes nothing writing to every object it walked; only the object
+      the scan started at now advances its scan generation, which is the only one that any waiting scan reads,
+      so scans of a shared graph no longer contend for a cache line on each of its objects
+    - Fixed recursive reference scans of one shared object graph excluding each other; a scan that changes no
+      recursive set now takes the r-section of the objects it walks in shared mode, so scans of the same
+      unchanged graph run at the same time instead of aborting and restarting each other, while a scan that has
+      to assign a recursive set still takes the r-section to itself.  Threads that repeatedly scan one shared
+      graph without changing it went from no gain at all on eight threads to four times the throughput of one
+    - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
+      it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
+      releases and retakes a weak reference to every member of the set, drops and re-registers the watches of
+      its lists, hashes, closures and references, or writes to every object it entered
+    - Fixed recursive reference scans walking a cycle that references nothing outside itself again on every scan
+      that reaches it; such a set is now recorded as closed when it is computed, and a scan that reaches it from
+      outside stops there, so a short-lived object that references a long-lived graph no longer pays for the size
+      of that graph on every dereference
     - Fixed crashes when scanning or destroying long chains or cycles of objects; objects in long chains are still
       destroyed before the objects that they reference
     - Fixed a crash when copying or deleting a long chain of exceptions, such as the chain of parse errors from a

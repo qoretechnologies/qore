@@ -590,6 +590,52 @@ public:
     DLLEXPORT QoreHashNode* send(const char* meth, const char* path, const QoreHashNode* headers,
             const QoreStringNode& body, bool getbody, QoreHashNode* info, ExceptionSink* xsink);
 
+    //! sends a message to the target named by a URL and returns the entire response as a hash
+    /** Equivalent to send() in every respect but the target: the request is sent to the origin named by @p url
+        instead of the client's own, and the client's URL and configuration are not changed, so requests to
+        different targets can run at the same time on one client.
+
+        @p url is any RFC 3986 URI reference and is resolved against the client's URL (section 5.2), so an
+        absolute URL selects its own origin, a network-path reference (\c "//host/path") changes the authority,
+        and a relative, empty, or query-only reference addresses the client's own origin.  It is a URI
+        reference, so it is already percent-encoded: only octets that cannot appear in a URI are encoded, and
+        percent-encoded octets and an empty query are sent as received.  Any fragment is dropped.
+
+        The credentials configured on the client belong to the origin of the client's URL: when @p url selects
+        another origin, no \c Authorization built from the client's URL and no default \c Authorization,
+        \c Cookie, or \c Host header is sent there, and an authentication challenge from it is not answered.
+        Headers passed in @p headers are for the target named here and are always sent.  User information in
+        @p url is never used as credentials.  Proxy credentials keep their proxy scope.
+
+        @param meth the HTTP method name to send
+        @param url the URL of the request target
+        @param headers a hash of headers to add to the message
+        @param data optional data to send (may be 0)
+        @param size the byte length of the data to send (if this is 0 then no data is sent)
+        @param getbody if true then a body will be read even if there is no "Content-Length:" header
+        @param info if not 0 then additional information about the HTTP communication will be added to the hash,
+        as with send()
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+
+        @return the entire response as a hash, caller owns the QoreHashNode reference returned (0 if there was
+        an error)
+
+        @throw HTTP-CLIENT-URL-ERROR the URL has no host, an invalid host, or names a UNIX domain socket when
+        the client is not itself on one
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* sendUrl(const char* meth, const QoreString& url, const QoreHashNode* headers,
+            const void* data, unsigned size, bool getbody, QoreHashNode* info, ExceptionSink* xsink);
+
+    //! sends a message to the target named by a URL and returns the entire response as a hash
+    /** @see the sendUrl() overload taking a data pointer for the target, credential, and encoding rules
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* sendUrl(const char* meth, const QoreString& url, const QoreHashNode* headers,
+            const QoreStringNode& body, bool getbody, QoreHashNode* info, ExceptionSink* xsink);
+
     //! Send HTTP request and return headers only, leaving body on socket for streaming
     /** @param meth the HTTP method (e.g. "GET", "POST")
         @param path the path for the request
@@ -827,7 +873,7 @@ public:
     /**
          @param xsink if an error occurs, the Qore-language exception information will be added here
     */
-    DLLEXPORT virtual void deref(ExceptionSink* xsink);
+    DLLEXPORT void deref(ExceptionSink* xsink) override;
 
     //! sets the connect timeout in ms
     /**

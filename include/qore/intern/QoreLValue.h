@@ -33,6 +33,31 @@
 
 #define _QORE_INTERN_QORELVALUE_H
 
+
+//! how an assignment stores the value it assigns
+/** This selects the representation the lvalue takes, which decides both ownership and whether the
+    deterministic garbage collector can see the resulting edge.
+*/
+enum class AssignmentMode : unsigned char {
+    //! an ordinary strong reference; owned, and followed by the DGC scanner
+    Normal = 0,
+    //! a weak reference (the \c := operator); not owned, and not followed by the scanner
+    Weak = 1,
+    //! an opaque reference (the \c \@= operator); owned, but NOT followed by the scanner
+    /** A cycle running through an opaque reference cannot be collected by cycle detection; it is
+        broken only by the holder releasing it or by the owning QoreProgram being torn down.
+    */
+    Opaque = 2,
+};
+
+//! returns the assignment mode for a legacy boolean \c weak flag
+/** Used where an interface still carries the pre-opaque boolean; a mode that must distinguish
+    opaque assignment cannot be recovered from a boolean, so every such interface that can see an
+    opaque assignment has to carry the mode itself.
+*/
+static inline AssignmentMode assignment_mode_from_weak(bool weak) {
+    return weak ? AssignmentMode::Weak : AssignmentMode::Normal;
+}
 DLLLOCAL void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out);
 
 template <typename U = qore_value_u>

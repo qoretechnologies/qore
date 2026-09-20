@@ -742,6 +742,11 @@ bool needs_scan(const AbstractQoreNode* n) {
 }
 
 bool needs_scan(const QoreValue& v) {
+    // an opaque reference is a strong reference the collector does not follow; it is transparent
+    // to every other consumer, so the tag is the only thing that distinguishes it here
+    if (v.isOpaque()) {
+        return false;
+    }
     return needs_scan(v.getInternalNode());
 }
 

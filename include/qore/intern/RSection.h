@@ -94,15 +94,22 @@ public:
         assert(list.empty());
     }
 
-    // does not block if there is an rsection conflict, returns -1 if the lock cannot be acquired and sets a
-    // notification
+    // returns -1 and sets a notification if the rsection or the write lock is held by another thread; waits
+    // only for scans holding the rsection in shared mode, which cannot block in turn
     DLLLOCAL int tryRSectionLockNotifyWaitRead(RNotifier* rn);
+
+    //! Takes the rsection in shared mode, which excludes writers and exclusive holders but not other scans
+    /** Scans read the graph; only a scan that has to change a recursive set needs the rsection to itself, and
+        RSetHelper starts that scan over in exclusive mode.  Does not block: returns -1 and registers a
+        notification when the rsection cannot be taken.  See design/dgc.md.
+    */
+    DLLLOCAL int tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared);
 
     DLLLOCAL void upgradeReadToRSection(int tid = q_gettid()) {
         AutoLocker al(l);
         assert(write_tid == -1);
 
-        while (rs_tid != -1) {
+        while (rs_tid != -1 || rs_shared) {
             ++rsection_waiting;
             rsection_cond.wait(l);
             --rsection_waiting;
@@ -125,12 +132,33 @@ public:
         // Threads that registered a notification while this thread also held the write lock cannot
         // acquire the rsection until that lock is released, and qore_var_rwlock_priv::unlock() notifies
         // them then; waking them here would only make them restart their scans and register again.
-        if (write_tid == -1) {
+        if (write_tid == -1 && !rs_shared) {
             qore_rsection_priv::notifyIntern();
         }
 
-        if (rsection_waiting)
+        // a thread waiting for the rsection can only take it once no shared holder is left
+        if (rsection_waiting && !rs_shared)
             rsection_cond.signal();
+
+        if (!--readers)
+            unlock_read_signal();
+    }
+
+    //! Releases a shared rsection taken with tryRSectionLockSharedNotifyWaitRead()
+    DLLLOCAL void rSectionUnlockShared() {
+        AutoLocker al(l);
+        assert(write_tid == -1);
+        assert(rs_tid == -1);
+        assert(rs_shared > 0);
+        assert(readers);
+
+        if (!--rs_shared) {
+            // the rsection is free now, so scans and threads waiting for it can take it
+            qore_rsection_priv::notifyIntern();
+            if (rsection_waiting) {
+                rsection_cond.signal();
+            }
+        }
 
         if (!--readers)
             unlock_read_signal();
@@ -144,6 +172,11 @@ public:
         return (rs_tid == tid || write_tid == tid);
     }
 
+    //! Returns true if the rsection is held, in either mode; for assertions only
+    DLLLOCAL bool checkRSectionHeld(int tid = q_gettid()) {
+        return checkRSectionExclusive(tid) || rs_shared > 0;
+    }
+
     DLLLOCAL int rSectionTid() const {
         return rs_tid;
     }
@@ -155,6 +188,10 @@ protected:
 
     // number of threads waiting on the rsection lock
     int rsection_waiting = 0;
+
+    // the number of scans holding the rsection in shared mode; they exclude writers and exclusive holders
+    // but not each other
+    int rs_shared = 0;
 
     // rsection condition variablt
     QoreCondition rsection_cond;
@@ -171,7 +208,7 @@ protected:
     }
 
     DLLLOCAL void setNotificationIntern(RNotifier* rn) {
-        assert(write_tid != -1 || rs_tid != -1);
+        assert(write_tid != -1 || rs_tid != -1 || rs_shared || rsection_waiting);
         list.push_back(rn);
         rn->set();
         //printd(5, "qrp::sNI t: %p r: %p\n", this, rn);
@@ -196,9 +233,19 @@ public:
         return static_cast<qore_rsection_priv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
     }
 
+    DLLLOCAL int tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool& shared) {
+        assert(priv->write_tid >= -1);
+        return static_cast<qore_rsection_priv*>(priv)->tryRSectionLockSharedNotifyWaitRead(rn, shared);
+    }
+
     DLLLOCAL void rSectionUnlock() {
         assert(priv->write_tid >= -1);
         static_cast<qore_rsection_priv*>(priv)->rSectionUnlock();
+    }
+
+    DLLLOCAL void rSectionUnlockShared() {
+        assert(priv->write_tid >= -1);
+        static_cast<qore_rsection_priv*>(priv)->rSectionUnlockShared();
     }
 
     DLLLOCAL bool hasRSectionLock(int tid = q_gettid()) {
@@ -209,6 +256,11 @@ public:
     DLLLOCAL bool checkRSectionExclusive(int tid = q_gettid()) {
         assert(priv->write_tid >= -1);
         return static_cast<qore_rsection_priv*>(priv)->checkRSectionExclusive(tid);
+    }
+
+    DLLLOCAL bool checkRSectionHeld(int tid = q_gettid()) {
+        assert(priv->write_tid >= -1);
+        return static_cast<qore_rsection_priv*>(priv)->checkRSectionHeld(tid);
     }
 
     DLLLOCAL void upgradeReadToRSection(int tid = q_gettid()) {

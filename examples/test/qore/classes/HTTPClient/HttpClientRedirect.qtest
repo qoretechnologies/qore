@@ -1021,6 +1021,45 @@ public class HttpClientRedirectTest inherits QUnit::Test {
             }
             assertEq(("/to-https",), (map $1.target, peer_a.getRequests()), api);
         }
+
+        # a redirect from https to http must be followed with HTTP/1: the connection manager's protocol follows
+        # the client's URL, but ALPN only runs over TLS, so the plaintext target cannot negotiate
+        {
+            HttpServer tls_server(<HttpServerOptionInfo>{});
+            on_exit tls_server.stop();
+            RedirectPeer tls_peer();
+            tls_server.setDefaultHandler("tls", tls_peer);
+            int tls_port = tls_server.addListener(<HttpListenerOptionInfo>{
+                "node": "127.0.0.1",
+                "service": 0,
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }).port;
+            tls_server.waitForAsyncIo();
+            tls_peer.setRedirect("/to-http", 302, url_a + "/from-https");
+            peer_a.setRoute("/from-https", 200, {"Content-Type": "text/plain"}, "plaintext target");
+            # the default HTTP/2 mode is "auto", so the manager for this TLS origin negotiates with ALPN
+            HTTPClient tls_hc({
+                "url": sprintf("https://127.0.0.1:%d", tls_port),
+                "ssl_verify_cert": False,
+                "connect_timeout": 10s,
+                "timeout": 10s,
+            });
+            foreach hash<RequestResult> r in (requestBoth(tls_hc, "GET", "/to-http", NOTHING, NOTHING,
+                    \peer_a.clear())) {
+                string msg = r.info.api;
+                assertEq(200, r.code, msg);
+                assertEq("plaintext target", toBin(r.body).toString(), msg);
+                assertEq(url_a + "/from-https", r.info."effective-url", msg);
+                assertEq(("/from-https",), (map $1.target, peer_a.getRequests()), msg);
+            }
+        }
+
+        # HTTP/3 runs over QUIC, which requires TLS; a plaintext target reports that instead of attempting a
+        # QUIC handshake against a TCP port
+        peer_a.setRoute("/h3-plain", 200, {"Content-Type": "text/plain"}, "plaintext target");
+        HTTPClient h3_hc({"url": url_a, "http3_mode": "required", "connect_timeout": 10s, "timeout": 10s});
+        assertThrows("HTTPCLIENT-HTTP3-SSL-REQUIRED", "requires TLS", \h3_hc.get(), "/h3-plain");
     }
 
     #! Returns data as a binary value

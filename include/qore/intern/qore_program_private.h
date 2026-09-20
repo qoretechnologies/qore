@@ -593,6 +593,30 @@ public:
     typedef std::map<std::string, int> ir_fallback_counts_t;
     mutable ir_fallback_counts_t ir_fallback_counts;
 
+    // Values that are the target of an opaque reference (the '@=' operator).
+    //
+    // The collector cannot see an opaque edge, so a cycle running through one is never collected.
+    // Tracking the targets bounds that leak to the creating Program's lifetime: teardown breaks
+    // every cycle still held up by one (see clearOpaqueTargets()).
+    //
+    // The registry is process-global and each entry records its owning Program, because a hash or a
+    // list has no owning-Program back-pointer of its own: the release path has only the target, so
+    // it has to be able to find the Program from the target alone.  Entries count REFERENCES, not
+    // assignments (see QoreValue::opaqueRegister()).  A registered target is always alive, because
+    // a non-zero count means at least one opaque value still holds a strong reference to it.
+    //
+    // opaque_lock is a LEAF lock: nothing else may be acquired while it is held and no user code
+    // runs under it; clearOpaqueTargets() copies what it needs and releases the lock before
+    // deleting anything.  Opaque assignment is a rare, deliberate operation, so one global plain
+    // lock is sufficient.
+    struct OpaqueTargetInfo {
+        QoreProgram* pgm;
+        unsigned count;
+    };
+    typedef std::map<AbstractQoreNode*, OpaqueTargetInfo> opaque_target_map_t;
+    DLLLOCAL static QoreThreadLock opaque_lock;
+    DLLLOCAL static opaque_target_map_t opaque_targets;
+
     struct PluginFallbackSiteInfo {
         std::string file;
         int line = -1;
@@ -626,6 +650,41 @@ public:
         AutoLocker al(plugin_fallback_lock);
         plugin_fallback_sites.clear();
     }
+
+    //! Records one more opaque reference to \a n, owned by \a pgm
+    /** @param n the target of the opaque reference
+        @param pgm the Program responsible for breaking a cycle through this target at teardown
+    */
+    DLLLOCAL static void registerOpaqueTarget(AbstractQoreNode* n, QoreProgram* pgm) {
+        assert(n);
+        assert(pgm);
+        AutoLocker al(opaque_lock);
+        auto i = opaque_targets.find(n);
+        if (i == opaque_targets.end()) {
+            opaque_targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+        } else {
+            ++i->second.count;
+        }
+    }
+
+    //! Records that one opaque reference to \a n has been released
+    /** @param n the target of the opaque reference
+    */
+    DLLLOCAL static void deregisterOpaqueTarget(AbstractQoreNode* n) {
+        assert(n);
+        AutoLocker al(opaque_lock);
+        auto i = opaque_targets.find(n);
+        if (i == opaque_targets.end()) {
+            // the owning Program was torn down first and already dropped its entries
+            return;
+        }
+        if (!--i->second.count) {
+            opaque_targets.erase(i);
+        }
+    }
+
+    //! Breaks every cycle held up by an opaque reference created in this Program
+    DLLLOCAL void clearOpaqueTargets(ExceptionSink* xsink);
 
     //! Records an IR fallback event for later reporting
     DLLLOCAL void recordIRFallback(const std::string& reason) const {

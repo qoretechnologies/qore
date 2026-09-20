@@ -33,6 +33,22 @@ class Node inherits Counted {
     }
 }
 
+#! A short-lived object in a cycle of its own that references the shared graph
+/** Releasing it makes a scan that walks the shared graph and changes nothing, which is the scan that takes
+    the rsection of each object it enters in shared mode.
+*/
+class Holder inherits Counted {
+    public {
+        any target;
+        any selfref;
+    }
+
+    constructor(any t) {
+        target = t;
+        selfref = self;
+    }
+}
+
 #! The object every thread dereferences; it is part of a cycle with all its nodes
 class Hub inherits Counted {
     public {
@@ -79,6 +95,10 @@ public class ConcurrentCycleScanTest inherits QUnit::Test {
         const NumThreads = 16;
         const GraphSize = 24;
         const Iterations = 200;
+        #! threads that only read the shared graph
+        const ReaderThreads = 14;
+        #! threads that change the shared graph
+        const WriterThreads = 2;
     }
 
     private {
@@ -90,6 +110,7 @@ public class ConcurrentCycleScanTest inherits QUnit::Test {
 
     constructor() : Test("concurrent cycle scan", "1.0", \ARGV) {
         addTestCase("concurrent dereferences of one shared cycle complete", \concurrentScanTest());
+        addTestCase("scans that change nothing run beside scans that do", \sharedScanTest());
         set_return_value(main());
     }
 
@@ -108,6 +129,54 @@ public class ConcurrentCycleScanTest inherits QUnit::Test {
             tmp[0].ping();
             tmp = ();
         }
+    }
+
+    #! Releases a short-lived cycle that references the shared graph, making a scan that changes nothing
+    private readerWorker() {
+        on_exit cnt.dec();
+        for (int i = 0; i < Iterations; ++i) {
+            list<auto> tmp = (new Holder(hub_holder[0]),);
+            tmp = ();
+        }
+    }
+
+    #! Changes the shared graph, which makes a scan that has to assign a recursive set
+    private writerWorker() {
+        on_exit cnt.dec();
+        for (int i = 0; i < Iterations; ++i) {
+            hub_holder[0].churn(i);
+        }
+    }
+
+    #! Scans that only read the graph must not keep a scan that has to change it out of the rsection
+    /** A scan that changes nothing takes the rsection of every object it enters in shared mode, so such
+        scans run at the same time.  A scan that has to assign a recursive set takes the rsection to itself
+        and waits for the shared holders to leave; while it waits, no new shared holder is admitted, so a
+        stream of read-only scans cannot starve it.  Starvation shows up here as a test that never returns.
+    */
+    private sharedScanTest() {
+        Counted::dc = 0;
+        {
+            Hub h(GraphSize);
+            hub_holder = (h,);
+        }
+
+        for (int i = 0; i < ReaderThreads; ++i) {
+            cnt.inc();
+            background readerWorker();
+        }
+        for (int i = 0; i < WriterThreads; ++i) {
+            cnt.inc();
+            background writerWorker();
+        }
+        cnt.waitForZero();
+
+        assertEq(ReaderThreads * Iterations, Counted::dc, "every short-lived cycle was collected");
+
+        int before = Counted::dc;
+        hub_holder = ();
+        assertEq(GraphSize + 1, Counted::dc - before,
+            "the shared cycle is collected once its last reference goes");
     }
 
     private concurrentScanTest() {

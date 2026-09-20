@@ -39,6 +39,7 @@
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
+QoreString QoreOpaqueAssignmentOperatorNode::op_str("opaque assignment (@=) operator expression");
 
 static const VarRefNode* get_lvalue_root_var_ref(QoreValue value) {
     unsigned depth = 0;
@@ -184,7 +185,11 @@ QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
     return metadata;
 }
 
-int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context, bool weak_assignment) {
+int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode) {
+    // the operator's spelling, used in diagnostics
+    const char* op_name = mode == AssignmentMode::Weak
+        ? ":="
+        : (mode == AssignmentMode::Opaque ? "@=" : "=");
     // turn off "reference ok" and "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
@@ -475,7 +480,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             "'(map expression) ?? ()' for a required list or declare the target as an optional list");
         metadata.addFact("expectedType", get_type_name(ti));
         metadata.addFact("actualType", get_type_name(parse_context.typeInfo));
-        metadata.addFact("operation", weak_assignment ? ":=" : "=");
+        metadata.addFact("operation", op_name);
         metadata.addFact("sourceType", get_type_name(source_ti));
         metadata.addFact("sourceTypeAllowsNothing", "true");
         metadata.addSuggestion("(map expression) ?? ()");
@@ -487,7 +492,8 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 
     if (raise_exception) {
         QoreStringNode* edesc = new QoreStringNodeMaker("lvalue for %sassignment operator '%s' expects ",
-            weak_assignment ? "weak " : "", weak_assignment ? ":=" : "=");
+            mode == AssignmentMode::Weak ? "weak " : (mode == AssignmentMode::Opaque ? "opaque " : ""),
+            op_name);
         QoreTypeInfo::getThisType(error_ti, *edesc);
         edesc->concat(", but right-hand side is ");
         QoreTypeInfo::getThisType(error_rhs_ti, *edesc);
@@ -502,7 +508,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 
         QoreDiagnosticMetadata metadata = qore_make_lvalue_type_diagnostic(left, error_ti, error_rhs_ti,
             has_narrowed_type && !is_direct_auto_assignment, "INCOMPATIBLE-ASSIGNMENT-TYPE",
-            weak_assignment ? ":=" : "=");
+            op_name);
         qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc, metadata);
         if (!err) {
             err = -1;
@@ -586,7 +592,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 }
 
 QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& needs_deref,
-        bool weak_assignment) const {
+        AssignmentMode mode) const {
     /* assign new value, this value gets referenced with the
         eval(xsink) call, so there's no need to reference it again
         for the variable assignment - however it does need to be
@@ -615,7 +621,7 @@ QoreValue QoreAssignmentOperatorNode::evalIntern(ExceptionSink* xsink, bool& nee
     assert(!*xsink);
 
     // assign new value
-    if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, weak_assignment))
+    if (v.assign(new_value.takeReferencedValue(), "<lvalue>", !ident, mode))
         return QoreValue();
 
     // reference return value if necessary

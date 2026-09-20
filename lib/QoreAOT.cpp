@@ -3317,7 +3317,7 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
             ref.local = linst->local;
             ref.lifecycle = inst->opcode == QoreIROpcode::InstantiateLocal
                 || inst->opcode == QoreIROpcode::UninstantiateLocal;
-            ref.weak_store = inst->opcode == QoreIROpcode::StoreLocal && linst->weak;
+            ref.weak_store = inst->opcode == QoreIROpcode::StoreLocal && linst->mode != AssignmentMode::Normal;
             ref.unknown = !linst->local;
             cb(ref);
             break;
@@ -3390,7 +3390,7 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
                     AOTOutlineLocalRef ref;
                     ref.local = reinterpret_cast<const LocalVar*>(root.ref_ptr);
                     ref.weak_store = inst->opcode == QoreIROpcode::LValuePathAssign
-                        && lvp->weak;
+                        && lvp->mode != AssignmentMode::Normal;
                     ref.unknown = !ref.local;
                     cb(ref);
                 }
@@ -6164,7 +6164,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::LoadClosure: {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!explicit_captures || !linst->local || linst->is_ref
-                            || linst->weak || !explicit_captures->count(linst->local)
+                            || linst->mode != AssignmentMode::Normal || !explicit_captures->count(linst->local)
                             || qore_ir_get_scalar_local_kind(linst->local)
                                 == BatchCalleeParamKind::Boxed) {
                         return false;
@@ -10808,7 +10808,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
             } else if (inst->opcode == QoreIROpcode::StoreLocal) {
                 const auto* store = static_cast<const QoreIRLocalInstruction*>(inst);
-                if (store->weak || !is_exact_int_local(store->local)
+                if (store->mode != AssignmentMode::Normal || !is_exact_int_local(store->local)
                         || inst->operands.size() != 1) {
                     return false;
                 }
@@ -13245,7 +13245,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     const auto* store =
                         static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!store->local || store->local == self
-                            || store->local->closureUse() || store->weak
+                            || store->local->closureUse() || store->mode != AssignmentMode::Normal
                             || inst->operands.size() != 1) {
                         return false;
                     }
@@ -13277,7 +13277,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     auto source = inst->operands.size() == 1
                         ? value_sources.find(inst->operands[0].id)
                         : value_sources.end();
-                    if (assign->weak || !member || member->empty()
+                    if (assign->mode != AssignmentMode::Normal || !member || member->empty()
                             || source == value_sources.end()) {
                         return false;
                     }
@@ -13380,7 +13380,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     const auto* store =
                         static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!store->local || store->local->closureUse()
-                            || store->weak || inst->operands.size() != 1
+                            || store->mode != AssignmentMode::Normal || inst->operands.size() != 1
                             || store->local == self) {
                         return false;
                     }
@@ -13426,7 +13426,7 @@ bool qore_ir_resolve_batch_function_summaries(
                                 == LVPathStepKind::HashKeyConst) {
                         assigned_member = &assign->path[1].name;
                     }
-                    if (assigned || assign->weak
+                    if (assigned || assign->mode != AssignmentMode::Normal
                             || !assigned_member
                             || assigned_member->empty()
                             || inst->operands.size() != 1) {
@@ -14697,7 +14697,7 @@ static size_t projectAOTNonescapingObjectScalars(
                 object_uses->second.front());
             const LocalVar* local = store->local;
             auto store_position = positions.find(store);
-            if (!local || store->weak || store->is_ref || store->is_closure
+            if (!local || store->mode != AssignmentMode::Normal || store->is_ref || store->is_closure
                     || local->closureUse()
                     || func.isAstVisibleLocal(
                         reinterpret_cast<const void*>(local))
@@ -15632,6 +15632,53 @@ static bool declareAOTBatchFastEntries(qore_ns_private* ns, QoreProgram* pgm,
             && !resolveAOTBatchGenericSpecializations(pgm, ctx,
                 module, *generic_specializations,
                 aot_batch_callee_map)) {
+        return false;
+    }
+    return true;
+}
+
+//! Fail, or prune, any fast-entry symbol that no walk gave a body.
+/** Every `approach_b_eligible` entry promises a callable native ABI at
+    `fast_name`, and a caller binds its call site straight to that symbol.  If
+    the body walk that owns the variant declines to emit it -- because the
+    discovery probe's outlining or eligibility verdict differed from the real
+    lowering's, or because two walks under different `compile_module` values
+    claimed the same variant -- the declaration is left behind.  LLVM reports
+    that as "Global is external, but doesn't have external or weak linkage!",
+    naming a mangled symbol and no Qore item, and an entry that a caller DID
+    bind to would otherwise reach the linker as an undefined reference.
+
+    A declaration nothing references is dead weight and is simply dropped, the
+    same as `pruneUnusedAOTSharedFastEntryFunctions()` does for the per-file
+    objects.  One that is referenced is a compiler defect, so report it against
+    the Qore item rather than letting the verifier speak for it. */
+static bool auditAOTBatchFastEntryDefinitions(llvm::Module& module,
+        const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>& batch_callees,
+        std::string& error) {
+    size_t callee_i = 0;
+    for (const auto& [variant, info] : batch_callees) {
+        (void)variant;
+        if (callee_i && !(callee_i % 100)
+                && qore_check_cancel(nullptr, "AOT fast-entry definition audit")) {
+            error = "operation cancelled during AOT fast-entry definition audit";
+            return false;
+        }
+        ++callee_i;
+        if (!info.approach_b_eligible || info.fast_name.empty()
+                || info.preloaded_fast_entry) {
+            continue;
+        }
+        llvm::Function* fn = module.getFunction(info.fast_name);
+        if (!fn || !fn->isDeclaration()) {
+            continue;
+        }
+        if (fn->use_empty()) {
+            fn->eraseFromParent();
+            continue;
+        }
+        error = "internal AOT error: no body was emitted for the fast entry of '"
+            + (info.call_ref_path.empty() ? info.name : info.call_ref_path)
+            + "' (symbol '" + info.fast_name + "'), but a compiled caller calls it";
         return false;
     }
     return true;
@@ -23005,6 +23052,28 @@ bool QoreAOT::compile(QoreProgram* pgm,
         error = "operation cancelled during executable AOT fast-entry discovery";
         return false;
     }
+    // An embedded module's own program root namespace holds every item the main
+    // program's tree cannot see, so it needs its own discovery pass -- but an
+    // EXPORTED item lives in both trees as one variant, and the two trees are
+    // walked under different `compile_module` values ("" here, the module name
+    // below), which is a different `_qaot_` symbol namespace for the same body.
+    // Discover into the SAME map and the SAME key set so each variant keeps one
+    // fast-entry symbol, owned by whichever walk emits its body: `declared_keys`
+    // is built with the identical `getVariantKey()` string the body walk dedups
+    // on through `compiled_keys`, so the two agree by construction.  Declaring a
+    // second, module-prefixed `_fast` symbol whose body the `compiled_keys` skip
+    // then suppresses leaves an internal-linkage declaration that LLVM rejects
+    // ("Global is external, but doesn't have external or weak linkage!") -- and
+    // that a module-private caller compiled below binds its call to.
+    for (auto& root : local_module_roots) {
+        if (!declareAOTBatchFastEntries(root.second, pgm, ctx, *module,
+                executable_batch_callees, declared_fast_keys, root.first.c_str(),
+                nullptr, nullptr, nullptr)) {
+            error = "operation cancelled during executable AOT embedded-module "
+                "fast-entry discovery";
+            return false;
+        }
+    }
 
     // Pass "" as compile_module to filter out module-originated functions/classes;
     // module functions are available at runtime via runTimeLoadModule().  Relative
@@ -23017,12 +23086,17 @@ bool QoreAOT::compile(QoreProgram* pgm,
         total_ir_insts_all, &const_reverse_map, &compiled_keys, "",
         nullptr, false, nullptr, nullptr, &fatal_lowering_error,
         local_module_names.empty() ? nullptr : &local_module_names, nullptr,
-        executable_batch_callees.empty() ? nullptr : &executable_batch_callees);
+        &executable_batch_callees);
     for (auto& root : local_module_roots) {
+        // Always hand over the shared map: passing nullptr would make
+        // compileNamespaceFunctions() build its own under this module's
+        // `compile_module`, re-declaring a prefixed `_fast` twin of every
+        // exported item whose body the walk above already emitted.
         compileNamespaceFunctions(root.second, pgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
             total_ir_insts_all, &const_reverse_map, &compiled_keys, root.first.c_str(),
-            nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr);
+            nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr, nullptr,
+            &executable_batch_callees);
         if (!fatal_lowering_error.empty()) {
             break;
         }
@@ -23237,10 +23311,24 @@ bool QoreAOT::compile(QoreProgram* pgm,
         std::unordered_set<std::string> dep_seen;
         {
             qore_program_private* pp = qore_program_private::get(*pgm);
+            // An embedded module is NOT a runtime dependency: its code and its
+            // declarations are compiled into this executable precisely because
+            // it cannot be loaded by name, and the namespace tree below keeps
+            // its items for the same reason using this same set.  Listing it
+            // here contradicts that and makes the executable refuse to start
+            // with `requires module '<Mod>', which could not be loaded`.  What
+            // the executable does inherit is everything the embedded module
+            // itself needs, which the loop below hoists into this list.
+            auto embedded_module = [&local_module_names](const std::string& feat) {
+                return local_module_names.find(feat) != local_module_names.end();
+            };
             for (const auto& feat : pp->featureList) {
                 aotAddFeatureDependency(all_deps, dep_seen, feat);
             }
             for (const auto& feat : pp->userFeatureList) {
+                if (embedded_module(feat)) {
+                    continue;
+                }
                 aotAddDependency(all_deps, dep_seen, feat);
             }
             for (const std::string& module_name : local_module_names) {
@@ -23255,6 +23343,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     aotAddFeatureDependency(all_deps, dep_seen, feat);
                 }
                 for (const auto& feat : mpp->userFeatureList) {
+                    if (embedded_module(feat)) {
+                        continue;
+                    }
                     aotAddDependency(all_deps, dep_seen, feat);
                 }
             }
@@ -23366,6 +23457,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     // Finalize shared debug info after all functions are lowered
     di_builder.finalize();
+
+    if (!auditAOTBatchFastEntryDefinitions(*module, executable_batch_callees, error)) {
+        return false;
+    }
 
     // Verify the complete module
     if (getenv("QORE_AOT_DEBUG")) {
@@ -35309,7 +35404,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const auto* pi = reinterpret_cast<const QoreIRLValuePathInstruction*>(ptr);
         AOTLVPathSlotId& lvid = out.lv_path_insts[slot];
         lvid.opcode = static_cast<uint16_t>(pi->opcode);
-        lvid.weak = pi->weak ? 1 : 0;
+        lvid.weak = pi->mode != AssignmentMode::Normal ? 1 : 0;
         lvid.compound_op = static_cast<uint8_t>(pi->compound_op);
         lvid.unary_op = static_cast<uint8_t>(pi->unary_op);
         lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);

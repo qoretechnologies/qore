@@ -630,12 +630,24 @@ public:
     }
 
     //! Reports that members were removed from the object held by the lvalue
-    /** @param scan_value_removed true if any removed value needs a recursive-reference scan
+    /** @param obj the object the members were removed from
+        @param scan_value_removed true if any removed value needs a recursive-reference scan
+
+        The lvalue path does not have to pass through an object: \c "remove h.x.a" navigates to the container
+        \c h.x, which is the object itself as the value of a hash key, so nothing on the path is an RObject and
+        the destructor would have no root for the scan.  Removing a reference from an object can break a cycle,
+        and without the scan the object's recursive set keeps describing a graph that no longer exists: the
+        references it counts as internal are gone, and the next dereference of a member can collect the set
+        although its objects are still referenced from outside it.  The object a value was removed from is
+        therefore the scan root when the path supplies none.
     */
-    DLLLOCAL void objectRemoved(bool scan_value_removed) {
+    DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {
             removal_object_scan = true;
+            if (!robj) {
+                robj = &obj;
+            }
         }
     }
 
@@ -916,7 +928,8 @@ public:
         }
     }
 
-    DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true, bool weak_assignment = false);
+    DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true,
+            AssignmentMode mode = AssignmentMode::Normal);
 
     DLLLOCAL QoreValue removeValue(bool for_del);
     DLLLOCAL QoreValue remove(bool& static_assignment);
@@ -979,5 +992,23 @@ struct lvinfo {
     DLLLOCAL lvinfo(QoreLValueGeneric* val, const QoreTypeInfo* typeInfo) : val(val), typeInfo(typeInfo) {
     }
 };
+
+
+//! replaces a value with the weak or opaque representation the given assignment mode calls for
+/** Applied by the execution tiers that build the stored representation themselves instead of
+    delegating to LValueHelper::assign().  Objects, hashes and lists are converted; every other
+    value is left unchanged.  The returned value holds its own reference, so the caller must
+    release the reference it held before the call once the store has taken its own.
+
+    @param val the value to convert in place
+    @param mode the assignment mode; must not be AssignmentMode::Normal
+*/
+DLLLOCAL void qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
+
+//! returns true if the value is a weak or opaque reference to an object, hash or list
+/** These are the representations that hold their target indirectly, so that a store which built
+    one must release the reference taken when it was built.
+*/
+DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 
 #endif // _QORE_VARIABLE_H

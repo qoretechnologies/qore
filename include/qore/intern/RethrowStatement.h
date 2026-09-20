@@ -39,6 +39,10 @@ class RuntimeConfig;
 
 class RethrowStatement : public AbstractStatement {
 public:
+    //! no lexical sub-scope of its own
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
     DLLLOCAL RethrowStatement(int start_line, int end_line) : AbstractStatement(start_line, end_line) {
     }
 

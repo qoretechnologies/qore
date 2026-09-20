@@ -37,6 +37,10 @@
 #include <qore/QoreEnumDecl.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
+#include "qore/intern/WeakReferenceNode.h"
+#include "qore/intern/WeakHashReferenceNode.h"
+#include "qore/intern/WeakListReferenceNode.h"
+#include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
 
@@ -272,6 +276,104 @@ QoreStringNode* QoreValue::makeCharString(unsigned codepoint, const QoreEncoding
     return rv;
 }
 
+// ============================================================================
+// Opaque references
+// ============================================================================
+
+QoreValue QoreValue::makeOpaqueIntern(AbstractQoreNode* n, uint64_t opaque_tag) {
+    assert(n);
+    uint64_t p = reinterpret_cast<uint64_t>(n);
+    // the 48-bit payload must hold the whole pointer; this is the same assumption TAG_POINTER makes
+    assert((p & ~PAYLOAD_MASK) == 0);
+    n->ref();
+    QoreValue rv;
+    rv.bits = opaque_tag | (p & PAYLOAD_MASK);
+    return rv;
+}
+
+void QoreValue::opaqueRegister() const {
+    // Registration is balanced against the strong references held THROUGH opaque values, not
+    // against the number of assignments: every copy of an opaque value takes its own reference, so
+    // every copy must take its own registration, or the first release would untrack a target that
+    // other copies still hold.
+    if (!isOpaque()) {
+        return;
+    }
+    AbstractQoreNode* n = reinterpret_cast<AbstractQoreNode*>(payload());
+    // an object knows its own Program; a hash or a list does not, so the Program responsible for
+    // breaking a cycle through it is the one that created the reference
+    QoreProgram* pgm = isOpaqueObject()
+        ? static_cast<QoreObject*>(n)->getProgram()
+        : getProgram();
+    if (pgm) {
+        qore_program_private::registerOpaqueTarget(n, pgm);
+    }
+}
+
+void QoreValue::opaqueDeregister() const {
+    if (!isOpaque()) {
+        return;
+    }
+    // the registry records the owning Program, so the release path needs only the target
+    qore_program_private::deregisterOpaqueTarget(reinterpret_cast<AbstractQoreNode*>(payload()));
+}
+
+QoreValue QoreValue::makeOpaqueObject(QoreObject* o) {
+    assert(o);
+    QoreValue rv = makeOpaqueIntern(o, TAG_OPAQUE_OBJECT);
+    // register with the owning Program so teardown can break any cycle this edge holds up; the
+    // target is the key, so the matching release finds the same Program
+    rv.opaqueRegister();
+    return rv;
+}
+
+QoreValue QoreValue::makeOpaqueHash(QoreHashNode* h) {
+    assert(h);
+    QoreValue rv = makeOpaqueIntern(h, TAG_OPAQUE_HASH);
+    rv.opaqueRegister();
+    return rv;
+}
+
+QoreValue QoreValue::makeOpaqueList(QoreListNode* l) {
+    assert(l);
+    QoreValue rv = makeOpaqueIntern(l, TAG_OPAQUE_LIST);
+    rv.opaqueRegister();
+    return rv;
+}
+
+QoreObject* QoreValue::getOpaqueObject() const {
+    assert(isOpaqueObject());
+    return reinterpret_cast<QoreObject*>(payload());
+}
+
+QoreHashNode* QoreValue::getOpaqueHash() const {
+    assert(isOpaqueHash());
+    return reinterpret_cast<QoreHashNode*>(payload());
+}
+
+QoreListNode* QoreValue::getOpaqueList() const {
+    assert(isOpaqueList());
+    return reinterpret_cast<QoreListNode*>(payload());
+}
+
+QoreValue QoreValue::resolveIndirect() const {
+    // an opaque reference already reports its target's type and node, so it needs no unwrapping
+    switch (getType()) {
+        case NT_WEAKREF: {
+            QoreObject* o = get<const WeakReferenceNode>()->get();
+            // a weak reference does not keep its target alive, so it can already be deleted
+            return o->isValid() ? QoreValue(o) : QoreValue();
+        }
+        case NT_WEAKREF_HASH:
+            return QoreValue(get<const WeakHashReferenceNode>()->get());
+        case NT_WEAKREF_LIST:
+            return QoreValue(get<const WeakListReferenceNode>()->get());
+        default:
+            break;
+    }
+    return *this;
+}
+
 void QoreValue::getShortString(char* buf) const {
     assert(isShortString());
     size_t len = shortStringLen();
@@ -502,18 +604,12 @@ bool QoreValue::hasNode() const {
 }
 
 bool QoreValue::isReferenceCounted() const {
-    if (!isPointer()) {
-        return false;
-    }
-    AbstractQoreNode* n = getPointerUnsafe();
+    AbstractQoreNode* n = getOwnedNodeIntern();
     return n && n->isReferenceCounted();
 }
 
 bool QoreValue::derefCanThrowException() const {
-    if (!isPointer()) {
-        return false;
-    }
-    AbstractQoreNode* n = getPointerUnsafe();
+    AbstractQoreNode* n = getOwnedNodeIntern();
     if (!n) {
         return false;
     }
@@ -659,11 +755,11 @@ void QoreValue::clear() {
 }
 
 void QoreValue::discard(ExceptionSink* xsink) {
-    if (isPointer()) {
-        AbstractQoreNode* n = getPointerUnsafe();
-        if (n) {
-            n->deref(xsink);
-        }
+    // an opaque reference owns its payload exactly like a pointer value does
+    AbstractQoreNode* n = getOwnedNodeIntern();
+    if (n) {
+        opaqueDeregister();
+        n->deref(xsink);
     }
     bits = VAL_NOTHING;
 }
@@ -711,7 +807,9 @@ void QoreValue::swap(QoreValue& val) {
 }
 
 void QoreValue::sanitize() {
-    if (!isPointer()) {
+    // an opaque reference must keep its representation: converting it would make the edge visible
+    // to the collector again
+    if (!isPointer() || isOpaque()) {
         return;
     }
     AbstractQoreNode* n = getPointerUnsafe();
@@ -777,11 +875,11 @@ void QoreValue::sanitize() {
 // ============================================================================
 
 void QoreValue::ref() const {
-    if (isPointer()) {
-        AbstractQoreNode* n = getPointerUnsafe();
-        if (n) {
-            n->ref();
-        }
+    // an opaque reference owns its payload exactly like a pointer value does
+    AbstractQoreNode* n = getOwnedNodeIntern();
+    if (n) {
+        n->ref();
+        opaqueRegister();
     }
 }
 
@@ -802,15 +900,20 @@ AbstractQoreNode* QoreValue::takeNode() {
 AbstractQoreNode* QoreValue::takeNodeIntern() {
     assert(isPointer());
     AbstractQoreNode* rv = getPointerUnsafe();
+    // the reference is leaving the opaque representation, so it is no longer an edge the collector
+    // must be told about
+    opaqueDeregister();
     bits = VAL_NOTHING;
     return rv;
 }
 
 AbstractQoreNode* QoreValue::takeIfNode() {
-    if (isPointer()) {
-        return takeNodeIntern();
+    // an opaque reference owns its payload, so it must be handed to the caller for dereferencing;
+    // assign() uses this to release the value being overwritten
+    if (!isPointer()) {
+        return nullptr;
     }
-    return nullptr;
+    return takeNodeIntern();
 }
 
 // ============================================================================

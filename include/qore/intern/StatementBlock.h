@@ -171,6 +171,34 @@ public:
         return statement_list;
     }
 
+    //! @see AbstractStatement::mayHaveNestedScopeLocals()
+    /** From depth 1 down this block IS a nested scope, so its own locals answer the question.
+        Callers asking about the block they are lowering pass depth 0 to its statements instead,
+        since a block's handler is supposed to see that block's own locals alive.
+    */
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        // a tree this deep is pathological; answer conservatively rather than recurse further
+        if (depth > 64) {
+            return true;
+        }
+        if (depth && lvars) {
+            return true;
+        }
+        size_t count = 0;
+        for (const AbstractStatement* stmt : statement_list) {
+            // a generated block can hold any number of statements; stay interruptible, and
+            // answer conservatively when the scan is cut short
+            if (++count % 100 == 0
+                    && qore_check_cancel(nullptr, "nested block-scope local scan")) {
+                return true;
+            }
+            if (stmt && stmt->mayHaveNestedScopeLocals(depth + 1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     //! Returns true if this block has on_exit/on_success/on_error handlers
     DLLLOCAL bool hasOnBlockExit() const {
         return !on_block_exit_list.empty();

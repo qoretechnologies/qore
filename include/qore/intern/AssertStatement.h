@@ -39,6 +39,10 @@ class RuntimeConfig;
 
 class AssertStatement : public AbstractStatement {
 public:
+    //! no lexical sub-scope of its own
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
     //! Creates an assert statement with an expression
     /** @param start_line the starting line number
         @param end_line the ending line number

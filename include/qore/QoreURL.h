@@ -42,8 +42,14 @@
 #define QURL_DECODE_ANY    (QURL_DECODE | QURL_DECODE_PATH)
 
 //! qore_resolve_url() option: reject arguments that are not valid URI references
-/** Controls, space, malformed percent-encoded octets, and a relative-path reference whose first segment contains a
-    colon are rejected
+/** Both arguments must match the RFC 3986 \c URI-reference grammar: the scheme, authority (userinfo, host, port),
+    path, query, and fragment are each validated against the character set and structure allowed for them, so a
+    bracketed IP literal must be a well formed \c IPv6address or \c IPvFuture, a port must be digits only, a path
+    cannot begin with \c "//" without an authority, and a relative-path reference whose first segment contains a
+    colon is rejected (it would be taken for a URI with a scheme; RFC 3986 section 4.2).  Controls, space, and
+    malformed percent-encoded octets are rejected anywhere.
+
+    Non-ASCII octets are accepted, as in IRIs (RFC 3987); add @ref QRU_ASCII to require a URI instead.
 */
 #define QRU_STRICT          (1 << 0)
 //! qore_resolve_url() option: remove any fragment from the target
@@ -52,6 +58,10 @@
 #define QRU_RELATIVE_BASE   (1 << 2)
 //! qore_resolve_url() option: percent-encode octets that cannot appear in a URI in the target (IRI to URI mapping)
 #define QRU_ENCODE          (1 << 3)
+//! qore_resolve_url() option: reject non-ASCII octets, requiring a URI (RFC 3986) rather than an IRI (RFC 3987)
+/** Implies @ref QRU_STRICT
+*/
+#define QRU_ASCII           (1 << 4)
 
 class QoreString;
 class QoreStringNode;

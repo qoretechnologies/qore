@@ -1,0 +1,208 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcScanRestartTest
+
+#! An object that every scan in this test reaches, so that concurrent scans contend for one r-section
+class Hub {
+    public {
+        string name = "hub";
+    }
+}
+
+#! A node of a cycle that also references the shared hub, which keeps the cycle's set open
+/** An open set is entered by every scan that reaches it, so the scans of this test walk the whole graph
+    instead of stopping at a closed region.
+*/
+class Node {
+    public {
+        *Node peer;
+        Hub hub;
+        hash<auto> state;
+        static int destroyed = 0;
+    }
+
+    constructor(Hub hub, string id) {
+        self.hub = hub;
+        state = {"id": id};
+    }
+
+    destructor() {
+        ++Node::destroyed;
+    }
+}
+
+#! Holds a value; assigning to a member scans the graph reachable from the holder
+class Holder {
+    public {
+        auto value;
+        auto other;
+    }
+}
+
+class DgcScanRestartTest inherits QUnit::Test {
+    public {
+        #! the number of objects in each cycle the workers build and drop
+        const CycleSize = 16;
+        #! the number of objects in the graph that stays alive for the whole test
+        const ResidentSize = 256;
+    }
+
+    private {
+        #! guards \a restarts, which the workers of concurrentScansComplete() write from their own threads
+        Mutex rm();
+        #! the number of passes each worker gave up
+        list<int> restarts = ();
+    }
+
+    constructor() : QUnit::Test("recursive scan restarts", "1.0") {
+        addTestCase("An uncontended scan never gives up a pass", \uncontendedScanNeverRestarts());
+        addTestCase("An uncontended steady state never gives up a pass", \steadyStateNeverRestarts());
+        addTestCase("Concurrent scans of one graph all complete", \concurrentScansComplete());
+        set_return_value(main());
+    }
+
+    #! A scan with no other thread running can never lose a race for a lock, so it must never start over
+    /** A pass is given up only when the r-section of an object the scan has to enter is held by another
+        thread; the scan then registers a notification with that owner, releases everything it holds and
+        waits for it.  With no other thread running there is no such owner, so a restart here means a pass
+        was abandoned for a reason that will be there again on the next pass and the scan cannot converge:
+        the constructor's retry loop walks the graph from scratch, abandons it at the same point and walks
+        it again, at 100% CPU, forever.  Nothing is written and no lock is held while that happens, so from
+        outside the process it is indistinguishable from a slow compile.
+    */
+    uncontendedScanNeverRestarts() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive scan counts require a debug build");
+        }
+        Node::destroyed = 0;
+        Hub hub();
+        int restarts = restartCount();
+        int walked = scanObjectCount();
+        {
+            list<Node> nodes = makeOpenCycle(hub, CycleSize, "u");
+            # building the cycle makes a scan that has to assign a recursive set
+            Holder holder();
+            holder.value = nodes[0];
+        }
+        int restarted = restartCount() - restarts;
+        if (m_options.verbose) {
+            printf("uncontended cycle: objects entered: %d; passes given up: %d\n",
+                scanObjectCount() - walked, restarted);
+        }
+        assertGt(CycleSize, scanObjectCount() - walked, "the scans walk the cycle");
+        assertEq(0, restarted, "a scan with no other thread running never gives up a pass");
+        assertEq(CycleSize, Node::destroyed, "the cycle is collected");
+    }
+
+    #! The shape that produced the failure this test guards: steady-state churn against a resident graph
+    /** A long-lived graph with one node repeatedly added and dropped is what a module's const initialiser
+        tears down, and it is where a scan that cannot converge shows up as a compile that never finishes.
+    */
+    steadyStateNeverRestarts() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive scan counts require a debug build");
+        }
+        Node::destroyed = 0;
+        Hub hub();
+        list<Node> resident = makeOpenCycle(hub, ResidentSize, "r");
+        Holder holder();
+        holder.value = resident[0];
+
+        int restarts = restartCount();
+        for (int i = 0; i < 4; ++i) {
+            # each pass joins a new cycle to the graph and drops it again, so the scans have sets to assign
+            list<Node> churn = makeOpenCycle(hub, CycleSize, sprintf("c-%d", i));
+            holder.other = churn[0];
+            holder.other = NOTHING;
+        }
+        int restarted = restartCount() - restarts;
+        if (m_options.verbose) {
+            printf("steady state: passes given up: %d\n", restarted);
+        }
+        assertEq(0, restarted, "steady-state churn never makes a scan give up a pass");
+        assertEq(CycleSize * 4, Node::destroyed, "every dropped cycle is collected");
+
+        remove resident;
+        remove holder;
+        assertEq(CycleSize * 4 + ResidentSize, Node::destroyed, "the resident graph is collected");
+    }
+
+    #! Concurrent scans of one shared graph must all finish and collect everything they dropped
+    /** Here passes really are given up, because the threads contend for the hub's r-section.  The count is
+        timing-dependent and so is only reported, but every object each thread dropped must still be
+        collected: a scan that gives up and starts over may not lose work.
+    */
+    concurrentScansComplete() {
+        Node::destroyed = 0;
+        Hub hub();
+        list<Node> resident = makeOpenCycle(hub, ResidentSize, "r");
+        Holder keep();
+        keep.value = resident[0];
+
+        int threads = 8;
+        int iters = 24;
+        Counter cnt();
+        restarts = ();
+        for (int t = 0; t < threads; ++t) {
+            cnt.inc();
+            background worker(hub, t, iters, cnt);
+        }
+        cnt.waitForZero();
+
+        if (m_options.verbose && Option::HAVE_LIBRARY_DEBUGGING) {
+            printf("concurrent scans: passes given up per thread: %y\n", restarts);
+        }
+        assertEq(threads * iters * CycleSize, Node::destroyed,
+            "every cycle dropped by every thread is collected");
+
+        remove resident;
+        remove keep;
+        assertEq(threads * iters * CycleSize + ResidentSize, Node::destroyed,
+            "the shared graph is collected after the workers finish");
+    }
+
+    #! Builds and drops a cycle joined to the shared hub, \a iters times, recording the passes given up
+    private worker(Hub hub, int t, int iters, Counter cnt) {
+        on_exit cnt.dec();
+        int before = Option::HAVE_LIBRARY_DEBUGGING ? restartCount() : 0;
+        Holder holder();
+        for (int i = 0; i < iters; ++i) {
+            list<Node> churn = makeOpenCycle(hub, CycleSize, sprintf("t-%d-%d", t, i));
+            holder.value = churn[0];
+            holder.value = NOTHING;
+        }
+        if (Option::HAVE_LIBRARY_DEBUGGING) {
+            int mine = restartCount() - before;
+            rm.lock();
+            on_exit rm.unlock();
+            restarts += mine;
+        }
+    }
+
+    #! Returns a cycle of \a n objects that also reference one object outside the cycle
+    private static list<Node> makeOpenCycle(Hub hub, int n, string tag) {
+        list<Node> nodes = ();
+        for (int i = 0; i < n; ++i) {
+            nodes += new Node(hub, sprintf("%s-%d", tag, i));
+        }
+        for (int i = 0; i < n; ++i) {
+            nodes[i].peer = nodes[(i + 1) % n];
+        }
+        return nodes;
+    }
+
+    #! Returns the number of times scans in this thread have given up a pass and started over
+    private static int restartCount() {
+        return call_function("dbg_get_rset_restart_count");
+    }
+
+    #! Returns the number of objects that scans have entered in this thread
+    private static int scanObjectCount() {
+        return call_function("dbg_get_scan_object_count");
+    }
+}

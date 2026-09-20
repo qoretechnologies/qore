@@ -1463,7 +1463,8 @@ public:
 
     LocalVar* local = nullptr;
     bool auto_ref = true;  // For LoadLocal: if true, calls refSelf(); if false, loads without inflating refcount
-    bool weak = false;  // For StoreLocal: if true, wraps object/hash/list in weak reference
+    //! For StoreLocal: selects the representation the store uses (see AssignmentMode)
+    AssignmentMode mode = AssignmentMode::Normal;
     bool initial_assignment = false; // For StoreLocal/StoreClosure: declaration initializer write
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
@@ -1478,7 +1479,8 @@ public:
     }
 
     Var* var = nullptr;
-    bool weak = false;  // For StoreGlobal/StoreThreadLocal: if true, wraps object/hash/list in weak reference
+    //! For StoreGlobal/StoreThreadLocal: selects the representation the store uses
+    AssignmentMode mode = AssignmentMode::Normal;
 };
 
 //! Implicit argument reference instruction - loads $1, $2, etc.
@@ -1658,8 +1660,8 @@ public:
 
     std::vector<LVPathStep> path;  //!< Root step + navigation steps
 
-    //! For LValuePathAssign
-    bool weak = false;             //!< Weak (:=) assignment
+    //! For LValuePathAssign: the representation the store uses
+    AssignmentMode mode = AssignmentMode::Normal;
 
     //! For LValuePathCompound
     LVCompoundOp compound_op = LVCompoundOp::AddAssign;
@@ -2111,8 +2113,9 @@ public:
 
 class QoreIRLValueInstruction : public QoreIRInstruction {
 public:
-    QoreIRLValueInstruction(QoreIROpcode op, const QoreValue& n_lvalue, bool n_weak = false)
-            : QoreIRInstruction(op), lvalue(n_lvalue), weak(n_weak) {
+    QoreIRLValueInstruction(QoreIROpcode op, const QoreValue& n_lvalue,
+            AssignmentMode n_mode = AssignmentMode::Normal)
+            : QoreIRInstruction(op), lvalue(n_lvalue), mode(n_mode) {
         lvalue.ref();
     }
 
@@ -2129,7 +2132,7 @@ public:
     bool hasLocalTarget() const { return lvalue_slot_id < LVALUE_NON_LOCAL; }
 
     QoreValue lvalue;
-    bool weak = false;  //!< true for weak (:=) assignment
+    AssignmentMode mode = AssignmentMode::Normal;  //!< the representation the store uses
     //! Pre-computed slot_id for the lvalue target variable.
     //! Valid slot_id (< LVALUE_NON_LOCAL): target is a local variable at this slot index.
     //! LVALUE_NON_LOCAL: target is a known non-local (member, static, global) — skip local cache invalidation.
@@ -2793,7 +2796,8 @@ public:
     QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
     QoreIRBasicBlock* normal_target = nullptr;
     std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
-    bool weak = false;            //!< true for weak (:=) assignment in StoreLValue invoke path
+    //! the representation the store uses in the StoreLValue invoke path
+    AssignmentMode mode = AssignmentMode::Normal;
     bool has_ref_args = false;    //!< True if any operand can pass a reference modified by the callee
     //! Resolved function for invoke_opcode == CallDirect, captured at IR-lowering time.
     //! Codegen MUST use this rather than re-reading getFunction() on the AST node: for

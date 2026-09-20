@@ -47,3 +47,27 @@ and exact character data through the production HTTP handler.
 [HTTP/1.1 message parsing (RFC 9112 section 2.2)](https://www.rfc-editor.org/rfc/rfc9112.html#section-2.2)
 requires protocol parsing as octets in an encoding compatible with US-ASCII;
 a body's charset does not change that message grammar.
+
+## Response bodies
+
+A response body follows the same rule as a request body: its media type decides
+whether it is text. A text type is delivered as a string in the charset the
+message declares, and any other type is delivered as binary, because its octets
+are not text and converting them would corrupt them. `qore_http_media_type()`
+and `qore_http_media_type_is_text()` in
+`include/qore/intern/QoreHttpHeaderPairs.h` are the one rule both the blocking
+and the non-blocking client apply, so the two never deliver the same response
+differently.
+
+A body that carries a content encoding always arrives as binary, because the
+compressed octets are not the body. Decoding it restores the form the media type
+calls for: a gzipped `text/plain` body decodes to a string, and a gzipped
+`application/octet-stream` body decodes to binary. With `encoding_passthru` the
+encoded octets are returned as they arrived, as binary.
+
+A response that declares no media type has no type to judge, which is a
+different question from a type that is not text: the client keeps delivering it
+as a string, as it always has.
+
+`examples/test/qore/classes/HTTPClient/HTTPClient.qtest` (`response body type`)
+checks every case against both APIs.

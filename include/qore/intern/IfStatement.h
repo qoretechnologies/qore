@@ -55,6 +55,12 @@ public:
         return if_code;
     }
 
+    //! @see AbstractStatement::mayHaveNestedScopeLocals()
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return (if_code && if_code->mayHaveNestedScopeLocals(depth))
+            || (else_code && else_code->mayHaveNestedScopeLocals(depth));
+    }
+
     DLLLOCAL StatementBlock* getElseCode() const {
         return else_code;
     }

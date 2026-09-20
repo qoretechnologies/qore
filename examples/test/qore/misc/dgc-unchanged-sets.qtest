@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcUnchangedSetsTest
+
+#! An object outside a cycle that the cycle's nodes reference
+/** The reference leaves the cycle's component, so the recursive set it forms is not closed and scans that
+    reach it from outside enter it.  That is the case this test is about: a scan that walks a set it cannot
+    skip must still leave the set alone when it finds exactly the set that is already in place.
+*/
+class Tag {
+    public {
+        string name = "tag";
+    }
+}
+
+#! A node of a cycle that also references an object outside it
+class OpenNode {
+    public {
+        *OpenNode peer;
+        Tag tag;
+        auto extra;
+        static int destroyed = 0;
+    }
+
+    constructor(Tag tag) {
+        self.tag = tag;
+    }
+
+    destructor() {
+        ++OpenNode::destroyed;
+    }
+}
+
+#! A node of a cycle that runs through a list, which is also held outside the cycle
+class ListNode {
+    public {
+        auto items;
+        auto peer;
+        Tag tag;
+        static int destroyed = 0;
+    }
+
+    constructor(Tag tag) {
+        self.tag = tag;
+    }
+
+    destructor() {
+        ++ListNode::destroyed;
+    }
+}
+
+#! Holds a value; assigning to either member scans the graph reachable from the holder
+class ValueHolder {
+    public {
+        auto value;
+        #! assigned to make a scan without changing any reference count inside the cycle
+        auto other;
+    }
+}
+
+class DgcUnchangedSetsTest inherits QUnit::Test {
+    public {
+        #! the size of the cycle the scans walk
+        const CycleSize = 8;
+    }
+
+    constructor() : QUnit::Test("unchanged recursive sets", "1.0") {
+        addTestCase("A scan leaves an unchanged recursive set in place", \scanKeepsAnUnchangedSet());
+        addTestCase("A new cycle still gets a recursive set", \newCycleGetsASet());
+        addTestCase("A set left in place is still collected", \unchangedSetIsCollected());
+        addTestCase("A set left in place keeps its node watch", \unchangedSetKeepsItsNodeWatch());
+        addTestCase("Assigning a cycle member does not rebuild its set", \assigningACycleMemberKeepsTheSet());
+        set_return_value(main());
+    }
+
+    scanKeepsAnUnchangedSet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive set counts require a debug build");
+        }
+        hash<string, auto> c = makeOpenCycle(CycleSize);
+        c.holder = new ValueHolder();
+        # the holder references the cycle, so every scan started at it walks the cycle.  The scans are made by
+        # assigning to the holder's other member: assigning the cycle itself again would take and release a
+        # temporary reference to one of its objects, and the reference count that the scan recorded would no
+        # longer match, which makes RSet::canDelete() invalidate the set and ask for a rescan
+        c.holder.value = c.head;
+        c.holder.other = new Tag();
+
+        int sets = rsetCreateCount();
+        int entered = scanObjectCount();
+        # this assignment scans the same graph again and finds the set already in place
+        c.holder.other = new Tag();
+        int walked = scanObjectCount() - entered;
+        int created = rsetCreateCount() - sets;
+        if (m_options.verbose) {
+            printf("second scan: objects entered: %d; recursive sets created: %d\n", walked, created);
+        }
+        # the set is not closed, so the scan does walk every node of the cycle
+        assertGt(CycleSize, walked, "the scan enters the cycle");
+        assertEq(0, created, "the scan does not replace the set with an identical one");
+    }
+
+    newCycleGetsASet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive set counts require a debug build");
+        }
+        # a cycle that no scan has seen yet must still produce a recursive set, otherwise the count above
+        # would prove nothing
+        int sets = rsetCreateCount();
+        hash<string, auto> c = makeOpenCycle(CycleSize);
+        assertGt(0, rsetCreateCount() - sets, "building a new cycle creates a recursive set");
+        remove c;
+    }
+
+    unchangedSetIsCollected() {
+        OpenNode::destroyed = 0;
+        hash<string, auto> c = makeOpenCycle(CycleSize);
+        c.holder = new ValueHolder();
+        c.holder.value = c.head;
+        # a scan that leaves the set in place must not disturb it
+        c.holder.other = new Tag();
+        assertEq(0, OpenNode::destroyed);
+        remove c;
+        assertEq(CycleSize, OpenNode::destroyed, "the cycle is collected after the set was left in place");
+    }
+
+    unchangedSetKeepsItsNodeWatch() {
+        ListNode::destroyed = 0;
+        hash<string, auto> c = {};
+        c.tag = new Tag();
+        c.a = new ListNode(c.tag);
+        c.b = new ListNode(c.tag);
+        c.a.items = (c.b,);
+        c.b.peer = c.a;
+        # the list is part of the cycle and is also held outside it, so the set records a watch for it
+        c.shared = c.a.items;
+        c.holder = new ValueHolder();
+        c.holder.value = c.a;
+        # a scan that leaves the set in place keeps the watch that the set registered
+        c.holder.other = new Tag();
+        remove c.a;
+        remove c.b;
+        remove c.holder;
+        assertEq(0, ListNode::destroyed, "the list held outside the set keeps the cycle");
+        remove c.shared;
+        assertEq(2, ListNode::destroyed, "releasing the list collects the cycle");
+    }
+
+    assigningACycleMemberKeepsTheSet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive set counts require a debug build");
+        }
+        hash<string, auto> c = makeOpenCycle(CycleSize);
+        c.holder = new ValueHolder();
+        # Evaluating the object takes a temporary reference that is released after the scan has recorded the
+        # reference count it saw, so the count the set holds for that object looks stale at the next
+        # dereference.  That asks for a rescan, which must confirm the set rather than build an identical one:
+        # rebuilding left the same temporary-reference trail behind and asked for the same rescan again.
+        c.holder.value = c.head;
+
+        int sets = rsetCreateCount();
+        int entered = scanObjectCount();
+        c.holder.value = c.head;
+        int created = rsetCreateCount() - sets;
+        int walked = scanObjectCount() - entered;
+        if (m_options.verbose) {
+            printf("assigning a cycle member: objects entered: %d; recursive sets created: %d\n", walked,
+                created);
+        }
+        assertEq(0, created, "the cycle's recursive set is not rebuilt");
+        # the transient references still make the recorded counts look stale, so the graph is still walked
+        # more than once; what must not happen is that each of those walks throws the set away and builds an
+        # identical one
+        assertGt(CycleSize, walked, "the scan still enters the cycle");
+    }
+
+    #! Returns a hash holding a cycle of \a n objects that also reference one object outside the cycle
+    private static hash<string, auto> makeOpenCycle(int n) {
+        hash<string, auto> rv = {};
+        rv.tag = new Tag();
+        list<OpenNode> nodes = ();
+        for (int i = 0; i < n; ++i) {
+            nodes += new OpenNode(rv.tag);
+        }
+        for (int i = 0; i < n; ++i) {
+            nodes[i].peer = nodes[(i + 1) % n];
+        }
+        rv.head = nodes[0];
+        return rv;
+    }
+
+    #! Returns the number of objects that scans have entered in this thread
+    private static int scanObjectCount() {
+        return call_function("dbg_get_scan_object_count");
+    }
+
+    #! Returns the number of recursive sets that scans in this thread have created
+    private static int rsetCreateCount() {
+        return call_function("dbg_get_rset_create_count");
+    }
+}

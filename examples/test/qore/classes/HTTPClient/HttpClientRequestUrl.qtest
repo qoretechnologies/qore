@@ -1,0 +1,738 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTPClient::sendUrl() tests: a request selects its own target without changing the client, so every test
+    asserts both where the request went and that the client is left exactly as it was configured.
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpClientRequestUrlTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMjA4MDcwOTAwMDdaFw0yMjExMDUwOTAwMDZaMCIxIDAeBgNVBAMT
+F2hxLnFvcmV0ZWNobm9sb2dpZXMuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAlw84m+9dCjeD4s8YYVZ3gbv8YkYQGyyaojgdJuarTyJPYnGzhMf7
+PF+Y2398k+8ydAnOTwJXRcaU36f0hHDvTagP1f0EFg3kWlplzsrtrDI/HZBRH0W2
++54YE6FhPEtEkkO1aKy+VXb8QMQKSmsUZS+IxSe+69tWFI60tW92eq53tFAwEWN+
+0oBeJBCASRQa7bq1J/BgZhlBSyUQ6Zf+wqUSfmVEf7tsFujyNZ2dfxHtPtLxRspA
+7yhgnQQaXHemyEWeZWjIbToazG8SvutmcwIFK/TtE0anWdTR+Hn92mxH9mxnnyns
+Ag+RlqxnEpBDIb1ufwCFUhMXBwRiiZIM1QIDAQABo4ICVDCCAlAwDgYDVR0PAQH/
+BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8E
+AjAAMB0GA1UdDgQWBBSj2nUL9X+zXI7p0fFhg03WZAS0xDAfBgNVHSMEGDAWgBQU
+LrMXt1hWy65QCUDmH6+dixTCxjBVBggrBgEFBQcBAQRJMEcwIQYIKwYBBQUHMAGG
+FWh0dHA6Ly9yMy5vLmxlbmNyLm9yZzAiBggrBgEFBQcwAoYWaHR0cDovL3IzLmku
+bGVuY3Iub3JnLzAiBgNVHREEGzAZghdocS5xb3JldGVjaG5vbG9naWVzLmNvbTBM
+BgNVHSAERTBDMAgGBmeBDAECATA3BgsrBgEEAYLfEwEBATAoMCYGCCsGAQUFBwIB
+FhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9yZzCCAQYGCisGAQQB1nkCBAIEgfcE
+gfQA8gB3AN+lXqtogk8fbK3uuF9OPlrqzaISpGpejjsSwCBEXCpzAAABgne/YgYA
+AAQDAEgwRgIhAP/ERcskhKhF7M8VIejtrwEtDXJoX1IXec//r64jkOlUAiEAhheZ
+VMT5cZ2uoPGoD6+SuQY/CYBuHdXNR/pUC3SGOQEAdwApeb7wnjk5IfBWc59jpXfl
+vld9nGAK+PlNXSZcJV3HhAAAAYJ3v2H5AAAEAwBIMEYCIQCmiChg/6dLhE3TfGum
+JR7k8s7ibmqw2KVJI3oUR/ogBAIhAIXIIhyqb3W/34ATNT9dIPCGFKpghQw82G8w
+ANnChDgYMA0GCSqGSIb3DQEBCwUAA4IBAQAovvC8AiF7+uNLJCEXMe3VeI4Ne+l1
+mqCRRujz7ijlr6VgNxZt+i/kx1HJKrSKnQZRQ48xWAipMVYfXxH3u20p4RkkW2nj
+jjIVQvQvlFhDjLaJR74PYopp0lPuBW9RKg+C+l3vvjxjkin/MOBX2apGOvC4LJwb
+2s6f8cArBRvdhA7nwEmlP3+aqxxkp9STZYpxuKR4F9fRGtg0Y39Db+3XkYp7Y/hV
+DBVpHegoty2VFErehkJUmgdNoLdTuC8gHgA3p5bCbApyVGjBuO+QpSWG/3WiBDfm
+1IpGT8P2OhFruQHryHEKmY6f5huZV2Y0gFmqBwRiR1ToF5gFveTUJM3d
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCXDzib710KN4Pi
+zxhhVneBu/xiRhAbLJqiOB0m5qtPIk9icbOEx/s8X5jbf3yT7zJ0Cc5PAldFxpTf
+p/SEcO9NqA/V/QQWDeRaWmXOyu2sMj8dkFEfRbb7nhgToWE8S0SSQ7VorL5VdvxA
+xApKaxRlL4jFJ77r21YUjrS1b3Z6rne0UDARY37SgF4kEIBJFBrturUn8GBmGUFL
+JRDpl/7CpRJ+ZUR/u2wW6PI1nZ1/Ee0+0vFGykDvKGCdBBpcd6bIRZ5laMhtOhrM
+bxK+62ZzAgUr9O0TRqdZ1NH4ef3abEf2bGefKewCD5GWrGcSkEMhvW5/AIVSExcH
+BGKJkgzVAgMBAAECggEAPhvyCJtYQ9UjkuPXgF4O8PacBMQN5z5lrgEoa1A4a2cO
+AMoDJ7sZ327m6Ij4bdLRichmXTH3NCc8GuFxterBWcqaCD/pqC+6DjRQ27+wDTbz
+oHIwCI2feME94QRfeGzyGrlgI1OzRmyPtwljuclhL2Fl+Loo08zxDa7HOjpEGphz
+wkD2gQy5S7Mi5ekBZMhy8EklpzdKlOFdvhjo7vQu8vY8xJZ6jN65RV+RBscbmZQl
+llK1uW/8UyRIAUK9sM6Ozxbiz7QQELHpSvY3JIiZC5A6rBk2DGqOu8ouzDrQuHsB
+LHWjzceu6UcJY0tCeOUkVDnoxbj2UcINEAIABIPN2QKBgQDHHbrwdW8qRecLw8y2
+FJDO/6+8VmRKtj8B7CeOYuEZet2UvnPssisCovu0jnMa2ysF/L4YQAWa5XY0bB+E
+R/NRzeh4i0jIsW70h2qePTK+XRAGhCCKiCcb7nkED72TTplQ5wgRA/oWPLOrys34
+f+YqCI7BVrbWzgDyrhEdRAXSbwKBgQDCNuMlLcGTTi04OIQFDZmzjdvx9KvHvksz
+zff9Y0Rb1eUsXF2oG3S55umgeUcG9Nk2KigJzO6WAmTT6rcbn4tsRsnkLdqcEPmg
+P1wbBikW3Bz935k7yPcx05bVshLrJsK0Gxa8YYE6hh/PbdiQFtHf2r4uYu1kxC01
+518U8oPm+wKBgDfyJIpXlKp+BZMKqsQmNyHSOaBjbb6IQl/Z6KtbIQA1w3h9orjI
+vsj43lw3AiRznD0MbKUHqAuDmZjVIG3cgYNkpYLpL8QkBpbyTYS0kUNnho8uJK6H
+3uU8NghsG8n99ZoDsAKH6YbB+4Gzc/f0h8kbqnCsWqc0LpQBUJG2gSRFAoGBAI3P
+4kBNjuFu3hoFOnEuIyM23HlqPNyXGPZ02TXOfCXKo5Kmx0Ru9+aes80XgUOVGd4x
+Hhc56qTijpkm9BlZgEbJ0bWpvczjoELgwPKCpxIoG4tM7+j1r3pUk/jqFGJcZSN5
+/DoFwITpVuTxwoZEA2+/m8rnNYy0qoaHsafsBWBtAoGAAPYkINDjhAslu2gQlsZi
+7eA4coUg5eNUI+YYy4xonJAU488AsrcAWr5nGEids4ZM5PqKkJezG+6gctaYnjjZ
+IQrghzR1AC0Y3XDSuJYGRcZeUF2XZmOjcXNm0oMxeMEeEuuNLOTZ2pp7aUcYIOfV
+OKKqgBjNAlYDdPhOy8O8Agk=
+-----END PRIVATE KEY-----";
+
+#! A request received by a test server
+hashdecl UrlRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string cookie;
+    *string host;
+    *string custom;
+    auto body;
+}
+
+#! A test server that records every request and answers from configurable routes
+class UrlPeer inherits AbstractHttpRequestHandler {
+    private {
+        #! The name reported in the response body, identifying the origin
+        string name;
+        #! target -> response: code, headers, body
+        hash<string, hash<auto>> routes;
+        #! The requests received
+        list<hash<UrlRequest>> requests;
+        #! Serializes access
+        Mutex m();
+    }
+
+    constructor(string name) {
+        self.name = name;
+    }
+
+    setRoute(string target, int code, *hash<auto> headers, *data body) {
+        AutoLock al(m);
+        routes{target} = {"code": code, "headers": headers, "body": body};
+    }
+
+    setRedirect(string target, int code, string location) {
+        setRoute(target, code, {"Location": location});
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<UrlRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    #! Returns the targets of the requests received, in order
+    list<string> getTargets() {
+        return map $1.target, getRequests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> route;
+        {
+            AutoLock al(m);
+            requests += <UrlRequest>{
+                "method": hdr.method,
+                "target": cx.raw_path,
+                "authorization": hdr.authorization,
+                "cookie": hdr.cookie,
+                "host": hdr.host,
+                "custom": hdr."x-custom",
+                "body": body,
+            };
+            route = routes{cx.raw_path};
+        }
+        if (route) {
+            return makeResponse(route.headers ?? {}, route.code,
+                route.body.typeCode() == NT_BINARY ? route.body : binary(route.body ?? ""));
+        }
+        # the default answer names the origin and the target it was received on
+        return makeResponse({"Content-Type": "text/plain"}, 200, binary(sprintf("%s %s", name, cx.raw_path)));
+    }
+}
+
+public class HttpClientRequestUrlTest inherits QUnit::Test {
+    public {
+        #! Binary data with NUL bytes and invalid UTF-8
+        const BinaryData = <000102ff80fe00c3>;
+    }
+
+    private {
+        HttpServer server_a;
+        HttpServer server_b;
+        UrlPeer peer_a("origin-A");
+        UrlPeer peer_b("origin-B");
+        int port_a;
+        int port_b;
+        string url_a;
+        string url_b;
+    }
+
+    constructor() : Test("HTTPClient request target URL test", "1.0") {
+        addTestCase("supplied reproducer", \reproducerTest());
+        addTestCase("URI reference forms", \referenceFormTest());
+        addTestCase("percent encoding and queries", \encodingTest());
+        addTestCase("cross-origin credentials", \crossOriginTest());
+        addTestCase("authentication challenges", \challengeTest());
+        addTestCase("message bodies", \bodyTest());
+        addTestCase("redirects from a request target", \redirectTest());
+        addTestCase("alternating targets", \alternatingTest());
+        addTestCase("simultaneous requests", \concurrentTest());
+        addTestCase("invalid URLs", \urlErrorTest());
+        addTestCase("errors leave the client unchanged", \errorCleanupTest());
+        addTestCase("UNIX domain sockets", \unixSocketTest());
+        addTestCase("HTTP/2", \http2Test());
+
+        server_a = new HttpServer(<HttpServerOptionInfo>{});
+        server_b = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            server_a.stop();
+            server_b.stop();
+        }
+        server_a.setDefaultHandler("a", peer_a);
+        server_b.setDefaultHandler("b", peer_b);
+        port_a = server_a.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        port_b = server_b.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url_a = sprintf("http://127.0.0.1:%d", port_a);
+        url_b = sprintf("http://127.0.0.1:%d", port_b);
+
+        set_return_value(main());
+    }
+
+    #! Returns a client whose URL is origin A with the given path, and no credentials
+    private HTTPClient client(string path = "/base/", *hash<auto> opts) {
+        return new HTTPClient({"url": url_a + path, "timeout": 30s, "connect_timeout": 30s} + opts);
+    }
+
+    reproducerTest() {
+        # the supplied reproducer: the client is configured for origin A with a base path, and the request names
+        # an absolute URL on origin B with an empty query; send() sends that URL as a request target to origin A,
+        # while sendUrl() sends the request to origin B
+        HTTPClient hc = client();
+        string target = url_b + "/target?";
+        peer_a.clear();
+        peer_b.clear();
+
+        hash<auto> info;
+        hash<auto> resp = hc.sendUrl("payload", "POST", target, NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("origin-B /target?", resp.body.toString());
+        assertEq(target, info."effective-url");
+        assertEq(sprintf("POST /target? HTTP/1.1"), info."request-uri");
+        assertEq(("/target?",), peer_b.getTargets());
+        # origin A received nothing
+        assertEq((), peer_a.getTargets());
+
+        # send() is unchanged: it takes a request target, not a URL, so the absolute form goes to origin A
+        peer_a.clear();
+        peer_b.clear();
+        resp = hc.send("payload", "POST", target, NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq(sprintf("origin-A %s", target), resp.body.toString());
+        assertEq((), peer_b.getTargets());
+
+        # neither call changed the client
+        assertEq(url_a + "/base/", hc.getURL());
+    }
+
+    referenceFormTest() {
+        HTTPClient hc = client();
+        # reference -> (target received, origin peer)
+        list<list<auto>> cases = (
+            # an absolute URL selects its own origin
+            (url_b + "/abs", "/abs", peer_b),
+            # an absolute URL on the client's own origin
+            (url_a + "/abs", "/abs", peer_a),
+            # a network-path reference changes the authority and keeps the scheme
+            (sprintf("//127.0.0.1:%d/net", port_b), "/net", peer_b),
+            # an absolute-path reference replaces the base path
+            ("/send", "/send", peer_a),
+            # a relative reference is merged with the base path
+            ("send", "/base/send", peer_a),
+            # dot segments are removed (RFC 3986 section 5.2.4)
+            ("./a/../b/./c", "/base/b/c", peer_a),
+            # ".." above the base path is removed
+            ("../../up", "/up", peer_a),
+            # an empty reference addresses the base itself
+            ("", "/base/", peer_a),
+            # a query-only reference keeps the base path
+            ("?q=1", "/base/?q=1", peer_a),
+            # a fragment is dropped, as a request target has none
+            ("/frag#section", "/frag", peer_a),
+            # a reference that is only a fragment keeps the base path
+            ("#section", "/base/", peer_a),
+        );
+
+        foreach list<auto> c in (cases) {
+            string ref = c[0];
+            string target = c[1];
+            UrlPeer peer = c[2];
+            string msg = sprintf("reference %y", ref);
+            peer_a.clear();
+            peer_b.clear();
+            hash<auto> info;
+            hash<auto> resp = hc.sendUrl("payload", "POST", ref, NOTHING, False, \info);
+            assertEq(200, resp.status_code, msg);
+            assertEq((target,), peer.getTargets(), msg);
+            assertEq(sprintf("POST %s HTTP/1.1", target), info."request-uri", msg);
+            # the effective URL names the origin the request actually reached
+            string origin = peer === peer_b ? url_b : url_a;
+            assertEq(origin + target, info."effective-url", msg);
+        }
+
+        # a client whose URL has no path resolves a relative reference against "/"
+        HTTPClient root = client("");
+        peer_a.clear();
+        root.sendUrl("payload", "POST", "rel");
+        assertEq(("/rel",), peer_a.getTargets());
+
+        # a base path that names a file, not a directory: the last segment is replaced
+        HTTPClient file = client("/dir/doc.wsdl");
+        peer_a.clear();
+        file.sendUrl("payload", "POST", "other.xsd");
+        assertEq(("/dir/other.xsd",), peer_a.getTargets());
+
+        # a client with no URL of its own can still be driven entirely by absolute URLs, since an absolute URL
+        # supplies its own origin
+        HTTPClient no_url();
+        assertNothing(no_url.getURL());
+        peer_b.clear();
+        hash<auto> resp = no_url.sendUrl("payload", "POST", url_b + "/no-url-client");
+        assertEq(200, resp.status_code);
+        assertEq("origin-B /no-url-client", resp.body.toString());
+        assertNothing(no_url.getURL());
+
+        assertEq(url_a + "/base/", hc.getURL());
+    }
+
+    encodingTest() {
+        HTTPClient hc = client();
+        # a URI reference is already encoded: percent-encoded octets are sent as received and never decoded,
+        # because decoding an encoded delimiter would change which resource is addressed
+        list<list<string>> cases = (
+            # an encoded slash stays encoded
+            ("/enc/a%2Fb", "/enc/a%2Fb"),
+            # an encoded percent stays as it is
+            ("/enc/100%25", "/enc/100%25"),
+            # an empty query is kept (RFC 3986 section 5.3 distinguishes it from no query)
+            ("/enc?", "/enc?"),
+            # a query is carried through with its own reserved characters
+            ("/enc?a=1&b=%20c", "/enc?a=1&b=%20c"),
+            # octets that cannot appear in a URI are encoded
+            ("/enc/a b", "/enc/a%20b"),
+            ("/enc/\"q\"", "/enc/%22q%22"),
+            # non-ASCII octets are encoded (UTF-8 for "ä")
+            ("/enc/ä", "/enc/%C3%A4"),
+            # a dot segment inside an encoded octet is not a dot segment
+            ("/enc/%2E%2E/x", "/enc/%2E%2E/x"),
+        );
+
+        foreach list<string> c in (cases) {
+            string ref = c[0];
+            string target = c[1];
+            string msg = sprintf("reference %y", ref);
+            peer_a.clear();
+            hash<auto> info;
+            hash<auto> resp = hc.sendUrl("payload", "POST", ref, NOTHING, False, \info);
+            assertEq(200, resp.status_code, msg);
+            assertEq((target,), peer_a.getTargets(), msg);
+            assertEq(url_a + target, info."effective-url", msg);
+        }
+
+        # the pre_encoded_urls option governs send(), which encodes its request target; a URI reference is
+        # already encoded, so the option does not apply to sendUrl()
+        HTTPClient pre = client("/base/", {"pre_encoded_urls": True});
+        peer_a.clear();
+        pre.sendUrl("payload", "POST", "/enc/a%2Fb");
+        assertEq(("/enc/a%2Fb",), peer_a.getTargets());
+        assertThrows("URL-ENCODING-ERROR", \pre.send(), ("payload", "POST", "/enc/a{b}"));
+    }
+
+    crossOriginTest() {
+        # the credentials configured on the client belong to the origin of its URL
+        HTTPClient hc = new HTTPClient({
+            "url": sprintf("http://user:pass@127.0.0.1:%d/base/", port_a),
+            "timeout": 30s,
+        });
+        hc.addDefaultHeaders({"Cookie": "c=1", "X-Custom": "v"});
+
+        # the client's own origin receives them
+        peer_a.clear();
+        hc.sendUrl("payload", "POST", "/same");
+        hash<UrlRequest> req = peer_a.getRequests()[0];
+        assertEq("Basic dXNlcjpwYXNz", req.authorization);
+        assertEq("c=1", req.cookie);
+        assertEq(sprintf("127.0.0.1:%d", port_a), req.host);
+        assertEq("v", req.custom);
+
+        # another origin receives none of them, but keeps the headers that do not name an origin
+        peer_b.clear();
+        hc.sendUrl("payload", "POST", url_b + "/other");
+        req = peer_b.getRequests()[0];
+        assertNothing(req.authorization);
+        assertNothing(req.cookie);
+        # the Host header names the target, not the client's URL
+        assertEq(sprintf("127.0.0.1:%d", port_b), req.host);
+        assertEq("v", req.custom);
+
+        # a default Host header is bound to the client's origin as well
+        hc.addDefaultHeaders({"Host": "vhost.example"});
+        peer_a.clear();
+        peer_b.clear();
+        hc.sendUrl("payload", "POST", "/same");
+        assertEq("vhost.example", peer_a.getRequests()[0].host);
+        hc.sendUrl("payload", "POST", url_b + "/other");
+        assertEq(sprintf("127.0.0.1:%d", port_b), peer_b.getRequests()[0].host);
+
+        # headers passed to the call are for the target named in the call and are always sent
+        peer_b.clear();
+        hc.sendUrl("payload", "POST", url_b + "/explicit", {"Authorization": "Bearer tok", "Cookie": "x=2"});
+        req = peer_b.getRequests()[0];
+        assertEq("Bearer tok", req.authorization);
+        assertEq("x=2", req.cookie);
+
+        # user information in the URL is never used as credentials
+        peer_b.clear();
+        hc.sendUrl("payload", "POST", sprintf("http://evil:pw@127.0.0.1:%d/userinfo", port_b));
+        req = peer_b.getRequests()[0];
+        assertNothing(req.authorization);
+        assertEq(("/userinfo",), peer_b.getTargets());
+
+        # the client still has its own credentials
+        assertEq(sprintf("http://user:pass@127.0.0.1:%d/base/", port_a), hc.getURL());
+    }
+
+    challengeTest() {
+        HTTPClient hc = new HTTPClient({
+            "url": sprintf("http://user:pass@127.0.0.1:%d/base/", port_a),
+            "timeout": 30s,
+        });
+
+        # a challenge from the origin the credentials belong to is answered
+        peer_a.setRoute("/challenge", 401, {"WWW-Authenticate": "Basic realm=\"a\""});
+        peer_a.setRoute("/challenge-ok", 200, {"Content-Type": "text/plain"}, "authenticated");
+        peer_a.clear();
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 401", \hc.sendUrl(),
+            ("payload", "POST", "/challenge"));
+        # the request was retried with credentials computed from the challenge
+        assertEq(2, peer_a.getRequests().size());
+        assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests()[1].authorization);
+
+        # a challenge from another origin is not answered with the client's credentials
+        peer_b.setRoute("/challenge", 401, {"WWW-Authenticate": "Basic realm=\"b\""});
+        peer_b.clear();
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 401", \hc.sendUrl(),
+            ("payload", "POST", url_b + "/challenge"));
+        assertEq(1, peer_b.getRequests().size());
+        assertNothing(peer_b.getRequests()[0].authorization);
+    }
+
+    bodyTest() {
+        HTTPClient hc = client();
+
+        # a string body
+        peer_b.clear();
+        hash<auto> info;
+        hc.sendUrl("string body", "POST", url_b + "/str", {"Content-Type": "text/plain"}, False, \info);
+        assertEq("string body", peer_b.getRequests()[0].body.toString());
+        assertEq(url_b + "/str", info."effective-url");
+
+        # a binary body, including NUL bytes and octets that are not valid UTF-8
+        peer_b.clear();
+        hc.sendUrl(BinaryData, "POST", url_b + "/bin", {"Content-Type": "application/octet-stream"}, False, \info);
+        assertEq(BinaryData, peer_b.getRequests()[0].body);
+        assertEq(url_b + "/bin", info."effective-url");
+
+        # no body at all
+        peer_b.clear();
+        hc.sendUrl(NOTHING, "GET", url_b + "/none");
+        assertEq(("/none",), peer_b.getTargets());
+
+        # a response body is delivered exactly as send() delivers it: the response of a request that named its
+        # target is the response of the same request made against a client configured for that target
+        peer_b.setRoute("/binresp", 200, {"Content-Type": "application/octet-stream"}, BinaryData);
+        hash<auto> by_url = hc.sendUrl(NOTHING, "GET", url_b + "/binresp");
+        hash<auto> by_path = new HTTPClient({"url": url_b, "timeout": 30s}).send(NOTHING, "GET", "/binresp");
+        assertEq(by_path.body, by_url.body);
+        assertEq(BinaryData.size(), by_url.body.size());
+        assertEq(by_path."content-type", by_url."content-type");
+    }
+
+    redirectTest() {
+        HTTPClient hc = new HTTPClient({
+            "url": sprintf("http://user:pass@127.0.0.1:%d/base/", port_a),
+            "timeout": 30s,
+        });
+
+        # a redirect is followed from the target that was named, and is resolved against it
+        peer_b.setRedirect("/start/here", 302, "../moved/there");
+        peer_b.setRoute("/moved/there", 200, {"Content-Type": "text/plain"}, "moved body");
+        peer_b.clear();
+        hash<auto> info;
+        hash<auto> resp = hc.sendUrl(NOTHING, "GET", url_b + "/start/here", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("moved body", resp.body.toString());
+        assertEq(("/start/here", "/moved/there"), peer_b.getTargets());
+        assertEq(url_b + "/moved/there", info."effective-url");
+        assertEq(1, info.redirects.size());
+        assertEq(url_b + "/start/here", info.redirects[0].request_url);
+        assertEq(url_b + "/moved/there", info.redirects[0].target_url);
+        # the client's credentials never reach the target or its redirect
+        assertEq((NOTHING, NOTHING), (map $1.authorization, peer_b.getRequests()));
+
+        # a redirect from the named target back to the client's own origin does not gain the client's
+        # credentials: they are sent only by a request whose own origin is the client's
+        peer_b.setRedirect("/back", 302, url_a + "/returned");
+        peer_a.clear();
+        peer_b.clear();
+        resp = hc.sendUrl(NOTHING, "GET", url_b + "/back", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq(("/returned",), peer_a.getTargets());
+        assertNothing(peer_a.getRequests()[0].authorization);
+        assertEq(url_a + "/returned", info."effective-url");
+
+        # a request that names the client's own origin is a same-origin request and does carry them
+        peer_a.setRedirect("/own/start", 302, "/own/end");
+        peer_a.clear();
+        resp = hc.sendUrl(NOTHING, "GET", url_a + "/own/start", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq(("Basic dXNlcjpwYXNz", "Basic dXNlcjpwYXNz"), (map $1.authorization, peer_a.getRequests()));
+    }
+
+    alternatingTest() {
+        # repeated requests alternating between two origins each reach the origin they name; the pool is keyed
+        # by host and port, so each origin reuses its own connection
+        HTTPClient hc = client();
+        peer_a.clear();
+        peer_b.clear();
+        for (int i = 0; i < 6; ++i) {
+            string body_a = hc.sendUrl(NOTHING, "GET", sprintf("%s/alt/a/%d", url_a, i)).body.toString();
+            assertEq(sprintf("origin-A /alt/a/%d", i), body_a);
+            string body_b = hc.sendUrl(NOTHING, "GET", sprintf("%s/alt/b/%d", url_b, i)).body.toString();
+            assertEq(sprintf("origin-B /alt/b/%d", i), body_b);
+        }
+        assertEq(6, peer_a.getRequests().size());
+        assertEq(6, peer_b.getRequests().size());
+        assertEq(url_a + "/base/", hc.getURL());
+    }
+
+    concurrentTest() {
+        # one client, several threads, each naming its own target: no request may reach another's origin, and
+        # the client is unchanged afterwards
+        HTTPClient hc = client();
+        peer_a.clear();
+        peer_b.clear();
+        Counter c();
+        Queue errors();
+        const int Threads = 8;
+        const int Iterations = 5;
+        for (int i = 0; i < Threads; ++i) {
+            c.inc();
+            # the thread index is passed as an argument; a closure that captured the loop variable would see it
+            # advance before the thread ran
+            background sub (int idx) {
+                on_exit c.dec();
+                try {
+                    for (int j = 0; j < Iterations; ++j) {
+                        # even threads use origin A, odd threads origin B
+                        bool use_a = !(idx % 2);
+                        string url = sprintf("%s/con/%d/%d", use_a ? url_a : url_b, idx, j);
+                        string expected = sprintf("%s /con/%d/%d", use_a ? "origin-A" : "origin-B", idx, j);
+                        string body = hc.sendUrl(NOTHING, "GET", url).body.toString();
+                        if (body != expected) {
+                            errors.push(sprintf("thread %d: expected %y, got %y", idx, expected, body));
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    errors.push(sprintf("thread %d: %s: %s", idx, ex.err, ex.desc));
+                }
+            }(i);
+        }
+        c.waitForZero();
+        assertEq(0, errors.size(), errors.empty() ? "no errors" : errors.get());
+        assertEq(Threads / 2 * Iterations, peer_a.getRequests().size());
+        assertEq(Threads / 2 * Iterations, peer_b.getRequests().size());
+        assertEq(url_a + "/base/", hc.getURL());
+    }
+
+    urlErrorTest() {
+        HTTPClient hc = client();
+        # (url, error, message fragment)
+        list<list<string>> cases = (
+            # a reference with a scheme but no authority names no host
+            ("http:send", "HTTP-CLIENT-URL-ERROR", "has no host"),
+            ("mailto:someone@example.com", "HTTP-CLIENT-URL-ERROR", "has no host"),
+            ("//", "HTTP-CLIENT-URL-ERROR", "has no host"),
+            # a host that could inject data into a request is rejected
+            ("http://ho st/x", "HTTP-CLIENT-URL-ERROR", "invalid host"),
+            ("http://ho\"st/x", "HTTP-CLIENT-URL-ERROR", "invalid host"),
+            ("http://host%zz/x", "HTTP-CLIENT-URL-ERROR", "invalid host"),
+            # a scheme the client does not speak
+            ("ftp://127.0.0.1/x", "HTTP-CLIENT-UNKNOWN-PROTOCOL", "ftp"),
+        );
+        foreach list<string> c in (cases) {
+            string msg = sprintf("url %y", c[0]);
+            assertThrows(c[1], c[2], \hc.sendUrl(), ("payload", "POST", c[0]), msg);
+        }
+        # an unknown method is still reported
+        assertThrows("HTTP-CLIENT-METHOD-ERROR", \hc.sendUrl(), ("payload", "BOGUS", url_b + "/x"));
+    }
+
+    errorCleanupTest() {
+        # a failed request leaves the client exactly as it was: nothing about the target is retained
+        HTTPClient hc = new HTTPClient({
+            "url": sprintf("http://user:pass@127.0.0.1:%d/base/", port_a),
+            "timeout": 30s,
+        });
+        string url_before = hc.getURL();
+        hash<auto> config_before = hc.getHttpConfig();
+
+        # an invalid URL fails before anything is sent
+        assertThrows("HTTP-CLIENT-URL-ERROR", \hc.sendUrl(), ("payload", "POST", "http://ho st/x"));
+        # a status error from another origin
+        peer_b.setRoute("/fail", 500, {"Content-Type": "text/plain"}, "server error");
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 500", \hc.sendUrl(),
+            ("payload", "POST", url_b + "/fail"));
+        # a target that refuses the connection: a port that was bound and released is not connectable, so the
+        # connection is refused rather than left to time out
+        Socket dead();
+        dead.bind("127.0.0.1:0", True);
+        int dead_port = dead.getSocketInfo().port;
+        dead.close();
+        assertThrows("SOCKET-CONNECT-ERROR", "Connection refused", \hc.sendUrl(),
+            ("payload", "POST", sprintf("http://127.0.0.1:%d/gone", dead_port)));
+
+        assertEq(url_before, hc.getURL());
+        assertEq(config_before.url, hc.getHttpConfig().url);
+
+        # the client still works against its own URL after all of that
+        peer_a.clear();
+        hash<auto> resp = hc.sendUrl("payload", "POST", "/after");
+        assertEq(200, resp.status_code);
+        assertEq(("/after",), peer_a.getTargets());
+        assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests()[0].authorization);
+    }
+
+    unixSocketTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+        # a request on a network connection can never select a local UNIX domain socket as its target
+        HTTPClient hc = client();
+        assertThrows("HTTP-CLIENT-URL-ERROR", "names a UNIX domain socket", \hc.sendUrl(),
+            ("payload", "POST", "http://socket=%2Ftmp%2Fnot-there/x"));
+
+        # a client on a UNIX domain socket can
+        string sock_path = sprintf("%s%ssendurl-%d.sock", tmp_location(), DirSep, getpid());
+        HttpServer unix_server(<HttpServerOptionInfo>{});
+        on_exit {
+            unix_server.stop();
+            unlink(sock_path);
+        }
+        UrlPeer unix_peer("origin-unix");
+        unix_server.setDefaultHandler("u", unix_peer);
+        unix_server.addListener(<HttpListenerOptionInfo>{"node": sock_path});
+        string encoded = replace(sock_path, "/", "%2F");
+        HTTPClient unix_hc({"url": sprintf("http://socket=%s/base/", encoded), "timeout": 30s});
+        unix_peer.clear();
+        hash<auto> resp = unix_hc.sendUrl(NOTHING, "GET", "/on-socket");
+        assertEq(200, resp.status_code);
+        assertEq("origin-unix /on-socket", resp.body.toString());
+        assertEq(("/on-socket",), unix_peer.getTargets());
+
+        # and can name its own socket absolutely
+        unix_peer.clear();
+        resp = unix_hc.sendUrl(NOTHING, "GET", sprintf("http://socket=%s/abs-socket", encoded));
+        assertEq(200, resp.status_code);
+        assertEq(("/abs-socket",), unix_peer.getTargets());
+    }
+
+    http2Test() {
+        # a request target URL works over HTTP/2 as it does over HTTP/1; HTTP/2 is negotiated with ALPN over TLS
+        HttpServer h2_server(<HttpServerOptionInfo>{});
+        on_exit h2_server.stop();
+        UrlPeer h2_peer("origin-h2");
+        h2_server.setDefaultHandler("h2", h2_peer);
+        int h2_port = h2_server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "2.0",
+        }).port;
+        h2_server.waitForAsyncIo();
+        string h2_url = sprintf("https://127.0.0.1:%d", h2_port);
+
+        HTTPClient hc({
+            "url": h2_url + "/base/",
+            "timeout": 30s,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        h2_peer.clear();
+        hash<auto> info;
+        hash<auto> resp = hc.sendUrl("payload", "POST", "/h2/target?x=1", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("origin-h2 /h2/target?x=1", resp.body.toString());
+        assertEq(h2_url + "/h2/target?x=1", info."effective-url");
+        assertTrue(hc.isHttp2Active());
+
+        # a relative reference over HTTP/2
+        h2_peer.clear();
+        hc.sendUrl("payload", "POST", "rel");
+        assertEq(("/base/rel",), h2_peer.getTargets());
+        assertTrue(hc.isHttp2Active());
+
+        # an absolute URL naming the same TLS origin
+        h2_peer.clear();
+        hc.sendUrl("payload", "POST", h2_url + "/h2/abs");
+        assertEq(("/h2/abs",), h2_peer.getTargets());
+
+        # an HTTP/2 client that requires HTTP/2 sends the preface to any target it names, including a plaintext
+        # one (HTTP/2 required without TLS is h2c with prior knowledge), so an HTTP/1 server closes on it
+        try {
+            hc.sendUrl("payload", "POST", url_a + "/h2-required");
+            fail("an HTTP/2-required client reached an HTTP/1 server");
+        } catch (hash<ExceptionInfo> ex) {
+            # the close is reported by whichever layer sees it first
+            assertTrue(ex.err == "HTTP2-CONNECTION-CLOSED" || ex.err == "SOCKET-CLOSED", ex.err);
+        }
+
+        # with the default HTTP/2 mode the transport follows the target: the TLS origin negotiates HTTP/2 with
+        # ALPN, and a plaintext target named by the same client is sent with HTTP/1, because ALPN needs TLS
+        HTTPClient auto_hc({"url": h2_url + "/base/", "timeout": 30s, "ssl_verify_cert": False});
+        h2_peer.clear();
+        resp = auto_hc.sendUrl("payload", "POST", "/auto/h2", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq(("/auto/h2",), h2_peer.getTargets());
+        assertTrue(auto_hc.isHttp2Active());
+
+        peer_a.clear();
+        resp = auto_hc.sendUrl("payload", "POST", url_a + "/auto/plain", NOTHING, False, \info);
+        assertEq(200, resp.status_code);
+        assertEq("origin-A /auto/plain", resp.body.toString());
+        assertEq(url_a + "/auto/plain", info."effective-url");
+        assertEq(("/auto/plain",), peer_a.getTargets());
+    }
+}

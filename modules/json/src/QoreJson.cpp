@@ -567,6 +567,10 @@ static int do_json_string(ExceptionSink* xsink, QoreString* str, const QoreStrin
 
 static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
         QoreSandboxManager* sm, ExceptionSink* xsink) {
+    // a value read through the language unwraps itself, but walking a container gives the stored
+    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself
+    v = v.resolveIndirect();
+
     if (v.isNullOrNothing()) {
         str->concat("null");
         return 0;

@@ -172,6 +172,46 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Binary body with NUL bytes and octets that are not valid UTF-8
+const BodyTypeBin = <00DEADBEEF00FF80>;
+#! The first bytes of a PNG file
+const BodyTypePng = <89504E470D0A1A0A>;
+
+#! Serves one response per media type, so that a client's delivery of each can be checked
+class BodyTypePeer inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch (cx.raw_path) {
+            case "/octet":
+                return makeResponse({"Content-Type": MimeTypeOctetStream}, 200, BodyTypeBin);
+            case "/png":
+                return makeResponse({"Content-Type": "image/png"}, 200, BodyTypePng);
+            case "/json":
+                return makeResponse({"Content-Type": MimeTypeJson}, 200, binary("{\"a\":1}"));
+            case "/text":
+                return makeResponse({"Content-Type": MimeTypeText}, 200, binary("plain text"));
+            case "/gzip-octet": {
+                hash<HttpResponseInfo> rv = makeResponse({
+                    "Content-Type": MimeTypeOctetStream,
+                    "Content-Encoding": "gzip",
+                }, 200, gzip(BodyTypeBin));
+                # the body is already encoded
+                rv.no_content_encoding = True;
+                return rv;
+            }
+            case "/gzip-text": {
+                hash<HttpResponseInfo> rv = makeResponse({
+                    "Content-Type": MimeTypeText,
+                    "Content-Encoding": "gzip",
+                }, 200, gzip(binary("compressed text")));
+                rv.no_content_encoding = True;
+                return rv;
+            }
+        }
+        # no Content-Type at all
+        return makeResponse({}, 200, binary("no declared type"));
+    }
+}
+
 class RealTestHttpServer inherits HttpServer {
     private:internal {
         EchoHandler eh();
@@ -394,6 +434,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("upgrade isDataAvailable test", \upgradeIsDataAvailableTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
+        addTestCase("response body type", \responseBodyTypeTest());
         addTestCase("chunked disconnect test", \chunkedDisconnectTest());
         addTestCase("client certs", \clientCertTest());
         addTestCase("issue 3472", \issue3472());
@@ -1344,6 +1385,68 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             hc.setAssumedEncoding("UTF-8");
             assertEq("UTF-8", hc.getAssumedEncoding());
         }
+    }
+
+    #! The media type of a response decides whether its body is a string or binary
+    /** The blocking API and the poll API must deliver the same body for the same response
+    */
+    responseBodyTypeTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        server.setDefaultHandler("body-type", new BodyTypePeer());
+        int port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", port), "timeout": 30s});
+
+        # target -> the body expected, whose type is the type the response must be delivered with
+        hash<string, auto> cases = {
+            # a media type that does not carry text keeps its octets
+            "/octet": BodyTypeBin,
+            "/png": BodyTypePng,
+            # a text media type is delivered as a string
+            "/json": "{\"a\":1}",
+            "/text": "plain text",
+            # a compressed body is decoded to the form its media type calls for
+            "/gzip-octet": BodyTypeBin,
+            "/gzip-text": "compressed text",
+            # a response that declares no media type keeps its historical string delivery
+            "/none": "no declared type",
+        };
+
+        foreach hash<auto> i in (cases.pairIterator()) {
+            string msg = sprintf("target %y", i.key);
+            hash<auto> resp = hc.send(NOTHING, "GET", i.key);
+            assertEq(200, resp.status_code, msg);
+            assertEq(i.value, resp.body, msg);
+            assertEq(i.value.type(), resp.body.type(), msg);
+
+            # the poll API reports the same body
+            auto out = Main::drivePoll(hc.startPollSendRecv("GET", i.key));
+            assertEq(i.value, out."response-body", msg + " (poll)");
+            assertEq(i.value.type(), out."response-body".type(), msg + " (poll)");
+        }
+
+        # with encoding_passthru an encoded body is returned encoded, as binary
+        HTTPClient pt({"url": sprintf("http://127.0.0.1:%d", port), "timeout": 30s, "encoding_passthru": True});
+        hash<auto> resp = pt.send(NOTHING, "GET", "/gzip-text");
+        assertEq("binary", resp.body.type());
+        assertEq("compressed text", gunzip_to_string(resp.body));
+    }
+
+    #! Drives a poll operation on this thread until it completes and returns its output
+    static auto drivePoll(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
     }
 
     chunkedHeadTest() {

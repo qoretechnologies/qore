@@ -446,7 +446,8 @@ int qore_object_private::checkMemberAccess(const char* mem, const qore_class_pri
 // returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is
 // held when this function is called
 bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata) {
-    assert(rml.checkRSectionExclusive());
+    // a scan that changes nothing holds the rsection in shared mode; either mode keeps the members stable
+    assert(rml.checkRSectionHeld());
 
     // A scan initiated elsewhere must follow this object's edges even if it has real references.
     // Otherwise a shared container can hide its live owner from the cycle. The r-section protects the
@@ -461,7 +462,8 @@ bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata
                 theclass->getName(), hi.getKey(), v.getInternalNode(), v.getTypeName());
         }
 #endif
-        if (v.hasNode() && scanCheck(rsh, v.getInternalNode())) {
+        // an opaque reference ('@=') is not an edge the collector may follow
+        if (v.hasNode() && !v.isOpaque() && scanCheck(rsh, v.getInternalNode())) {
             return true;
         }
     }
@@ -758,7 +760,12 @@ QoreValue qore_object_private::takeMember(ExceptionSink* xsink, const char* key,
 
     QoreHashNode* odata = member_class_ctx ? getCreateInternalData(member_class_ctx) : data;
 
-    return odata->priv->swapKeyValue(key, QoreValue(), this);
+    QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
+    if (needs_scan(rv)) {
+        // the removal can take a reference out of this object's recursive set
+        clearRSetClosed();
+    }
+    return rv;
 }
 
 QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
@@ -789,8 +796,10 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
         if (!getScanCount()) {
             lvh.setDelta(-1);
         }
+        // the removal can take a reference out of this object's recursive set
+        clearRSetClosed();
     }
-    lvh.objectRemoved(scan_value_removed);
+    lvh.objectRemoved(*this, scan_value_removed);
 
     return rv;
 }
@@ -863,7 +872,11 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     if (old_count && !getScanCount()) {
         lvh.setDelta(-1);
     }
-    lvh.objectRemoved(scan_value_removed);
+    if (scan_value_removed) {
+        // the removal can take a reference out of this object's recursive set
+        clearRSetClosed();
+    }
+    lvh.objectRemoved(*this, scan_value_removed);
 }
 
 void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {

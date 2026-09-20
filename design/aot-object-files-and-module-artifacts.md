@@ -202,6 +202,73 @@ does not rebuild a caller after a provider body changes. Source-only edits that
 leave the lowered contract unchanged retain the same hash and remain link
 compatible.
 
+## Embedded Source Modules in an Executable
+
+A user module required by source path — `%requires ../qlib/Mod.qm`, or any
+absolute path — is *embedded*: because its file lies outside every effective
+module dir, `qcc -o app script.qr` compiles the module's code into the
+executable instead of leaving it to `runTimeLoadModule()`. A module required by
+name from inside the module path is not embedded; it stays a runtime
+dependency, and the executable refuses to start without it.
+
+An embedded module is visible to the compiler through two namespace trees, and
+both must be walked:
+
+| Tree | Holds | `compile_module` | Symbol namespace |
+|---|---|---|---|
+| The main program's root namespace | the module's **exported** items, imported into the importing program | `""` | unprefixed |
+| The module program's own root namespace | **every** item, exported or not | the module name | `_qaot_<Mod>_` |
+
+The two overlap: an exported item appears in both. It is one
+`AbstractQoreFunctionVariant`, because namespace import copies functions and
+variants **by reference**, and both walks derive the identical
+`getVariantKey()` string from it.
+
+The ownership rule follows from that overlap:
+
+> An exported item is compiled **once**, by the main-program walk, under the
+> unprefixed symbol namespace. Only items that walk cannot see — a module's
+> private functions and methods — are compiled under `_qaot_<Mod>_`.
+
+Body emission enforces this with a shared `compiled_keys` set. Fast-entry
+*declaration* must obey the same rule, so both walks discover into one shared
+batch-callee map and one shared declared-key set, before either emits a body.
+Discovering per walk instead declares a second, module-prefixed `_fast` symbol
+for every exported item whose body the other walk already emitted; that symbol
+never receives a body, and a module-private caller compiled by the second walk
+binds its call straight to it. LLVM rejects the result — `Global is external,
+but doesn't have external or weak linkage!`, naming only a mangled symbol — and
+an entry that survived to the linker would be an undefined reference instead.
+
+Two consequences worth keeping:
+
+- a batch-callee map must never be passed as `nullptr` to a body walk that a
+  discovery pass has already run for. A null map makes the walk build its own
+  under its own `compile_module`, which is exactly how the duplicate namespace
+  appears. A non-null map is also the safe default for an unknown variant: it
+  is simply not fast-entry eligible, and the call falls back to standard
+  dispatch;
+- both discoveries must complete before any body is emitted, because
+  re-walking the shared map erases and recreates every declaration and requires
+  each one to still be bodyless and unreferenced.
+
+`local_module_names` is the one set that decides what is embedded, and every
+consumer must honour it. The serialized namespace tree keeps an embedded
+module's items because they cannot be loaded by name; for the same reason the
+executable's **dependency list must not name the module itself**. What the
+executable inherits instead is everything the embedded module depends on,
+hoisted into its own list. Listing the module made a successfully compiled
+executable refuse to start with `requires module '<Mod>', which could not be
+loaded`, even with the `.qm` sitting next to it, because the name never
+resolves outside the module path.
+
+Before verification the executable path audits every `approach_b_eligible`
+entry: a fast-entry symbol that is still a declaration is erased when nothing
+references it, and reported against its Qore item when something does. This is
+the executable-side equivalent of the per-file objects' unused-declaration
+prune, and it keeps any future divergence between a discovery verdict and the
+real lowering's verdict from surfacing as an LLVM verifier message.
+
 ## Module Aggregation
 
 `qcc -m <module-dir>` is the preferred clean-build path for split-directory

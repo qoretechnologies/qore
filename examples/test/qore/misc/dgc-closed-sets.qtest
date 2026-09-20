@@ -1,0 +1,329 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcClosedSetsTest
+
+#! A node of a cycle that references only other nodes of the same cycle and scalar values
+/** The recursive set such a cycle forms is closed: no reference held by any of its nodes points outside it, so
+    a scan that reaches it from outside does not enter it.  The destroyed count is a static class variable, not
+    an object member, so counting destructions does not add a reference out of the set.
+*/
+class ClosedNode {
+    public {
+        *ClosedNode peer;
+        #! used to give the set a reference out of itself
+        auto extra;
+        int id;
+        static int destroyed = 0;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    destructor() {
+        ++ClosedNode::destroyed;
+    }
+}
+
+#! A node of a second cycle that references a closed set
+class MiddleNode {
+    public {
+        *MiddleNode peer;
+        auto value;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++MiddleNode::destroyed;
+    }
+}
+
+#! An object that is in no cycle until it is made to reference one
+class Bridge {
+    public {
+        auto value;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Bridge::destroyed;
+    }
+}
+
+#! Holds a value; assigning to it scans the graph reachable from the holder
+class ValueHolder {
+    public {
+        auto value;
+        auto self_ref;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++ValueHolder::destroyed;
+    }
+}
+
+#! A node of a cycle that runs through a list
+class ListNode {
+    public {
+        auto items;
+        auto peer;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++ListNode::destroyed;
+    }
+}
+
+#! A node whose cycle runs through a Queue, a private data container the scanner reaches with a custom scanner
+/** The queue's contents are changed by its own methods, which make no scan of the object holding it, so a
+    recursive set with such an object must never be treated as closed.
+*/
+class QueueNode {
+    public {
+        Queue q = new Queue();
+        auto value;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++QueueNode::destroyed;
+    }
+}
+
+class DgcClosedSetsTest inherits QUnit::Test {
+    public {
+        #! the size of the small closed cycle used to compare scan costs
+        const SmallCycle = 8;
+        #! the size of the large closed cycle used to compare scan costs
+        const LargeCycle = 256;
+    }
+
+    constructor() : QUnit::Test("closed recursive sets", "1.0") {
+        addTestCase("Scans do not enter a closed recursive set", \scanSkipsClosedSet());
+        addTestCase("A closed recursive set is collected", \closedSetIsCollected());
+        addTestCase("A holder outside a closed set is collected alone", \externalHolderIsCollected());
+        addTestCase("A closed set that gains an outside reference is collected", \closedSetJoinsCycle());
+        addTestCase("A set that references a closed set is not closed itself", \referencingSetIsNotClosed());
+        addTestCase("A closed set is recalculated from inside", \closedSetIsRecalculatedFromInside());
+        addTestCase("A closed set with a shared container is watched", \closedSetWithSharedContainer());
+        addTestCase("A cycle through a private data container is not closed", \queueCycleIsNotClosed());
+        addTestCase("A removal with no object in the lvalue path scans", \removalWithoutAnObjectInThePath());
+        addTestCase("A removal scanned from outside the set reopens it", \removalScannedFromOutsideTheSet());
+        set_return_value(main());
+    }
+
+    scanSkipsClosedSet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("scan object counts require a debug build");
+        }
+        int small = enterCount(SmallCycle);
+        int large = enterCount(LargeCycle);
+        if (m_options.verbose) {
+            printf("objects entered: %d nodes: %d; %d nodes: %d\n", SmallCycle, small, LargeCycle, large);
+        }
+        # the scan enters the holder and stops at the closed set, whatever its size; before closed sets were
+        # recognized it entered every node of the cycle as well
+        assertEq(small, large, "the scan cost does not depend on the size of the closed set");
+        assertLt(SmallCycle, large, "the scan does not enter the closed set");
+    }
+
+    closedSetIsCollected() {
+        ClosedNode::destroyed = 0;
+        hash<string, ClosedNode> c = {"head": makeClosedCycle(16)};
+        assertEq(0, ClosedNode::destroyed);
+        remove c;
+        assertEq(16, ClosedNode::destroyed, "the closed set is collected when its last outside reference goes");
+    }
+
+    externalHolderIsCollected() {
+        ClosedNode::destroyed = 0;
+        ValueHolder::destroyed = 0;
+        hash<string, ClosedNode> keep = {"head": makeClosedCycle(16)};
+        {
+            # the holder is in a cycle of its own, so reference counting alone cannot collect it
+            hash<string, ValueHolder> c = {"h": new ValueHolder()};
+            c.h.self_ref = c.h;
+            c.h.value = keep.head;
+            remove c;
+        }
+        assertEq(1, ValueHolder::destroyed, "the holder is collected");
+        assertEq(0, ClosedNode::destroyed, "the closed set is still held");
+        remove keep;
+        assertEq(16, ClosedNode::destroyed, "the closed set is collected afterwards");
+    }
+
+    closedSetJoinsCycle() {
+        ClosedNode::destroyed = 0;
+        Bridge::destroyed = 0;
+        hash<string, auto> c = {};
+        c.head = makeClosedCycle(8);
+        c.bridge = new Bridge();
+        # an object outside the closed set that references it
+        c.bridge.value = c.head;
+        assertEq(0, ClosedNode::destroyed);
+        # the set gains a reference out of itself, which closes a cycle through the bridge: the scan that this
+        # assignment starts is rooted inside the set, so the set is recalculated and is no longer closed
+        c.head.extra = c.bridge;
+        remove c;
+        assertEq(8, ClosedNode::destroyed, "the enlarged cycle is collected");
+        assertEq(1, Bridge::destroyed, "the bridge is collected with it");
+    }
+
+    referencingSetIsNotClosed() {
+        ClosedNode::destroyed = 0;
+        MiddleNode::destroyed = 0;
+        Bridge::destroyed = 0;
+
+        hash<string, auto> c = {};
+        c.head = makeClosedCycle(8);
+        # a second cycle, which is closed until it is made to reference the first one
+        c.middle = makeMiddleCycle();
+        c.middle.value = c.head;
+        # the closed set gains a reference to an object that the middle cycle cannot reach yet, so the scan
+        # that this assignment makes does not reach the middle cycle
+        c.bridge = new Bridge();
+        c.head.extra = c.bridge;
+        # the bridge now closes a cycle back through the middle nodes.  The scan that this assignment starts
+        # can only find that cycle if it enters the middle cycle, which is not closed: it references the set
+        # that the first cycle formed
+        c.bridge.value = c.middle;
+        assertEq(0, MiddleNode::destroyed);
+        remove c;
+        assertEq(2, MiddleNode::destroyed, "the cycle through the middle nodes is collected");
+        assertEq(8, ClosedNode::destroyed, "the first cycle is collected with it");
+        assertEq(1, Bridge::destroyed, "the bridge is collected with it");
+    }
+
+    closedSetIsRecalculatedFromInside() {
+        ClosedNode::destroyed = 0;
+        hash<string, auto> c = {};
+        c.head = makeClosedCycle(8);
+        # rerouting the cycle to the head alone releases the other nodes as an ordinary chain and leaves a
+        # recursive set of one object, which the scan started at the head has to recalculate
+        c.head.peer = c.head;
+        assertEq(7, ClosedNode::destroyed, "the nodes taken out of the cycle are released");
+        remove c;
+        assertEq(8, ClosedNode::destroyed, "the remaining self-reference is collected");
+    }
+
+    closedSetWithSharedContainer() {
+        ListNode::destroyed = 0;
+        hash<string, auto> c = {};
+        c.a = new ListNode();
+        c.b = new ListNode();
+        c.a.items = (c.b,);
+        c.b.peer = c.a;
+        # the list is part of the cycle and is also held outside it, which keeps the set from being collected
+        c.shared = c.a.items;
+        remove c.a;
+        remove c.b;
+        assertEq(0, ListNode::destroyed, "the list held outside the set keeps the cycle");
+        remove c.shared;
+        assertEq(2, ListNode::destroyed, "releasing the list collects the cycle");
+    }
+
+    queueCycleIsNotClosed() {
+        QueueNode::destroyed = 0;
+        Bridge::destroyed = 0;
+        hash<string, auto> c = {};
+        c.node = new QueueNode();
+        # the queue holds the reference that closes the cycle; pushing it makes no scan of the node
+        c.node.q.push(c.node);
+        # an assignment to the node scans it and finds the cycle that runs through the queue
+        c.node.value = 1;
+        # the queue gains a reference to an object outside that cycle, again without any scan
+        c.bridge = new Bridge();
+        c.node.q.push(c.bridge);
+        # the bridge closes a larger cycle.  The scan that this assignment makes can only find it by entering
+        # the set the queue's cycle formed, which is why such a set is never treated as closed
+        c.bridge.value = c.node;
+        remove c;
+        assertEq(1, QueueNode::destroyed, "the cycle through the queue is collected");
+        assertEq(1, Bridge::destroyed, "the bridge is collected with it");
+    }
+
+    removalWithoutAnObjectInThePath() {
+        ClosedNode::destroyed = 0;
+        hash<string, auto> c = makeLinkedPair();
+        # the lvalue path of the removal holds no object: the object whose member is removed is the value of a
+        # hash key, so the object itself has to be the root of the scan that the removal makes
+        remove c.x.peer;
+        remove c.y.peer;
+        assertEq(0, ClosedNode::destroyed, "both objects are still held by the hash");
+        remove c;
+        assertEq(2, ClosedNode::destroyed, "the objects are collected with the hash");
+    }
+
+    removalScannedFromOutsideTheSet() {
+        ClosedNode::destroyed = 0;
+        hash<string, auto> c = makeLinkedPair();
+        # a reference argument makes the scan root the variable holding the hash, which is not in the set that
+        # the removal changes, so the removal has to take that set out of its closed state
+        unlinkThroughReference(\c);
+        assertEq(0, ClosedNode::destroyed, "both objects are still held by the hash");
+        remove c;
+        assertEq(2, ClosedNode::destroyed, "the objects are collected with the hash");
+    }
+
+    #! Returns a hash holding two objects that reference each other, which is a closed recursive set
+    private static hash<string, auto> makeLinkedPair() {
+        hash<string, auto> rv = {};
+        rv.x = new ClosedNode(0);
+        rv.y = new ClosedNode(1);
+        rv.x.peer = rv.y;
+        rv.y.peer = rv.x;
+        return rv;
+    }
+
+    #! Breaks the cycle through a reference argument, so that the scans are rooted at the variable
+    private static unlinkThroughReference(reference<hash<auto>> h) {
+        remove h.x.peer;
+        remove h.y.peer;
+    }
+
+    #! Returns the number of objects a scan enters when a holder is made to reference a closed cycle
+    private static int enterCount(int n) {
+        # an object held by a local variable defers the scans that start at it, so the objects are in a hash
+        hash<string, auto> c = {};
+        c.head = makeClosedCycle(n);
+        c.holder = new ValueHolder();
+        int start = scanObjectCount();
+        c.holder.value = c.head;
+        return scanObjectCount() - start;
+    }
+
+    #! Returns the head of a cycle of \a n objects that references nothing outside itself
+    private static ClosedNode makeClosedCycle(int n) {
+        ClosedNode head(0);
+        ClosedNode cur = head;
+        for (int i = 1; i < n; ++i) {
+            ClosedNode next(i);
+            cur.peer = next;
+            cur = next;
+        }
+        # closing the cycle makes the scan find the recursive set
+        cur.peer = head;
+        return head;
+    }
+
+    #! Returns one node of a cycle of two objects
+    private static MiddleNode makeMiddleCycle() {
+        MiddleNode first();
+        MiddleNode second();
+        first.peer = second;
+        second.peer = first;
+        return first;
+    }
+
+    #! Returns the number of objects that scans have entered in this thread
+    private static int scanObjectCount() {
+        return call_function("dbg_get_scan_object_count");
+    }
+}

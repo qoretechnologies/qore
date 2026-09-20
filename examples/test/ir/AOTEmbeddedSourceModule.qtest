@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTEmbeddedSourceModuleTest
+
+# Regression test for standalone AOT (`qcc -o <exe> <script>`) of a user module
+# that is loaded by SOURCE PATH rather than by name.
+#
+# A module whose file lies outside every effective module dir is "embedded":
+# its code is compiled into the executable instead of being loaded at runtime.
+# `QoreAOT::compile()` then has to walk two namespace trees -- the main
+# program's root namespace, which holds the module's EXPORTED items, and the
+# module program's own root namespace, which is the only place its private
+# items live.  Those two walks used to run under different `compile_module`
+# values, so the same exported variant was declared under two different
+# `_qaot_` symbol namespaces while only one of them ever received a body:
+#
+#   error: LLVM module verification failed: Global is external, but doesn't
+#   have external or weak linkage!
+#   ptr @_qaot_<Mod>_<item>_..._fast_h<contract>
+#
+# A module-private function compiled by the second walk bound its calls to that
+# body-less symbol, so the declaration was referenced, not merely dangling.
+#
+# Requiring the same module BY NAME from inside the module path never
+# reproduced this, because the module is then not embedded at all -- which is
+# why every other `qcc` module test missed it.  These cases therefore write the
+# `.qm` into a temporary directory and require it by absolute path, with no
+# QORE_MODULE_DIR pointing at that directory.
+class AOTEmbeddedSourceModuleTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTEmbeddedSourceModuleTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s QORE_LIBDIR=%s",
+            libqore_dir, libqore_dir, libqore_dir);
+
+        addTestCase("an embedded module's exported function keeps one fast-entry symbol",
+            \testExportedFunction());
+        addTestCase("a module-private caller binds to the exported callee's emitted body",
+            \testModulePrivateCaller());
+        addTestCase("an embedded module's class methods keep one fast-entry symbol",
+            \testClassMethods());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private string writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+        return path;
+    }
+
+    #! Compiles @a script to a standalone executable and returns its output.
+    /** Asserts the compile itself succeeded, naming the fast-entry symbol
+        failure explicitly so a regression is recognizable without decoding a
+        mangled name, then asserts every runtime tier agrees with the compiled
+        executable: source loading and native loading must not differ in
+        content.
+    */
+    private string compileRunAndCompare(string tmp_dir, string script, string ctx) {
+        string exe = tmp_dir + "/aot-exe";
+        string compile_out = run(sprintf("%s %s -o %s %s", env, qcc_bin, exe, script));
+        assertEq(-1, compile_out.find("doesn't have external or weak linkage"),
+            ctx + ": no fast entry may be declared without a body: " + compile_out);
+        assertEq(-1, compile_out.find("no body was emitted for the fast entry"),
+            ctx + ": the fast-entry definition audit must find nothing: " + compile_out);
+        assertTrue(is_file(exe), ctx + ": qcc produced an executable: " + compile_out);
+
+        # the embedded module must NOT be needed at run time: no QORE_MODULE_DIR
+        string aot_out = run(sprintf("%s %s", env, exe));
+        assertTrue(aot_out.size() > 0, ctx + ": the executable produced output");
+
+        foreach string mode in (("ast", "ir", "jit")) {
+            string tier_out = run(sprintf("%s %s -b --enable-debug --exec-mode=%s %s",
+                env, qore_bin, mode, script));
+            assertEq(aot_out, tier_out,
+                sprintf("%s: --exec-mode=%s must agree with the AOT executable", ctx, mode));
+        }
+        return aot_out;
+    }
+
+    testExportedFunction() {
+        TmpDir tmp("qore-aot-embedded-source-fn-");
+        string qm = writeFile(tmp.path + "/AesmFunc.qm", "%modern
+module AesmFunc {
+    version = \"1.0\";
+    desc = \"embedded source module regression: exported function\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AesmFunc;
+
+public int sub aesm_add(int a, int b) {
+    return a + b;
+}
+");
+        string script = writeFile(tmp.path + "/run.q", sprintf("%%modern
+%%requires %s
+printf(\"%%d\\n\", aesm_add(19, 23));
+", qm));
+
+        assertEq("42\n", compileRunAndCompare(tmp.path, script, "exported function"),
+            "the embedded module's exported function returns its computed value");
+    }
+
+    testModulePrivateCaller() {
+        TmpDir tmp("qore-aot-embedded-source-private-");
+        # aesm_pub is exported, so the main program's tree compiles its body;
+        # aesm_private exists ONLY in the module's own tree, so the second walk
+        # compiles it -- and its call to aesm_pub is what used to bind to a
+        # declared-but-never-defined fast entry.
+        string qm = writeFile(tmp.path + "/AesmPrivate.qm", "%modern
+module AesmPrivate {
+    version = \"1.0\";
+    desc = \"embedded source module regression: module-private caller\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AesmPrivate;
+
+public int sub aesm_pub(int a, int b) {
+    return a + b;
+}
+
+int sub aesm_private(int a) {
+    return aesm_pub(a, 3);
+}
+
+public int sub aesm_entry(int a) {
+    return aesm_private(a) + 1;
+}
+");
+        string script = writeFile(tmp.path + "/run.q", sprintf("%%modern
+%%requires %s
+printf(\"%%d\\n\", aesm_entry(4));
+", qm));
+
+        assertEq("8\n", compileRunAndCompare(tmp.path, script, "module-private caller"),
+            "the module-private caller reaches the exported callee's real body");
+    }
+
+    testClassMethods() {
+        TmpDir tmp("qore-aot-embedded-source-class-");
+        string qm = writeFile(tmp.path + "/AesmClass.qm", "%modern
+module AesmClass {
+    version = \"1.0\";
+    desc = \"embedded source module regression: class methods\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AesmClass;
+
+public class AesmCalc {
+    public static int twice(int a) {
+        return a * 2;
+    }
+
+    int bump(int a) {
+        return a + 1;
+    }
+
+    public int run(int a) {
+        return bump(a) + AesmCalc::twice(a);
+    }
+}
+");
+        string script = writeFile(tmp.path + "/run.q", sprintf("%%modern
+%%requires %s
+AesmCalc c();
+printf(\"%%d %%d\\n\", c.run(10), AesmCalc::twice(3));
+", qm));
+
+        assertEq("31 6\n", compileRunAndCompare(tmp.path, script, "class methods"),
+            "static and instance methods of an embedded module's class both run");
+    }
+}

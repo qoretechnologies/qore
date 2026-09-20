@@ -3570,9 +3570,11 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
                     ? sendWithResponseLimit(body, m, path, hdr, \info, max_response_bytes)
                     : send(body, m, path, hdr, False, \info);
                 info."response-code" = h.status_code;
+                # a response body is a string only when its media type carries text; any other type is binary
+                # and has no character encoding
                 debug("RestClient sent: %y received: %y (%y: %s bytes%s)", info."request-uri", info."response-uri",
-                    (h.body ? h.body.encoding() : "n/a"), h.body.size(), h.body.size() && h."content-type" ? (" " +
-                        h."content-type") : "");
+                    (h.body.typeCode() == NT_STRING ? h.body.encoding() : (h.body ? h.body.type() : "n/a")),
+                    h.body.size(), h.body.size() && h."content-type" ? (" " + h."content-type") : "");
                 if (!h."content-type".val() && assume_content_type.val()) {
                     debug("missing content-type from response; assuming %y", assume_content_type);
                     h."content-type" = assume_content_type;

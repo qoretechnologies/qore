@@ -2382,6 +2382,14 @@ static QoreOperatorNode* process_weak_assignment(const QoreProgramLocation* loc,
    return static_cast<QoreOperatorNode*>(new QoreWeakAssignmentOperatorNode(loc, $1, $3));
 }
 
+static QoreOperatorNode* process_opaque_assignment(const QoreProgramLocation* loc, QoreValue $1, QoreValue $3) {
+   if ($1.getType() == NT_LIST) {
+       parse_error(*loc, "the '@=' operator is not valid with list assignments");
+       return static_cast<QoreOperatorNode*>(new QoreAssignmentOperatorNode(loc, $1, $3));
+   }
+   return static_cast<QoreOperatorNode*>(new QoreOpaqueAssignmentOperatorNode(loc, $1, $3));
+}
+
 static void add_named_call_arg(QoreParseListNode* l, char* name, QoreValue arg, const QoreProgramLocation* loc) {
     if (l->hasArgName(name)) {
         parseException(*loc, "NAMED-ARG-DUPLICATE", "duplicate named argument '%s' in named call", name);
@@ -2780,6 +2788,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token NULL_COALESCING "?? operator"
 %token VALUE_COALESCING "?* or ?: operator"
 %token WEAK_ASSIGNMENT ":= operator"
+%token OPAQUE_ASSIGNMENT "@= operator"
 %token RANGE ".. operator"
 %token ELLIPSES "... marker"
 
@@ -2826,7 +2835,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %left ','
 // Resolve "const name =" and "const Type name =" by shifting to the constant/initializer form when available.
 %nonassoc CONST_READONLY_DECL_PREFIX
-%right PLUS_EQUALS MINUS_EQUALS AND_EQUALS OR_EQUALS MODULA_EQUALS MULTIPLY_EQUALS DIVIDE_EQUALS XOR_EQUALS SHIFT_LEFT_EQUALS SHIFT_RIGHT_EQUALS '=' WEAK_ASSIGNMENT
+%right PLUS_EQUALS MINUS_EQUALS AND_EQUALS OR_EQUALS MODULA_EQUALS MULTIPLY_EQUALS DIVIDE_EQUALS XOR_EQUALS SHIFT_LEFT_EQUALS SHIFT_RIGHT_EQUALS '=' WEAK_ASSIGNMENT OPAQUE_ASSIGNMENT
 %right '?' ':'
 %nonassoc RANGE ELLIPSES
 %right NULL_COALESCING VALUE_COALESCING
@@ -5949,6 +5958,14 @@ exp:
 
         $$ = (process_weak_assignment(loc, $1, $3));
     }
+    | exp OPAQUE_ASSIGNMENT exp         {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
+        // see if the use of the opaque assignment operator is allowed
+        if (!parse_check_parse_option(QoreParseOptions::ALLOW_OPAQUE_REFERENCES))
+            parse_error(*loc, "unauthorized use of the opaque reference assignment operator \"@=\" (parse option 'allow-opaque-references' is not set)");
+
+        $$ = (process_opaque_assignment(loc, $1, $3));
+    }
     | exp TOK_INSTANCEOF uncqtypedef    {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         $$ = ($3->getTypeInfo()
@@ -6055,6 +6072,14 @@ exp_n:
             parse_error(*loc, "unauthorized use of the weak reference assignment operator \":=\" (parse option PO_ALLOW_WEAK_REFERENCES is not set)");
 
         $$ = (process_weak_assignment(loc, $1, $3));
+    }
+    | exp_n OPAQUE_ASSIGNMENT exp         {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
+        // see if the use of the opaque assignment operator is allowed
+        if (!parse_check_parse_option(QoreParseOptions::ALLOW_OPAQUE_REFERENCES))
+            parse_error(*loc, "unauthorized use of the opaque reference assignment operator \"@=\" (parse option 'allow-opaque-references' is not set)");
+
+        $$ = (process_opaque_assignment(loc, $1, $3));
     }
     | exp_n TOK_INSTANCEOF uncqtypedef    {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);

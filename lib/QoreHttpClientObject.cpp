@@ -53,6 +53,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/ql_crypto.h"
 
@@ -395,8 +396,24 @@ static qore_uncompress_to_binary_t get_binary_decoder_for_content_encoding(const
     return nullptr;
 }
 
+//! Returns the message body of a response that arrived as binary, decoded according to its content encoding
+/** The connection decides how a body is delivered from its media type: a text type arrives as a string, and
+    any other type as binary, whose octets are not text.  A body that carries a content encoding always arrives
+    as binary, because the compressed octets are not the body; decoding it restores the type the media type
+    calls for.
+
+    @param bin the body as received
+    @param body_enc the character encoding for a text body
+    @param content_encoding the content encoding to decode, or nullptr if the body is not encoded
+    @param dec the decoder for @p content_encoding, if one was already selected
+    @param encoding_passthru true if an encoded body is returned encoded
+    @param is_text true if the media type of the body carries text
+    @param xsink exception sink
+
+    @return the body, or no value if there is nothing to change
+*/
 static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
-        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru,
+        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru, bool is_text,
         ExceptionSink* xsink) {
     if (!bin || !bin->size()) {
         return QoreValue();
@@ -405,6 +422,18 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
     if (content_encoding) {
         if (encoding_passthru) {
             return bin->refSelf();
+        }
+        if (!is_text) {
+            // the decoded octets are not text, so they are decoded to binary
+            qore_uncompress_to_binary_t bin_dec = get_binary_decoder_for_content_encoding(content_encoding, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (!bin_dec) {
+                // an encoding that is not a compression, such as "identity", leaves the body as it is
+                return QoreValue();
+            }
+            return bin_dec(bin, xsink);
         }
         if (!dec) {
             bool ignore_encoding = false;
@@ -420,6 +449,11 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
         }
         QoreStringNode* decoded = dec(bin, body_enc, xsink);
         return decoded;
+    }
+
+    if (!is_text) {
+        // the body is already the value to return: its octets are not text
+        return QoreValue();
     }
 
     return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
@@ -540,6 +574,12 @@ static bool has_header(const QoreHashNode& h, const char* name) {
 struct HttpRedirectChain {
     //! The connection of the original request; its origin is the only one that receives origin-bound headers
     con_info origin;
+    //! The origin the client's configured credentials belong to, which is the origin of the client's URL
+    /** The same as @ref origin for a request sent to the client's URL.  A request that selects its own target
+        keeps them apart: the request's own headers belong to the target it names, while the credentials
+        configured on the client still belong only to the client's URL.
+    */
+    con_info credential_origin;
     //! The number of redirects followed
     int count = 0;
     //! The redirects followed, as a list of HttpRedirectInfo hashes
@@ -547,7 +587,12 @@ struct HttpRedirectChain {
     //! The origin-bound headers of the original request
     QoreHashNode* origin_headers = nullptr;
 
-    DLLLOCAL HttpRedirectChain(const con_info& origin) : origin(origin) {
+    DLLLOCAL HttpRedirectChain(const con_info& origin) : origin(origin), credential_origin(origin) {
+    }
+
+    //! Creates a chain whose request targets an origin other than the one that configured its credentials
+    DLLLOCAL HttpRedirectChain(const con_info& origin, const con_info& credential_origin) : origin(origin),
+            credential_origin(credential_origin) {
     }
 
     DLLLOCAL HttpRedirectChain(const HttpRedirectChain&) = delete;
@@ -592,10 +637,12 @@ struct HttpRedirectChain {
     }
 
     //! Returns true if a server authentication challenge from the given target may be answered
-    /** The client's credentials belong to the origin of the original request
+    /** The client's credentials belong to the origin they were configured for, which is the origin of the
+        client's URL.  That is the origin of the original request too, unless the request selected its own
+        target, in which case the credentials still belong only to the client's URL.
     */
     DLLLOCAL bool canAuthenticate(const con_info& target) const {
-        return is_same_origin(origin, target);
+        return is_same_origin(credential_origin, target);
     }
 
     //! Returns a copy of the redirects followed, if any
@@ -614,6 +661,17 @@ struct HttpRedirectTarget {
     const char* method = nullptr;
     //! True if the next request carries no body
     bool drop_body = false;
+};
+
+//! The target of a request that selects its own URL instead of using the client's
+/** Resolved once before the request is sent; the client's own URL and configuration are never changed, so
+    requests that select different targets can run at the same time on one client.
+*/
+struct HttpRequestTarget {
+    //! The connection of the target
+    con_info conn;
+    //! The request target (path and query); already percent-encoded
+    std::string target;
 };
 
 // ============================================================================
@@ -723,7 +781,7 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
 //
 // See LEGACY RESPONSE SHAPE ADAPTERS block above for the rationale and
 // the full list of callers — do not reuse this function for anything else.
-static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const BinaryNode* decoded_body,
+static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const SimpleValueQoreNode* decoded_body,
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     QoreValue sc = src->getKeyValue("status_code");
@@ -1091,6 +1149,48 @@ struct qore_httpclient_priv {
         }
     }
 
+    //! Returns the protocol a connection manager for this client is created with
+    /** The protocol follows the client's configuration, so that one manager serves every request; a target that
+        cannot use it is resolved to one it can use when its connection is created, which is the only place the
+        target's transport is known (see HttpClientConnectionManagerBase::Options::protocol_required).
+
+        H2C_DIRECT is also an H2 protocol (over plain TCP, the client sends the HTTP/2 preface on connect).
+        REQUIRED with SSL negotiates h2 via ALPN; REQUIRED without SSL is equivalent to H2C_DIRECT.  AUTO over
+        SSL uses NEGOTIATE (per-connect ALPN via NegotiatingHttpClientConnection).  The global mode override is
+        checked here so that set_global_http2_mode("disabled") prevents H2 connections even for REQUIRED-mode
+        clients (matching legacy connect).
+
+        @param required output: true if the protocol is a requirement rather than a preference
+
+        @return the protocol for a new connection manager
+    */
+    DLLLOCAL HttpClientProtocol getConnMgrProtocol(bool& required) const {
+        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
+        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED || http2_mode == HTTP2_MODE_H2C_DIRECT)
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
+            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+        bool h3_required = http3_mode.load(std::memory_order_relaxed) == HTTP3_MODE_REQUIRED;
+
+        required = false;
+        if (connection.is_unix) {
+            return HttpClientProtocol::H1;
+        }
+        if (h3_required || (http3_active && connection.ssl)) {
+            // an HTTP/3 upgrade from an Alt-Svc advertisement is opportunistic; only the mode is a requirement
+            required = h3_required;
+            return HttpClientProtocol::H3;
+        }
+        if (h2_hard) {
+            return HttpClientProtocol::H2;
+        }
+        if (h2_auto_ssl) {
+            return HttpClientProtocol::NEGOTIATE;
+        }
+        return HttpClientProtocol::H1;
+    }
+
     DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> getConnMgr(ExceptionSink* xsink) {
         std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
         std::shared_ptr<HttpClientConnectionManagerBase> rv;
@@ -1103,34 +1203,11 @@ struct qore_httpclient_priv {
             if (conn_mgr) {
                 const auto& opts = conn_mgr->getOptions();
                 // Recompute the effective protocol
-                int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
-                bool ld = qore_check_option(QLO_DISABLE_HTTP2);
-                // H2C_DIRECT is also an H2 protocol (over plain TCP, client
-                // sends the HTTP/2 preface on connect).  REQUIRED with SSL
-                // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
-                // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
-                // ALPN via NegotiatingHttpClientConnection).
-                bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
-                        || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                    && gm != HTTP2_MODE_DISABLED && !ld;
-                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
-                    && gm != HTTP2_MODE_DISABLED && !ld;
-                HttpClientProtocol want_proto;
-                if (connection.is_unix) {
-                    want_proto = HttpClientProtocol::H1;
-                } else if (http3_mode.load(std::memory_order_relaxed)
-                        == HTTP3_MODE_REQUIRED
-                        || (http3_active && connection.ssl)) {
-                    want_proto = HttpClientProtocol::H3;
-                } else if (h2_hard) {
-                    want_proto = HttpClientProtocol::H2;
-                } else if (h2_auto_ssl) {
-                    want_proto = HttpClientProtocol::NEGOTIATE;
-                } else {
-                    want_proto = HttpClientProtocol::H1;
-                }
+                bool want_required;
+                HttpClientProtocol want_proto = getConnMgrProtocol(want_required);
                 std::string proxy_url = getConnMgrProxyUrl();
                 if (opts.protocol != want_proto
+                        || opts.protocol_required != want_required
                         || opts.proxy_url != proxy_url
                         || opts.connect_timeout_ms != connect_timeout_ms
                         || opts.request_timeout_ms != timeout
@@ -1149,37 +1226,8 @@ struct qore_httpclient_priv {
                 // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
                 // path does per-connect ALPN over TLS and adopts the result
                 // into a concrete H1/H2 connection (see
-                // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
-                // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
-                // everything else maps to H1.  The global mode override
-                // must be checked here so that set_global_http2_mode("disabled")
-                // prevents H2 connections even for REQUIRED-mode clients
-                // (matches legacy connect).
-                {
-                    int global_mode = qore_global_http2_mode.load(
-                        std::memory_order_relaxed);
-                    bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-                    bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
-                            || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-                    bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
-                        && connection.ssl
-                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-
-                    if (connection.is_unix) {
-                        opts.protocol = HttpClientProtocol::H1;
-                    } else if (http3_mode.load(std::memory_order_relaxed)
-                            == HTTP3_MODE_REQUIRED
-                            || (http3_active && connection.ssl)) {
-                        opts.protocol = HttpClientProtocol::H3;
-                    } else if (h2_hard) {
-                        opts.protocol = HttpClientProtocol::H2;
-                    } else if (h2_auto_ssl) {
-                        opts.protocol = HttpClientProtocol::NEGOTIATE;
-                    } else {
-                        opts.protocol = HttpClientProtocol::H1;
-                    }
-                }
+                // design/conn-mgr-alpn-negotiation.md).
+                opts.protocol = getConnMgrProtocol(opts.protocol_required);
                 opts.connect_timeout_ms = connect_timeout_ms;
                 opts.request_timeout_ms = timeout;
                 opts.idle_timeout_ms = 60000;
@@ -1779,6 +1827,126 @@ struct qore_httpclient_priv {
         return 0;
     }
 
+    //! Resolves a URI reference against the URL of a request and returns the target it names
+    /** RFC 3986 section 5.2 resolution, shared by redirects and by a request that selects its own target, so
+        that both reach the same target for the same reference.  Everything works on octets: percent-encoded
+        octets and an empty query are carried through as given, and only octets that cannot appear in a URI are
+        encoded.  Any fragment is dropped, as a request target has none.
+
+        A reference with no scheme and no authority keeps the connection of the base, so the base authority is
+        never needed and is left empty.
+
+        @param xsink exception sink
+        @param err the error code raised for a reference that cannot be used
+        @param what how to name the reference in an error message, e.g. \c "redirect location 'x' from 'y'
+        (code 302)" or \c "request URL 'x'"; the messages read \c "<what> has no host"
+        @param ref_str the reference, in UTF-8
+        @param ref_len the length of the reference in bytes
+        @param base_conn the connection the reference is resolved against
+        @param base_target the request target the reference is resolved against; percent-encoded
+        @param conn output: the connection of the resolved target; keeps @p base_conn when the reference names
+        no authority
+        @param target output: the resolved request target; percent-encoded
+
+        @return 0 if the reference was resolved, -1 if an exception was raised
+    */
+    DLLLOCAL int resolveRequestTargetUnlocked(ExceptionSink* xsink, const char* err, const std::string& what,
+            const char* ref_str, size_t ref_len, const con_info& base_conn, const std::string& base_target,
+            con_info& conn, std::string& target) {
+        // the base URI is the URI of the request the reference is resolved against (RFC 9110 section 10.2.2)
+        QoreUriReference base;
+        base.scheme = base_conn.ssl ? "https" : "http";
+        base.has_scheme = true;
+        base.has_authority = true;
+        size_t qpos = base_target.find('?');
+        if (qpos == std::string::npos) {
+            base.path = base_target;
+        } else {
+            base.path = base_target.substr(0, qpos);
+            base.query = base_target.substr(qpos + 1);
+            base.has_query = true;
+        }
+        if (base.path.empty() || base.path[0] != '/') {
+            base.path.insert(0, "/");
+        }
+        QoreUriReference ref;
+        ref.parse(ref_str, ref_len, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        QoreUriReference resolved = base.resolve(ref, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        conn = base_conn;
+        if (ref.has_scheme || ref.has_authority) {
+            // user information in a reference is never used as credentials
+            std::string authority = resolved.authority;
+            size_t at = authority.rfind('@');
+            if (at != std::string::npos) {
+                authority.erase(0, at + 1);
+            }
+            if (authority.empty()) {
+                xsink->raiseException(err, "%s has no host", what.c_str());
+                return -1;
+            }
+            // the host is sent in the Host header and, through a proxy, in the request line
+            if (!QoreUriReference::isValidAuthority(authority)) {
+                xsink->raiseException(err, "%s has an invalid host", what.c_str());
+                return -1;
+            }
+            std::string origin = resolved.scheme + "://" + authority + "/";
+            if (setRedirectOriginUnlocked(origin.c_str(), conn, xsink)) {
+                xsink->appendLastDescription(": while processing %s", what.c_str());
+                return -1;
+            }
+            for (unsigned char c : conn.host) {
+                if (c <= 0x20 || c == 0x7f) {
+                    xsink->raiseException(err, "%s has an invalid host", what.c_str());
+                    return -1;
+                }
+            }
+            // a request on a network connection must never be able to reach a local UNIX domain socket: a
+            // redirect target is chosen by the server, and a request target can be built from a document
+            // retrieved from one
+            if (conn.is_unix && !base_conn.is_unix) {
+                xsink->raiseException(err, "%s names a UNIX domain socket; only a request on a UNIX domain "
+                    "socket can select one as its target", what.c_str());
+                return -1;
+            }
+        }
+        // octets that cannot appear in a request target are percent-encoded; everything else is sent as received
+        target.clear();
+        QoreUriReference::appendEncoded(target, resolved.getRequestTarget(), xsink);
+        return *xsink ? -1 : 0;
+    }
+
+    //! Resolves the URL of a request that selects its own target against the client's URL
+    /** The client's URL and configuration are not changed; the result applies to one request only.
+
+        @param xsink exception sink
+        @param url the URL of the request: any RFC 3986 URI reference, resolved against the client's URL, so an
+        absolute URL selects its own origin, a network-path reference changes the authority, and a relative
+        reference, an empty reference, or a query-only reference addresses the client's own origin
+        @param rv output: the resolved target
+
+        @return 0 if the URL was resolved, -1 if an exception was raised
+    */
+    DLLLOCAL int resolveRequestUrlUnlocked(ExceptionSink* xsink, const QoreString& url, HttpRequestTarget& rv) {
+        TempEncodingHelper str(url, QCS_UTF8, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        // the base is the client's URL, whose path is the one a request without a path is sent to
+        std::string base_path = connection.path.empty()
+            ? (default_path.empty() ? std::string("/") : default_path)
+            : connection.path;
+        QoreStringMaker what("request URL '%s'", str->c_str());
+        return resolveRequestTargetUnlocked(xsink, "HTTP-CLIENT-URL-ERROR", what.c_str(), str->c_str(),
+            str->size(), connection, base_path, rv.conn, rv.target);
+    }
+
     //! Processes a redirect response that is followed and determines the next request of the chain
     /** Resolves the \c Location value against the URL of the request that received the response according to
         RFC 3986 section 5.2, applies the method rules of RFC 9110 section 15.4, and records the redirect in the chain
@@ -1809,72 +1977,12 @@ struct qore_httpclient_priv {
 
         std::string request_url = get_request_url(conn, target);
 
-        // the base URI is the URI of the request that received the response (RFC 9110 section 10.2.2); its
-        // authority is not needed here, because a reference without a scheme or authority keeps the connection
-        QoreUriReference base;
-        base.scheme = conn.ssl ? "https" : "http";
-        base.has_scheme = true;
-        base.has_authority = true;
-        size_t qpos = target.find('?');
-        if (qpos == std::string::npos) {
-            base.path = target;
-        } else {
-            base.path = target.substr(0, qpos);
-            base.query = target.substr(qpos + 1);
-            base.has_query = true;
+        QoreStringMaker what("redirect location '%s' from '%s' (code %d)", loc->c_str(), request_url.c_str(),
+            code);
+        if (resolveRequestTargetUnlocked(xsink, "HTTP-CLIENT-REDIRECT-ERROR", what.c_str(), loc->c_str(),
+                loc->size(), conn, target, next.conn, next.target)) {
+            return -1;
         }
-        if (base.path.empty() || base.path[0] != '/') {
-            base.path.insert(0, "/");
-        }
-        QoreUriReference ref;
-        ref.parse(loc->c_str(), loc->size());
-        QoreUriReference resolved = base.resolve(ref);
-
-        next.conn = conn;
-        if (ref.has_scheme || ref.has_authority) {
-            // user information in a redirect location is never used as credentials
-            std::string authority = resolved.authority;
-            size_t at = authority.rfind('@');
-            if (at != std::string::npos) {
-                authority.erase(0, at + 1);
-            }
-            if (authority.empty()) {
-                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
-                    "has no host", loc->c_str(), request_url.c_str(), code);
-                return -1;
-            }
-            // the host is sent in the Host header and, through a proxy, in the request line
-            if (!QoreUriReference::isValidAuthority(authority)) {
-                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
-                    "has an invalid host", loc->c_str(), request_url.c_str(), code);
-                return -1;
-            }
-            std::string origin = resolved.scheme + "://" + authority + "/";
-            if (setRedirectOriginUnlocked(origin.c_str(), next.conn, xsink)) {
-                xsink->appendLastDescription(": while processing redirect location '%s' from '%s' (code %d)",
-                    loc->c_str(), request_url.c_str(), code);
-                return -1;
-            }
-            for (unsigned char c : next.conn.host) {
-                if (c <= 0x20 || c == 0x7f) {
-                    xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code "
-                        "%d) has an invalid host", loc->c_str(), request_url.c_str(), code);
-                    return -1;
-                }
-            }
-            // the server chooses the location, so a network server must never be able to send the request (and a
-            // repeated body) to a local UNIX domain socket; a request on a socket comes from a local server and can
-            // be redirected to another socket
-            if (next.conn.is_unix && !conn.is_unix) {
-                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
-                    "names a UNIX domain socket; only a request on a UNIX domain socket can be redirected to one",
-                    loc->c_str(), request_url.c_str(), code);
-                return -1;
-            }
-        }
-        // octets that cannot appear in a request target are percent-encoded; everything else is sent as received
-        next.target.clear();
-        QoreUriReference::appendEncoded(next.target, resolved.getRequestTarget());
         std::string target_url = get_request_url(next.conn, next.target);
 
         // RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301 or 302 is
@@ -2301,9 +2409,15 @@ struct qore_httpclient_priv {
         return i->first.c_str();
     }
 
+    //! Builds the headers of a request from the caller's headers and the client's configuration
+    /** @param suppress_configured_origin_headers true if the request targets an origin other than the client's
+        URL, in which case the headers that name or authenticate that origin — the \c Authorization built from
+        the client's URL and any default \c Authorization, \c Cookie or \c Host header — are left out; headers
+        supplied by the caller are for the target the caller named and are always kept
+    */
     DLLLOCAL QoreHashNode* getRequestHeaders(ExceptionSink* xsink, const QoreHashNode* headers,
             const QoreEncoding* string_body_enc, bool msg_body, bool send_chunked, bool& keep_alive,
-            bool& host_override) {
+            bool& host_override, bool suppress_configured_origin_headers = false) {
         ReferenceHolder<QoreHashNode> nh(new QoreHashNode(autoTypeInfo), xsink);
         bool transfer_encoding = false;
         // issue #1824: find content-type header, if any
@@ -2356,6 +2470,10 @@ struct qore_httpclient_priv {
 
         // add default headers if they weren't overridden
         for (auto& hdri : default_headers) {
+            // a default header that names or authenticates the client's origin belongs to that origin only
+            if (suppress_configured_origin_headers && is_origin_bound_header(hdri.first.c_str())) {
+                continue;
+            }
             // look in original headers to see if the key was already given
             if (headers) {
                 bool skip = false;
@@ -2407,7 +2525,8 @@ struct qore_httpclient_priv {
             nh->setKeyValue("Transfer-Encoding", new QoreStringNode("chunked"), xsink);
         }
 
-        if (!connection.username.empty()) {
+        // the credentials configured on the client belong to the origin of its URL and are sent only there
+        if (!connection.username.empty() && !suppress_configured_origin_headers) {
             // check for "Authorization" header
             bool auth_found = false;
             if (headers) {
@@ -2577,12 +2696,16 @@ struct qore_httpclient_priv {
         return content_encoding;
     }
 
+    /** @param request_target the target of a request that selects its own URL, or nullptr for a request sent to
+        the client's URL with @p mpath as its request target
+    */
     DLLLOCAL QoreHashNode* send_internal(ExceptionSink* xsink, const char* mname, const char* meth, const char* mpath,
         const QoreHashNode* headers, const QoreStringNode* body, const void* data, unsigned size,
         const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info, int timeout_ms,
         const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr,
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
-        const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false);
+        const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false,
+        const HttpRequestTarget* request_target = nullptr);
 
     //! Conn_mgr dispatch path for synchronous request/response and streaming operations
     DLLLOCAL QoreHashNode* send_internal_conn_mgr(ExceptionSink* xsink, const char* mname, const char* meth,
@@ -2590,13 +2713,14 @@ struct qore_httpclient_priv {
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
         int timeout_ms, const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, OutputStream* os,
         InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
-        bool streaming = false);
+        bool streaming = false, const HttpRequestTarget* request_target = nullptr);
 
     //! Conn_mgr dispatch path for HTTP/1 WebSocket Upgrade handshakes
     DLLLOCAL QoreHashNode* send_websocket_upgrade_conn_mgr(ExceptionSink* xsink, const char* mname,
         const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
         const void* data, unsigned size, QoreHashNode* info, int timeout_ms,
-        const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr);
+        const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr,
+        const HttpRequestTarget* request_target = nullptr);
 
     // Parse Alt-Svc header value and update the cache
     DLLLOCAL void parseAltSvc(const char* value, const char* host, int port);
@@ -4734,10 +4858,25 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         const void* data, unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody,
         QoreHashNode* info, int timeout_ms, const ResolvedCallReferenceNode* recv_callback,
         QoreObject* obj, OutputStream* os, InputStream* is, size_t max_chunk_size,
-        const ResolvedCallReferenceNode* trailer_callback, bool streaming) {
+        const ResolvedCallReferenceNode* trailer_callback, bool streaming,
+        const HttpRequestTarget* request_target) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", mname, xsink);
 
     con_info this_connection = connection;
+
+    // Build path
+    QoreString pathstr(enc ? enc : QCS_UTF8);
+    bool path_already_encoded = false;
+
+    // A request that selected its own URL is sent to the target it names; the client's URL is unchanged, and
+    // the target is already resolved and percent-encoded
+    bool cross_origin = false;
+    if (request_target) {
+        this_connection = request_target->conn;
+        mpath = request_target->target.c_str();
+        path_already_encoded = true;
+        cross_origin = !is_same_origin(connection, this_connection);
+    }
 
     bool bodyp = false;
     meth = checkMethod(xsink, meth, bodyp);
@@ -4754,7 +4893,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     bool host_override = false;
     ReferenceHolder<QoreHashNode> nh(getRequestHeaders(xsink, headers,
         msg_body ? msg_body->getEncoding() : nullptr, (data && size), false,
-        keep_alive, host_override), xsink);
+        keep_alive, host_override, cross_origin), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -4770,12 +4909,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         body_len = size;
     }
 
-    // Build path
-    QoreString pathstr(enc ? enc : QCS_UTF8);
-    bool path_already_encoded = false;
-
-    // Redirect + auth retry loop
-    HttpRedirectChain chain(this_connection);
+    // Redirect + auth retry loop; the headers the request carries are bound to the origin it targets, while the
+    // credentials configured on the client stay bound to the origin of the client's URL
+    HttpRedirectChain chain(this_connection, connection);
     chain.init(**nh, xsink);
     if (*xsink) {
         return nullptr;
@@ -6139,10 +6275,28 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 return nullptr;
             }
 
+            // The media type decides whether the body is text; a response that declares no type keeps the
+            // string delivery this client has always given it.  processContentType() saved the value it read
+            // before it stripped any charset parameter.
+            bool is_text = true;
+            {
+                QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
+                if (ct.getType() != NT_STRING) {
+                    ct = ans->getKeyValue("content-type");
+                }
+                if (ct.getType() == NT_STRING) {
+                    QoreStringValueHelper ct_str(ct);
+                    std::string media_type = qore_http_media_type(ct_str->c_str());
+                    if (!media_type.empty()) {
+                        is_text = qore_http_media_type_is_text(media_type);
+                    }
+                }
+            }
+
             // Use default encoding from the HTTPClient
             const QoreEncoding* body_enc = enc ? enc : QCS_UTF8;
             QoreValue processed = process_binary_body(bin, body_enc, content_encoding, dec,
-                encoding_passthru, xsink);
+                encoding_passthru, is_text, xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -6183,8 +6337,16 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSink* xsink, const char* mname,
         const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
         const void* data, unsigned size, QoreHashNode* info, int timeout_ms,
-        const ResolvedCallReferenceNode* recv_callback, QoreObject* obj) {
+        const ResolvedCallReferenceNode* recv_callback, QoreObject* obj,
+        const HttpRequestTarget* request_target) {
     con_info this_connection = connection;
+    // a request that selected its own URL is upgraded on the target it names, with the same origin rules
+    bool cross_origin = false;
+    if (request_target) {
+        this_connection = request_target->conn;
+        mpath = request_target->target.c_str();
+        cross_origin = !is_same_origin(connection, this_connection);
+    }
     if (!this_connection.has_url()) {
         xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
             "no URL set - cannot make WebSocket Upgrade request");
@@ -6195,7 +6357,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     bool host_override = false;
     ReferenceHolder<QoreHashNode> nh(getRequestHeaders(xsink, headers,
         msg_body ? msg_body->getEncoding() : nullptr, (data && size), false,
-        keep_alive, host_override), xsink);
+        keep_alive, host_override, cross_origin), xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -6211,7 +6373,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     }
 
     QoreString pathstr(enc ? enc : QCS_UTF8);
-    const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, false, false);
+    const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, request_target != nullptr, false);
     if (*xsink) {
         return nullptr;
     }
@@ -6406,7 +6568,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
         int timeout_ms, const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, OutputStream* os,
-        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, bool streaming) {
+        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, bool streaming,
+        const HttpRequestTarget* request_target) {
     assert(!(data && send_callback));
     assert(!(data && is));
     assert(!(is && send_callback));
@@ -6474,7 +6637,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         if (!is_ws_upgrade) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
-                recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
+                recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming, request_target);
         }
         if (send_callback || is || os || trailer_callback || streaming) {
             xsink->raiseException("HTTP-CLIENT-UPGRADE-ERROR",
@@ -6482,7 +6645,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             return nullptr;
         }
         return send_websocket_upgrade_conn_mgr(xsink, mname, meth, mpath, headers,
-            msg_body, data, size, info, timeout_ms, recv_callback, obj);
+            msg_body, data, size, info, timeout_ms, recv_callback, obj, request_target);
     }
 
 }
@@ -6502,6 +6665,33 @@ QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path,
     }
     return http_priv->send_internal(xsink, "send", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
         nullptr, getbody, info, http_priv->timeout, nullptr);
+}
+
+QoreHashNode* QoreHttpClientObject::sendUrl(const char* meth, const QoreString& url, const QoreHashNode* headers,
+        const void* data, unsigned size, bool getbody, QoreHashNode* info, ExceptionSink* xsink) {
+    HttpRequestTarget request_target;
+    if (http_priv->resolveRequestUrlUnlocked(xsink, url, request_target)) {
+        return nullptr;
+    }
+    return http_priv->send_internal(xsink, "sendUrl", meth, nullptr, headers, nullptr, data, size, nullptr,
+        getbody, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, false,
+        &request_target);
+}
+
+QoreHashNode* QoreHttpClientObject::sendUrl(const char* meth, const QoreString& url, const QoreHashNode* headers,
+        const QoreStringNode& body, bool getbody, QoreHashNode* info, ExceptionSink* xsink) {
+    HttpRequestTarget request_target;
+    if (http_priv->resolveRequestUrlUnlocked(xsink, url, request_target)) {
+        return nullptr;
+    }
+    const QoreEncoding* enc = http_priv->getEncoding();
+    QoreStringNodeValueHelper tstr(&body, enc, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return http_priv->send_internal(xsink, "sendUrl", meth, nullptr, headers, *tstr, tstr->c_str(), tstr->size(),
+        nullptr, getbody, info, http_priv->timeout, nullptr, nullptr, nullptr, nullptr, 0, nullptr, false,
+        &request_target);
 }
 
 // --- conn_mgr-backed poll operations ---
@@ -6588,8 +6778,13 @@ public:
         //! True if the content encoding of the response body is not decoded
         bool encoding_passthru = false;
 
+        //! The character encoding given to a decoded text body, as in the blocking API
+        const QoreEncoding* body_enc = QCS_UTF8;
+
         //! The response body with its content encoding decoded, if it had one; see decodeResponseBody()
-        SimpleRefHolder<BinaryNode> decoded_body;
+        /** A string when the media type of the body carries text, binary otherwise, as in the blocking API
+        */
+        SimpleRefHolder<SimpleValueQoreNode> decoded_body;
         //! The decoding state of the response body: 0 = not decoded yet, 1 = done, -1 = failed
         int decode_state = 0;
 
@@ -6911,7 +7106,7 @@ public:
     DLLLOCAL void initRequest(std::shared_ptr<HttpClientConnectionManagerBase> mgr, const con_info& origin,
             const char* target, const char* method, const char* http_version, QoreHashNode* headers,
             BinaryNode* body, bool follow, int max_redirects, bool streaming_response,
-            bool encoding_passthru, QoreProgram* pgm, ExceptionSink* xsink) {
+            bool encoding_passthru, const QoreEncoding* body_enc, QoreProgram* pgm, ExceptionSink* xsink) {
         assert(!request);
         request.reset(new RequestState(origin));
         request->headers = headers;
@@ -6924,6 +7119,7 @@ public:
         request->follow = follow && client_obj;
         request->streaming_response = streaming_response;
         request->encoding_passthru = encoding_passthru;
+        request->body_enc = body_enc ? body_enc : QCS_UTF8;
         if (request->follow) {
             request->chain.init(*headers, xsink);
             // a redirect that repeats the request sends the body again
@@ -7487,9 +7683,34 @@ public:
             request->decode_state = 1;
             return 0;
         }
-        qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
-        assert(dec);
-        SimpleRefHolder<BinaryNode> decoded(dec ? dec(bin, xsink) : nullptr);
+        // the decoded octets take the form the media type calls for: a text type is a string, and any other
+        // type stays binary; a body that declares no type keeps the string delivery of the blocking API
+        bool is_text = true;
+        {
+            SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink,
+                *hv.get<const QoreHashNode>(), "content-type"));
+            if (*xsink) {
+                request->decode_state = -1;
+                return -1;
+            }
+            if (ct) {
+                std::string media_type = qore_http_media_type(ct->c_str());
+                if (!media_type.empty()) {
+                    is_text = qore_http_media_type_is_text(media_type);
+                }
+            }
+        }
+
+        SimpleRefHolder<SimpleValueQoreNode> decoded;
+        if (is_text) {
+            qore_uncompress_to_string_t dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
+            assert(dec);
+            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8, xsink) : nullptr;
+        } else {
+            qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
+            assert(dec);
+            decoded = dec ? dec(bin, xsink) : nullptr;
+        }
         if (*xsink) {
             xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",
                 token.c_str(), (long long)bin->size());
@@ -8325,7 +8546,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // request sends the body again
     poller->initRequest(mgr_holder, this_connection, msgpath, method, http11 ? "1.1" : "1.0",
         request_headers.release(), redirect_passthru ? nullptr : body_node_ref(), !redirect_passthru, max_redirects,
-        streaming_response, encoding_passthru, getProgram(), xsink);
+        streaming_response, encoding_passthru, enc ? enc : QCS_UTF8, getProgram(), xsink);
     if (*xsink) {
         release_local_conn_ref();
         return nullptr;

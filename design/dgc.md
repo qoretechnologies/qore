@@ -22,6 +22,7 @@ Every `QoreObject` (via `RObject` in `include/qore/intern/RSet.h`) carries these
 | `rrefs` | "Real" refs: references known *not* to be part of a cycle (set by `realRef()`, e.g., method-call helpers, background thread ownership). If `rrefs > 0`, starting a scan at that object is **deferred**; scans initiated elsewhere still follow its edges. |
 | `rcount` | Number of unique cyclic references pointing *at* this object, computed by the scanner. `rcount == references` ⇒ every ref to this object comes from inside the rset. |
 | `rset` | Pointer to the `RSet` the object belongs to (a group of objects in one detected cycle). |
+| `rclosed` | The object's `RSet` while that set is **closed** (nothing in it references anything outside it), otherwise null. A scan that reaches the object from outside the set does not enter it. |
 | `rml` | Read/write lock with a special "r-section" mode used during scans. |
 
 The cycle detector (`RSetHelper`, `lib/RSet.cpp`) traverses the graph reachable from a candidate object, divides it into strongly connected components, assigns the objects of each component with a cycle to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
@@ -135,8 +136,13 @@ when `deferred_scan` was set). The cycle is then stranded for the life of the pr
 
 `RObject::scan_refs` records what `references` was when `rcount` was assigned (`RObject::setRSet()`). When
 `canDelete()` finds a member with `rcount != references` *and* that member has lost references since the scan,
-the snapshot no longer describes the graph, so it invalidates the rset and asks for a rescan instead of trusting
-it. Members whose reference count is unchanged still return 0 immediately, so this costs no extra scans in the
+the snapshot no longer describes the graph, so it asks for a rescan instead of trusting it. It leaves the set
+in place while doing so: the scan recomputes the components from the live graph and, when they are the ones
+already recorded, confirms the set and records the reference count it saw, which is all the verdict was
+missing. Throwing the set away first would make that scan build an identical one — and since evaluating an
+object into an lvalue holds a temporary reference that is released *after* the scan has recorded its count,
+the next dereference asked for the same rescan again: one assignment of an object in a cycle cost five walks
+of the graph and four discarded sets. Members whose reference count is unchanged still return 0 immediately, so this costs no extra scans in the
 ordinary "something outside still holds it" case, and after a rescan `scan_refs` matches again, so it cannot
 loop.
 
@@ -196,6 +202,14 @@ reachable objects:
   `LValueHelper::objectRemoved()` whether any removed value needs a scan. An object's scan count cannot be
   used here: other threads can change the object's members through their own lvalues at the same time.
 
+A removal navigates to the container, so the `RObject` that `robj` holds is whatever the path passed through
+*before* the container — which is not necessarily the object the value is removed from, and for an object
+reached as the value of a hash key or list element (`remove h.x.a`) there is none at all. Without a root there
+is no scan, and the object's recursive set keeps counting a reference that no longer exists, which lets a later
+dereference collect the set while its objects are still held from outside it.
+`qore_object_private::takeMember()` and `takeMembers()` therefore report the object with
+`LValueHelper::objectRemoved()`, which makes it the scan root when the path supplies none.
+
 Removing an object, or a container, closure or reference that needs a scan still scans, because dropping an
 edge can make a cycle collectable. `delete` needs no special case: deleting an object removes a value that needs
 a scan. Any other removal (`lvh.remove()` of the whole value, or an unexpected container type) keeps the
@@ -211,10 +225,90 @@ Debug builds count the scans started by lvalue operations per thread (`dbg_get_l
 `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
 execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
 
+### Closed recursive sets: the region a scan does not enter
+
+A scan costs time linear in the graph reachable from its root, so a short-lived object that merely references a
+long-lived one makes every one of its dereferences walk the whole long-lived graph. Nearly all of that work
+re-derives a result an earlier scan already committed.
+
+A recursive set is **closed** when every reference held by every node of its component — its objects,
+closure-bound variables, lists, hashes, closures and references — points at another node of the same component.
+Nothing in a closed set can reach a node outside it, so no cycle through it can include a node that a scan
+started elsewhere is examining, and its membership and `rcount`s are already computed. A scan that reaches one
+of its objects therefore records the reference as leaving the scanned graph and does not follow it
+(`RSetHelper::checkNode(RObject&)`), which is also what keeps the *referring* component from being called
+closed itself. `RSetHelper::findClosedComponents()` decides this at commit time and `RObject::setRSet()` records
+the set in `rclosed`, which is read without a lock and only ever compared, never dereferenced. The scan always
+enters the set it started in (`root_rset`): that set is the one being recalculated.
+
+**The invariant that makes this safe: any change to a node of a closed set takes the set out of the closed
+state.** Three rules establish it:
+
+- An assignment through an lvalue runs its scan with `robj` set to the innermost `RObject` on the path, i.e. the
+  object or closure-bound variable whose member changed, so the scan enters that object's set. A list or hash
+  node of the set is reached only through such an `RObject`: any other holder gives the container a second
+  reference, and `ensureUnique()` then copies it rather than changing the set's node.
+- A removal's root is not necessarily in the set it changes (see above), so
+  `qore_object_private::takeMember()` / `takeMembers()` call `RObject::clearRSetClosed()` whenever they take out
+  a value that needs a scan.
+- Values in a private data container (Pattern B below) are changed by the container's own methods, which make no
+  scan of the object at all, so `RObject::valuesCanChangeWithoutScan()` keeps a set containing such an object
+  from ever being marked closed.
+
+Invalidating a set clears the mark for every member (`RSet::invalidateIntern()`), so a set that is rescanned,
+collected or torn down is never left marked. Nothing else may mark a set closed: a set whose mark outlives a
+change to one of its nodes describes a graph that no longer exists, and the cycles through it are then never
+found.
+
+Debug builds count the objects that scans have entered in the current thread
+(`dbg_get_scan_object_count()`), which measures what a scan actually walked;
+`examples/test/qore/misc/dgc-closed-sets.qtest` uses it along with collection checks for each of the rules
+above.
+
+### A scan that finds the set already in place leaves it alone
+
+A scan that cannot skip a recursive set still usually finds exactly the set that is already there. Replacing it
+with an identical one is not free: `RSet::invalidateIntern()` releases the weak reference the set holds to every
+member and removes the watches of its nodes, a new `RSet` is allocated and every member's weak reference and
+each node's watch are taken again, and every object the scan entered is written. The last part is what costs
+under load, because it makes every scan a writer of every object it reached.
+
+`RSetHelper::findUnchangedComponents()` compares each component with the set its objects already have: the same
+set for every object of the component, the same `rcount` for each of them, the same closed state, and the same
+lists, hashes, closures and references with the same internal counts. When they match, `commit()` creates no set
+and calls `RObject::confirmRSet()` in place of `setRSet()`: the set, its watches and `rcount` are left alone and
+only the scan generation advances, so a scan waiting for the object still sees that its set is current. An
+object in a component without a cycle that already has no set is left alone the same way.
+
+`confirmRSet()` does refresh the reference count that `rcount` was computed against, and only when it has moved.
+`RSet::canDelete()` compares a member's live reference count with that snapshot to tell a stale verdict from a
+genuine reference from outside the set, and a snapshot left behind by an earlier scan makes that test read a
+graph that no longer exists.
+
+`prepareCommit()` skips a component that is left in place: the members of a set that is not being replaced do
+not have to be locked for an invalidation that will not happen. When *no* component changed, `commit()` has
+nothing to invalidate, create or replace, so it confirms and releases each object in one pass instead of the
+four it makes when it has sets to assign.
+
+**Only the object a scan started at advances its scan generation when nothing changed.** `RScanHelper` samples
+the generation of the scan's own root and of no other object, so that is the only one a waiting scan reads. A
+scan that changed something still advances the generation of every object it entered — that is what stops the
+scans waiting on those objects from repeating work and making every scan in flight restart, and such a scan
+holds the r-section exclusively anyway. A scan that changed nothing conflicts with no other scan, so writing
+the generation of every object of a shared graph, in every scan, would buy only the occasional avoided rescan
+while costing a contended cache line per object per scan. That write was 21% of an eight-thread read-only
+scan before it was removed.
+
+Debug builds count the recursive sets that scans have created (`dbg_get_rset_create_count()`), and
+`examples/test/qore/misc/dgc-unchanged-sets.qtest` uses it to check that a second scan of an unchanged graph
+creates none, that a new cycle still gets one, and that a set left in place is still collected and keeps the
+watch of a node held from outside it.
+
 ## Scan locking: how the scanner stays deadlock-free and convergent
 
 A scan (`RSetHelper`, `lib/RSet.cpp`) walks an arbitrary object graph and needs the r-section of every object
-it reaches, in whatever order the traversal finds them. **It never blocks to get one.** Every lock a scan takes
+it reaches, in whatever order the traversal finds them. **It never blocks for a lock another thread could in
+turn be waiting on** (it does wait for shared holders, which cannot wait; see below). Every lock a scan takes
 is a try-lock:
 
 - `tryRSectionLockNotifyWaitRead()` (`lib/RSection.cpp`) registers an `RNotifier` against the conflicting owner
@@ -244,6 +338,62 @@ same object — every accepted connection releasing a local that holds a shared 
 restarts stop converging: every thread sits in `RNotifier::wait()`, no scan finishes, and the work those
 threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
 with nothing running, which reads like a deadlock but is the restart loop failing to converge.
+
+### Every abandoned pass registers the notification its retry waits on
+
+The restart loop in `RSetHelper::RSetHelper()` is deliberately unbounded: a scan that loses a race has to keep
+trying until it wins. What makes it terminate is not a retry limit but `RNotifier::wait()`, which blocks until
+the owner of the lock the pass could not take releases it. Every path that abandons a pass therefore goes
+through `tryRSectionLockNotifyWaitRead()` or `tryRSectionLockSharedNotifyWaitRead()`, which register that
+notification before returning `-1`: `RSetHelper::getNode()` when it cannot enter an object's r-section, and
+`RSetHelper::removeInvalidate()` when it cannot lock a member of a set it has to replace.
+
+**A pass must never ask to be retried without registering a notification.** Such a retry has nothing to wait
+for, so `notifier.wait()` returns at once and the loop becomes a busy spin: the graph is walked from scratch,
+abandoned at the same point, and walked again, at 100% CPU, forever. Nothing is written and no lock is held,
+so from outside the process this is indistinguishable from a slow compile or a long-running script — a single
+`qcc` invocation in this state consumed seven hours of CPU before it was noticed. `RSetHelper::retry_notified`
+records that the notification was registered — it is not read back from the notifier, because the owner may
+release the lock and clear the notification before the constructor looks at it — and the constructor asserts
+it on every retry, so a new abandon path that forgets the notification fails immediately in a debug build
+instead of hanging.
+
+### Scans that change nothing share the r-section
+
+A scan is a reader of the graph: it needs the objects it walks to hold still, not to have them to itself. Only
+a scan that has to assign a recursive set needs the r-section exclusively, and after the previous section most
+scans assign none.
+
+`tryRSectionLockSharedNotifyWaitRead()` takes the r-section alongside other scans while still excluding
+writers and exclusive holders, so threads scanning the same unchanged graph proceed at the same time instead of
+aborting one another. When `findUnchangedComponents()` reports a component the scan would have to change, the
+pass has recorded nothing: the scan rolls back and starts over with `exclusive` set, which is the protocol
+exactly as it was before.
+
+**Which mode a scan starts in is a prediction, because guessing wrong costs a second walk of the graph.**
+`RObject::scan_wrote` records whether the last scan rooted at that object had to assign a set, and the next
+scan started there uses it: an object whose graph has settled keeps finding the same sets, and an object that
+is having a cycle built around it keeps changing them. It is true to begin with, because the first scan of a
+new object nearly always assigns a set — which is exactly the case where starting shared would walk everything
+twice.
+
+Two rules keep the writing pass from being starved:
+
+- An exclusive acquisition **waits** when the only conflict is shared holders, instead of registering a
+  notification. That wait always ends: shared holders are scans, a scan never blocks (it releases every lock it
+  holds before waiting on its notifier) and never takes an `RSet` write lock, so it cannot be waiting for
+  anything the waiting scan holds. A conflict with a writer or with another exclusive holder still rolls back
+  and waits on the notifier, because those can hold locks that the scan would have to wait for.
+- While any thread waits for the r-section (`rsection_waiting`), `tryRSectionLockSharedNotifyWaitRead()` admits
+  no new scan. Without this, a stream of read-only scans could keep both a writing scan and
+  `qore_object_private::customDeref()` out of the r-section indefinitely, and collection would stop.
+
+`RObject::scan_refs` is atomic because two scans in shared mode can confirm the same set at once, and the
+assertions that a scan holds the r-section of the object it is walking accept either mode
+(`RSectionLock::checkRSectionHeld()`).
+
+`examples/test/qore/misc/concurrent-cycle-scans.qtest` runs read-only scans beside scans that change the graph;
+starvation there shows up as a test case that never returns.
 
 ### A scan may be re-entered under a write lock the calling thread already holds
 
@@ -392,6 +542,79 @@ While `rrefs > 0`, DGC will not scan the object. Leaking a `realRef()` without a
 
 Do not use `realRef()` for references stored in C++ state that outlives a single call. Those refs belong in internal members (Pattern A) or must be made visible via a custom scanner (Pattern B).
 
+## Opaque references: a strong reference the scanner does not follow
+
+The `@=` operator (the **opaque reference assignment operator**, gated by
+`QoreParseOptions::ALLOW_OPAQUE_REFERENCES` / `%allow-opaque-references`) stores a reference that is
+**owned** like an ordinary one but that a scan does not follow. It exists because a scan rooted at a
+hub walks the hub's whole container graph: registering one connection in a 2,000-entry registry walked
+6,005 objects and cost 162 ops/s on one thread. Holding the registry's entries with `:=` did not fix
+that — it stayed linear, because the entry hashes are themselves graph nodes — and `:=` would also
+make the holder's own entries collectable while it still uses them.
+
+The two primitives are opposite trades:
+
+| | `:=` (weak) | `@=` (opaque) |
+|---|---|---|
+| owns the target | no | **yes** |
+| scanner follows it | no | no |
+| failure mode when misused | the target is collected while still in use (dangling) | the cycle is never collected (leak) |
+
+`@=` is therefore strictly safer than `:=` — a mistake leaks rather than dangles — but the leak is
+**unrecoverable by cycle detection**. Use it only where the assigned value can be shown not to
+reference its holder back.
+
+### Representation
+
+An opaque reference is stored inline in the `QoreValue` NaN-boxed encoding under the 12-bit tag family
+`0xFFD` (`TAG12_OPAQUE`), with the kind — object, hash or list — in bits 48-51 and the target pointer
+in bits 0-47. It costs no allocation, unlike the `WeakReferenceNode` wrapper that `:=` uses, and it is
+carved out of the double range by one extra comparison in `QoreValue::isFloat()`, exactly as inline
+short strings are.
+
+The representation is **transparent to every consumer except the collector**: `getType()`,
+`getTypeName()`, `getInternalNode()` and `isPointer()` all report the target, so ordinary code,
+serialization, pseudo-methods and binary modules treat an opaque reference exactly like a normal one
+and need no changes. Only four places look at the tag, and they are the four that decide whether the
+collector follows an edge:
+
+- `needs_scan(const QoreValue&)` — `lib/AbstractQoreNode.cpp`
+- the list and hash traversals in `RSetHelper::startNode()` — `lib/RSet.cpp`
+- `qore_object_private::scanMembersIntern()` — `lib/QoreObject.cpp`
+
+This is the whole reason the traversal sites take a `QoreValue` rather than a raw `AbstractQoreNode*`:
+the tag is still in hand where the decision is made. **A new traversal site must check `isOpaque()`,
+or it will follow opaque edges and silently undo the feature** — silently, because following the edge
+is not incorrect, merely slow, so nothing fails.
+
+### Ownership and Program tracking
+
+`QoreValue`'s reference-counting paths treat an opaque reference exactly like a pointer value, which
+`isPointer()` returning true for it gives for free. The one addition is that every strong reference
+held through an opaque value is registered with the target's owning `QoreProgram`
+(`qore_program_private::registerOpaqueTarget()`), balanced in `ref()`, `discard()` and
+`takeNodeIntern()`. Registration counts **references, not assignments**: each copy takes its own
+reference, so each copy must take its own registration, or the first release would untrack a target
+other copies still hold.
+
+`qore_program_private::clearOpaqueTargets()` then deletes every still-registered target during
+`waitForTerminationAndClear()`, next to `clearSavedObjects()` and for the same reason: deleting a
+target releases its members and breaks the cycle the collector could not see, and it has to happen
+while the Program is still valid (`ptid == tid`, data not yet cleared) because the destructors it runs
+are user code. This is what bounds the leak an opaque reference can cause to the lifetime of the
+Program that created it instead of the lifetime of the process.
+
+`opaque_target_lock` is a **leaf lock**: nothing else may be acquired while it is held, and no user
+code runs under it — `clearOpaqueTargets()` copies the set and releases the lock before deleting
+anything.
+
+### Rules
+
+4. An opaque reference is invisible to the scanner. A cycle running through one cannot be collected by
+   cycle detection; it is broken only by the holder releasing it, or by Program teardown.
+5. `@=` is only correct where the programmer can show the target does not reference the holder back,
+   or where the leak is bounded and intended.
+
 ## Debugging a suspected cycle leak
 
 1. **Count survivors.** Instrument `qore_object_private` ctor/dtor with an atexit dump. For each surviving object, also print `references`, `rrefs`, whether `rset` is non-null, and `rcount`. (See `lib/QoreObject.cpp` around the `qo_register`/`qo_unregister` hooks used during the H2-connection-manager leak investigation.)
@@ -401,8 +624,8 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 
 ## Related files
 
-- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, the container-edge and
-  per-container counting memos.
+- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, `rclosed`, the
+  container-edge and per-container counting memos.
 - `include/qore/intern/RSection.h` — r-section lock semantics.
 - `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation, and the scanner proper
   (`RSetHelper::scan()`: the component search, and `countInternalReferences()`: `rcount` assignment).
@@ -425,3 +648,7 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 - `examples/test/qore/misc/dgc-graph-components.qtest` — cycles held through lists, objects, closures and queues
   from outside, long cycles and chains in a thread with a small stack, and the scan time of shared containers.
 - `examples/test/qore/misc/shared-container-dense-cycles.qtest` — dense graphs sharing one container.
+- `examples/test/qore/misc/dgc-closed-sets.qtest` — closed recursive sets: the scan cost, the three rules that
+  keep the mark accurate, and collection through and around them.
+- `examples/test/qore/misc/dgc-unchanged-sets.qtest` — a scan that finds the set already in place leaves it,
+  its watches and its counts alone.

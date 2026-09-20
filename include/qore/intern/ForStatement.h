@@ -61,6 +61,11 @@ public:
         return iterator;
     }
 
+    //! @see AbstractStatement::mayHaveNestedScopeLocals()
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return code && code->mayHaveNestedScopeLocals(depth);
+    }
+
     DLLLOCAL StatementBlock* getCode() const {
         return code;
     }

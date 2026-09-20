@@ -47,6 +47,11 @@ public:
         return true;
     }
 
+    //! no lexical sub-scope of its own
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
+
 private:
     DLLLOCAL virtual int execImpl(QoreValue& return_value, ExceptionSink *xsink) {
         return RC_CONTINUE;

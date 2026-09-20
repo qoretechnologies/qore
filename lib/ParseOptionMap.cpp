@@ -134,6 +134,7 @@ void ParseOptionMap::static_init() {
     DO_MAP("negative-offsets",         PO_NEGATIVE_OFFSETS);
     DO_MAP("no-streaming-operators",   QoreParseOptions::NO_STREAMING_OPERATORS);
     DO_MAP("broken-auto-cast",         QoreParseOptions::BROKEN_AUTO_CAST);
+    DO_MAP("allow-opaque-references",  QoreParseOptions::ALLOW_OPAQUE_REFERENCES);
 
     // the following are not useful from the command-line
     //DO_MAP("no-user-constants",        PO_NO_INHERIT_USER_CONSTANTS);
