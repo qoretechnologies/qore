@@ -135,9 +135,21 @@ public:
     // reference count
     std::atomic_int& references;
 
-    bool deferred_scan : 1, // do we need to make a scan when the object is eligible for it?
-        needs_is_valid : 1,  // do we need to call isValidImpl()
-        rref_wait : 1;       // rset invalidation in progress
+    // These are separate members rather than bit-fields packed into one storage unit.
+    // needs_is_valid is read with no lock at all, from isValid() on the scan path, while
+    // deferred_scan and rref_wait are written under rlck.  Writing a bit-field is a
+    // read-modify-write of the whole storage unit it lives in, so packing them together made
+    // every deferred_scan write overlap the needs_is_valid read: a data race that can lose the
+    // write, or -- on a weakly ordered machine -- publish a byte in which needs_is_valid has been
+    // clobbered, which decides whether a scan asks the object whether it may be deleted at all.
+    // Distinct objects are distinct memory locations, so unpacking them removes the overlap.
+
+    // do we need to make a scan when the object is eligible for it?  written under rlck
+    bool deferred_scan;
+    // do we need to call isValidImpl()?  set at construction and never written again
+    bool needs_is_valid;
+    // rset invalidation in progress; written under rlck
+    bool rref_wait;
 
     DLLLOCAL RObject(std::atomic_int& n_refs, bool niv = false) :
         references(n_refs), deferred_scan(false), needs_is_valid(niv), rref_wait(false) {
@@ -460,7 +472,11 @@ protected:
     rset_t set;
     std::vector<SetNode> nodes;
     unsigned acnt;
-    bool valid;
+    //! whether this set still describes the graph; false once it has been invalidated
+    /** Atomic because the fast paths in RSet::canDelete() and RSet::isValid() read it without
+        taking rwl, while invalidateIntern() writes it under rwl's write lock.
+    */
+    std::atomic_bool valid;
 
     // called with the write lock held
     DLLLOCAL void invalidateIntern() {
