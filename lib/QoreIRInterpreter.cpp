@@ -9539,20 +9539,22 @@ load_local_done:
                     ++ip;
                     break;
                 }
-                // Resolve vi from expr if not set (AOT-deserialized handler IR)
-                if (!sv_inst->vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
-                    auto* static_var = dynamic_cast<StaticClassVarRefNode*>(const_cast<AbstractQoreNode*>(node));
-                    if (!static_var) {
-                        xsink->raiseException("IR-RUNTIME-ERROR",
-                            "LoadStaticVar instruction has invalid static member metadata");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    sv_inst->vi = &static_var->vi;
+                // Resolve vi from expr if not set (AOT-deserialized handler IR).  Every thread
+                // executing this function shares the instruction, so keep the resolved pointer
+                // in a local rather than writing it back.
+                QoreVarInfo* vi = sv_inst->vi;
+                if (!vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
+                    vi = qore_static_var_ref_info(sv_inst->expr);
+                }
+                if (!vi) {
+                    xsink->raiseException("IR-RUNTIME-ERROR",
+                        "LoadStaticVar instruction has invalid static member metadata");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 // issue 3523: evaluate in case the value is a reference
-                ValueHolder val(sv_inst->vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
+                ValueHolder val(vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
                         xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -9632,7 +9634,13 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                no_inst->object_type_info = qore_substitute_type_params_if_needed(no_inst->object_type_info);
+                // The substitution resolves against the calling context's type-parameter
+                // instantiation, so its result belongs to this execution, not to the instruction:
+                // every thread running this function shares one QoreIRNewObjectInstruction.  Writing
+                // it back raced with the other threads reading it and could construct an object with
+                // the type another thread's instantiation had resolved.
+                const QoreTypeInfo* object_type_info =
+                    qore_substitute_type_params_if_needed(no_inst->object_type_info);
                 // Build NaN-boxed arg array from pre-computed IR operand values
                 int nargs = static_cast<int>(no_inst->operands.size());
                 constexpr int SMALL_BUF = 8;
@@ -9642,7 +9650,7 @@ load_local_done:
                     nb_args[i] = toBits(getIRValue(values, no_inst->operands[i]));
                 }
                 // Dispatch via the shared no-AST runtime helper
-                uint64_t rv = qore_rt_new_object_nb(qc, variant, no_inst->object_type_info, nb_args, nargs, xsink);
+                uint64_t rv = qore_rt_new_object_nb(qc, variant, object_type_info, nb_args, nargs, xsink);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

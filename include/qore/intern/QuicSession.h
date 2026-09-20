@@ -135,6 +135,20 @@ struct QuicStreamInfo {
     bool stream_data_shutdown = false;
 };
 
+//! The response header of a stream, reported once to the client that issued the request
+/** @see QuicSession::takeResponseHeaderEvents()
+
+    @since %Qore 3.0
+*/
+struct QuicResponseHeaderEvent {
+    //! The stream the response belongs to
+    int64_t stream_id = -1;
+    //! The status code of the response
+    int status_code = 0;
+    //! The header of the response; header names are lower case, as HTTP/3 sends them
+    std::map<std::string, std::vector<std::string>, ltstrcase> headers;
+};
+
 //! Per-stream body data for sending via nghttp3 data reader callback
 struct QuicBodyData {
     std::vector<uint8_t> data;   //!< owned copy of body data
@@ -466,6 +480,34 @@ public:
         @return copy of the stream info, or nullptr if none found
     */
     DLLLOCAL std::unique_ptr<QuicStreamInfo> takeHeadersReadyStreamCopy();
+
+    //! Records the response header of each client stream, for the event sink of the client
+    /** Enabled while a request that reports events is in flight on this connection; the header of a
+        response is recorded when it arrives, because a stream is erased from the session as soon as its
+        response completes, which can happen in the read cycle that received its header.
+
+        @param v @ref True to record response headers
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setRecordResponseHeaderEvents(bool v);
+
+    //! Takes the recorded response headers of the named streams
+    /** Only the streams named by @a stream_ids are taken, so a header that arrived before its caller
+        finished registering the request is taken by a later call instead of being dropped; a header
+        recorded for a stream that no longer exists and is not named is discarded, so an unclaimed
+        record cannot accumulate.
+
+        @param stream_ids the streams to take
+        @param out receives one entry per stream, in the order the headers arrived
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int64_t>& stream_ids,
+        std::vector<QuicResponseHeaderEvent>& out);
+
+    //! Records the response header of a stream if recording is enabled; called on the I/O thread
+    DLLLOCAL void recordResponseHeaderEvent(const QuicStreamInfo& stream);
 
     //! Returns true if any stream on this session has been dispatched to a handler
     /** A stream is "dispatched" from the moment
@@ -1384,6 +1426,12 @@ private:
         matters for server-side session lifecycle.
     */
     std::atomic<int> dispatched_stream_count_{0};
+    //! True while the response headers of client streams are recorded for event reporting
+    bool record_response_header_events_{false};
+
+    //! The response headers recorded and not yet taken; see takeResponseHeaderEvents()
+    std::vector<QuicResponseHeaderEvent> pending_header_events_;
+
     bool headers_only_mode_{false};                  //!< when true, markStreamComplete() keeps undispatched headers-complete streams in map
     std::atomic<bool> attempting_0rtt_{false};          //!< true when attempting 0-RTT connection
     std::atomic<bool> early_data_rejected_{false};    //!< true when 0-RTT early data was rejected by server

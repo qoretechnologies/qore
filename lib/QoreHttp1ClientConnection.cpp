@@ -480,7 +480,7 @@ std::string Http1ClientConnection::getNegotiatedProtocol() const {
 
 QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -515,6 +515,8 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
     // of promise_holder's ref stays with us and gets released at scope
     // exit — the action keeps its own ref.
     PromiseAction* action = new PromiseAction(promise_raw, /* promise_obj */ nullptr);
+    // the events of this request are reported to the sink of the client that issued it
+    action->setEventSink(event_sink);
 
     // Submit via the poll op.  submitRequest consumes the action's ref on
     // failure; on success it stores the action internally.  max_streams=1
@@ -571,7 +573,7 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
 
 int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -595,6 +597,7 @@ int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const 
 
     // Create ChannelAction — poll op takes ownership via submitRequest.
     ChannelAction* action = new ChannelAction(ch);
+    action->setEventSink(event_sink);
 
     // Submit with streaming=true so the poll op uses
     // dispatchStreamingHeaders/Data/End instead of dispatchResponse.
@@ -633,7 +636,7 @@ int64_t Http1ClientConnection::submitRequestStreaming(const char* method, const 
 
 QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* method,
         const char* path, const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         releaseStreamReservation(true);
@@ -689,6 +692,7 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }
+    action->setEventSink(event_sink);
 
     // Submit with streaming_send=true
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
@@ -807,6 +811,22 @@ void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
         return;
     }
     poll_op_priv->setTrailers(trailers, xsink);
+}
+
+bool Http1ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        // The connection is already being closed / torn down; the poll op
+        // settles every pending stream on the way out, so there is nothing
+        // left for this call to abandon.
+        return false;
+    }
+    // Http1ClientPollOperationPriv::cancelStream() settles the request's
+    // completion action and, when the exchange already reached the wire,
+    // closes the socket — HTTP/1.1 cannot resynchronize in the middle of a
+    // response, so the peer must see EOF.  A request still queued on the
+    // connection is simply dropped and the connection stays usable.
+    return poll_op_priv->cancelStream(stream_id, xsink);
 }
 
 int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const char* path,

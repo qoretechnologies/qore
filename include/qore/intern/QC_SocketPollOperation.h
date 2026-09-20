@@ -1408,6 +1408,14 @@ public:
         return h2_session && h2_session->isRemoteSettingsReceived();
     }
 
+    //! Collects the response header of each stream whose header arrived and has not been reported
+    /** @see Http2Session::takeResponseHeaderEvents()
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int32_t>& stream_ids,
+        std::vector<Http2ResponseHeaderEvent>& out);
+
     //! Returns the next completed response, or NOTHING if none available
     DLLLOCAL virtual QoreValue getOutput() const override {
         AutoLocker al(response_lock);

@@ -42,6 +42,8 @@
 #include <deque>
 #include <string>
 
+class HttpClientEventSink;
+
 //! C++ base for Http1ClientPollOperation providing SocketPollOperationBase fast path
 /** This class implements the HTTP/1.1 client poll state machine (connecting,
     ssl_upgrade, proxy_connect, reading/sending, closed) entirely in C++,
@@ -311,6 +313,13 @@ public:
         return connection_priv;
     }
 
+    //! Returns the event sink of the request in flight with a new reference, or nullptr if it has none
+    /** The sink reports the protocol events of the request to the event queue of the client that
+        issued it; it is attached to the request's completion action, because the connection is shared
+        between requests.  I/O thread only.
+    */
+    DLLLOCAL HttpClientEventSink* getReferencedEventSink() const;
+
     DLLLOCAL QoreObject* getReferencedSocket() const {
         if (self) {
             ExceptionSink xsink;
@@ -430,7 +439,9 @@ private:
         connection proactively with HTTP1-IDLE-TIMEOUT.  Mirrors nginx's
         upstream keepalive_timeout; I/O thread only.
     */
-    int64_t idle_timeout_us = -1;
+    // atomic: setIdleTimeout() is called from the thread configuring the connection while
+    // the I/O thread reads it to arm the idle deadline
+    std::atomic<int64_t> idle_timeout_us{-1};
 
     //! Deadline for the current idle period (epoch us); 0 = not yet in idle wait
     /** Set on first handleIdle entry with no pending request; cleared when a

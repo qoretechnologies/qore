@@ -7907,8 +7907,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            // Find the static var info from the class
-            auto* si = new QoreIRStaticVarInstruction(nullptr, var_name ? var_name : "", expr);
+            // Bind the static variable info of an expression whose class resolved while it
+            // was read; a reference that stayed deferred keeps none until its class appears.
+            auto* si = new QoreIRStaticVarInstruction(qore_static_var_ref_info(expr),
+                var_name ? var_name : "", expr);
             si->opcode = opcode;
             expr.discard(nullptr);
             inst.reset(si);

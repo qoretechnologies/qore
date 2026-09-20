@@ -45,6 +45,8 @@
 #include <vector>
 #include <algorithm>
 
+class HttpClientEventSink;
+
 //! C++ base for Http2ClientPollOperation providing SocketPollOperationBase fast path
 /** This class implements the HTTP/2 client poll state machine (connecting,
     ssl_upgrade, proxy_connect_send, proxy_connect_recv, reading, wait_read,
@@ -314,6 +316,13 @@ public:
     }
 
     //! Returns the raw connection priv pointer (for I/O-thread calls)
+    //! Returns the event sink of the request on a stream with a new reference, or nullptr if it has none
+    /** The sink reports the protocol events of the request to the event queue of the client that issued
+        it; it is attached to the request's completion action, because the connection is shared between
+        requests.  I/O thread only.
+    */
+    DLLLOCAL HttpClientEventSink* getReferencedEventSink(int32_t stream_id) const;
+
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
     }
@@ -491,7 +500,9 @@ private:
         closes the connection proactively with HTTP2-IDLE-TIMEOUT.  Mirrors
         nginx's upstream keepalive_timeout.  I/O thread only.
     */
-    int64_t idle_timeout_us = -1;
+    // atomic: setIdleTimeout() is called from the thread configuring the connection while
+    // the I/O thread reads it to arm the idle deadline
+    std::atomic<int64_t> idle_timeout_us{-1};
 
     //! Deadline for the current idle period (epoch us); 0 = not yet armed
     /** Armed on the first handleReading() cycle that observes

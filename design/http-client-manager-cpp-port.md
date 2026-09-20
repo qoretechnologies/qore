@@ -655,6 +655,89 @@ Reuse Safety (curl-aligned model)".  Pieces specific to the C++ manager:
   requests racing the proactive idle close get transparently replayed on
   a fresh connection.  This is the curl `Curl_retry_request` analog.
 
+### 7.9 Abandoning a request whose caller stopped waiting
+
+`HttpClientConnectionManagerBase::request()` is sync-over-async: it submits a
+request to the I/O controller and blocks in `q_future_get_blocking()`.  That
+wait can end without a response — the calling thread is cancelled
+(`THREAD-CANCELLED`), the request timeout expires (`FUTURE-TIMEOUT`, renamed
+`SOCKET-TIMEOUT` at the `QoreHttpClientObject` boundary), or the wait is
+otherwise interrupted.
+
+**Leaving the wait does not stop the request.**  Cancelling a *wait* says
+nothing about the operation backing the Future.  After the caller returns, the
+request is still live on the I/O controller:
+
+- the protocol's completion action still holds the caller's `QorePromise`;
+- the poll op still counts the stream as active, so the connection is at
+  capacity for its whole idle lifetime;
+- the connection is still in the pool, since only the pending *reservation*
+  was released at submit time;
+- the peer is still serving an exchange nobody will read, and never sees EOF.
+
+**Contract:** every path that leaves such a wait without a delivered response
+calls `HttpClientConnectionManagerBase::abandonRequest(conn, stream_id)` before
+dropping its connection reference.
+
+```cpp
+void HttpClientConnectionManagerBase::abandonRequest(HttpClientConnectionBase* conn,
+        int64_t stream_id);
+```
+
+It dispatches to `HttpClientConnectionBase::cancelRequest()`, whose H1 / H2 / H3
+overrides mirror the Qore-level `cancelRequest()` on the poll-operation classes
+in `qlib/HttpClientIo/`: settle the completion action via the poll op's
+`cancelStream()`, then stop the exchange on the wire.
+
+Three rules make this safe:
+
+- **The cleanup runs under a cancellation deferral.**  The caller arrives with
+  a cancellation still pending and sticky, so every lock the cleanup takes is
+  itself a cancellation point.  Without `QoreCancelDeferralHelper` the cleanup
+  aborts part-way and strands exactly the request it exists to abandon.  The
+  deferral leaves the pending request and its reason intact, so the caller's
+  next cancellation point still raises it.
+
+- **The cleanup uses its own `ExceptionSink`.**  The exception that ended the
+  wait reaches the caller unchanged — `THREAD-CANCELLED` is never converted
+  into a transport or protocol error.
+
+- **Eviction is decided by what the cancellation actually did, not by the
+  protocol alone.**  `cancelRequest()` returns `false` when the request had
+  already completed (the completion/cancellation race), and nothing is torn
+  down.  When it returns `true`, the connection is closed and evicted only if
+  the cancellation left it closed:
+
+  | Case | On the wire | Connection |
+  |---|---|---|
+  | H1, exchange already started | socket closed, peer sees EOF | closed → evicted |
+  | H1, request still queued | nothing sent | stays pooled, reusable |
+  | H2 | `RST_STREAM(CANCEL)` for this stream | stays pooled; other streams unaffected |
+  | H3 | QUIC stream cancelled | stays pooled; other streams unaffected |
+
+  HTTP/1.1 is serial and cannot resynchronize in the middle of a response, so
+  an exchange already on the wire costs the connection.  Multiplexed protocols
+  reset only the one stream, which is why unrelated concurrent streams survive
+  their sibling's cancellation.
+
+**Related invariant (`Http1ClientPollOperationPriv::handleIdle`).**
+`cancelStream()` reads `req_state` to decide whether the exchange reached the
+wire.  `handleIdle()` therefore claims the send direction
+(`req_state = ReqState::SENDING`) under the same `stream_lock` acquisition that
+takes `pending_request_data`.  Setting it after the send starts would leave a
+window in which a concurrent cancel sees a false `IDLE`, takes its
+"nothing sent yet" branch and drops the stream action, while the I/O thread goes
+on to put the request on the wire anyway — the peer then sees a request the
+caller has already abandoned, with no EOF and no reader for the response.
+
+The same contract applies to the streaming-send path in
+`QoreHttpClientObject::send_internal_conn_mgr()`, which owns its request between
+`submitRequestStreamingSend()` and either the Future resolving or the response
+channel being handed to the caller.  Because that span has many failure exits
+(body-push errors, trailer callbacks, channel recv errors and timeouts), the
+cleanup is a scope guard disarmed at the two delivery points rather than a call
+repeated at each exit.
+
 ---
 
 ## 8. Risks

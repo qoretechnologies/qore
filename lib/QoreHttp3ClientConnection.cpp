@@ -735,7 +735,7 @@ int Http3ClientConnection::getActiveStreamCount() const {
 
 QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -770,6 +770,8 @@ QoreHashNode* Http3ClientConnection::submitRequest(const char* method, const cha
         qore_new_future_impl_object(pgm, future_holder.release()), xsink);
 
     PromiseAction* action = new PromiseAction(promise_raw, /* promise_obj */ nullptr);
+    // the events of this request are reported to the sink of the client that issued it
+    action->setEventSink(event_sink);
 
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action,
@@ -830,7 +832,7 @@ int64_t Http3ClientConnection::submitRequestWithAction(const char* method, const
 
 int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -853,6 +855,7 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
     QoreChannel* ch = *ch_holder;
 
     ChannelAction* action = new ChannelAction(ch);
+    action->setEventSink(event_sink);
 
     // streaming=false: `streaming` at this layer means request-body streaming
     // (caller pushes body via sendStreamData).  submitRequestStreaming uses a
@@ -878,7 +881,7 @@ int64_t Http3ClientConnection::submitRequestStreaming(const char* method, const 
 
 QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* method,
         const char* path, const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         releaseStreamReservation(true);
@@ -932,6 +935,7 @@ QoreHashNode* Http3ClientConnection::submitRequestStreamingSend(const char* meth
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }
+    action->setEventSink(event_sink);
 
     // Submit with streaming=true (no END_STREAM — bidirectional streaming)
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
@@ -1036,6 +1040,29 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
     }
 
     sock_priv->submitQuicClientTrailers(streaming_send_stream_id, trailers, xsink);
+}
+
+bool Http3ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        // Already closing: the poll op settles every pending stream on the
+        // way out, so there is nothing left to abandon here.
+        return false;
+    }
+    // Settle the request's completion action first.  A stream that already
+    // completed reports false and is left alone — the connection stays in
+    // the pool untouched.
+    if (!poll_op_priv->cancelStream(stream_id, xsink)) {
+        return false;
+    }
+    // Then cancel the stream on the wire.  HTTP/3 multiplexes over QUIC, so
+    // only this stream ends: concurrent streams on the same connection are
+    // unaffected and the connection stays poolable.
+    int64_t session_id = poll_op_priv->getSessionId();
+    if (session_id && sock_priv) {
+        sock_priv->cancelQuicStream(session_id, stream_id, xsink);
+    }
+    return true;
 }
 
 void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {

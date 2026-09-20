@@ -131,7 +131,7 @@ void HttpClientConnectionBase::onClosedHook() {
 
 QoreHashNode* HttpClientConnectionBase::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     // Default: not implemented.  C++ subclasses (Http1ClientConnection etc.)
     // override with protocol-specific implementations.  Qore subclasses
     // override the QPP method at the Qore level.
@@ -142,7 +142,7 @@ QoreHashNode* HttpClientConnectionBase::submitRequest(const char* method, const 
 
 int64_t HttpClientConnectionBase::submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
         "submitRequestStreaming not implemented on this connection class");
     return -1;
@@ -164,7 +164,7 @@ int64_t HttpClientConnectionBase::submitRequestWithAction(const char* method, co
 
 QoreHashNode* HttpClientConnectionBase::submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
         "submitRequestStreamingSend not implemented on this connection class");
     return nullptr;
@@ -178,6 +178,13 @@ void HttpClientConnectionBase::pushSendData(const void* data, size_t len, Except
 void HttpClientConnectionBase::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
     xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
         "setTrailers not implemented on this connection class");
+}
+
+bool HttpClientConnectionBase::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    // Default: a connection class with no protocol-level stream tracking has
+    // nothing to abandon.  Reporting "not cancelled" keeps callers from
+    // tearing down a connection they cannot reason about.
+    return false;
 }
 
 void HttpClientConnectionBase::setPoolKey(const std::string& key) {

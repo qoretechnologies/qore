@@ -213,6 +213,35 @@ public namespace Schema {
             return alignIntern(force, verbose, do_msgs).getInfo();
         }
 
+        #! Aligns a schema while leaving the transaction under caller control.
+        /** @param force align even when the stored version matches
+            @param verbose logging verbosity
+            @param do_msgs whether to print progress messages
+            @return the alignment result before the caller commits or rolls back
+            @throw SCHEMA-TRANSACTION-ERROR if a DataSchema contains a migration
+                action that manages its own transactions
+            @throw DBI-ERROR if a database operation fails
+
+            @note The caller must commit or roll back after success or failure.
+            Rollback of DDL requires a transactional-DDL database. Custom schema
+            hooks and metadata callbacks must also respect caller ownership.
+            DataSchema rejects SQL, script, and table-reconciliation migrations
+            in this mode because those actions may commit independently.
+
+            @par Example: Preview an inventory schema on PostgreSQL
+            @code{.py}
+            DataSchema schema(ds, inventory_definition);
+            on_exit ds.rollback();
+            hash<SchemaAlignmentInfo> preview = schema.alignWithInfoInTransaction(True, -1, False);
+            @endcode
+
+            @since Schema 1.9
+        */
+        hash<SchemaAlignmentInfo> alignWithInfoInTransaction(bool force = False,
+                int verbose = 0, bool do_msgs = True) {
+            return alignIntern(force, verbose, do_msgs, False).getInfo();
+        }
+
         #! executes a schema alignment action on the database with the current schema template
         /** this causes the database to be aligned with the schema template, which will result in:
             - the schema being created in an empty schema
@@ -226,7 +255,8 @@ public namespace Schema {
             undefined attributes of tables defined in the schema (columns, indexes, constraints, etc) will be dropped,
             however
         */
-        private SchemaCallbackHelper alignIntern(bool force = False, int verbose = 0, bool do_msgs = True) {
+        private SchemaCallbackHelper alignIntern(bool force = False, int verbose = 0, bool do_msgs = True,
+                bool manage_transaction = True) {
             SchemaCallbackHelper sch(self, verbose);
 
             pure_callback_opts = sch.getCallbacks();
@@ -249,20 +279,20 @@ public namespace Schema {
             }
 
             on_error {
-                ds.rollback();
+                if (manage_transaction) { ds.rollback(); }
                 if (list<string> tables = sch.getChangedTables()) {
                     notifyDdlChangeNoThrow(tables);
                 }
-                if (verbose > 0) {
+                if (manage_transaction && verbose > 0) {
                     logpf("ALIGNMENT ROLLED BACK");
                 }
             }
             on_success {
-                ds.commit();
+                if (manage_transaction) { ds.commit(); }
                 if (list<string> tables = sch.getChangedTables()) {
                     notifyDdlChange(tables);
                 }
-                if (verbose > 0) {
+                if (manage_transaction && verbose > 0) {
                     logpf("COMMITTED ALIGNMENT");
                 }
             }

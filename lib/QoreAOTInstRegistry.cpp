@@ -1964,7 +1964,10 @@ static std::unique_ptr<QoreIRInstruction> readStaticVar(
         ctx.error = error;
         return nullptr;
     }
-    auto* si = new QoreIRStaticVarInstruction(nullptr, var_name ? var_name : "", expr);
+    // Bind the static variable info of an expression whose class resolved while it was read;
+    // a reference that stayed deferred keeps none until its class appears.
+    auto* si = new QoreIRStaticVarInstruction(qore_static_var_ref_info(expr),
+        var_name ? var_name : "", expr);
     si->opcode = static_cast<QoreIROpcode>(opcode_raw);
     expr.discard(nullptr);
     si->result = QoreIRValue(result_id);

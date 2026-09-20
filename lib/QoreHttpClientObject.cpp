@@ -50,6 +50,7 @@
 #include "qore/intern/ql_misc.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/HttpClientEventSink.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
@@ -990,6 +991,12 @@ static void setConnMgrResponseUri(QoreHashNode* info, const QoreHashNode* src,
 struct qore_httpclient_priv {
     my_socket_priv* msock;
 
+    //! Reports the protocol events of the client's requests; see setEventQueueUnlocked()
+    /** Never nullptr; created with the client and released with it.  A request in flight holds its own
+        reference, so a sink outlives the client when a request does.
+    */
+    HttpClientEventSink* event_sink;
+
     prot_map_t prot_map;
 
     con_info connection, proxy_connection;
@@ -1295,6 +1302,8 @@ struct qore_httpclient_priv {
 
     DLLLOCAL qore_httpclient_priv(my_socket_priv* ms) :
             msock(ms),
+            // the events of the client's requests report the identity of the client's own socket
+            event_sink(new HttpClientEventSink(ms->socket->priv->getObjectIDForEvents())),
             connection(HTTPCLIENT_DEFAULT_PORT) {
         assert(ms);
         // setup protocol map
@@ -1307,6 +1316,37 @@ struct qore_httpclient_priv {
 
     DLLLOCAL ~qore_httpclient_priv() {
         disconnect_unlocked();
+        // cleanup() released the event queue configuration, and a request still in flight holds its own
+        // reference to the sink, so this is the last reference and it holds nothing that can raise; the
+        // sink is released with a sink of its own because a destructor has none to report to
+        ExceptionSink xsink;
+        event_sink->deref(&xsink);
+        xsink.clear();
+    }
+
+    //! Returns the event sink of the client; the reference belongs to the client
+    /** Requests pass it down the submit path so that the protocol layers can report their events to the
+        event queue configured on this client
+    */
+    DLLLOCAL HttpClientEventSink* getEventSink() const {
+        return event_sink;
+    }
+
+    //! Sets the event queue of the client and of its requests; the queue and argument references are taken
+    /** The client's own socket reports the events of the operations it performs itself, and the sink reports
+        the events of the requests that the connection manager performs on its pooled connections.
+
+        Must be called with the client lock held.
+    */
+    DLLLOCAL void setEventQueueUnlocked(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
+        // the sink needs references of its own; the socket consumes the caller's
+        Queue* sink_q = q;
+        if (sink_q) {
+            sink_q->ref();
+        }
+        QoreValue sink_arg = arg.refSelf();
+        msock->socket->setEventQueue(xsink, q, arg, with_data);
+        event_sink->set(xsink, sink_q, sink_arg, with_data);
     }
 
     QoreHashNode* getConfig(my_socket_priv& priv) const {
@@ -1460,6 +1500,17 @@ struct qore_httpclient_priv {
     DLLLOCAL void lock() { msock->m.lock(); }
     DLLLOCAL void unlock() { msock->m.unlock(); }
 
+    //! Reports the send event of a request submitted by startPollSendRecvConnMgr()
+    DLLLOCAL void reportPollSendEvent(const char* method, const char* msgpath, const QoreHashNode* headers) {
+        if (!event_sink->active()) {
+            return;
+        }
+        QoreString req_line;
+        req_line.sprintf("%s %s HTTP/%s", method, msgpath && msgpath[0] ? msgpath : "/",
+            http11 ? "1.1" : "1.0");
+        event_sink->sendMessage(req_line, headers);
+    }
+
     //! Creates a conn_mgr-backed poll operation for startPollSendRecv
     DLLLOCAL QoreObject* startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
             QoreHttpClientObject* client, const char* method, const char* path,
@@ -1609,6 +1660,8 @@ struct qore_httpclient_priv {
             qore_socket_private* old = adopted_msock->socket->priv;
             active->swapEventQueueState(*old);
             active->swapWarningQueueState(*old);
+            // events reported for the client's requests identify the socket the client now owns
+            event_sink->setId(active->getObjectIDForEvents());
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
             std::swap(active->utf8_content_type_set, old->utf8_content_type_set);
             active->enc = old->enc;
@@ -3312,7 +3365,7 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
             return -1;
 
         if (q) { // pass reference from QoreObject::getReferencedPrivateData() to function
-            priv->socket->setEventQueue(xsink, q, QoreValue(), false);
+            http_priv->setEventQueueUnlocked(xsink, q, QoreValue(), false);
         }
     }
 
@@ -5001,6 +5054,16 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             return nullptr;
         }
 
+        // Report the send event before the request is handed to the connection manager, as the socket
+        // does before it writes a request message.  Each attempt of a redirect or authentication chain
+        // reports its own event, as in the legacy path.
+        if (event_sink->active()) {
+            QoreString req_line;
+            req_line.sprintf("%s %s HTTP/%s", meth, msgpath && msgpath[0] ? msgpath : "/",
+                http11 ? "1.1" : "1.0");
+            event_sink->sendMessage(req_line, *nh);
+        }
+
         if (stream_body) {
             // Streaming send path: use chunked TE with incremental body push
             // streaming_recv also set when streaming=true (sendAndStream) to
@@ -5060,12 +5123,39 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             };
             ReferenceHolder<QoreHashNode> submit_result(
                 conn->submitRequestStreamingSend(meth, msgpath, *nh,
-                    streaming_recv, channel_raw, xsink), xsink);
+                    streaming_recv, channel_raw, xsink, event_sink), xsink);
             if (*xsink || !submit_result) {
                 close_channel_raw();
                 close_and_evict_if_unusable();
                 return nullptr;
             }
+
+            // From here the request is live on the I/O controller, and every
+            // path out of this block that is not a delivered response has to
+            // abandon it: the completion action still holds the caller's
+            // Promise, the protocol still counts the stream as active, and the
+            // peer is still serving an exchange nobody will read.  There are
+            // many such paths (body-push errors, trailer callbacks, channel
+            // recv errors and timeouts), so the cleanup is a scope guard
+            // rather than a call repeated at each one.  It is disarmed at the
+            // two points where the response has been delivered: the Future
+            // resolved, or the response channel was handed to the caller.
+            struct StreamingSendRequestGuard {
+                HttpClientConnectionManagerBase& mgr;
+                HttpClientConnectionBase* conn;
+                int64_t stream_id;
+
+                ~StreamingSendRequestGuard() {
+                    if (stream_id >= 0) {
+                        mgr.abandonRequest(conn, stream_id);
+                    }
+                }
+
+                void disarm() {
+                    stream_id = -1;
+                }
+            } ss_guard{mgr, conn,
+                submit_result->getKeyValue("stream_id").getAsBigInt()};
 
             // Push body chunks from send_callback or InputStream
             if (send_callback) {
@@ -5335,6 +5425,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             channel->ref();
                             streaming_recv_channel = *channel;
                             keep_channel_open = true;
+                            // the caller owns the rest of this stream now
+                            ss_guard.disarm();
                             break;
                         }
                         // Fall through to check for body data in the same
@@ -5418,6 +5510,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                 }
 
+                // Every exit from the drain loop above means the response
+                // stream is no longer pending: it ended, the peer closed it,
+                // or it was handed to the caller.  Nothing left to abandon.
+                ss_guard.disarm();
+
                 if (!keep_channel_open) {
                     channel->close();
                 }
@@ -5468,6 +5565,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     close_and_evict_if_unusable();
                     return nullptr;
                 }
+                // the request completed; nothing left to abandon
+                ss_guard.disarm();
 
                 // Transform to legacy flat format
                 ReferenceHolder<QoreHashNode> raw_resp(
@@ -5506,7 +5605,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             QoreChannel* channel_raw = nullptr;
             int64_t stream_id = mgr.requestStreaming(meth, scheme,
                 this_connection.host.c_str(), this_connection.port,
-                msgpath, *nh, body_ptr, body_len, channel_raw, xsink);
+                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink);
             if (*xsink || stream_id < 0 || !channel_raw) {
                 return nullptr;
             }
@@ -5878,7 +5977,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             QoreChannel* channel_raw = nullptr;
             int64_t stream_id = mgr.requestStreaming(meth, scheme,
                 this_connection.host.c_str(), this_connection.port,
-                msgpath, *nh, body_ptr, body_len, channel_raw, xsink);
+                msgpath, *nh, body_ptr, body_len, channel_raw, xsink, event_sink);
             if (*xsink || stream_id < 0 || !channel_raw) {
                 return nullptr;
             }
@@ -5988,7 +6087,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // Non-streaming path: submit and await complete response
             ReferenceHolder<QoreHashNode> raw_resp(
                 mgr.request(meth, scheme, this_connection.host.c_str(), this_connection.port,
-                    msgpath, *nh, body_ptr, body_len, timeout_ms, xsink),
+                    msgpath, *nh, body_ptr, body_len, timeout_ms, xsink, event_sink),
                 xsink);
             // HttpClientConnectionManagerBase::request() documents FUTURE-TIMEOUT for its own callers, but
             // this class documents SOCKET-TIMEOUT for a request that exceeds its "timeout" option; translate
@@ -6095,19 +6194,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
         }
 
-        // Fire HTTP events on the HTTPClient's event queue (matching legacy
-        // send_internal behavior).  The conn_mgr path uses its own sockets
-        // for I/O, but events are fired on msock's queue for user visibility.
-        {
-            std::optional<std::string> cl = get_string_header_value(xsink, **ans, "content-length");
-            if (!*xsink && cl) {
-                ssize_t len = strtoll(cl->c_str(), nullptr, 10);
-                msock->socket->priv->do_content_length_event(len, QORE_SOURCE_HTTPCLIENT);
-            }
-            if (*xsink) {
-                return nullptr;
-            }
-        }
+        // The response events (@ref QORE_EVENT_HTTP_MESSAGE_RECEIVED and
+        // @ref QORE_EVENT_HTTP_CONTENT_LENGTH) are reported by the protocol layer through the event sink
+        // of this request, when the response header is received — a client that monitors a response must
+        // see them while the body is still being read, which an event reported here could not do.
 
         // Handle 401/407 auth challenges — retry once with computed credentials
         if (!auth_retried && !error_passthru
@@ -6441,9 +6531,16 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         return nullptr;
     }
 
+    if (event_sink->active()) {
+        QoreString req_line;
+        req_line.sprintf("%s %s HTTP/%s", meth, msgpath && msgpath[0] ? msgpath : "/",
+            http11 ? "1.1" : "1.0");
+        event_sink->sendMessage(req_line, *nh);
+    }
+
     QoreChannel* channel_raw = nullptr;
     int64_t stream_id = conn->submitRequestStreaming(meth, msgpath, *nh,
-        body_ptr, body_len, channel_raw, xsink);
+        body_ptr, body_len, channel_raw, xsink, event_sink);
     if (*xsink || stream_id < 0) {
         mgr.releaseConnection(conn);
         return nullptr;
@@ -7129,6 +7226,37 @@ public:
         }
     }
 
+    //! Reports the send event of a request that this operation submits
+    /** The blocking API reports the event in send_internal_conn_mgr(); an async operation submits its
+        request itself — when its connection becomes ready, and again for each redirect it follows — so
+        it reports the event where it submits.
+
+        @param method the method of the request
+        @param target the request target; percent-encoded
+        @param http_version the HTTP version claimed in the request line
+        @param headers the headers of the request
+    */
+    DLLLOCAL void reportSendEvent(const char* method, const char* target, const char* http_version,
+            const QoreHashNode* headers) {
+        if (!priv_ref) {
+            return;
+        }
+        HttpClientEventSink* sink = priv_ref->getEventSink();
+        if (!sink->active()) {
+            return;
+        }
+        QoreString req_line;
+        req_line.sprintf("%s %s HTTP/%s", method, target && target[0] ? target : "/", http_version);
+        sink->sendMessage(req_line, headers);
+    }
+
+    //! Attaches the event sink of the client to a request's completion action
+    DLLLOCAL void attachEventSink(AbstractAsyncAction* action) {
+        if (priv_ref) {
+            action->setEventSink(priv_ref->getEventSink());
+        }
+    }
+
     QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         while (true) {
             bool acquire = false;
@@ -7588,6 +7716,9 @@ public:
                 new StreamingHeadersPromiseNotifierAction(pending_promise, notifier))
             : static_cast<AbstractAsyncAction*>(
                 new PromiseNotifierAction(pending_promise, notifier));
+        attachEventSink(action);
+        reportSendEvent(pending_method.c_str(), pending_path.c_str(),
+            priv_ref && !priv_ref->http11 ? "1.0" : "1.1", pending_headers);
         const void* body_ptr = nullptr;
         size_t body_len = 0;
         if (pending_body) {
@@ -7940,6 +8071,9 @@ public:
                     ? static_cast<AbstractAsyncAction*>(
                         new StreamingHeadersPromiseNotifierAction(*promise, notifier))
                     : static_cast<AbstractAsyncAction*>(new PromiseNotifierAction(*promise, notifier));
+                attachEventSink(action);
+                reportSendEvent(request->method.c_str(), request->target.c_str(),
+                    request->http_version.c_str(), request->headers);
                 int64_t stream_id = conn->submitRequestWithAction(request->method.c_str(),
                     request->target.c_str(), request->headers,
                     request->body ? request->body->getPtr() : nullptr,
@@ -8441,6 +8575,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                 new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw))
             : static_cast<AbstractAsyncAction*>(
                 new PromiseNotifierAction(promise_raw, notifier_raw));
+        action->setEventSink(event_sink);
+        reportPollSendEvent(method, msgpath, *nh);
         int64_t stream_id = conn->submitRequestWithAction(method, msgpath,
             *nh, data, size, action, xsink);
         if (*xsink || stream_id < 0) {
@@ -8517,6 +8653,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
                     new StreamingHeadersPromiseNotifierAction(promise_raw, notifier_raw))
                 : static_cast<AbstractAsyncAction*>(
                     new PromiseNotifierAction(promise_raw, notifier_raw));
+            action->setEventSink(event_sink);
+            reportPollSendEvent(method, msgpath, *nh);
             int64_t stream_id = conn->submitRequestWithAction(method,
                 msgpath, *nh, data, size, action, xsink);
             if (*xsink || stream_id < 0) {
@@ -9295,12 +9433,12 @@ QoreHashNode* QoreHttpClientObject::getDefaultHeaders() const {
 
 void QoreHttpClientObject::setEventQueue(Queue *cbq, ExceptionSink* xsink) {
     AutoLocker al(priv->m);
-    priv->socket->setEventQueue(xsink, cbq, QoreValue(), false);
+    http_priv->setEventQueueUnlocked(xsink, cbq, QoreValue(), false);
 }
 
 void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
     AutoLocker al(priv->m);
-    priv->socket->setEventQueue(xsink, q, arg, with_data);
+    http_priv->setEventQueueUnlocked(xsink, q, arg, with_data);
 }
 
 void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
@@ -9312,6 +9450,7 @@ void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
         priv->invalidate();
     }
     qore_httpclient_priv::closeReferencedSocket(close_priv);
+    http_priv->getEventSink()->clear(xsink);
     priv->socket->cleanup(xsink);
 }
 

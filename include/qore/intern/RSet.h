@@ -135,9 +135,21 @@ public:
     // reference count
     std::atomic_int& references;
 
-    bool deferred_scan : 1, // do we need to make a scan when the object is eligible for it?
-        needs_is_valid : 1,  // do we need to call isValidImpl()
-        rref_wait : 1;       // rset invalidation in progress
+    // These are separate members rather than bit-fields packed into one storage unit.
+    // needs_is_valid is read with no lock at all, from isValid() on the scan path, while
+    // deferred_scan and rref_wait are written under rlck.  Writing a bit-field is a
+    // read-modify-write of the whole storage unit it lives in, so packing them together made
+    // every deferred_scan write overlap the needs_is_valid read: a data race that can lose the
+    // write, or -- on a weakly ordered machine -- publish a byte in which needs_is_valid has been
+    // clobbered, which decides whether a scan asks the object whether it may be deleted at all.
+    // Distinct objects are distinct memory locations, so unpacking them removes the overlap.
+
+    // do we need to make a scan when the object is eligible for it?  written under rlck
+    bool deferred_scan;
+    // do we need to call isValidImpl()?  set at construction and never written again
+    bool needs_is_valid;
+    // rset invalidation in progress; written under rlck
+    bool rref_wait;
 
     DLLLOCAL RObject(std::atomic_int& n_refs, bool niv = false) :
         references(n_refs), deferred_scan(false), needs_is_valid(niv), rref_wait(false) {
@@ -392,7 +404,10 @@ public:
     DLLLOCAL void dbg();
 
     DLLLOCAL static bool isValid(const RSet* rs) {
-        return rs ? rs->valid : false;
+        // not "rs ? rs->valid : false": since valid became std::atomic_bool the two arms of the
+        // conditional have unrelated types, each convertible to the other, so the expression is
+        // ambiguous and does not compile
+        return rs && rs->valid;
     }
 #endif
 
@@ -460,7 +475,11 @@ protected:
     rset_t set;
     std::vector<SetNode> nodes;
     unsigned acnt;
-    bool valid;
+    //! whether this set still describes the graph; false once it has been invalidated
+    /** Atomic because the fast paths in RSet::canDelete() and RSet::isValid() read it without
+        taking rwl, while invalidateIntern() writes it under rwl's write lock.
+    */
+    std::atomic_bool valid;
 
     // called with the write lock held
     DLLLOCAL void invalidateIntern() {
@@ -708,6 +727,17 @@ private:
 
 class qore_object_private;
 
+//! one in-progress dereference on one thread, linked into an intrusive per-thread stack
+/** Every node is a member of the robject_dereference_helper that owns the dereference, and that
+    helper lives on the C++ stack for exactly the lifetime of the dereference, so the stack of
+    in-progress dereferences needs no allocation and no thread_local destructor.  See
+    t_deref_inprogress in lib/RSet.cpp for what the stack is used for.
+*/
+struct robject_deref_frame {
+    const RObject* o = nullptr;
+    robject_deref_frame* next = nullptr;
+};
+
 /** this class ensures that RObjects will not be deleted until all deref() calls are complete
  */
 class robject_dereference_helper {
@@ -719,6 +749,8 @@ protected:
         do_scan = false,
         deferred_scan,
         handed_off = false;
+    // this thread's entry in the stack of in-progress dereferences; see lib/RSet.cpp
+    robject_deref_frame frame;
 
 public:
     DLLLOCAL robject_dereference_helper(RObject* obj, bool real = false);

@@ -44,7 +44,7 @@
 %requires json
 
 module Schema {
-    version = "1.8.0";
+    version = "1.9.0";
     desc = "user module for working with SQL schemas";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -887,6 +887,11 @@ module Schema {
     - Shared definitions: top-level \c columns and \c indexes, drawn from with \c $use
 
     @section schema_relnotes Schema Module Release History
+
+    @subsection schema_v1_9_0 Schema Module v1.9.0
+    - added @ref Schema::AbstractSchema::alignWithInfoInTransaction()
+      for alignment with caller-controlled commit or rollback; DataSchema
+      rejects migration actions that commit independently in this mode
 
     @subsection schema_v1_8_0 Schema Module v1.8.0
     - added shared \c columns and \c indexes definitions at the top level of a data schema: a

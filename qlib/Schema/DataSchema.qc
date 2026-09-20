@@ -236,9 +236,25 @@ public class DataSchema inherits AbstractVersionedSchema {
     }
 
     #! Overrides alignIntern to capture verbose level for use in checkUpgrade
-    private SchemaCallbackHelper alignIntern(bool force = False, int verbose = 0, bool do_msgs = True) {
+    private SchemaCallbackHelper alignIntern(bool force = False, int verbose = 0, bool do_msgs = True,
+            bool manage_transaction = True) {
+        # Check the complete migration plan before any alignment or migration
+        # runs. These actions can commit the datasource independently, so they
+        # cannot participate in a caller-owned rollback-only preview.
+        if (!manage_transaction) {
+            foreach hash<auto> migration in (schema_data.migrations ?? ()) {
+                foreach string phase in (("pre_align", "post_align")) {
+                    foreach hash<auto> step in (migration{phase} ?? ()) {
+                        if (inlist(step.action, ("sql", "script", "reconcile_table"))) {
+                            throw "SCHEMA-TRANSACTION-ERROR", sprintf(
+                                "migration action %y requires managed transactions", step.action);
+                        }
+                    }
+                }
+            }
+        }
         align_verbose = verbose;
-        return AbstractSchema::alignIntern(force, verbose, do_msgs);
+        return AbstractSchema::alignIntern(force, verbose, do_msgs, manage_transaction);
     }
 
     #! Executes pre-alignment migration steps when upgrading

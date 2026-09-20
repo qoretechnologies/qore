@@ -38,6 +38,7 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/HttpClientEventSink.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -570,6 +571,19 @@ void Http2ClientPollOperationPriv::startMultiplex(ExceptionSink* xsink) {
     // peer's SETTINGS frame has been processed.
 }
 
+HttpClientEventSink* Http2ClientPollOperationPriv::getReferencedEventSink(int32_t stream_id) const {
+    AutoLocker al(stream_lock);
+    auto it = stream_actions.find(std::to_string(stream_id));
+    if (it == stream_actions.end()) {
+        return nullptr;
+    }
+    HttpClientEventSink* sink = it->second->getEventSink();
+    if (sink) {
+        sink->ref();
+    }
+    return sink;
+}
+
 QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
     SocketPollOperationBase* op = refCurrentOp();
     if (!op) {
@@ -622,6 +636,45 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         setError("HTTP2-READ-ERROR", "stream queue drain error", xsink);
         op->deref(xsink);
         return nullptr;
+    }
+
+    // Report the response header events of the streams whose header arrived in this read cycle, before
+    // the completed responses are dispatched: a client that monitors a response must see its header
+    // while the body is still being read.  Only the requests that have finished registering themselves
+    // are considered, so a header that arrives while its caller is still in submitRequest() is reported
+    // by the read cycle that follows the registration instead of being dropped.
+    {
+        std::unordered_set<int32_t> reporting_streams;
+        {
+            AutoLocker al(stream_lock);
+            for (auto& i : stream_actions) {
+                if (i.second->getEventSink()) {
+                    reporting_streams.insert((int32_t)strtoll(i.first.c_str(), nullptr, 10));
+                }
+            }
+        }
+        std::vector<Http2ResponseHeaderEvent> header_events;
+        if (!reporting_streams.empty()) {
+            static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->takeResponseHeaderEvents(
+                reporting_streams, header_events);
+        }
+        for (auto& event : header_events) {
+            ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(event.stream_id), xsink);
+            if (!sink) {
+                continue;
+            }
+            // the shape of the header hash matches the one the HTTP/1.1 path reports: header names in
+            // lower case, with the status line in the status_code and http_version keys
+            ReferenceHolder<QoreHashNode> hdr(httpMultiHeadersToQoreHash(event.headers, true), xsink);
+            hdr->setKeyValue("status_code", event.status_code, xsink);
+            hdr->setKeyValue("http_version", new QoreStringNode("2"), xsink);
+            if (*xsink) {
+                setError("HTTP2-READ-ERROR", "response header event error", xsink);
+                op->deref(xsink);
+                return nullptr;
+            }
+            sink->responseHeaders(**hdr);
+        }
     }
 
     // Drain completed responses
@@ -1309,6 +1362,11 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
 
         ++active_stream_count;
         reserved_stream_slot = true;
+    }
+
+    // a request that reports events needs the response header of its stream recorded when it arrives
+    if (action->getEventSink()) {
+        sock_obj->setHttp2RecordResponseHeaderEvents(true);
     }
 
     // Submit through the controller, but defer waking the multiplex reader until

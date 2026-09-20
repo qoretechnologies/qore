@@ -530,6 +530,20 @@ public:
     */
     DLLLOCAL void setHttp2StreamStreamingDirect(int32_t stream_id);
 
+    //! Records the response headers of the HTTP/2 client session for event reporting
+    /** @see Http2Session::setRecordResponseHeaderEvents()
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setHttp2RecordResponseHeaderEvents(bool v);
+
+    //! Records the response headers of the HTTP/3 client session for event reporting
+    /** @see QuicSession::setRecordResponseHeaderEvents()
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setQuicRecordResponseHeaderEvents(bool v);
+
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** @since %Qore 3.0
     */

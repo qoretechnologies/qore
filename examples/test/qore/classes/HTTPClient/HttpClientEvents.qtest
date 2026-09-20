@@ -1,0 +1,637 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTPClient event tests: requests are served by the connections of the client's connection manager,
+    which are shared between requests, so every assertion here is about the events of one request
+    reaching the queue of the client that issued it — including the receive event, which must be reported
+    while the response body is still outstanding, so that a client can act on the response header.
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpClientEventsTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMjA4MDcwOTAwMDdaFw0yMjExMDUwOTAwMDZaMCIxIDAeBgNVBAMT
+F2hxLnFvcmV0ZWNobm9sb2dpZXMuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAlw84m+9dCjeD4s8YYVZ3gbv8YkYQGyyaojgdJuarTyJPYnGzhMf7
+PF+Y2398k+8ydAnOTwJXRcaU36f0hHDvTagP1f0EFg3kWlplzsrtrDI/HZBRH0W2
++54YE6FhPEtEkkO1aKy+VXb8QMQKSmsUZS+IxSe+69tWFI60tW92eq53tFAwEWN+
+0oBeJBCASRQa7bq1J/BgZhlBSyUQ6Zf+wqUSfmVEf7tsFujyNZ2dfxHtPtLxRspA
+7yhgnQQaXHemyEWeZWjIbToazG8SvutmcwIFK/TtE0anWdTR+Hn92mxH9mxnnyns
+Ag+RlqxnEpBDIb1ufwCFUhMXBwRiiZIM1QIDAQABo4ICVDCCAlAwDgYDVR0PAQH/
+BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8E
+AjAAMB0GA1UdDgQWBBSj2nUL9X+zXI7p0fFhg03WZAS0xDAfBgNVHSMEGDAWgBQU
+LrMXt1hWy65QCUDmH6+dixTCxjBVBggrBgEFBQcBAQRJMEcwIQYIKwYBBQUHMAGG
+FWh0dHA6Ly9yMy5vLmxlbmNyLm9yZzAiBggrBgEFBQcwAoYWaHR0cDovL3IzLmku
+bGVuY3Iub3JnLzAiBgNVHREEGzAZghdocS5xb3JldGVjaG5vbG9naWVzLmNvbTBM
+BgNVHSAERTBDMAgGBmeBDAECATA3BgsrBgEEAYLfEwEBATAoMCYGCCsGAQUFBwIB
+FhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9yZzCCAQYGCisGAQQB1nkCBAIEgfcE
+gfQA8gB3AN+lXqtogk8fbK3uuF9OPlrqzaISpGpejjsSwCBEXCpzAAABgne/YgYA
+AAQDAEgwRgIhAP/ERcskhKhF7M8VIejtrwEtDXJoX1IXec//r64jkOlUAiEAhheZ
+VMT5cZ2uoPGoD6+SuQY/CYBuHdXNR/pUC3SGOQEAdwApeb7wnjk5IfBWc59jpXfl
+vld9nGAK+PlNXSZcJV3HhAAAAYJ3v2H5AAAEAwBIMEYCIQCmiChg/6dLhE3TfGum
+JR7k8s7ibmqw2KVJI3oUR/ogBAIhAIXIIhyqb3W/34ATNT9dIPCGFKpghQw82G8w
+ANnChDgYMA0GCSqGSIb3DQEBCwUAA4IBAQAovvC8AiF7+uNLJCEXMe3VeI4Ne+l1
+mqCRRujz7ijlr6VgNxZt+i/kx1HJKrSKnQZRQ48xWAipMVYfXxH3u20p4RkkW2nj
+jjIVQvQvlFhDjLaJR74PYopp0lPuBW9RKg+C+l3vvjxjkin/MOBX2apGOvC4LJwb
+2s6f8cArBRvdhA7nwEmlP3+aqxxkp9STZYpxuKR4F9fRGtg0Y39Db+3XkYp7Y/hV
+DBVpHegoty2VFErehkJUmgdNoLdTuC8gHgA3p5bCbApyVGjBuO+QpSWG/3WiBDfm
+1IpGT8P2OhFruQHryHEKmY6f5huZV2Y0gFmqBwRiR1ToF5gFveTUJM3d
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCXDzib710KN4Pi
+zxhhVneBu/xiRhAbLJqiOB0m5qtPIk9icbOEx/s8X5jbf3yT7zJ0Cc5PAldFxpTf
+p/SEcO9NqA/V/QQWDeRaWmXOyu2sMj8dkFEfRbb7nhgToWE8S0SSQ7VorL5VdvxA
+xApKaxRlL4jFJ77r21YUjrS1b3Z6rne0UDARY37SgF4kEIBJFBrturUn8GBmGUFL
+JRDpl/7CpRJ+ZUR/u2wW6PI1nZ1/Ee0+0vFGykDvKGCdBBpcd6bIRZ5laMhtOhrM
+bxK+62ZzAgUr9O0TRqdZ1NH4ef3abEf2bGefKewCD5GWrGcSkEMhvW5/AIVSExcH
+BGKJkgzVAgMBAAECggEAPhvyCJtYQ9UjkuPXgF4O8PacBMQN5z5lrgEoa1A4a2cO
+AMoDJ7sZ327m6Ij4bdLRichmXTH3NCc8GuFxterBWcqaCD/pqC+6DjRQ27+wDTbz
+oHIwCI2feME94QRfeGzyGrlgI1OzRmyPtwljuclhL2Fl+Loo08zxDa7HOjpEGphz
+wkD2gQy5S7Mi5ekBZMhy8EklpzdKlOFdvhjo7vQu8vY8xJZ6jN65RV+RBscbmZQl
+llK1uW/8UyRIAUK9sM6Ozxbiz7QQELHpSvY3JIiZC5A6rBk2DGqOu8ouzDrQuHsB
+LHWjzceu6UcJY0tCeOUkVDnoxbj2UcINEAIABIPN2QKBgQDHHbrwdW8qRecLw8y2
+FJDO/6+8VmRKtj8B7CeOYuEZet2UvnPssisCovu0jnMa2ysF/L4YQAWa5XY0bB+E
+R/NRzeh4i0jIsW70h2qePTK+XRAGhCCKiCcb7nkED72TTplQ5wgRA/oWPLOrys34
+f+YqCI7BVrbWzgDyrhEdRAXSbwKBgQDCNuMlLcGTTi04OIQFDZmzjdvx9KvHvksz
+zff9Y0Rb1eUsXF2oG3S55umgeUcG9Nk2KigJzO6WAmTT6rcbn4tsRsnkLdqcEPmg
+P1wbBikW3Bz935k7yPcx05bVshLrJsK0Gxa8YYE6hh/PbdiQFtHf2r4uYu1kxC01
+518U8oPm+wKBgDfyJIpXlKp+BZMKqsQmNyHSOaBjbb6IQl/Z6KtbIQA1w3h9orjI
+vsj43lw3AiRznD0MbKUHqAuDmZjVIG3cgYNkpYLpL8QkBpbyTYS0kUNnho8uJK6H
+3uU8NghsG8n99ZoDsAKH6YbB+4Gzc/f0h8kbqnCsWqc0LpQBUJG2gSRFAoGBAI3P
+4kBNjuFu3hoFOnEuIyM23HlqPNyXGPZ02TXOfCXKo5Kmx0Ru9+aes80XgUOVGd4x
+Hhc56qTijpkm9BlZgEbJ0bWpvczjoELgwPKCpxIoG4tM7+j1r3pUk/jqFGJcZSN5
+/DoFwITpVuTxwoZEA2+/m8rnNYy0qoaHsafsBWBtAoGAAPYkINDjhAslu2gQlsZi
+7eA4coUg5eNUI+YYy4xonJAU488AsrcAWr5nGEids4ZM5PqKkJezG+6gctaYnjjZ
+IQrghzR1AC0Y3XDSuJYGRcZeUF2XZmOjcXNm0oMxeMEeEuuNLOTZ2pp7aUcYIOfV
+OKKqgBjNAlYDdPhOy8O8Agk=
+-----END PRIVATE KEY-----";
+
+#! A response served by the test server
+hashdecl EventRoute {
+    #! The status code of the response
+    int code = 200;
+    #! The headers of the response
+    hash<auto> headers = {"Content-Type": "text/plain"};
+    #! The body of the response
+    string body = "response body";
+}
+
+#! The handler of the test server
+class EventPeer inherits AbstractHttpRequestHandler {
+    private {
+        #! The response of each path
+        hash<string, hash<EventRoute>> routes;
+    }
+
+    #! Sets the response of a path
+    setRoute(string path, hash<EventRoute> route) {
+        routes{path} = route;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<EventRoute> route = routes{cx.raw_path};
+        if (!route) {
+            return makeResponse(404, "no such path", {"Content-Type": "text/plain"});
+        }
+        return makeResponse(route.code, route.body, route.headers);
+    }
+}
+
+#! A peer that speaks HTTP/1.1 on a raw socket so that a response can be held open
+/** The peer sends the response header as soon as it has read a request and then withholds the rest of
+    the response, sending one value for each release the test makes.  This gives the test a barrier at
+    each point of the response instead of a timing assumption about when the client reports an event.
+*/
+class RawHttpPeer {
+    public {
+        #! The port the peer listens on
+        int port;
+
+        #! Receives the header hash of each request the peer reads
+        Queue requests();
+
+        #! The test pushes one value here for each send the peer makes after the response header
+        Queue release();
+    }
+
+    private {
+        #! The listening socket
+        Socket listener();
+        #! The response header sent as soon as a request has been read
+        string response_header;
+        #! The sends made after the response header, one for each release
+        list<string> sends;
+        #! Signalled when the peer thread has finished
+        Counter running(1);
+    }
+
+    #! Starts the peer
+    /** @param response_header the response header sent as soon as a request has been read
+        @param sends the sends made after the header, one for each value pushed to @ref release
+    */
+    constructor(string response_header, list<string> sends) {
+        self.response_header = response_header;
+        self.sends = sends;
+        listener.bindINET("127.0.0.1", "0", True);
+        port = listener.getSocketInfo().port;
+        listener.listen();
+        background run();
+    }
+
+    #! Returns the URL of the peer
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    #! Releases every send the peer may still be waiting for and waits for it to finish
+    stop() {
+        # one release per send is enough to unblock the peer wherever it stands in the response
+        foreach string send in (sends) {
+            release.push("stop");
+        }
+        running.waitForZero(30s);
+        listener.close();
+    }
+
+    private run() {
+        on_exit running.dec();
+        *Socket conn = listener.accept(30s);
+        if (!conn) {
+            return;
+        }
+        on_exit conn.close();
+        requests.push(conn.readHTTPHeader(30s));
+        conn.send(response_header);
+        foreach string data in (sends) {
+            release.get(30s);
+            conn.send(data);
+        }
+    }
+}
+
+#! Tests of the events reported for the requests of an HTTPClient object
+class HttpClientEventsTest inherits QUnit::Test {
+    public {
+        #! The body served by the test server
+        const ServerBody = "hello, events";
+
+        #! The headers of a request whose response must arrive as it was served
+        const IdentityHeaders = {"Accept-Encoding": "identity"};
+    }
+
+    private {
+        #! The test server
+        HttpServer server;
+        #! The handler of the test server
+        EventPeer peer();
+        #! The URL of the plain HTTP/1.1 listener
+        string url;
+        #! The URL of the TLS listener, which negotiates HTTP/2
+        string tls_url;
+        #! The URL of the QUIC listener, which serves HTTP/3
+        string quic_url;
+    }
+
+    constructor() : Test("HttpClientEventsTest", "1.0") {
+        addTestCase("completed response", \completedResponseTest());
+        addTestCase("header before body", \headerBeforeBodyTest());
+        addTestCase("chunked framing", \chunkedFramingTest());
+        addTestCase("event argument and data", \eventArgumentTest());
+        addTestCase("clearing the queue", \clearQueueTest());
+        addTestCase("concurrent clients", \concurrentClientsTest());
+        addTestCase("redirects", \redirectTest());
+        addTestCase("poll API", \pollApiTest());
+        addTestCase("protocols", \protocolTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("HttpClientEventsTest", LoggerLevel::getLevelInfo()),
+            "debug": False,
+        });
+        server.setDefaultHandler("events", peer);
+        peer.setRoute("/plain", <EventRoute>{"body": ServerBody});
+        peer.setRoute("/other", <EventRoute>{"body": "other body"});
+        peer.setRoute("/target", <EventRoute>{"body": "redirect target"});
+        peer.setRoute("/redirect", <EventRoute>{
+            "code": 302,
+            "headers": {"Content-Type": "text/plain", "Location": "/target"},
+            "body": "redirecting",
+        });
+        url = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+        }).port);
+        tls_url = sprintf("https://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "2.0",
+        }).port);
+        quic_url = sprintf("https://127.0.0.1:%d", server.addQuicListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port);
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+        }
+    }
+
+    #! Returns the next event of the given type, ignoring any event reported before it
+    static hash<auto> waitForEvent(Queue events, softint event, timeout t = 30s) {
+        while (True) {
+            hash<auto> ev = events.get(t);
+            if (ev.event == event) {
+                return ev;
+            }
+        }
+    }
+
+    #! Returns every event waiting on the queue
+    static list<hash<auto>> drainEvents(Queue events) {
+        list<hash<auto>> rv();
+        while (events.size()) {
+            rv += events.get(30s);
+        }
+        return rv;
+    }
+
+    #! Returns the events of the given type
+    static list<hash<auto>> eventsOfType(list<hash<auto>> events, softint event) {
+        return map $1, events, $1.event == event;
+    }
+
+    #! Returns the position of the first event of the given type
+    static int indexOfEvent(list<hash<auto>> events, softint event) {
+        int i = 0;
+        foreach hash<auto> ev in (events) {
+            if (ev.event == event) {
+                return i;
+            }
+            ++i;
+        }
+        throw "TEST-ERROR", sprintf("no event %d was reported in %y", event, (map $1.event, events));
+    }
+
+    #! Returns the number of distinct identities reported by a list of events
+    static int identityCount(list<hash<auto>> events) {
+        hash<string, bool> ids;
+        foreach hash<auto> ev in (events) {
+            ids{ev.id.toString()} = True;
+        }
+        return ids.size();
+    }
+
+    #! Drives a poll operation to its goal and returns its output
+    static auto drive(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete (state %y)", op.getGoal(),
+                    op.getState());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
+    }
+
+    #! A request that completes reports the documented events in the order the message is processed
+    completedResponseTest() {
+        # every blocking API that sends a request and waits for the response reports the same events
+        foreach string api in (("get", "send", "sendUrl")) {
+            Queue events();
+            HTTPClient hc({"url": url, "timeout": 30s});
+            hc.setEventQueue(events);
+            switch (api) {
+                case "get":
+                    assertEq(ServerBody, hc.get("/plain", IdentityHeaders), api);
+                    break;
+                case "send":
+                    assertEq(ServerBody, hc.send(NOTHING, "GET", "/plain", IdentityHeaders).body, api);
+                    break;
+                case "sendUrl":
+                    assertEq(ServerBody, hc.sendUrl(NOTHING, "GET", url + "/plain", IdentityHeaders).body, api);
+                    break;
+            }
+
+            list<hash<auto>> ev = drainEvents(events);
+            list<hash<auto>> sent = eventsOfType(ev, EVENT_HTTP_SEND_MESSAGE);
+            assertEq(1, sent.size(), api);
+            assertEq("GET /plain HTTP/1.1", sent[0].message, api);
+            assertEq("text/html", sent[0].headers.Accept, api);
+            assertEq(SOURCE_HTTPCLIENT, sent[0].source, api);
+
+            list<hash<auto>> received = eventsOfType(ev, EVENT_HTTP_MESSAGE_RECEIVED);
+            assertEq(1, received.size(), api);
+            assertEq(200, received[0].headers.status_code, api);
+            assertTrue(received[0].headers.hasKey("content-length"), api);
+            assertEq(SOURCE_HTTPCLIENT, received[0].source, api);
+
+            list<hash<auto>> len = eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH);
+            assertEq(1, len.size(), api);
+            assertEq(ServerBody.size(), len[0].len, api);
+
+            # every event of a request reports the identity of the client that issued it
+            assertEq(1, identityCount(ev), api);
+
+            # the request is reported before the response header, which is reported before its length
+            assertTrue(indexOfEvent(ev, EVENT_HTTP_SEND_MESSAGE) < indexOfEvent(ev, EVENT_HTTP_MESSAGE_RECEIVED),
+                api);
+            assertTrue(indexOfEvent(ev, EVENT_HTTP_MESSAGE_RECEIVED) < indexOfEvent(ev,
+                EVENT_HTTP_CONTENT_LENGTH), api);
+        }
+    }
+
+    #! The receive event is reported while the response body is still outstanding
+    /** This is what a client that acts on a response header needs: an event reported when the response
+        is complete would arrive too late to cancel or to start reading the body as it arrives.
+    */
+    headerBeforeBodyTest() {
+        # the peer withholds the body of a response with each HTTP/1.1 framing
+        hash<string, list<auto>> framings = {
+            "length": (
+                sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n",
+                    ServerBody.size()),
+                (ServerBody,),
+            ),
+            "chunked": (
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n",
+                (sprintf("%x\r\n%s\r\n", ServerBody.size(), ServerBody), "0\r\n\r\n"),
+            ),
+        };
+        foreach string framing in (keys framings) {
+            RawHttpPeer raw(framings{framing}[0], framings{framing}[1]);
+            on_exit raw.stop();
+
+            Queue events();
+            HTTPClient hc({"url": raw.getUrl(), "timeout": 30s});
+            hc.setEventQueue(events);
+            Queue result();
+            background sub () {
+                try {
+                    result.push({"body": hc.get("/held", IdentityHeaders)});
+                } catch (hash<ExceptionInfo> ex) {
+                    result.push({"err": ex.err, "desc": ex.desc});
+                }
+            }();
+
+            # the peer has read the request and sent the response header, and nothing else
+            assertEq("/held", raw.requests.get(30s).path, framing);
+            hash<auto> received = waitForEvent(events, EVENT_HTTP_MESSAGE_RECEIVED);
+            assertEq(200, received.headers.status_code, framing);
+            # the response cannot be complete: its body has not been sent
+            assertEq(0, result.size(), framing);
+
+            # a declared content length is reported with the header as well
+            if (framing == "length") {
+                assertEq(ServerBody.size(), waitForEvent(events, EVENT_HTTP_CONTENT_LENGTH).len, framing);
+            }
+
+            # release the body of the response
+            foreach string send in (framings{framing}[1]) {
+                raw.release.push("send");
+            }
+            assertEq(ServerBody, result.get(30s).body, framing);
+        }
+    }
+
+    #! A chunked response reports the size and the data of each chunk as it is read
+    chunkedFramingTest() {
+        list<string> chunks = ("first chunk", "second chunk");
+        list<string> sends = map sprintf("%x\r\n%s\r\n", $1.size(), $1), chunks;
+        sends += "0\r\n\r\n";
+        RawHttpPeer raw("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n", sends);
+        on_exit raw.stop();
+
+        Queue events();
+        HTTPClient hc({"url": raw.getUrl(), "timeout": 30s});
+        # with_data reports the bytes of each chunk as well
+        hc.setEventQueue(events, "chunk-arg", True);
+        Queue result();
+        background sub () {
+            result.push(hc.get("/chunked", IdentityHeaders));
+        }();
+        assertEq("/chunked", raw.requests.get(30s).path);
+        foreach string send in (sends) {
+            raw.release.push("send");
+        }
+        assertEq(chunks[0] + chunks[1], result.get(30s));
+
+        list<hash<auto>> ev = drainEvents(events);
+        # the size of each chunk is reported, including the terminating chunk
+        assertEq((chunks[0].size(), chunks[1].size(), 0),
+            (map $1.size, eventsOfType(ev, EVENT_HTTP_CHUNK_SIZE)));
+        assertEq((chunks[0].size(), chunks[1].size()),
+            (map $1.read, eventsOfType(ev, EVENT_HTTP_CHUNKED_DATA_RECEIVED)));
+        assertEq((binary(chunks[0]), binary(chunks[1])),
+            (map $1.data, eventsOfType(ev, EVENT_HTTP_CHUNKED_DATA_READ)));
+        # a chunked response declares no content length
+        assertEq(0, eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH).size());
+    }
+
+    #! The argument and the data option of the event queue are reported as they were configured
+    eventArgumentTest() {
+        # the argument is reported in every event of the client
+        Queue events();
+        HTTPClient hc({"url": url, "timeout": 30s});
+        hc.setEventQueue(events, {"client": "one"}, False);
+        assertEq(ServerBody, hc.get("/plain", IdentityHeaders));
+        list<hash<auto>> ev = drainEvents(events);
+        assertTrue(ev.size() > 0);
+        assertEq(ev.size(), (map $1, ev, $1.arg == {"client": "one"}).size());
+
+        # without the data option no data event is reported, but the chunk events still are
+        list<string> chunks = ("only chunk",);
+        list<string> sends = map sprintf("%x\r\n%s\r\n", $1.size(), $1), chunks;
+        sends += "0\r\n\r\n";
+        RawHttpPeer raw("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n", sends);
+        on_exit raw.stop();
+        Queue no_data();
+        HTTPClient raw_hc({"url": raw.getUrl(), "timeout": 30s});
+        raw_hc.setEventQueue(no_data, NOTHING, False);
+        Queue result();
+        background sub () {
+            result.push(raw_hc.get("/chunked", IdentityHeaders));
+        }();
+        assertEq("/chunked", raw.requests.get(30s).path);
+        foreach string send in (sends) {
+            raw.release.push("send");
+        }
+        assertEq(chunks[0], result.get(30s));
+        list<hash<auto>> raw_ev = drainEvents(no_data);
+        assertEq(0, eventsOfType(raw_ev, EVENT_HTTP_CHUNKED_DATA_READ).size());
+        assertEq(2, eventsOfType(raw_ev, EVENT_HTTP_CHUNK_SIZE).size());
+    }
+
+    #! Clearing the event queue stops the events of the client, including of a request in flight
+    clearQueueTest() {
+        HTTPClient hc({"url": url, "timeout": 30s});
+        Queue events();
+        hc.setEventQueue(events);
+        assertEq(ServerBody, hc.get("/plain", IdentityHeaders));
+        assertTrue(events.size() > 0);
+        hc.setEventQueue();
+        drainEvents(events);
+        assertEq(ServerBody, hc.get("/plain", IdentityHeaders));
+        assertEq(0, events.size());
+
+        # clearing the queue while a request is in flight stops the events of that request as well
+        list<string> chunks = ("first chunk", "second chunk");
+        list<string> sends = map sprintf("%x\r\n%s\r\n", $1.size(), $1), chunks;
+        sends += "0\r\n\r\n";
+        RawHttpPeer raw("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nTransfer-Encoding: chunked\r\n\r\n", sends);
+        on_exit raw.stop();
+        Queue in_flight();
+        HTTPClient raw_hc({"url": raw.getUrl(), "timeout": 30s});
+        raw_hc.setEventQueue(in_flight);
+        Queue result();
+        background sub () {
+            result.push(raw_hc.get("/chunked", IdentityHeaders));
+        }();
+        assertEq("/chunked", raw.requests.get(30s).path);
+        waitForEvent(in_flight, EVENT_HTTP_MESSAGE_RECEIVED);
+        raw.release.push("send");
+        assertEq(chunks[0].size(), waitForEvent(in_flight, EVENT_HTTP_CHUNK_SIZE).size);
+
+        # from here on nothing is reported, although the response is still being read
+        raw_hc.setEventQueue();
+        drainEvents(in_flight);
+        raw.release.push("send");
+        raw.release.push("send");
+        assertEq(chunks[0] + chunks[1], result.get(30s));
+        assertEq(0, in_flight.size());
+    }
+
+    #! The events of a request are reported to the queue of the client that issued it, and to no other
+    concurrentClientsTest() {
+        Queue first_events();
+        Queue second_events();
+        HTTPClient first({"url": url, "timeout": 30s});
+        HTTPClient second({"url": url, "timeout": 30s});
+        first.setEventQueue(first_events);
+        second.setEventQueue(second_events);
+
+        # the requests are made at the same time, so their connections come from the same pool
+        Counter c(2);
+        background sub () {
+            on_exit c.dec();
+            first.get("/plain", IdentityHeaders);
+        }();
+        background sub () {
+            on_exit c.dec();
+            second.get("/other", IdentityHeaders);
+        }();
+        c.waitForZero(30s);
+
+        list<hash<auto>> first_ev = drainEvents(first_events);
+        list<hash<auto>> second_ev = drainEvents(second_events);
+        # each queue reports the request of its own client, and only that request
+        assertEq(("GET /plain HTTP/1.1",), (map $1.message, eventsOfType(first_ev, EVENT_HTTP_SEND_MESSAGE)));
+        assertEq(("GET /other HTTP/1.1",), (map $1.message, eventsOfType(second_ev, EVENT_HTTP_SEND_MESSAGE)));
+        assertEq(1, eventsOfType(first_ev, EVENT_HTTP_MESSAGE_RECEIVED).size());
+        assertEq(1, eventsOfType(second_ev, EVENT_HTTP_MESSAGE_RECEIVED).size());
+        # each client reports one identity, and the two identities differ
+        assertEq(1, identityCount(first_ev));
+        assertEq(1, identityCount(second_ev));
+        assertNeq(first_ev[0].id, second_ev[0].id);
+    }
+
+    #! A redirect reports the events of every request it makes
+    redirectTest() {
+        Queue events();
+        HTTPClient hc({"url": url, "timeout": 30s});
+        hc.setEventQueue(events);
+        assertEq("redirect target", hc.get("/redirect", IdentityHeaders));
+        list<hash<auto>> ev = drainEvents(events);
+        assertEq(("GET /redirect HTTP/1.1", "GET /target HTTP/1.1"),
+            (map $1.message, eventsOfType(ev, EVENT_HTTP_SEND_MESSAGE)));
+        assertEq((302, 200), (map $1.headers.status_code, eventsOfType(ev, EVENT_HTTP_MESSAGE_RECEIVED)));
+        assertEq(("/target",), (map $1.location, eventsOfType(ev, EVENT_HTTP_REDIRECT)));
+    }
+
+    #! A request driven by the poll API reports the same events as the blocking API
+    pollApiTest() {
+        Queue events();
+        HTTPClient hc({"url": url, "timeout": 30s});
+        hc.setEventQueue(events);
+        hash<auto> out = drive(hc.startPollSendRecv("GET", "/plain", NOTHING, IdentityHeaders));
+        assertEq(ServerBody, out."response-body".toString());
+        list<hash<auto>> ev = drainEvents(events);
+        assertEq(("GET /plain HTTP/1.1",), (map $1.message, eventsOfType(ev, EVENT_HTTP_SEND_MESSAGE)));
+        assertEq((200,), (map $1.headers.status_code, eventsOfType(ev, EVENT_HTTP_MESSAGE_RECEIVED)));
+        assertEq((ServerBody.size(),), (map $1.len, eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH)));
+    }
+
+    #! Every protocol reports the request and the response header of a request
+    protocolTest() {
+        hash<string, string> protocols = {
+            "1.1": url,
+            "2.0": tls_url,
+            "3.0": quic_url,
+        };
+        foreach string protocol in (keys protocols) {
+            Queue events();
+            HTTPClient hc({
+                "url": protocols{protocol},
+                "http_version": protocol,
+                "ssl_verify_cert": False,
+                "accept_all_certs": True,
+                "timeout": 30s,
+            });
+            hc.setEventQueue(events);
+            assertEq(ServerBody, hc.get("/plain", IdentityHeaders), protocol);
+            list<hash<auto>> ev = drainEvents(events);
+            assertEq(("GET /plain HTTP/1.1",), (map $1.message, eventsOfType(ev, EVENT_HTTP_SEND_MESSAGE)),
+                protocol);
+            list<hash<auto>> received = eventsOfType(ev, EVENT_HTTP_MESSAGE_RECEIVED);
+            assertEq(1, received.size(), protocol);
+            assertEq(200, received[0].headers.status_code, protocol);
+            assertTrue(received[0].headers.hasKey("content-length"), protocol);
+            assertEq((ServerBody.size(),), (map $1.len, eventsOfType(ev, EVENT_HTTP_CONTENT_LENGTH)), protocol);
+        }
+    }
+}

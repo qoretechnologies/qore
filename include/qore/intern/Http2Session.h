@@ -49,6 +49,7 @@
 #include <string>
 #include <sys/stat.h>
 #include <unordered_map>
+#include <unordered_set>
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
 class QoreIoUring;
@@ -143,6 +144,20 @@ struct Http2StreamInfo {
 
     DLLLOCAL Http2StreamInfo() = default;
     DLLLOCAL Http2StreamInfo(int32_t id) : stream_id(id), state(Http2StreamState::Open) {}
+};
+
+//! The response header of a stream, reported once to the client that issued the request
+/** @see Http2Session::takeResponseHeaderEvents()
+
+    @since %Qore 3.0
+*/
+struct Http2ResponseHeaderEvent {
+    //! The stream the response belongs to
+    int32_t stream_id = 0;
+    //! The status code of the response
+    int status_code = 0;
+    //! The header of the response; header names are lower case, as HTTP/2 sends them
+    std::map<std::string, std::vector<std::string>> headers;
 };
 
 //! HTTP/2 Settings
@@ -592,6 +607,34 @@ public:
     using StreamCompleteCallback = std::function<void(int32_t stream_id, Http2StreamInfo* stream,
         ExceptionSink* xsink)>;
 
+    //! Records the response header of each client stream, for the event sink of the client
+    /** Enabled while a request that reports events is in flight on this connection; the header of a
+        response is recorded when it arrives, because a stream is erased from the session as soon as its
+        response completes, which can happen in the read cycle that received its header.
+
+        @param v @ref True to record response headers
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setRecordResponseHeaderEvents(bool v);
+
+    //! Takes the recorded response headers of the named streams
+    /** Only the streams named by @a stream_ids are taken, so a header that arrived before its caller
+        finished registering the request is taken by a later call instead of being dropped; a header
+        recorded for a stream that no longer exists and is not named is discarded, so an unclaimed
+        record cannot accumulate.
+
+        @param stream_ids the streams to take
+        @param out receives one entry per stream, in the order the headers arrived
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void takeResponseHeaderEvents(const std::unordered_set<int32_t>& stream_ids,
+        std::vector<Http2ResponseHeaderEvent>& out);
+
+    //! Records the response header of a stream if recording is enabled; called on the I/O thread
+    DLLLOCAL void recordResponseHeaderEvent(const Http2StreamInfo& stream);
+
     //! Sets the stream completion callback for HTTP/2 client multiplexing
     /** When set, this callback is invoked each time a stream completes (response received,
         stream reset, or error). This enables multiplexed response routing in client scenarios.
@@ -778,6 +821,12 @@ private:
 
     // Stream completion callback for client multiplexing
     StreamCompleteCallback stream_complete_callback;
+
+    //! True while the response headers of client streams are recorded for event reporting
+    bool record_response_header_events = false;
+
+    //! The response headers recorded and not yet taken; see takeResponseHeaderEvents()
+    std::vector<Http2ResponseHeaderEvent> pending_header_events;
 
     // Send buffer
     std::vector<char> send_buffer;

@@ -1541,6 +1541,38 @@ std::unique_ptr<Http2StreamInfo> Http2Session::takeHeadersReadyStreamCopy() {
     return nullptr;
 }
 
+void Http2Session::setRecordResponseHeaderEvents(bool v) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    record_response_header_events = v;
+}
+
+void Http2Session::recordResponseHeaderEvent(const Http2StreamInfo& stream) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (!record_response_header_events || is_server) {
+        return;
+    }
+    pending_header_events.push_back({stream.stream_id, stream.status_code, stream.headers});
+}
+
+void Http2Session::takeResponseHeaderEvents(const std::unordered_set<int32_t>& stream_ids,
+        std::vector<Http2ResponseHeaderEvent>& out) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    if (pending_header_events.empty()) {
+        return;
+    }
+    std::vector<Http2ResponseHeaderEvent> keep;
+    for (auto& event : pending_header_events) {
+        if (stream_ids.count(event.stream_id)) {
+            out.push_back(std::move(event));
+        } else if (streams.find(event.stream_id) != streams.end()) {
+            // the request is still registering itself; take the header on a later call
+            keep.push_back(std::move(event));
+        }
+        // a header recorded for a stream that is gone and unclaimed is discarded here
+    }
+    pending_header_events = std::move(keep);
+}
+
 std::unique_ptr<Http2StreamInfo> Http2Session::takeStreamingHeadersReadyCopy() {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& [id, info] : streams) {
@@ -1796,6 +1828,10 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                     } else {
                         // Initial HEADERS (request or response)
                         stream->headers_complete = true;
+                        // record the response header for the event sink of the client that issued the
+                        // request: the stream is erased from the session as soon as its response
+                        // completes, which can happen before the caller's poll operation runs again
+                        h2->recordResponseHeaderEvent(*stream);
                         // For requests without a body (like GET), END_STREAM is on the HEADERS frame
                         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
                             stream->headers_end_stream = true;

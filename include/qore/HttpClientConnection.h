@@ -48,6 +48,7 @@ class ExceptionSink;
 class QoreChannel;
 class HttpClientConnectionManagerBase;
 class AbstractAsyncAction;
+class HttpClientEventSink;
 
 //! HTTP client protocol version
 /** @since %Qore 3.0
@@ -234,6 +235,9 @@ public:
         @param body optional request body (may be nullptr if @a body_len is 0)
         @param body_len request body length in bytes
         @param xsink exception sink
+        @param event_sink optional event sink reporting the protocol events of this request to the
+            event queue of the client that issued it; the sink is attached to the completion action of
+            the request, because the connection is shared between requests
 
         @return a newly-allocated hash with the keys described above
             (caller owns); @c nullptr on error (@a xsink is set)
@@ -245,7 +249,7 @@ public:
     */
     DLLEXPORT virtual QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr);
 
     //! Submits a streaming request with Channel-based response delivery
     /** Like @ref submitRequest but uses a @c QoreChannel for incremental
@@ -258,13 +262,16 @@ public:
         @param body_len body length in bytes
         @param channel_out receives a ref'd QoreChannel* on success
         @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request; see
+            @ref submitRequest
         @return stream ID on success; -1 on error
 
         @since %Qore 3.0
     */
     DLLEXPORT virtual int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr);
 
     //! Submits a request with a caller-provided async completion action.
     /** Like @ref submitRequest but uses the caller's
@@ -306,13 +313,16 @@ public:
         @param streaming_recv if true, response delivered incrementally via Channel
         @param channel_out receives a ref'd QoreChannel* when streaming_recv is true
         @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request; see
+            @ref submitRequest
         @return result hash on success, nullptr on error
 
         @since %Qore 3.0
     */
     DLLEXPORT virtual QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr);
 
     //! Push body data for a streaming send request
     /** @param data body chunk pointer (nullptr signals end-of-body)
@@ -332,6 +342,45 @@ public:
         @since %Qore 3.0
     */
     DLLEXPORT virtual void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
+
+    //! Abandons a request whose caller has stopped waiting for its response.
+    /** Called when a synchronous submit-and-await caller leaves its wait
+        without a result — thread cancellation, a request timeout, or any
+        other interruption.  The submitted request is still live on the I/O
+        controller at that point: its completion action still holds the
+        caller's %Promise, the protocol still counts the stream as active,
+        and the peer is still serving (or waiting to serve) the exchange.
+        Returning without abandoning it strands all three.
+
+        The implementation settles the request's completion action with a
+        protocol-specific cancellation error and stops the exchange on the
+        wire.  HTTP/1.1 is serial and cannot resynchronize mid-response, so
+        an exchange that already started closes the connection (the peer
+        sees EOF and the connection is never reused); a request that has not
+        reached the wire is dropped and the connection stays usable.
+        Multiplexed protocols reset only this stream, so unrelated
+        concurrent streams on the same connection survive.
+
+        This is best-effort and race-free against completion: a request that
+        finished while the caller was leaving its wait is reported as not
+        cancelled, and nothing is torn down.
+
+        @param stream_id the stream ID returned in the @c stream_id key of
+            @ref submitRequest's result hash
+        @param xsink exception sink for errors raised by the cleanup itself;
+            callers pass a sink separate from the one carrying the exception
+            that ended the wait
+
+        @return @c true if the request was still in flight and was
+            cancelled; @c false if it had already completed (nothing was
+            cancelled and the connection was left untouched)
+
+        @note Default implementation returns @c false; H1 / H2 / H3
+        subclasses override.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual bool cancelRequest(int64_t stream_id, ExceptionSink* xsink);
 
     //! Close the connection and release controller resources
     /** After this call, @ref AbstractHttpPollConnectionPriv::isClosed returns true and no further requests

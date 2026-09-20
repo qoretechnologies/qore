@@ -1694,6 +1694,186 @@ static void ut_manager_close_callback_lifetime_handshake(UnitTestCounters& c) {
         "manager detach finishes after close callback");
 }
 
+// A connection whose cancelRequest() outcome is scripted, so the manager's
+// abandon decision can be observed on its own — without a peer, a socket or a
+// protocol.  It also records whether cancellation was still deliverable while
+// the cleanup ran, which is what the deferral in abandonRequest() guarantees.
+class UtAbandonConnection : public HttpClientConnectionBase {
+public:
+    DLLLOCAL UtAbandonConnection(HttpClientProtocol proto, bool cancel_result,
+            bool close_on_cancel)
+        : HttpClientConnectionBase("unit-test.invalid", 80, false),
+          proto(proto), cancel_result(cancel_result),
+          close_on_cancel(close_on_cancel) {
+    }
+
+    DLLLOCAL HttpClientProtocol getProtocol() const override {
+        return proto;
+    }
+
+    DLLLOCAL bool cancelRequest(int64_t stream_id, ExceptionSink* xsink) override {
+        ++cancel_calls;
+        cancelled_stream_id = stream_id;
+        // a real cleanup takes locks, each of which is a cancellation point;
+        // record what a cancellation point would have seen here
+        ExceptionSink probe;
+        cancel_deliverable_during_cleanup = qore_check_cancel(&probe, "unit test cleanup");
+        probe.clear();
+        if (cancel_result && close_on_cancel) {
+            // mirrors H1: an exchange already on the wire closes the connection
+            setClosed();
+        }
+        return cancel_result;
+    }
+
+    DLLLOCAL int getCancelCalls() const {
+        return cancel_calls;
+    }
+
+    DLLLOCAL int64_t getCancelledStreamId() const {
+        return cancelled_stream_id;
+    }
+
+    DLLLOCAL bool wasCancelDeliverableDuringCleanup() const {
+        return cancel_deliverable_during_cleanup;
+    }
+
+private:
+    HttpClientProtocol proto;
+    bool cancel_result;
+    bool close_on_cancel;
+    int cancel_calls = 0;
+    int64_t cancelled_stream_id = -1;
+    bool cancel_deliverable_during_cleanup = false;
+};
+
+// An HTTP/1.1 request abandoned mid-exchange leaves a connection that cannot be
+// resynchronized: it must leave the pool so no later checkout can hand it out.
+static void ut_manager_abandon_h1_evicts_connection(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtAbandonConnection> conn(
+        new UtAbandonConnection(HttpClientProtocol::H1, true, true), &xsink);
+    UT_ASSERT(c, !xsink, "H1 abandon fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooled(*conn);
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the connection starts in the pool");
+
+    mgr->abandonRequest(*conn, 7);
+    UT_ASSERT_EQ(c, 1, conn->getCancelCalls(),
+        "abandoning a request cancels it exactly once");
+    UT_ASSERT_EQ(c, 7, static_cast<int>(conn->getCancelledStreamId()),
+        "the submitted stream is the one cancelled");
+    UT_ASSERT(c, conn->isClosed(),
+        "cancelling an H1 exchange already on the wire closes the connection");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(),
+        "an H1 connection left unusable by cancellation is evicted from the pool");
+
+    // the close hook queued a notification before closeAndEvict removed the
+    // connection; draining it afterwards must be a no-op, not a second eviction
+    mgr->drainClosed(&xsink);
+    UT_ASSERT(c, !xsink, "draining the close queue after eviction raises nothing");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "the drain does not evict twice");
+    xsink.clear();
+}
+
+// A multiplexed connection carries other streams; resetting one must not cost
+// them their connection.
+static void ut_manager_abandon_multiplexed_keeps_connection(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtAbandonConnection> conn(
+        new UtAbandonConnection(HttpClientProtocol::H2, true, false), &xsink);
+    UT_ASSERT(c, !xsink, "multiplexed abandon fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooled(*conn);
+    mgr->abandonRequest(*conn, 3);
+    UT_ASSERT_EQ(c, 1, conn->getCancelCalls(),
+        "abandoning a multiplexed request cancels its stream");
+    UT_ASSERT(c, !conn->isClosed(),
+        "resetting one stream does not close a multiplexed connection");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
+        "a multiplexed connection stays pooled for its other streams");
+    xsink.clear();
+}
+
+// Cancellation races completion: a request that finished while its caller was
+// leaving the wait has nothing to abandon and its connection must be untouched.
+static void ut_manager_abandon_completed_request_is_a_no_op(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtAbandonConnection> conn(
+        new UtAbandonConnection(HttpClientProtocol::H1, false, true), &xsink);
+    UT_ASSERT(c, !xsink, "completed-request abandon fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooled(*conn);
+    mgr->abandonRequest(*conn, 11);
+    UT_ASSERT_EQ(c, 1, conn->getCancelCalls(),
+        "abandoning asks the connection whether the request was still in flight");
+    UT_ASSERT(c, !conn->isClosed(),
+        "a request that already completed does not close its connection");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
+        "a connection whose request completed stays in the pool");
+    xsink.clear();
+}
+
+// The caller reaches abandonRequest() with its cancellation still pending and
+// sticky.  Without the deferral the first lock in the cleanup raises again and
+// the request is stranded — exactly the leak the cleanup exists to prevent.
+static void ut_manager_abandon_runs_while_cancelled(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtAbandonConnection> conn(
+        new UtAbandonConnection(HttpClientProtocol::H1, true, true), &xsink);
+    UT_ASSERT(c, !xsink, "cancelled-cleanup fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooled(*conn);
+    UT_ASSERT_EQ(c, 0, qore_cancel_thread(q_gettid(), "unit test"),
+        "the running thread accepts a cancellation request");
+    UT_ASSERT(c, qore_is_thread_cancel_requested(),
+        "the cancellation request is pending before the cleanup runs");
+
+    mgr->abandonRequest(*conn, 5);
+
+    UT_ASSERT_EQ(c, 1, conn->getCancelCalls(),
+        "the cleanup runs although the calling thread is cancelled");
+    UT_ASSERT(c, !conn->wasCancelDeliverableDuringCleanup(),
+        "cancellation is deferred for the duration of the cleanup");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(),
+        "the unusable connection is evicted even on a cancelled thread");
+    UT_ASSERT(c, qore_is_thread_cancel_requested(),
+        "the deferral leaves the pending cancellation intact for the caller");
+
+    qore_clear_thread_cancel();
+    UT_ASSERT(c, !qore_is_thread_cancel_requested(),
+        "the unit test thread leaves no cancellation behind");
+    xsink.clear();
+}
+
 static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -3984,6 +4164,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_submit_after_ssl_error_preserves_error(c);
     ut_http1_onclosed_hook_one_shot(c);
     ut_http1_onclosed_hook_app_thread_close(c);
+    ut_manager_abandon_h1_evicts_connection(c);
+    ut_manager_abandon_multiplexed_keeps_connection(c);
+    ut_manager_abandon_completed_request_is_a_no_op(c);
+    ut_manager_abandon_runs_while_cancelled(c);
     ut_manager_close_callback_does_not_wait_for_pool(c);
     ut_manager_close_callback_lifetime_handshake(c);
     ut_manager_acquire_first_request(c);

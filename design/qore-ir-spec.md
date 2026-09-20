@@ -63,6 +63,36 @@ Every block must end in an explicit terminator. The verifier checks operand
 validity, terminators, block targets, local slot references, cleanup metadata,
 and instruction-specific invariants.
 
+## Deserialized Instruction Metadata
+
+An instruction field that holds a process address — a `QoreVarInfo*`, a
+`QoreClass*`, a variant pointer — cannot be serialized into an AOT binary. The
+binary records the name or path instead, and the address exists only once the
+target is resolved in the running Program. IR read back from a binary therefore
+arrives with those fields empty, and the resolution can still fail: a class that
+is not loaded yet leaves a deferred reference that has to be retried at run time.
+
+Such a field is a cache, not the source of truth. The instruction's serialized
+expression is authoritative, and every consumer must be able to work from it:
+
+- Resolve an empty field from the expression before use; never dereference it.
+- Serve a reference that stayed deferred by name, through the by-path runtime
+  helper.
+- Treat metadata that is neither resolvable nor deferred as a lowering failure,
+  so the JIT keeps the function on the IR tier instead of emitting a call that
+  cannot work.
+
+This applies to the LLVM lowering as much as to the interpreter. Deserialized IR
+reaches the JIT whenever a function or closure loaded from a binary is promoted
+to the JIT tier, and the JIT bakes these addresses into the generated code as
+constants: an unresolved field becomes a null pointer in native code that faults
+the first time the instruction is reached, which can be long after the program
+started and only on the first execution that takes that branch.
+
+Resolution happens per execution, so a consumer must keep the resolved address in
+a local. Every thread executing a function shares one instruction, and writing
+the resolution back races with the other threads' reads of the same field.
+
 ## Locals and Parent Slot Identity
 
 Locals are mutable runtime locations, not SSA variables. IR uses explicit
@@ -141,6 +171,8 @@ instrumentation on Qore tests and services where enabled.
 
 - Add verifier coverage with every new opcode or operand shape.
 - Keep IR slot IDs stable across interpreter, JIT, and AOT paths.
+- Resolve pointer-valued instruction metadata from the serialized expression
+  before use, and keep the result in a local.
 - Do not add runtime fallbacks that hide missing lowering in `%modern` code.
 - Every owned value path needs a normal-exit and exception-exit cleanup.
 - Any lvalue mutation must preserve the COW invariant.

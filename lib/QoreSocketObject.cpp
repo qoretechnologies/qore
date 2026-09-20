@@ -5691,6 +5691,20 @@ void QoreSocketObject::setHttp2StreamStreamingDirect(int32_t stream_id) {
     }
 }
 
+void QoreSocketObject::setHttp2RecordResponseHeaderEvents(bool v) {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (h2) {
+        h2->setRecordResponseHeaderEvents(v);
+    }
+}
+
+void QoreSocketObject::setQuicRecordResponseHeaderEvents(bool v) {
+    std::shared_ptr<QuicSession> quic = qore_socket_object_get_first_quic_session(this);
+    if (quic) {
+        quic->setRecordResponseHeaderEvents(v);
+    }
+}
+
 void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     AutoLocker al(priv->m);
     priv->socket->setHttp2ConnectProtocolEnabled(enable);

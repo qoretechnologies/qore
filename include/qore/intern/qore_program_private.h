@@ -443,7 +443,9 @@ public:
     unsigned thread_count = 0;   // number of threads currently running in this Program
     unsigned thread_waiting = 0; // number of threads waiting on all threads to terminate or parsing to complete
     unsigned parse_count = 0;    // recursive parse count
-    int parse_tid = -1;          // thread with the parse lock
+    // thread with the parse lock; atomic because parsingLocked() reads it without plock,
+    // while lockParsing()/unlockParsing() write it under plock
+    std::atomic_int parse_tid{-1};
 
     // file name and unique string storage
     cstr_vector_t str_vec;

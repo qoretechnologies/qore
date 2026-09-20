@@ -375,7 +375,7 @@ int Http2ClientConnection::getActiveStreamCount() const {
 
 QoreHashNode* Http2ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -406,6 +406,8 @@ QoreHashNode* Http2ClientConnection::submitRequest(const char* method, const cha
         qore_new_future_impl_object(pgm, future_holder.release()), xsink);
 
     PromiseAction* action = new PromiseAction(promise_raw, /* promise_obj */ nullptr);
+    // the events of this request are reported to the sink of the client that issued it
+    action->setEventSink(event_sink);
 
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action,
@@ -471,7 +473,7 @@ int64_t Http2ClientConnection::submitRequestWithAction(const char* method, const
 
 int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
@@ -495,6 +497,7 @@ int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const 
 
     // Create ChannelAction — poll op takes ownership via submitRequest
     ChannelAction* action = new ChannelAction(ch);
+    action->setEventSink(event_sink);
 
     // streaming=false: Http2ClientPollOperationPriv::submitRequest interprets
     // `streaming` as request-body streaming (caller pushes body via
@@ -524,7 +527,7 @@ int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const 
 
 QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* method,
         const char* path, const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     MethodGuard g(this);
     if (!g.acquired()) {
         releaseStreamReservation(true);
@@ -580,6 +583,7 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }
+    action->setEventSink(event_sink);
 
     // Submit with streaming=true (no END_STREAM on headers — bidirectional streaming)
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
@@ -683,6 +687,30 @@ void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 
     // sendHttp2Trailers() delegates to the socket-level enqueue operation,
     // which wakes the controller after the trailers are queued.
+}
+
+bool Http2ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        // Already closing: the poll op settles every pending stream on the
+        // way out, so there is nothing left to abandon here.
+        return false;
+    }
+    // Settle the request's completion action first.  A stream that already
+    // completed reports false and is left alone — the connection stays in
+    // the pool untouched.
+    if (!poll_op_priv->cancelStream(stream_id, xsink)) {
+        return false;
+    }
+    // Then reset the stream on the wire.  HTTP/2 multiplexes, so only this
+    // stream ends: concurrent streams on the same connection are unaffected
+    // and the connection stays poolable.  Without the RST_STREAM the peer
+    // keeps sending a response body nobody reads, consuming the connection's
+    // flow-control window.  The enqueue is safe from any thread.
+    if (sock_priv) {
+        sock_priv->cancelHttp2Stream(static_cast<int32_t>(stream_id), xsink);
+    }
+    return true;
 }
 
 void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {

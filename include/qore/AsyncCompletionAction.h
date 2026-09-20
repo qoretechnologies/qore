@@ -39,6 +39,8 @@
 
 #include <vector>
 
+class HttpClientEventSink;
+
 //! Abstract base for I/O completion actions — pure C++, no Qore interpreter
 /** Completion actions describe WHAT to do with the result of an async I/O
     operation. They are executed on the I/O thread by the poll operation's
@@ -83,13 +85,46 @@ public:
     */
     DLLEXPORT virtual void complete(ExceptionSink* xsink) {}
 
+    //! Sets the HTTP client event sink of the request that this action completes
+    /** The sink reports the protocol events of one request to the event queue configured on the
+        HTTPClient object that issued it.  It is attached to the action because the action has exactly
+        the lifetime of the request: a connection is shared between requests and between client
+        objects, so a sink attached to the connection would mix the events of concurrent requests.
+
+        Called once, when the request is submitted and before the action can run.
+
+        @param sink the event sink; a reference is taken and released when the action is destroyed.
+            A @ref nullptr sink leaves the action without a sink.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setEventSink(HttpClientEventSink* sink);
+
+    //! Returns the HTTP client event sink of the request, or @ref nullptr if none is set
+    /** The reference belongs to the action, which the caller must keep referenced while it uses the
+        sink.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT HttpClientEventSink* getEventSink() const {
+        return event_sink;
+    }
+
     DLLEXPORT void ref() { ROreference(); }
     DLLEXPORT void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             cleanup(xsink);
+            releaseEventSink(xsink);
             delete this;
         }
     }
+
+private:
+    //! The event sink of the request this action completes (ref'd) or nullptr
+    HttpClientEventSink* event_sink = nullptr;
+
+    //! Releases the event sink reference, if any
+    DLLLOCAL void releaseEventSink(ExceptionSink* xsink);
 };
 
 //! Resolves a QorePromise with the result

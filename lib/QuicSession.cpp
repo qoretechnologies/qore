@@ -2948,6 +2948,38 @@ void QuicSession::setStreamStreaming(int64_t stream_id) {
     }
 }
 
+void QuicSession::setRecordResponseHeaderEvents(bool v) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    record_response_header_events_ = v;
+}
+
+void QuicSession::recordResponseHeaderEvent(const QuicStreamInfo& stream) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!record_response_header_events_ || is_server_) {
+        return;
+    }
+    pending_header_events_.push_back({stream.stream_id, stream.status_code, stream.headers});
+}
+
+void QuicSession::takeResponseHeaderEvents(const std::unordered_set<int64_t>& stream_ids,
+        std::vector<QuicResponseHeaderEvent>& out) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (pending_header_events_.empty()) {
+        return;
+    }
+    std::vector<QuicResponseHeaderEvent> keep;
+    for (auto& event : pending_header_events_) {
+        if (stream_ids.count(event.stream_id)) {
+            out.push_back(std::move(event));
+        } else if (streams_.find(event.stream_id) != streams_.end()) {
+            // the request is still registering itself; take the header on a later call
+            keep.push_back(std::move(event));
+        }
+        // a header recorded for a stream that is gone and unclaimed is discarded here
+    }
+    pending_header_events_ = std::move(keep);
+}
+
 std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [id, info] : streams_) {
@@ -4228,6 +4260,10 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         auto* stream = session->getOrCreateStream(stream_id);
         stream->headers_complete = true;
         stream->headers_end_stream = (fin != 0);
+        // record the response header for the event sink of the client that issued the request: the
+        // stream is erased from the session as soon as its response completes, which can happen before
+        // the caller's poll operation runs again
+        session->recordResponseHeaderEvent(*stream);
 
         // Pre-allocate body buffer using content-length hint to avoid repeated
         // reallocation in h3RecvDataCallback

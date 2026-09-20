@@ -110,7 +110,7 @@ public:
 
     DLLEXPORT QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) override;
+        ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr) override;
 
     //! Submits a request with a caller-provided completion action.
     /** @since %Qore 3.0
@@ -124,14 +124,16 @@ public:
     */
     DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr) override;
 
     //! Submits a request with streaming send (H3 DATA frames pushed incrementally)
     /** @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr) override;
 
     //! Push body data for a streaming send request (H3 DATA frame via QUIC)
     /** @since %Qore 3.0
@@ -142,6 +144,8 @@ public:
     /** @since %Qore 3.0
     */
     DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
+
+    DLLEXPORT bool cancelRequest(int64_t stream_id, ExceptionSink* xsink) override;
 
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 

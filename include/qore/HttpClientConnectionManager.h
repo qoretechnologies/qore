@@ -51,6 +51,7 @@ class ExceptionSink;
 class QoreHashNode;
 class QoreSSLCertificate;
 class QoreSSLPrivateKey;
+class HttpClientEventSink;
 
 //! C++ HTTP client connection manager — Phase P3 of the porting plan.
 /** Implements the connection pool, per-key creation serialization, proxy
@@ -320,6 +321,39 @@ public:
     DLLEXPORT virtual void closeAndEvict(HttpClientConnectionBase* conn,
         ExceptionSink* xsink);
 
+    //! Abandons a submitted request whose caller stopped waiting for it.
+    /** Call this when a synchronous submit-and-await wait ended without a
+        result — thread cancellation, a request timeout, or any other
+        interruption.  Returning from such a wait without abandoning the
+        request leaves it live on the I/O controller: the completion action
+        still holds the caller's %Promise, the protocol still counts the
+        stream as active, and the peer is still serving an exchange nobody
+        will read.  For HTTP/1.1 the connection would stay in the pool with
+        a response half-delivered on it and the peer would never see EOF.
+
+        Cancellation runs under a cancellation deferral (see
+        @ref QoreCancelDeferralHelper) so it completes even though the
+        calling thread already has a cancellation pending, and it uses its
+        own exception sink so the exception that ended the wait reaches the
+        caller unchanged.
+
+        The connection is closed and evicted only if abandoning the request
+        actually left it unusable: HTTP/1.1 cannot resynchronize in the
+        middle of a response, so an exchange already on the wire closes the
+        connection, while multiplexed protocols reset just the one stream
+        and keep serving their other streams.  A request that completed
+        while the caller was leaving its wait cancels nothing and the
+        connection is left in the pool.
+
+        @param conn the connection the request was submitted on; the caller
+            must hold a strong reference for the duration of this call
+        @param stream_id the stream ID returned in the @c stream_id key of
+            @c HttpClientConnectionBase::submitRequest's result hash
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual void abandonRequest(HttpClientConnectionBase* conn, int64_t stream_id);
+
     //! Closes all pooled connections and clears the pool.
     /** Called by the destructor; can be called explicitly to drain the
         manager without destroying it.  After this call, @ref acquireConnection
@@ -404,6 +438,9 @@ public:
         @param timeout_ms per-request timeout in milliseconds; 0 or negative
             uses the default from @c Options::request_timeout_ms
         @param xsink exception sink
+        @param event_sink optional event sink reporting the protocol events of this request to the
+            event queue of the client that issued it; the connection that serves the request is shared,
+            so the sink belongs to the request and not to the connection
 
         @return the response hash (caller owns), or @c nullptr on error
 
@@ -414,7 +451,7 @@ public:
     DLLEXPORT virtual QoreHashNode* request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        int timeout_ms, ExceptionSink* xsink);
+        int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr);
 
     //! Submits a streaming request and returns a Channel for reading
     /** Like @ref request but uses Channel-based incremental delivery
@@ -430,6 +467,8 @@ public:
         @param body optional complete request body
         @param body_len body length in bytes
         @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request; see
+            @ref request
 
         @return hash with "stream_id" and "channel" (QoreChannel*, ref'd);
             nullptr on error.  Caller must deref channel when done.
@@ -442,7 +481,8 @@ public:
     DLLEXPORT int64_t requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr);
 
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 
