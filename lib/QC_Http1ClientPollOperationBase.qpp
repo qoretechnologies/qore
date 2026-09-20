@@ -38,6 +38,7 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/HttpClientEventSink.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -1080,6 +1081,18 @@ void Http1ClientPollOperationPriv::setTrailers(const QoreHashNode* trailers, Exc
     send_trailers = trailers ? trailers->hashRefSelf() : nullptr;
 }
 
+HttpClientEventSink* Http1ClientPollOperationPriv::getReferencedEventSink() const {
+    AutoLocker al(stream_lock);
+    if (!stream_action) {
+        return nullptr;
+    }
+    HttpClientEventSink* sink = stream_action->getEventSink();
+    if (sink) {
+        sink->ref();
+    }
+    return sink;
+}
+
 QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsink) {
     if (!current_op) {
         setError("HTTP1-RECV-ERROR", "header read not initialized", xsink);
@@ -1311,6 +1324,17 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_status_code, (int)response_chunked,
             (long long)response_content_length, (int)connection_close,
             sock_obj ? sock_obj->getSocket() : -1);
+
+        // Report the response header events on the event queue of the client that issued the
+        // request.  Reported here, where the header is parsed, and not when the response is
+        // complete: a client that monitors the response must see the header while the body is
+        // still being read.
+        {
+            ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
+            if (sink) {
+                sink->responseHeaders(*hdr);
+            }
+        }
 
         // Determine if the response has a body
         // HEAD responses, 1xx, 204, and 304 have no body regardless of headers
@@ -1593,6 +1617,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
         printd(5, "Http1ClientPollOperationPriv::handleRecvChunkSize() chunk_size=%lld\n",
             (long long)chunk_size);
 
+        {
+            ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
+            if (sink) {
+                sink->chunkSize((size_t)chunk_size, len);
+            }
+        }
+
         if (chunk_size == 0) {
             // Last chunk - read trailing CRLF (or trailers followed by CRLF)
             releaseCurrentOp(xsink);
@@ -1656,6 +1687,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkData(ExceptionSink* x
             if (data->size() > 2) {
                 SimpleRefHolder<BinaryNode> chunk(new BinaryNode());
                 chunk->append(data->getPtr(), data->size() - 2);
+                {
+                    ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(), xsink);
+                    if (sink) {
+                        sink->chunkedDataRead(chunk->getPtr(), chunk->size());
+                        sink->chunkedDataReceived(chunk->size(), data->size());
+                    }
+                }
                 if (streaming_active_io) {
                     dispatchStreamingData(*chunk, xsink);
                 } else if (response_body) {

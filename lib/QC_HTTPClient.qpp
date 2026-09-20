@@ -192,16 +192,26 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
 
     The events raised by this object are listed in the following table:
     <b>HTTPClient Events</b>
-    |!Name|!Description
-    |@ref EVENT_HTTP_CONTENT_LENGTH|Raised when the HTTP \c "Content-Length" header is received.
-    |@ref EVENT_HTTP_CHUNKED_START|Raised when HTTP chunked data is about to be received.
-    |@ref EVENT_HTTP_CHUNKED_END|Raised when all HTTP chunked data has been received.
-    |@ref EVENT_HTTP_REDIRECT|Raised when an HTTP redirect message is received.
-    |@ref EVENT_HTTP_SEND_MESSAGE|Raised when an HTTP message is sent.
-    |@ref EVENT_HTTP_MESSAGE_RECEIVED|Raised when an HTTP message is received.
-    |@ref EVENT_HTTP_FOOTERS_RECEIVED|Raised when HTTP footers are received.
-    |@ref EVENT_HTTP_CHUNKED_DATA_RECEIVED|Raised when a block of HTTP chunked data is received.
-    |@ref EVENT_HTTP_CHUNK_SIZE|Raised when the next chunk size for HTTP chunked data is known.
+    |!Name|!Raised
+    |@ref EVENT_HTTP_SEND_MESSAGE|Before a request message is sent; a redirect or an authentication \
+        challenge sends another request, which raises its own event
+    |@ref EVENT_HTTP_MESSAGE_RECEIVED|When the header of a response has been received; the body of the \
+        response has not been read yet, so a client can act on the response while it is still arriving
+    |@ref EVENT_HTTP_CONTENT_LENGTH|With the response header, when the response declares a \
+        \c "Content-Length"
+    |@ref EVENT_HTTP_REDIRECT|When a redirect response is followed
+    |@ref EVENT_HTTP_CHUNK_SIZE|When the size of the next chunk of a chunked response is known
+    |@ref EVENT_HTTP_CHUNKED_DATA_RECEIVED|When a chunk of a chunked response has been read
+    |@ref EVENT_HTTP_CHUNKED_DATA_READ|When a chunk of a chunked response has been read, with the data \
+        of the chunk; only raised when the event queue was set with the \c with_data option
+
+    Chunked transfer encoding is an HTTP/1.1 framing, so the chunk events are raised only for responses
+    that use it; a response delivered over HTTP/2 or HTTP/3 raises the request, response header, and
+    content length events like any other.
+
+    Requests are served by the connections of the client's connection manager, which are shared between
+    requests and between clients; each event is raised on the queue of the client that made the request
+    it belongs to, and reports that client in its \c "id" key.
 
     @section httpclient_response_body Response Message Bodies
 
@@ -3017,6 +3027,9 @@ httpclient.setEventQueue(queue);
     Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
     @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
+
+    The queue receives the events of every request made by this object, including requests still in
+    flight when it is set; clearing the queue stops the events of requests in flight as well.
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 

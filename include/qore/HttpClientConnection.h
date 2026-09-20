@@ -48,6 +48,7 @@ class ExceptionSink;
 class QoreChannel;
 class HttpClientConnectionManagerBase;
 class AbstractAsyncAction;
+class HttpClientEventSink;
 
 //! HTTP client protocol version
 /** @since %Qore 3.0
@@ -234,6 +235,9 @@ public:
         @param body optional request body (may be nullptr if @a body_len is 0)
         @param body_len request body length in bytes
         @param xsink exception sink
+        @param event_sink optional event sink reporting the protocol events of this request to the
+            event queue of the client that issued it; the sink is attached to the completion action of
+            the request, because the connection is shared between requests
 
         @return a newly-allocated hash with the keys described above
             (caller owns); @c nullptr on error (@a xsink is set)
@@ -245,7 +249,7 @@ public:
     */
     DLLEXPORT virtual QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink);
+        ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr);
 
     //! Submits a streaming request with Channel-based response delivery
     /** Like @ref submitRequest but uses a @c QoreChannel for incremental
@@ -258,13 +262,16 @@ public:
         @param body_len body length in bytes
         @param channel_out receives a ref'd QoreChannel* on success
         @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request; see
+            @ref submitRequest
         @return stream ID on success; -1 on error
 
         @since %Qore 3.0
     */
     DLLEXPORT virtual int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr);
 
     //! Submits a request with a caller-provided async completion action.
     /** Like @ref submitRequest but uses the caller's
@@ -306,13 +313,16 @@ public:
         @param streaming_recv if true, response delivered incrementally via Channel
         @param channel_out receives a ref'd QoreChannel* when streaming_recv is true
         @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request; see
+            @ref submitRequest
         @return result hash on success, nullptr on error
 
         @since %Qore 3.0
     */
     DLLEXPORT virtual QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr);
 
     //! Push body data for a streaming send request
     /** @param data body chunk pointer (nullptr signals end-of-body)

@@ -1720,6 +1720,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreHttp2ClientConnection.cpp
     lib/QoreHttp3ClientConnection.cpp
     lib/QoreHttpClientConnectionManagerBase.cpp
+    lib/HttpClientEventSink.cpp
     lib/NegotiatingConnectionPollOp.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
@@ -2070,6 +2071,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp2ClientConnection.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp3ClientConnection.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionManagerBase.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/HttpClientEventSink.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/NegotiatingConnectionPollOp.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"

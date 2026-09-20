@@ -1148,7 +1148,7 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
 QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        int timeout_ms, ExceptionSink* xsink) {
+        int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink) {
     SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "request", xsink);
     if (*xsink) {
         return nullptr;
@@ -1167,7 +1167,7 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
 
     ReferenceHolder<QoreHashNode> submit_result(
-        conn->submitRequest(method, path, headers, body, body_len, xsink), xsink);
+        conn->submitRequest(method, path, headers, body, body_len, xsink, event_sink), xsink);
     if (!submit_result || *xsink) {
         // submitRequest failed — release the reservation we made via
         // acquireConnection's tryReserveStream.
@@ -1250,14 +1250,15 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
 int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) {
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return -1;
     }
 
     int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
-        body, body_len, channel_out, xsink);
+        body, body_len, channel_out, xsink, event_sink);
     if (*xsink || stream_id < 0) {
         releaseConnection(conn);
         return -1;

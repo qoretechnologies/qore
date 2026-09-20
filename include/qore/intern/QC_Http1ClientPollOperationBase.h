@@ -42,6 +42,8 @@
 #include <deque>
 #include <string>
 
+class HttpClientEventSink;
+
 //! C++ base for Http1ClientPollOperation providing SocketPollOperationBase fast path
 /** This class implements the HTTP/1.1 client poll state machine (connecting,
     ssl_upgrade, proxy_connect, reading/sending, closed) entirely in C++,
@@ -310,6 +312,13 @@ public:
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
     }
+
+    //! Returns the event sink of the request in flight with a new reference, or nullptr if it has none
+    /** The sink reports the protocol events of the request to the event queue of the client that
+        issued it; it is attached to the request's completion action, because the connection is shared
+        between requests.  I/O thread only.
+    */
+    DLLLOCAL HttpClientEventSink* getReferencedEventSink() const;
 
     DLLLOCAL QoreObject* getReferencedSocket() const {
         if (self) {

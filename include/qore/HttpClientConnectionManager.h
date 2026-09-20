@@ -51,6 +51,7 @@ class ExceptionSink;
 class QoreHashNode;
 class QoreSSLCertificate;
 class QoreSSLPrivateKey;
+class HttpClientEventSink;
 
 //! C++ HTTP client connection manager — Phase P3 of the porting plan.
 /** Implements the connection pool, per-key creation serialization, proxy
@@ -404,6 +405,9 @@ public:
         @param timeout_ms per-request timeout in milliseconds; 0 or negative
             uses the default from @c Options::request_timeout_ms
         @param xsink exception sink
+        @param event_sink optional event sink reporting the protocol events of this request to the
+            event queue of the client that issued it; the connection that serves the request is shared,
+            so the sink belongs to the request and not to the connection
 
         @return the response hash (caller owns), or @c nullptr on error
 
@@ -414,7 +418,7 @@ public:
     DLLEXPORT virtual QoreHashNode* request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        int timeout_ms, ExceptionSink* xsink);
+        int timeout_ms, ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr);
 
     //! Submits a streaming request and returns a Channel for reading
     /** Like @ref request but uses Channel-based incremental delivery
@@ -430,6 +434,8 @@ public:
         @param body optional complete request body
         @param body_len body length in bytes
         @param xsink exception sink
+        @param event_sink optional event sink for the protocol events of this request; see
+            @ref request
 
         @return hash with "stream_id" and "channel" (QoreChannel*, ref'd);
             nullptr on error.  Caller must deref channel when done.
@@ -442,7 +448,8 @@ public:
     DLLEXPORT int64_t requestStreaming(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink);
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr);
 
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 

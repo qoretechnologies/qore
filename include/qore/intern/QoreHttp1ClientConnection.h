@@ -213,11 +213,12 @@ public:
 
     DLLEXPORT QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) override;
+        ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr) override;
 
     DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr) override;
 
     //! Submits a request with streaming send (chunked TE); body pushed via pushSendData()
     /** @param method HTTP method
@@ -230,7 +231,8 @@ public:
     */
     DLLEXPORT QoreHashNode* submitRequestStreamingSend(const char* method, const char* path,
         const QoreHashNode* headers, bool streaming_recv,
-        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+        QoreChannel*& channel_out, ExceptionSink* xsink,
+        HttpClientEventSink* event_sink = nullptr) override;
 
     //! Pushes body data for a streaming send request (virtual override: const void*, size_t)
     /** @param data body chunk pointer; nullptr signals end-of-body

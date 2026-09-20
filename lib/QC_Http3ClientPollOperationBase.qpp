@@ -37,6 +37,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/HttpClientEventSink.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 
@@ -304,6 +305,19 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     return nullptr;
 }
 
+HttpClientEventSink* Http3ClientPollOperationPriv::getReferencedEventSink(int64_t stream_id) const {
+    AutoLocker al(stream_lock);
+    auto it = stream_actions.find(std::to_string(stream_id));
+    if (it == stream_actions.end()) {
+        return nullptr;
+    }
+    HttpClientEventSink* sink = it->second->getEventSink();
+    if (sink) {
+        sink->ref();
+    }
+    return sink;
+}
+
 QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
     // Defensive: if state was set to CLOSED (e.g. by abort() on another thread),
     // do not drain — return immediately to avoid buffering orphaned responses
@@ -413,6 +427,53 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 auto session = inner_op->getSession();
                 if (session && session->isGoawayReceived()) {
                     goaway_received.store(true, std::memory_order_release);
+                }
+            }
+        }
+
+        // Report the response header events of the streams whose header arrived in this read cycle,
+        // before the completed responses are dispatched: a client that monitors a response must see its
+        // header while the body is still being read.
+        {
+            auto session = inner_op->getSession();
+            if (session) {
+                // only the requests that have finished registering themselves are considered, so a
+                // header that arrives while its caller is still in submitRequest() is reported by the
+                // read cycle that follows the registration instead of being dropped
+                std::unordered_set<int64_t> reporting_streams;
+                {
+                    AutoLocker al(stream_lock);
+                    for (auto& i : stream_actions) {
+                        if (i.second->getEventSink()) {
+                            reporting_streams.insert(strtoll(i.first.c_str(), nullptr, 10));
+                        }
+                    }
+                }
+                std::vector<QuicResponseHeaderEvent> header_events;
+                if (!reporting_streams.empty()) {
+                    session->takeResponseHeaderEvents(reporting_streams, header_events);
+                }
+                for (auto& event : header_events) {
+                    ReferenceHolder<HttpClientEventSink> sink(getReferencedEventSink(event.stream_id),
+                        xsink);
+                    if (!sink) {
+                        continue;
+                    }
+                    // the shape of the header hash matches the one the HTTP/1.1 path reports: header
+                    // names in lower case, with the status line in the status_code and http_version keys
+                    ReferenceHolder<QoreHashNode> hdr(httpMultiHeadersToQoreHash(event.headers, true),
+                        xsink);
+                    hdr->setKeyValue("status_code", event.status_code, xsink);
+                    hdr->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+                    if (*xsink) {
+                        setError("HTTP3-READ-ERROR", "response header event error", xsink);
+                        cleanupPendingState();
+                        if (last_poll_info) {
+                            last_poll_info->deref(xsink);
+                        }
+                        return nullptr;
+                    }
+                    sink->responseHeaders(**hdr);
                 }
             }
         }
@@ -793,6 +854,11 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     if (*xsink) {
         action->deref(xsink);
         return -1;
+    }
+
+    // a request that reports events needs the response header of its stream recorded when it arrives
+    if (action->getEventSink()) {
+        sock_obj->setQuicRecordResponseHeaderEvents(true);
     }
 
     // Phase 2: begin submit

@@ -17812,6 +17812,13 @@ int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {
     return 0;
 }
 
+void SocketHttp2ClientMultiplexPollOperation::takeResponseHeaderEvents(
+        const std::unordered_set<int32_t>& stream_ids, std::vector<Http2ResponseHeaderEvent>& out) {
+    if (h2_session) {
+        h2_session->takeResponseHeaderEvents(stream_ids, out);
+    }
+}
+
 void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id, Http2StreamInfo* stream,
         ExceptionSink* xsink) {
     // Build response hash from stream info

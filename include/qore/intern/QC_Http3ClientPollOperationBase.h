@@ -45,6 +45,8 @@
 #include <unordered_set>
 #include <vector>
 
+class HttpClientEventSink;
+
 class Http3ClientConnection;
 
 //! C++ base for Http3ClientPollOperation providing SocketPollOperationBase fast path
@@ -307,6 +309,13 @@ public:
     }
 
     //! Get the socket object (returns a referenced QoreObject*)
+    //! Returns the event sink of the request on a stream with a new reference, or nullptr if it has none
+    /** The sink reports the protocol events of the request to the event queue of the client that issued
+        it; it is attached to the request's completion action, because the connection is shared between
+        requests.  I/O thread only.
+    */
+    DLLLOCAL HttpClientEventSink* getReferencedEventSink(int64_t stream_id) const;
+
     DLLLOCAL QoreObject* getReferencedSocket() const {
         if (self) {
             ExceptionSink xsink;
