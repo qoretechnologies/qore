@@ -500,7 +500,9 @@ private:
         closes the connection proactively with HTTP2-IDLE-TIMEOUT.  Mirrors
         nginx's upstream keepalive_timeout.  I/O thread only.
     */
-    int64_t idle_timeout_us = -1;
+    // atomic: setIdleTimeout() is called from the thread configuring the connection while
+    // the I/O thread reads it to arm the idle deadline
+    std::atomic<int64_t> idle_timeout_us{-1};
 
     //! Deadline for the current idle period (epoch us); 0 = not yet armed
     /** Armed on the first handleReading() cycle that observes

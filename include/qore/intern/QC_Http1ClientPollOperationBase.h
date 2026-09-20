@@ -439,7 +439,9 @@ private:
         connection proactively with HTTP1-IDLE-TIMEOUT.  Mirrors nginx's
         upstream keepalive_timeout; I/O thread only.
     */
-    int64_t idle_timeout_us = -1;
+    // atomic: setIdleTimeout() is called from the thread configuring the connection while
+    // the I/O thread reads it to arm the idle deadline
+    std::atomic<int64_t> idle_timeout_us{-1};
 
     //! Deadline for the current idle period (epoch us); 0 = not yet in idle wait
     /** Set on first handleIdle entry with no pending request; cleared when a

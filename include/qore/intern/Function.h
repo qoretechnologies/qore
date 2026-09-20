@@ -898,7 +898,7 @@ protected:
     mutable std::once_flag ir_lower_once;
     //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
     mutable std::atomic<int> jit_compile_state{0};
-    mutable bool ir_lower_failed = false;
+    mutable std::atomic_bool ir_lower_failed{false};
     //! True when native JIT compilation is permanently unavailable for this variant
     mutable std::atomic<bool> jit_compile_failed{false};
     bool is_closure = false;  //!< true for closure variants
