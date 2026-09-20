@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o., all rights reserved
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Schema
+%requires SqlUtil
+%requires QUnit
+%try-module sqlite3
+%define NO_SQLITE3
+%endtry
+%exec-class AlignmentTransactionTest
+
+class AlignmentTransactionTest inherits QUnit::Test {
+    constructor() : Test("Schema alignment transaction ownership", "1.0", \ARGV) {
+        addTestCase("caller can roll back DDL and additional writes", \rollbackAlignment());
+        addTestCase("caller can commit alignment", \commitAlignment());
+        addTestCase("default alignment still commits", \defaultCommit());
+        addTestCase("independently committing migrations are rejected before mutation", \rejectCommittingMigrations());
+        addTestCase("caller retains ownership after alignment failure", \failureOwnership());
+        set_return_value(main());
+    }
+    private Datasource datasource() {
+%ifdef NO_SQLITE3
+        testSkip("sqlite3 module unavailable");
+%endif
+        return new Datasource("sqlite3:@:memory:");
+    }
+    private hash<auto> definition() {
+        return Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": "inventory", "version": "1.0", "version_table": "inventory_version",
+                "version_column": "version", "version_where": {"name": "inventory"}},
+            "tables": {"inventory_version": {"columns": {
+                "name": {"type": "text"}, "version": {"type": "text"}}},
+                "inventory": {"columns": {"id": {"type": "int"}, "name": {"type": "text"}}}},
+        });
+    }
+    private bool existsTable(AbstractDatasource ds) {
+        return new SqlUtil::Table(ds, "inventory").checkExistence();
+    }
+    private rollbackAlignment() {
+        Datasource ds = datasource(); on_exit ds.rollback();
+        Schema::DataSchema schema(ds, definition());
+        hash<auto> info = schema.alignWithInfoInTransaction(True, -1, False);
+        assertTrue(info.val());
+        assertTrue(existsTable(ds));
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "name": "Widget"});
+        assertEq("Widget", new SqlUtil::Table(ds, "inventory").selectRow().name);
+        ds.rollback();
+        assertFalse(existsTable(ds), "DDL and additional writes disappear on caller rollback");
+    }
+    private commitAlignment() {
+        Datasource ds = datasource(); on_exit ds.rollback();
+        Schema::DataSchema schema(ds, definition());
+        schema.alignWithInfoInTransaction(True, -1, False);
+        new SqlUtil::Table(ds, "inventory").insert({"id": 1, "name": "Widget"});
+        ds.commit(); ds.rollback();
+        assertTrue(existsTable(ds));
+        assertEq("Widget", new SqlUtil::Table(ds, "inventory").selectRow().name);
+    }
+    private defaultCommit() {
+        Datasource ds = datasource(); on_exit ds.rollback();
+        Schema::DataSchema schema(ds, definition());
+        schema.alignWithInfo(True, -1, False);
+        ds.rollback();
+        assertTrue(existsTable(ds), "legacy alignment owns and commits its transaction");
+        assertNothing(new SqlUtil::Table(ds, "inventory").selectRow());
+    }
+    private failureOwnership() {
+        foreach bool managed in ((False, True)) {
+            Datasource ds = datasource(); on_exit ds.rollback();
+            FailingTransactionSchema schema(ds, definition());
+            if (managed) {
+                assertThrows("EXPECTED-ALIGNMENT-FAILURE", \schema.alignWithInfo(), (True, -1, False));
+            } else {
+                assertThrows("EXPECTED-ALIGNMENT-FAILURE", \schema.alignWithInfoInTransaction(), (True, -1, False));
+            }
+            assertEq(!managed, existsTable(ds), "only the transaction owner rolls back on failure");
+            ds.rollback();
+            assertFalse(existsTable(ds));
+        }
+    }
+    private rejectCommittingMigrations() {
+        foreach string action in (("sql", "script", "reconcile_table")) {
+            foreach string phase in (("pre_align", "post_align")) {
+                Datasource ds = datasource(); on_exit ds.rollback();
+                hash<auto!> data = definition();
+                data.migrations = ({"version": "2.0", phase: ({"action": action},)},);
+                Schema::DataSchema schema(ds, data);
+                assertThrows("SCHEMA-TRANSACTION-ERROR", \schema.alignWithInfoInTransaction(), (True, -1, False));
+                assertFalse(existsTable(ds), "unsafe migration is rejected before any alignment DDL");
+            }
+        }
+    }
+}
+
+class FailingTransactionSchema inherits Schema::DataSchema {
+    constructor(AbstractDatasource ds, hash<auto> data) : DataSchema(ds, data) { }
+    private doPostAlignment(SqlUtil::Tables table_cache, bool first_time_install,
+            *hash<auto> initial_schema_info, int verbose) {
+        throw "EXPECTED-ALIGNMENT-FAILURE", "Controlled failure after alignment DDL";
+    }
+}
