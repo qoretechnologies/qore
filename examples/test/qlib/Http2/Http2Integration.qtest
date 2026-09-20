@@ -85,17 +85,22 @@ H4sqXPgfKSW/wUHTeS9BN4s=
         @param method the request method
         @param path the request path
         @param hdr the request headers, if any
-        @param error_status True if the request asks the server for an error status
+        @param error_status the error status the request asks the server to return, if any
+
+        @note A server error is only the status the request asked for; any other 5xx is the external server
+        failing rather than answering, which is not a failure of the client.  Checking only a boolean "an error
+        was requested" cannot tell those apart, so a request for \c /status/500 answered with \c 502 by an
+        overloaded httpbin.org used to be reported as the client returning the wrong status.
     */
     private hash<auto> sendExternal(HTTPClient client, *data body, string method, string path, *hash<auto> hdr,
-            bool error_status = False) {
+            *int error_status) {
         hash<auto> resp;
         try {
             resp = client.send(body, method, path, hdr, True);
         } catch (hash<ExceptionInfo> ex) {
             testSkip(sprintf("External server unavailable: %s: %s", ex.err, ex.desc));
         }
-        if (!error_status && resp.status_code >= 500) {
+        if (resp.status_code >= 500 && resp.status_code != error_status) {
             testSkip(sprintf("External server unavailable: %s %s returned status %d", method, path,
                 resp.status_code));
         }
@@ -181,7 +186,7 @@ H4sqXPgfKSW/wUHTeS9BN4s=
         hash<auto> resp = sendExternal(client, NOTHING, "GET", "/status/404");
         assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
         assertEq(404, resp.status_code, "Status should be 404");
-        resp = sendExternal(client, NOTHING, "GET", "/status/500", NOTHING, True);
+        resp = sendExternal(client, NOTHING, "GET", "/status/500", NOTHING, 500);
         assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
         assertEq(500, resp.status_code, "Status should be 500");
     }
