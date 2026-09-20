@@ -93,4 +93,16 @@ protected:
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 };
 
+//! Returns the variable info \a expr refers to, or nullptr if it refers to no resolved variable
+/** A static variable reference serialized to an AOT binary is stored as a class path and a member
+    name; its QoreVarInfo exists only once the owning class is resolved in the running Program.  A
+    reference read back before its class is available is a DeferredStaticClassMemberRefNode and has
+    no variable info until the lookup is retried, so consumers must be able to work from the class
+    path alone.
+*/
+static inline QoreVarInfo* qore_static_var_ref_info(const QoreValue& expr) {
+    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(expr.getInternalNode());
+    return static_var ? &static_var->vi : nullptr;
+}
+
 #endif

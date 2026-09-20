@@ -9539,20 +9539,22 @@ load_local_done:
                     ++ip;
                     break;
                 }
-                // Resolve vi from expr if not set (AOT-deserialized handler IR)
-                if (!sv_inst->vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
-                    auto* static_var = dynamic_cast<StaticClassVarRefNode*>(const_cast<AbstractQoreNode*>(node));
-                    if (!static_var) {
-                        xsink->raiseException("IR-RUNTIME-ERROR",
-                            "LoadStaticVar instruction has invalid static member metadata");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    sv_inst->vi = &static_var->vi;
+                // Resolve vi from expr if not set (AOT-deserialized handler IR).  Every thread
+                // executing this function shares the instruction, so keep the resolved pointer
+                // in a local rather than writing it back.
+                QoreVarInfo* vi = sv_inst->vi;
+                if (!vi && sv_inst->expr.getType() == NT_CLASS_VARREF) {
+                    vi = qore_static_var_ref_info(sv_inst->expr);
+                }
+                if (!vi) {
+                    xsink->raiseException("IR-RUNTIME-ERROR",
+                        "LoadStaticVar instruction has invalid static member metadata");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 // issue 3523: evaluate in case the value is a reference
-                ValueHolder val(sv_inst->vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
+                ValueHolder val(vi->getReferencedValue(sv_inst->var_name.c_str(), xsink),
                         xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

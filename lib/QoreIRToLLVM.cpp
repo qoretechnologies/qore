@@ -16690,19 +16690,42 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     result = emitMaybeInvoke(helper, helper_throwing,
                             {aot_ctx_arg, class_path, var_name, xsink_arg}, module, llvm_func, inst);
                 } else {
-                    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
-                            inv->expr.getInternalNode());
-                    assert(static_var);
-                    llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(&static_var->vi));
-                    llvm::Value* vi_as_ptr = builder->CreateIntToPtr(vi_ptr, ptr_type);
-                    llvm::Constant* name_const = builder->CreateGlobalString(static_var->str,
-                            "static_var_name");
-                    const char* helper_name = dot_eval_only_bases.count(inst->result.id)
-                            ? "qore_rt_load_static_var_for_call" : "qore_rt_load_static_var";
-                    auto helper = module.getOrInsertFunction(helper_name,
-                            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {vi_as_ptr, name_const, xsink_arg});
+                    // JIT bakes the QoreVarInfo address into the generated code, which is only
+                    // available once the owning class is resolved in the running Program.  IR
+                    // deserialized from an AOT binary can carry an unresolved reference
+                    // instead; serve those with the by-path helper rather than dereferencing
+                    // a null node to reach its vi member.
+                    const AbstractQoreNode* node = inv->expr.getInternalNode();
+                    const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node);
+                    const bool for_call = dot_eval_only_bases.count(inst->result.id);
+                    auto lsv_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, ptr_type}, false);
+                    if (static_var) {
+                        llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(&static_var->vi));
+                        llvm::Value* vi_as_ptr = builder->CreateIntToPtr(vi_ptr, ptr_type);
+                        llvm::Constant* name_const = builder->CreateGlobalString(static_var->str,
+                                "static_var_name");
+                        auto helper = module.getOrInsertFunction(for_call
+                                ? "qore_rt_load_static_var_for_call" : "qore_rt_load_static_var",
+                                lsv_ft);
+                        result = builder->CreateCall(helper, {vi_as_ptr, name_const, xsink_arg});
+                    } else {
+                        const auto* deferred_static =
+                                dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+                        if (!deferred_static) {
+                            error = "JIT LoadStaticVar requires static member metadata";
+                            return false;
+                        }
+                        llvm::Value* class_path = qore_ir_create_global_string_ptr(
+                                builder, deferred_static->class_path, "static_var_class_path");
+                        llvm::Value* var_name = qore_ir_create_global_string_ptr(
+                                builder, deferred_static->member_name, "static_var_name");
+                        auto helper = module.getOrInsertFunction(for_call
+                                ? "qore_rt_load_static_var_by_path_for_call"
+                                : "qore_rt_load_static_var_by_path", lsv_ft);
+                        result = builder->CreateCall(helper, {class_path, var_name, xsink_arg});
+                    }
                 }
                 // LoadStaticVar doesn't modify locals — no reload needed
 
@@ -25566,23 +25589,63 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {aot_ctx_arg, class_path, var_name, xsink_arg}, module, llvm_func, inst);
             } else {
-                // JIT: pass QoreVarInfo* and var_name directly
-                llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(svinst->vi));
-                llvm::Value* vi_as_ptr = builder->CreateIntToPtr(vi_ptr, ptr_type);
-                llvm::Constant* name_const = builder->CreateGlobalString(svinst->var_name,
-                        "static_var_name");
+                // JIT: pass QoreVarInfo* and var_name directly.
+                //
+                // The instruction's vi is only set when the IR was built by the parser in
+                // this process.  IR deserialized from an AOT binary has none: the binary
+                // stores the class path and member name, and the QoreVarInfo only exists
+                // once the class is resolved in the running Program.  Such IR reaches this
+                // lowering whenever a deserialized function or closure is promoted to the
+                // JIT tier, and baking a null pointer into the generated code crashes the
+                // first time the instruction is reached at run time — so resolve vi from the
+                // serialized expression here, exactly as the IR interpreter does, and serve
+                // a reference whose class could not be resolved with the by-path helper.
+                const AbstractQoreNode* node = svinst->expr.getInternalNode();
+                QoreVarInfo* vi = svinst->vi;
+                if (!vi) {
+                    if (const auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+                        vi = &static_var->vi;
+                    }
+                }
+                const bool for_call = dot_eval_only_bases.count(inst->result.id);
                 auto lsv_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, ptr_type, ptr_type}, false);
-                const bool for_call = dot_eval_only_bases.count(inst->result.id);
-                auto helper = module.getOrInsertFunction(for_call
-                        ? "qore_rt_load_static_var_for_call" : "qore_rt_load_static_var", lsv_ft);
-                auto helper_throwing = module.getOrInsertFunction(for_call
-                        ? "qore_rt_load_static_var_for_call_throwing"
-                        : "qore_rt_load_static_var_throwing", lsv_ft);
-                result = emitMaybeInvoke(helper, helper_throwing,
-                        {vi_as_ptr, name_const, xsink_arg},
-                        module, llvm_func, inst);
+                if (vi) {
+                    llvm::Value* vi_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(vi));
+                    llvm::Value* vi_as_ptr = builder->CreateIntToPtr(vi_ptr, ptr_type);
+                    llvm::Constant* name_const = builder->CreateGlobalString(svinst->var_name,
+                            "static_var_name");
+                    auto helper = module.getOrInsertFunction(for_call
+                            ? "qore_rt_load_static_var_for_call" : "qore_rt_load_static_var",
+                            lsv_ft);
+                    auto helper_throwing = module.getOrInsertFunction(for_call
+                            ? "qore_rt_load_static_var_for_call_throwing"
+                            : "qore_rt_load_static_var_throwing", lsv_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {vi_as_ptr, name_const, xsink_arg},
+                            module, llvm_func, inst);
+                } else {
+                    const auto* deferred_static =
+                            dynamic_cast<const DeferredStaticClassMemberRefNode*>(node);
+                    if (!deferred_static) {
+                        error = "JIT LoadStaticVar requires static member metadata";
+                        return false;
+                    }
+                    llvm::Value* class_path = qore_ir_create_global_string_ptr(
+                            builder, deferred_static->class_path, "static_var_class_path");
+                    llvm::Value* var_name = qore_ir_create_global_string_ptr(
+                            builder, deferred_static->member_name, "static_var_name");
+                    auto helper = module.getOrInsertFunction(for_call
+                            ? "qore_rt_load_static_var_by_path_for_call"
+                            : "qore_rt_load_static_var_by_path", lsv_ft);
+                    auto helper_throwing = module.getOrInsertFunction(for_call
+                            ? "qore_rt_load_static_var_by_path_for_call_throwing"
+                            : "qore_rt_load_static_var_by_path_throwing", lsv_ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {class_path, var_name, xsink_arg},
+                            module, llvm_func, inst);
+                }
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);

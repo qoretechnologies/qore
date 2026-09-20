@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDeserializedStaticVarJITTierTest
+
+# Regression test: a class-static variable read in IR deserialized from an AOT binary must not
+# be lowered to a null QoreVarInfo pointer when the function reaches the JIT tier.
+#
+# The JIT bakes the variable's QoreVarInfo address into the generated code.  That address cannot
+# be serialized, so an AOT binary stores the class path and member name instead and the
+# instruction is read back with no pointer at all.  The IR interpreter resolved the pointer from
+# the instruction's expression before using it; the LLVM lowering did not, and emitted
+# qore_rt_load_static_var(nullptr, ...) instead -- a SIGSEGV on the first execution that reaches
+# the instruction.
+#
+# Reaching it took three things at once, which is why it survived so long:
+#   - the read runs in a closure a deferred scope handler creates, so its body is deserialized
+#     and executed on the IR tier rather than as the AOT native body;
+#   - the closure is promoted to the JIT tier in the background while the read is still guarded
+#     by a branch the interpreter has never taken, so nothing has resolved the pointer;
+#   - a later call finally takes that branch, in native code compiled against the null.
+#
+# The scenario below is the shape that found it: an owned fixture whose exit handler releases an
+# admission under a class-static mutex, warmed up by cancelled runs that never admit anything.
+class AOTDeserializedStaticVarJITTierTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        const ScenarioCode = "%modern
+
+class Ctl {
+    private {
+        const Key = \"ctl-bound\";
+        static Mutex controller_mutex();
+        static Condition controller_condition();
+        static hash<string, int> tally;
+    }
+
+    static auto runBound(bool admit, code task) {
+        hash<auto> previous = {};
+        *string admitted;
+        bool installed = False;
+        # the exit handler runs deferred, and its closure reads the class statics only after an
+        # admission -- the warm-up runs below never get that far
+        on_exit defer_thread_cancel(nothing sub () {
+            if (installed) {
+                remove_thread_data(Key);
+                save_thread_data(previous);
+            }
+            if (admitted) {
+                AutoLock al(controller_mutex);
+                tally{admitted} = (tally{admitted} ?? 0) + 1;
+                controller_condition.broadcast();
+            }
+        });
+        defer_thread_cancel(nothing sub () {
+            if (admit) {
+                admitted = \"bound\";
+                installed = True;
+                save_thread_data(Key, admitted);
+            }
+        });
+        return task();
+    }
+
+    static int tallied() { return tally.size(); }
+}
+
+#! Runs the fixture and cancels the running thread from inside the task
+sub cancelRun(bool admit) {
+    int owner = gettid();
+    Counter entered(1);
+    ThreadPool canceller(1, 0, 1);
+    on_exit canceller.stop();
+    canceller.submit(nothing sub () {
+        entered.waitForZero(5s);
+        cancel_thread(owner, \"fixture cancellation\");
+    });
+    try {
+        Ctl::runBound(admit, auto sub () { entered.dec(); usleep(2s); return 1; });
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    clear_thread_cancel();
+    canceller.stopWait();
+}
+
+int sub main() {
+    # warm the closure to the JIT tier without ever reading the statics
+    for (int i = 0; i < 40; ++i) {
+        cancelRun(False);
+    }
+    # now take the guarded branch, in whatever code the closure was promoted to
+    cancelRun(True);
+    printf(\"tallied=%d\\n\", Ctl::tallied());
+    return 0;
+}
+
+main();
+";
+        const Expected = "tallied=1\n";
+    }
+
+    constructor() : QUnit::Test("AOTDeserializedStaticVarJITTierTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a deferred handler's static read survives JIT promotion",
+            \testDeserializedStaticVarReachesJIT());
+        addTestCase("every execution tier agrees on the fixture", \testAllTiersAgree());
+
+        set_return_value(main());
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+    }
+
+    #! Returns the command's combined output with its exit status appended
+    private string run(string cmd) {
+        return backquote(sprintf("%s 2>&1; echo \"exit=$?\"", cmd));
+    }
+
+    private static writeSource(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    testDeserializedStaticVarReachesJIT() {
+        TmpDir tmp("qore-aot-deserialized-static-var-jit-");
+        string src = tmp.path + "/scenario.q";
+        writeSource(src, ScenarioCode);
+
+        string exe = tmp.path + "/scenario";
+        string compile_out = run(sprintf("%s %s -O3 -o %s %s", env(), qcc_bin, exe, src));
+        assertTrue(is_file(exe), "AOT-compiled the fixture: " + compile_out);
+
+        string out = run(sprintf("%s %s", env(), exe));
+        # a null QoreVarInfo in the promoted closure killed the process here (exit=139)
+        assertNeq(-1, out.find("exit=0"),
+            "the AOT fixture exits normally once the closure is JIT-compiled: " + out);
+        assertNeq(-1, out.find(Expected),
+            "the admitted run reached the class statics: " + out);
+    }
+
+    testAllTiersAgree() {
+        TmpDir tmp("qore-aot-deserialized-static-var-tiers-");
+        string src = tmp.path + "/scenario.q";
+        writeSource(src, ScenarioCode);
+
+        foreach string mode in (("ast", "ir", "tiered", "jit")) {
+            string out = run(sprintf("%s %s -b --exec-mode=%s %s", env(), qore_bin, mode, src));
+            assertNeq(-1, out.find("exit=0"), mode + " mode exits normally: " + out);
+            assertNeq(-1, out.find(Expected), mode + " mode reached the class statics: " + out);
+        }
+    }
+}
