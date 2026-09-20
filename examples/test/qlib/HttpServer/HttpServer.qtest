@@ -2577,7 +2577,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             hash<auto> post_resp = h2client.send(large_body, "POST", "/echo-body");
             assertEq(200, post_resp.status_code, sprintf("HTTP/2 POST %d bytes should succeed", post_size));
             assertEq(post_size, post_resp.body.size(), sprintf("HTTP/2 POST %d bytes - response body size", post_size));
-            assertEq(large_body, post_resp.body, sprintf("HTTP/2 POST %d bytes - body content", post_size));
+            # the echo handler declares application/octet-stream, so the body is delivered as binary
+            assertEq(binary(large_body), post_resp.body, sprintf("HTTP/2 POST %d bytes - body content", post_size));
             # Verify HTTP/2 connection is still active after large upload
             assertTrue(h2client.isHttp2Active(), sprintf("HTTP/2 active after %d byte POST", post_size));
         }
