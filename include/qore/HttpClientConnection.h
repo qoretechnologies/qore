@@ -343,6 +343,45 @@ public:
     */
     DLLEXPORT virtual void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
 
+    //! Abandons a request whose caller has stopped waiting for its response.
+    /** Called when a synchronous submit-and-await caller leaves its wait
+        without a result — thread cancellation, a request timeout, or any
+        other interruption.  The submitted request is still live on the I/O
+        controller at that point: its completion action still holds the
+        caller's %Promise, the protocol still counts the stream as active,
+        and the peer is still serving (or waiting to serve) the exchange.
+        Returning without abandoning it strands all three.
+
+        The implementation settles the request's completion action with a
+        protocol-specific cancellation error and stops the exchange on the
+        wire.  HTTP/1.1 is serial and cannot resynchronize mid-response, so
+        an exchange that already started closes the connection (the peer
+        sees EOF and the connection is never reused); a request that has not
+        reached the wire is dropped and the connection stays usable.
+        Multiplexed protocols reset only this stream, so unrelated
+        concurrent streams on the same connection survive.
+
+        This is best-effort and race-free against completion: a request that
+        finished while the caller was leaving its wait is reported as not
+        cancelled, and nothing is torn down.
+
+        @param stream_id the stream ID returned in the @c stream_id key of
+            @ref submitRequest's result hash
+        @param xsink exception sink for errors raised by the cleanup itself;
+            callers pass a sink separate from the one carrying the exception
+            that ended the wait
+
+        @return @c true if the request was still in flight and was
+            cancelled; @c false if it had already completed (nothing was
+            cancelled and the connection was left untouched)
+
+        @note Default implementation returns @c false; H1 / H2 / H3
+        subclasses override.
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual bool cancelRequest(int64_t stream_id, ExceptionSink* xsink);
+
     //! Close the connection and release controller resources
     /** After this call, @ref AbstractHttpPollConnectionPriv::isClosed returns true and no further requests
         can be submitted.  Any in-flight request is rejected with

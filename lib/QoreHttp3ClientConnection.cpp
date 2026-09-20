@@ -1042,6 +1042,29 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
     sock_priv->submitQuicClientTrailers(streaming_send_stream_id, trailers, xsink);
 }
 
+bool Http3ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        // Already closing: the poll op settles every pending stream on the
+        // way out, so there is nothing left to abandon here.
+        return false;
+    }
+    // Settle the request's completion action first.  A stream that already
+    // completed reports false and is left alone — the connection stays in
+    // the pool untouched.
+    if (!poll_op_priv->cancelStream(stream_id, xsink)) {
+        return false;
+    }
+    // Then cancel the stream on the wire.  HTTP/3 multiplexes over QUIC, so
+    // only this stream ends: concurrent streams on the same connection are
+    // unaffected and the connection stays poolable.
+    int64_t session_id = poll_op_priv->getSessionId();
+    if (session_id && sock_priv) {
+        sock_priv->cancelQuicStream(session_id, stream_id, xsink);
+    }
+    return true;
+}
+
 void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // Lifetime barrier: atomically mark the connection invalidated (so
     // any NEW method calls arriving after this point are refused via

@@ -5130,6 +5130,33 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 return nullptr;
             }
 
+            // From here the request is live on the I/O controller, and every
+            // path out of this block that is not a delivered response has to
+            // abandon it: the completion action still holds the caller's
+            // Promise, the protocol still counts the stream as active, and the
+            // peer is still serving an exchange nobody will read.  There are
+            // many such paths (body-push errors, trailer callbacks, channel
+            // recv errors and timeouts), so the cleanup is a scope guard
+            // rather than a call repeated at each one.  It is disarmed at the
+            // two points where the response has been delivered: the Future
+            // resolved, or the response channel was handed to the caller.
+            struct StreamingSendRequestGuard {
+                HttpClientConnectionManagerBase& mgr;
+                HttpClientConnectionBase* conn;
+                int64_t stream_id;
+
+                ~StreamingSendRequestGuard() {
+                    if (stream_id >= 0) {
+                        mgr.abandonRequest(conn, stream_id);
+                    }
+                }
+
+                void disarm() {
+                    stream_id = -1;
+                }
+            } ss_guard{mgr, conn,
+                submit_result->getKeyValue("stream_id").getAsBigInt()};
+
             // Push body chunks from send_callback or InputStream
             if (send_callback) {
                 while (true) {
@@ -5398,6 +5425,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             channel->ref();
                             streaming_recv_channel = *channel;
                             keep_channel_open = true;
+                            // the caller owns the rest of this stream now
+                            ss_guard.disarm();
                             break;
                         }
                         // Fall through to check for body data in the same
@@ -5481,6 +5510,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
                 }
 
+                // Every exit from the drain loop above means the response
+                // stream is no longer pending: it ended, the peer closed it,
+                // or it was handed to the caller.  Nothing left to abandon.
+                ss_guard.disarm();
+
                 if (!keep_channel_open) {
                     channel->close();
                 }
@@ -5531,6 +5565,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     close_and_evict_if_unusable();
                     return nullptr;
                 }
+                // the request completed; nothing left to abandon
+                ss_guard.disarm();
 
                 // Transform to legacy flat format
                 ReferenceHolder<QoreHashNode> raw_resp(

@@ -813,6 +813,22 @@ void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
     poll_op_priv->setTrailers(trailers, xsink);
 }
 
+bool Http1ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        // The connection is already being closed / torn down; the poll op
+        // settles every pending stream on the way out, so there is nothing
+        // left for this call to abandon.
+        return false;
+    }
+    // Http1ClientPollOperationPriv::cancelStream() settles the request's
+    // completion action and, when the exchange already reached the wire,
+    // closes the socket — HTTP/1.1 cannot resynchronize in the middle of a
+    // response, so the peer must see EOF.  A request still queued on the
+    // connection is simply dropped and the connection stays usable.
+    return poll_op_priv->cancelStream(stream_id, xsink);
+}
+
 int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) {

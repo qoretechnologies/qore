@@ -689,6 +689,30 @@ void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
     // which wakes the controller after the trailers are queued.
 }
 
+bool Http2ClientConnection::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        // Already closing: the poll op settles every pending stream on the
+        // way out, so there is nothing left to abandon here.
+        return false;
+    }
+    // Settle the request's completion action first.  A stream that already
+    // completed reports false and is left alone — the connection stays in
+    // the pool untouched.
+    if (!poll_op_priv->cancelStream(stream_id, xsink)) {
+        return false;
+    }
+    // Then reset the stream on the wire.  HTTP/2 multiplexes, so only this
+    // stream ends: concurrent streams on the same connection are unaffected
+    // and the connection stays poolable.  Without the RST_STREAM the peer
+    // keeps sending a response body nobody reads, consuming the connection's
+    // flow-control window.  The enqueue is safe from any thread.
+    if (sock_priv) {
+        sock_priv->cancelHttp2Stream(static_cast<int32_t>(stream_id), xsink);
+    }
+    return true;
+}
+
 void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
     // Lifetime barrier (S1): invalidate so new method calls are refused,
     // then wait for any in-flight calls to finish before tearing down

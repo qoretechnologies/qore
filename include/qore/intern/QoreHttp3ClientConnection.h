@@ -145,6 +145,8 @@ public:
     */
     DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
 
+    DLLEXPORT bool cancelRequest(int64_t stream_id, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
     //! Handshake-phase hook invoked by an inner Http3ClientPollOperationPriv

@@ -212,6 +212,8 @@ public:
     */
     DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) override;
 
+    DLLEXPORT bool cancelRequest(int64_t stream_id, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
     //! Returns the raw poll-op priv pointer (for setIdleTimeout from the

@@ -976,6 +976,39 @@ found:
     conn->deref(xsink);
 }
 
+void HttpClientConnectionManagerBase::abandonRequest(HttpClientConnectionBase* conn,
+        int64_t stream_id) {
+    if (!conn || stream_id < 0) {
+        return;
+    }
+    // The caller reaches this path with an exception already pending on its
+    // own sink — most often THREAD-CANCELLED, whose flag stays set until the
+    // caller clears it.  Every lock and wait below would otherwise be a
+    // cancellation point that aborts the cleanup half-way, stranding exactly
+    // the request we are here to abandon.  Defer delivery for the duration;
+    // the pending request (and its reason) survives untouched and is raised
+    // again at the caller's next cancellation point.
+    QoreCancelDeferralHelper cdh;
+
+    // A private sink: cleanup diagnostics must not displace the exception
+    // that ended the caller's wait.
+    ExceptionSink cleanup_xsink;
+    if (conn->cancelRequest(stream_id, &cleanup_xsink)) {
+        // The request was still in flight.  cancelRequest() has settled its
+        // completion action and stopped the exchange on the wire; for H1 an
+        // exchange that already started also closed the connection, since
+        // HTTP/1.1 cannot resynchronize mid-response.  Evict such a
+        // connection now instead of leaving it for the next checkout to
+        // notice, so the pool never hands out a connection whose peer state
+        // we cannot account for.  A multiplexed connection that reset only
+        // this stream is still healthy and stays in the pool.
+        if (conn->isClosed()) {
+            closeAndEvict(conn, &cleanup_xsink);
+        }
+    }
+    cleanup_xsink.clear();
+}
+
 void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     // Drain the pool into a local vector under the write lock, then
     // process each connection without the lock held.  setManager(nullptr)
@@ -1175,11 +1208,16 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         return nullptr;
     }
 
+    // The request is now live on the I/O controller; remember which stream
+    // it is so the wait can abandon it if it ends without a response.
+    int64_t stream_id = submit_result->getKeyValue("stream_id").getAsBigInt();
+
     // Extract the future from the result hash and block on it.
     QoreValue future_v = submit_result->getKeyValue("future");
     if (future_v.getType() != NT_OBJECT) {
         xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
             "submitRequest result missing 'future' key");
+        abandonRequest(conn, stream_id);
         releaseConnection(conn);
         return nullptr;
     }
@@ -1191,15 +1229,24 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         effective_timeout, xsink);
     future_obj->deref(xsink);
 
-    // The PromiseAction has already cleared the active stream count
-    // inside the poll op when it ran on the I/O thread.  We don't
-    // need to releaseConnection because submitRequest already
-    // decremented our pending reservation.
-
     if (*xsink) {
+        // The wait ended without a response: the thread was cancelled, the
+        // request timed out, or the wait was otherwise interrupted.  Leaving
+        // the Future pending does NOT stop the request — it is still live on
+        // the I/O controller, holding an active stream on a connection that
+        // stays in the pool, with the peer still serving an exchange nobody
+        // will read.  Abandon it here, while the caller's exception is
+        // pending and before the connection reference goes out of scope.
+        abandonRequest(conn, stream_id);
         result.discard(xsink);
         return nullptr;
     }
+
+    // A completed request needed no cleanup: the PromiseAction cleared the
+    // active stream count inside the poll op when it ran on the I/O thread,
+    // and submitRequest already decremented our pending reservation, so
+    // there is no releaseConnection to do here.
+
     if (result.getType() != NT_HASH) {
         result.discard(xsink);
         xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",

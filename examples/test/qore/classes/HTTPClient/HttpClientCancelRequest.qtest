@@ -1,0 +1,332 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A request submitted through the connection manager stays live on the I/O controller until it
+    completes; a caller that stops waiting for it (thread cancellation, request timeout) must abandon
+    it, or the peer keeps serving an exchange nobody reads and the HTTP/1.1 connection is never
+    reusable again.  Every assertion here is made against a raw peer that observes the transport
+    directly: the peer requires the client to close a cancelled HTTP/1.1 exchange, and requires a
+    completed exchange to be left open for reuse.
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientCancelRequestTest
+
+#! One scripted exchange
+hashdecl PeerExchange {
+    #! raw response bytes sent once the request has been read in full
+    string response;
+
+    #! if True, the client must close the connection before the peer serves the next exchange
+    bool expect_eof = False;
+}
+
+#! One observed exchange
+hashdecl PeerObserved {
+    #! the request target
+    string path;
+
+    #! the request body
+    string body;
+
+    #! how the connection ended: \c "SOCKET-CLOSED" when the client closed it, \c "reused" when the
+    #! peer kept it for the next request, or the unexpected error or data seen instead
+    string transport;
+}
+
+#! A raw HTTP/1.1 peer that serves scripted responses and reports what the client did to the transport
+/** Each scripted exchange reads one complete request, sends the scripted response bytes and then
+    observes the connection.  When @ref PeerExchange::expect_eof is set, the peer requires the client
+    to close the connection: the observation is a blocking read, so it completes as soon as the
+    client's FIN arrives and needs no sleep and no polling.  The read timeout is only an upper bound
+    — reaching it is a test failure, reported as \c SOCKET-TIMEOUT instead of the required
+    \c SOCKET-CLOSED.
+*/
+class RawHttpPeer {
+    public {
+        #! upper bound on any single blocking peer operation; reaching it fails the test
+        const PeerTimeout = 30s;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        Counter done(1);
+        Queue observed();
+        *hash<ExceptionInfo> peer_ex;
+    }
+
+    #! Binds an ephemeral port and starts serving the scripted exchanges in the background
+    constructor(list<hash<PeerExchange>> exchanges) {
+        if (listener.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        if (listener.listen()) {
+            throw "SOCKET-LISTEN-ERROR", strerror();
+        }
+        port = listener.getSocketInfo().port;
+        background serve(exchanges);
+    }
+
+    #! Returns the URL the client must use
+    string getUrl() {
+        return sprintf("http://127.0.0.1:%d", port);
+    }
+
+    #! Returns the next observed exchange, blocking until the peer has finished it
+    hash<PeerObserved> getObserved() {
+        return observed.get(PeerTimeout);
+    }
+
+    #! Waits for the peer thread to finish and rethrows anything it caught
+    stopAndCheck() {
+        if (done.waitForZero(PeerTimeout)) {
+            throw "PEER-ERROR", "the raw peer did not finish";
+        }
+        if (peer_ex) {
+            throw "PEER-ERROR", sprintf("the raw peer failed: %s: %s", peer_ex.err, peer_ex.desc);
+        }
+    }
+
+    #! Serves each scripted exchange in turn, recording what the client did to the transport
+    private serve(list<hash<PeerExchange>> exchanges) {
+        on_exit done.dec();
+        *Socket conn;
+        on_exit {
+            if (conn) {
+                conn.close();
+            }
+            listener.close();
+        }
+        try {
+            foreach hash<PeerExchange> exchange in (exchanges) {
+                if (!conn) {
+                    conn = listener.accept(PeerTimeout);
+                }
+                hash<auto> hdr = conn.readHTTPHeader(PeerTimeout);
+                string body = "";
+                if (hdr."content-length") {
+                    body = conn.recv(hdr."content-length".toInt(), PeerTimeout);
+                }
+                conn.send(exchange.response);
+                string transport = "reused";
+                if (exchange.expect_eof) {
+                    # a blocking read that returns only when the client closes the transport; the
+                    # error it raises is the assertion subject, so it is recorded, not thrown
+                    try {
+                        transport = sprintf("data: %y", conn.recv(1, PeerTimeout));
+                    } catch (hash<ExceptionInfo> ex) {
+                        transport = ex.err;
+                    }
+                    conn.close();
+                    delete conn;
+                }
+                observed.push(<PeerObserved>{
+                    "path": hdr.path,
+                    "body": body,
+                    "transport": transport,
+                });
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            peer_ex = ex;
+            # unblock a test waiting for an exchange that will never be observed
+            observed.push(<PeerObserved>{
+                "path": "",
+                "body": "",
+                "transport": sprintf("%s: %s", ex.err, ex.desc),
+            });
+        }
+    }
+}
+
+public class HttpClientCancelRequestTest inherits QUnit::Test {
+    public {
+        #! response headers that promise a body the peer never sends
+        const HeldContentLengthResponse = "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 8\r\n"
+            "\r\n";
+
+        #! response headers that promise a chunked body whose first chunk the peer never sends
+        const HeldChunkedResponse = "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Transfer-Encoding: chunked\r\n"
+            "\r\n";
+
+        #! a complete keep-alive response
+        const CompleteResponse = "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 8\r\n"
+            "\r\n"
+            "response";
+
+        #! upper bound on any blocking client-side operation; reaching it fails the test
+        const ClientTimeout = 30s;
+    }
+
+    constructor() : Test("HttpClientCancelRequestTest", "1.0") {
+        addTestCase("cancel with a held Content-Length body", \cancelHeldContentLengthBodyTest());
+        addTestCase("cancel with a held chunked body", \cancelHeldChunkedBodyTest());
+        addTestCase("request timeout abandons the request", \requestTimeoutAbandonsRequestTest());
+        addTestCase("a completed request is not abandoned", \completedRequestKeepsConnectionTest());
+        set_return_value(main());
+    }
+
+    #! Cancels the thread waiting for a response whose Content-Length body is never sent
+    cancelHeldContentLengthBodyTest() {
+        checkCancelledExchange(HeldContentLengthResponse);
+    }
+
+    #! The same, with a chunked response whose first chunk is never sent
+    cancelHeldChunkedBodyTest() {
+        checkCancelledExchange(HeldChunkedResponse);
+    }
+
+    #! Runs the cancellation and recovery matrix against a response whose body the peer withholds
+    private checkCancelledExchange(string held_response) {
+        RawHttpPeer peer((
+            <PeerExchange>{"response": held_response, "expect_eof": True},
+            <PeerExchange>{"response": CompleteResponse},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient client({"url": peer.getUrl(), "timeout": ClientTimeout});
+        on_exit client.disconnect();
+
+        Queue events();
+        client.setEventQueue(events);
+
+        Counter worker_done(1);
+        Queue result();
+        int tid = background sub () {
+            on_exit worker_done.dec();
+            try {
+                client.send("request", "POST", "/held", NOTHING, True);
+                result.push({"err": "UNEXPECTED-SUCCESS"});
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation flag is sticky: read it before clearing it so this thread can run
+                # its own cleanup without re-raising
+                bool cancelled = thread_cancelled();
+                clear_thread_cancel();
+                result.push({"err": ex.err, "desc": ex.desc, "cancelled": cancelled});
+            }
+        }();
+
+        # cancel exactly when the response header has arrived and the body is still outstanding
+        waitForEvent(events, EVENT_HTTP_MESSAGE_RECEIVED);
+        assertTrue(cancel_thread(tid, "held HTTP response"),
+            "the worker waiting for the held response is cancellable");
+        assertEq(0, worker_done.waitForZero(ClientTimeout), "the cancelled worker completes");
+
+        hash<auto> row = result.get(ClientTimeout);
+        assertEq("THREAD-CANCELLED", row.err, "cancellation reaches the caller unconverted");
+        assertTrue(row.cancelled, "the caller observes its own sticky cancellation flag");
+        assertRegex("held HTTP response", row.desc, "the cancellation reason reaches the caller");
+
+        hash<PeerObserved> held = peer.getObserved();
+        assertEq("/held", held.path, "the peer served the request that was then cancelled");
+        assertEq("request", held.body, "the peer read the complete request body");
+        assertEq("SOCKET-CLOSED", held.transport,
+            "cancelling the caller closes the HTTP/1.1 transport carrying the abandoned response");
+
+        # the same client must recover without the peer having to time anything out
+        client.setEventQueue();
+        hash<auto> response = client.send("request", "POST", "/recovered", NOTHING, True);
+        assertEq(200, response.status_code, "the same client recovers after a cancelled request");
+        assertEq("response", response.body, "the recovery response body is delivered");
+
+        hash<PeerObserved> recovered = peer.getObserved();
+        assertEq("/recovered", recovered.path, "the recovery request reaches the peer");
+        assertEq("reused", recovered.transport,
+            "the recovery request runs on a healthy connection the client keeps open");
+    }
+
+    #! A request timeout must abandon the request exactly as cancellation does
+    requestTimeoutAbandonsRequestTest() {
+        RawHttpPeer peer((
+            <PeerExchange>{"response": HeldContentLengthResponse, "expect_eof": True},
+            <PeerExchange>{"response": CompleteResponse},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient client({"url": peer.getUrl(), "timeout": 250ms});
+        on_exit client.disconnect();
+
+        assertThrows("SOCKET-TIMEOUT", sub () {
+            client.send("request", "POST", "/held", NOTHING, True);
+        }, NOTHING, "a response body that never arrives times out");
+
+        hash<PeerObserved> held = peer.getObserved();
+        assertEq("/held", held.path, "the peer served the request that then timed out");
+        assertEq("SOCKET-CLOSED", held.transport,
+            "a timed-out request closes the HTTP/1.1 transport carrying the abandoned response");
+
+        client.setTimeout(ClientTimeout);
+        hash<auto> response = client.send("request", "POST", "/recovered", NOTHING, True);
+        assertEq(200, response.status_code, "the same client recovers after a timed-out request");
+        assertEq("response", response.body, "the recovery response body is delivered");
+
+        hash<PeerObserved> recovered = peer.getObserved();
+        assertEq("/recovered", recovered.path, "the recovery request reaches the peer");
+    }
+
+    #! A request that completed leaves nothing to abandon, so its connection stays poolable
+    /** The peer serves both requests on one accepted connection: if a completed request were
+        abandoned, the first exchange would close the transport and the second request would arrive
+        on a connection the peer never accepts.
+    */
+    completedRequestKeepsConnectionTest() {
+        RawHttpPeer peer((
+            <PeerExchange>{"response": CompleteResponse},
+            <PeerExchange>{"response": CompleteResponse},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient client({"url": peer.getUrl(), "timeout": ClientTimeout});
+        on_exit client.disconnect();
+
+        hash<auto> first = client.send("request", "POST", "/first", NOTHING, True);
+        assertEq(200, first.status_code, "the first request completes");
+        assertEq("reused", peer.getObserved().transport,
+            "a completed request leaves its transport open");
+
+        hash<auto> second = client.send("request", "POST", "/second", NOTHING, True);
+        assertEq(200, second.status_code, "the second request completes");
+        hash<PeerObserved> reused = peer.getObserved();
+        assertEq("/second", reused.path,
+            "the second request is served on the connection kept open by the first");
+    }
+
+    #! Blocks until the given client event arrives
+    private waitForEvent(Queue events, int event) {
+        while (True) {
+            hash<auto> info = events.get(ClientTimeout);
+            if (info.event == event) {
+                return;
+            }
+        }
+    }
+}

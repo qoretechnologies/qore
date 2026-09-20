@@ -274,6 +274,8 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         AbstractAsyncAction* action, ExceptionSink* xsink) override;
 
+    DLLEXPORT bool cancelRequest(int64_t stream_id, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
     //! Extracts the socket from this connection for protocol escalation.

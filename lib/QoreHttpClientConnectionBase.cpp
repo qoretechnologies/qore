@@ -180,6 +180,13 @@ void HttpClientConnectionBase::setTrailers(const QoreHashNode* trailers, Excepti
         "setTrailers not implemented on this connection class");
 }
 
+bool HttpClientConnectionBase::cancelRequest(int64_t stream_id, ExceptionSink* xsink) {
+    // Default: a connection class with no protocol-level stream tracking has
+    // nothing to abandon.  Reporting "not cancelled" keeps callers from
+    // tearing down a connection they cannot reason about.
+    return false;
+}
+
 void HttpClientConnectionBase::setPoolKey(const std::string& key) {
     pool_key_ = key;
 }

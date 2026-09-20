@@ -321,6 +321,39 @@ public:
     DLLEXPORT virtual void closeAndEvict(HttpClientConnectionBase* conn,
         ExceptionSink* xsink);
 
+    //! Abandons a submitted request whose caller stopped waiting for it.
+    /** Call this when a synchronous submit-and-await wait ended without a
+        result — thread cancellation, a request timeout, or any other
+        interruption.  Returning from such a wait without abandoning the
+        request leaves it live on the I/O controller: the completion action
+        still holds the caller's %Promise, the protocol still counts the
+        stream as active, and the peer is still serving an exchange nobody
+        will read.  For HTTP/1.1 the connection would stay in the pool with
+        a response half-delivered on it and the peer would never see EOF.
+
+        Cancellation runs under a cancellation deferral (see
+        @ref QoreCancelDeferralHelper) so it completes even though the
+        calling thread already has a cancellation pending, and it uses its
+        own exception sink so the exception that ended the wait reaches the
+        caller unchanged.
+
+        The connection is closed and evicted only if abandoning the request
+        actually left it unusable: HTTP/1.1 cannot resynchronize in the
+        middle of a response, so an exchange already on the wire closes the
+        connection, while multiplexed protocols reset just the one stream
+        and keep serving their other streams.  A request that completed
+        while the caller was leaving its wait cancels nothing and the
+        connection is left in the pool.
+
+        @param conn the connection the request was submitted on; the caller
+            must hold a strong reference for the duration of this call
+        @param stream_id the stream ID returned in the @c stream_id key of
+            @c HttpClientConnectionBase::submitRequest's result hash
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual void abandonRequest(HttpClientConnectionBase* conn, int64_t stream_id);
+
     //! Closes all pooled connections and clears the pool.
     /** Called by the destructor; can be called explicitly to drain the
         manager without destroying it.  After this call, @ref acquireConnection
