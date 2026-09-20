@@ -39,6 +39,13 @@ class RuntimeConfig;
 
 class OnBlockExitStatement : public AbstractStatement {
 public:
+    //! A handler body is a scope of the handler's own
+    /** It opens and closes inside the handler and is never a scope an exception unwinds out of,
+        so it is not what an enclosing block's exception anchor orders.
+    */
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
     DLLLOCAL OnBlockExitStatement(int start_line, int end_line, StatementBlock* n_code,
             enum obe_type_e type = OBE_Unconditional);
 

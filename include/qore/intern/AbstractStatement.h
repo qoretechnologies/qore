@@ -105,6 +105,23 @@ public:
         return false;
     }
 
+    //! Returns false only when this statement provably opens no nested lexical scope with locals
+    /** Used to decide whether a block carrying on_exit/on_error handlers has to anchor an
+        exception target so the scopes nested inside it can destroy their locals before the
+        handler runs.  The anchor costs the enclosing function its AOT outlining, so it is worth
+        not raising one when there is nothing to order.
+
+        The default is the conservative answer on purpose: a statement kind that does not
+        override this keeps the anchor, so a new statement class is safe without anyone
+        remembering it here, and a wrong answer can only cost outlining, never the ordering.
+
+        @param depth recursion depth; a scope's own locals count from depth 1 down, since the
+        block being asked about is allowed to keep its own locals alive for its handler
+    */
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return true;
+    }
+
     DLLLOCAL virtual void parseCommit(QoreProgram* pgm);
 
 protected:

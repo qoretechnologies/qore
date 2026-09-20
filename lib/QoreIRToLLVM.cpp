@@ -10180,14 +10180,24 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
         }
 
-        // Outlined-function coordinators: helpers mutate shared locals
-        // through the TLS stack, so every cached-local read needs its
-        // stale check from the very first lowered block.  The reload
-        // epoch is otherwise created lazily by the first call-site
-        // lowering — but block layout order does not follow control flow
-        // (a loop condition lowers before the helper-call block that
-        // bumps the epoch), which would silently skip the check.  Create
-        // it eagerly when the function calls outlined helpers.
+        // Anything that can mutate this frame's locals through the TLS stack
+        // makes every cached-local read need its stale check from the very
+        // first lowered block.  The reload epoch is otherwise created lazily by
+        // the first call-site lowering — but block layout order does not follow
+        // control flow (a loop condition lowers before the helper-call block
+        // that bumps the epoch; a try landing pad lowers before the block-scope
+        // cleanup block that fires handlers), and ensureLocalCacheFresh() emits
+        // nothing at all while the epoch does not exist, so the check is
+        // silently skipped.  Create it eagerly for both such mutators:
+        //
+        // - outlined-function coordinators, whose helpers write shared locals;
+        // - on_exit/on_error handlers, which run as AST code through
+        //   qore_rt_exec_on_block_exit_impl() and can assign any local.
+        //
+        // Missing it for handlers cost a landing pad its stale check: entered
+        // after a block-scope handler had already fired, it read a local from
+        // its stale alloca and synced that value back over the one the handler
+        // had written, silently discarding the handler's assignment.
         if (aot_mode) {
             bool has_helper_calls = false;
             for (const auto& block : func.blocks) {
@@ -10202,7 +10212,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     break;
                 }
             }
-            if (has_helper_calls) {
+            if (has_helper_calls || has_on_block_exit_handlers) {
                 getOrCreateLocalReloadEpoch(llvm_func);
             }
         }

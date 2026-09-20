@@ -39,6 +39,10 @@ class RuntimeConfig;
 
 class ExpressionStatement : public AbstractStatement {
 public:
+    //! no lexical sub-scope of its own
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
     DLLLOCAL ExpressionStatement(const QoreProgramLocation* loc, QoreValue v);
 
     DLLLOCAL virtual ~ExpressionStatement();

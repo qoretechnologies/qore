@@ -3361,6 +3361,32 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
     return false;
 }
 
+//! Returns true unless @p block provably encloses no lexical scope that instantiates locals.
+/** The block's OWN locals do not count: its handler is supposed to see them alive, which is AST
+    behaviour.  Only the scopes nested inside it have to be destroyed before the handler runs, so
+    the question is put to the statements rather than to the block.
+
+    The walk is a virtual call per statement, not a chain of dynamic_casts: this runs on the
+    compile path for every handler-bearing block, and AbstractStatement's default answer keeps
+    an unknown statement kind conservative without a list to maintain here.
+*/
+static bool qoreIrBlockEnclosesScopeLocals(const StatementBlock* block) {
+    if (!block) {
+        return false;
+    }
+    size_t count = 0;
+    for (const AbstractStatement* stmt : block->getStatements()) {
+        if (++count % 100 == 0
+                && qore_check_cancel(nullptr, "IR nested block-scope local scan")) {
+            return true;
+        }
+        if (stmt && stmt->mayHaveNestedScopeLocals(1)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::string& error) {
     if (!block) {
         error = "null statement block for IR lowering";
@@ -3435,7 +3461,18 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     QoreIRBasicBlock* lvar_exception_cleanup_continue_block = nullptr;
     QoreIRBasicBlock* saved_exception_target = nullptr;
     bool pushed_lvar_exception_target = false;
-    if (has_on_block_exit || (lvars && getCurrentExceptionTarget())) {
+    // A block carrying handlers anchors an exception target so the lexical scopes nested in it
+    // can destroy their locals before its handler runs — the inner AutoLock whose Mutex the
+    // handler then acquires.  The anchor is not free: it gives every throwing instruction in the
+    // body an exception edge to a block at the end of the function, and the AOT outliner must
+    // reject any region holding such an edge ("exception edge leaves region"), so the function
+    // stops outlining altogether.  When nothing nested inside instantiates locals there is
+    // nothing to order, and the handlers fire from the enclosing landing pad or the function-exit
+    // guard exactly as they did before the anchor existed.  The scan only ever answers "no" when
+    // it can prove it, so an unrecognized statement keeps the anchor.
+    const bool needs_handler_anchor = has_on_block_exit
+            && qoreIrBlockEnclosesScopeLocals(block);
+    if (needs_handler_anchor || (lvars && getCurrentExceptionTarget())) {
         // Exceptions raised inside this lexical block must destroy its block-scoped
         // locals before control reaches the enclosing catch.  Normal fall-through
         // cleanup below only handles non-exception exits.

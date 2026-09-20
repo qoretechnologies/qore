@@ -52,6 +52,12 @@ public:
         return try_block;
     }
 
+    //! @see AbstractStatement::mayHaveNestedScopeLocals()
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return (try_block && try_block->mayHaveNestedScopeLocals(depth))
+            || (catch_block && catch_block->mayHaveNestedScopeLocals(depth));
+    }
+
     DLLLOCAL class StatementBlock* getCatchBlock() const {
         return catch_block;
     }

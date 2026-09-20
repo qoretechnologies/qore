@@ -39,6 +39,10 @@ class RuntimeConfig;
 
 class ReturnStatement : public AbstractStatement {
 public:
+    //! no lexical sub-scope of its own
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
     DLLLOCAL ReturnStatement(int start_line, int end_line, QoreValue v = QoreValue())
             : AbstractStatement(start_line, end_line), exp(v) {
     }

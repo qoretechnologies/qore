@@ -39,6 +39,10 @@ class RuntimeConfig;
 
 class ThrowStatement : public AbstractStatement {
 public:
+    //! no lexical sub-scope of its own
+    DLLLOCAL virtual bool mayHaveNestedScopeLocals(unsigned depth) const {
+        return false;
+    }
     DLLLOCAL ThrowStatement(int start_line, int end_line, QoreValue v) : AbstractStatement(start_line, end_line),
             args(v) {
     }
