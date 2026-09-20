@@ -25,6 +25,8 @@
     resolve_url() tests: RFC 3986 section 5.4 reference resolution examples plus octet preservation and errors.
 */
 
+%modern
+
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires ../../../../qlib/QUnit.qm
 
@@ -94,11 +96,14 @@ public class ResolveUrlTest inherits QUnit::Test {
         addTestCase("HTTP redirect locations", \redirectLocationTest());
         addTestCase("encodings", \encodingTest());
         addTestCase("strict option", \strictTest());
+        addTestCase("strict component grammar", \strictGrammarTest());
+        addTestCase("ascii option", \asciiOptionTest());
         addTestCase("no fragment option", \noFragmentTest());
         addTestCase("relative base option", \relativeBaseTest());
         addTestCase("encode option", \encodeTest());
         addTestCase("negative", \negativeTest());
         addTestCase("cancellation", \cancellationTest());
+        addTestCase("strict cancellation", \strictCancellationTest());
 
         set_return_value(main());
     }
@@ -250,6 +255,163 @@ public class ResolveUrlTest inherits QUnit::Test {
         assertEq("http://h/a/1:relative", resolve_url("http://h/a/x", "1:relative"));
     }
 
+    #! Every component of a URI reference is validated against its RFC 3986 production
+    /** The octet scan that RESOLVE_URL_STRICT used to be only rejected characters that can appear nowhere at all,
+        so references that are invalid only because of where a character sits - an unterminated IP literal, a
+        non-digit port, punctuation that no production allows - were returned unchanged.
+    */
+    strictGrammarTest() {
+        int opt = RESOLVE_URL_STRICT | RESOLVE_URL_RELATIVE_BASE;
+
+        # opaque absolute URIs: the path of a URI with a scheme may contain ":" and "@"
+        list<string> opaque = (
+            "urn:ietf:rfc:3986",
+            "urn:uuid:f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
+            "mailto:user@example.com",
+            "tel:+1-816-555-1212",
+        );
+        foreach string uri in (opaque) {
+            assertEq(uri, resolve_url("", uri, opt), "opaque " + uri);
+        }
+
+        # authority forms that RFC 3986 allows
+        list<string> valid = (
+            # bracketed IP literals: IPv6address and IPvFuture
+            "http://[::1]/x",
+            "http://[::]/x",
+            "http://[2001:db8::1]:8080/p?q#f",
+            "http://[1:2:3:4:5:6:7:8]/x",
+            "http://[::ffff:192.0.2.1]/x",
+            "http://[1:2:3:4:5:6:1.2.3.4]/x",
+            "http://[v7.fe80::a+en1]/x",
+            # a port is *DIGIT, so an empty port is valid
+            "http://h:8080/x",
+            "http://h:/x",
+            "http://user:pw@h/x",
+            # a reg-name accepts anything unreserved/sub-delims, including what is not a valid IPv4 address
+            "http://192.0.2.1/x",
+            "http://999.1.1.1/x",
+            "http://h/x",
+            # every sub-delim and ":"/"@" are legal in a path segment
+            "http://h/a!$&'()*+,;=:@b/c",
+            # percent-encoded punctuation stays as given
+            "http://h/a%2Fb%3Ac%3Fd",
+            # query and fragment additionally allow "/" and "?"
+            "http://h/p?a=b&c=d/e?f#g/h?i",
+            # a defined but empty query and fragment
+            "http://h/p?#",
+        );
+        foreach string uri in (valid) {
+            assertEq(uri, resolve_url("", uri, opt), "valid " + uri);
+        }
+
+        # relative references of every shape stay valid
+        assertEq("http://h/a/b", resolve_url("http://h/a/x", "b", RESOLVE_URL_STRICT));
+        assertEq("http://h/a/x?q", resolve_url("http://h/a/x", "?q", RESOLVE_URL_STRICT));
+        assertEq("http://h/a/x#f", resolve_url("http://h/a/x", "#f", RESOLVE_URL_STRICT));
+        assertEq("http://h/a/x", resolve_url("http://h/a/x", "", RESOLVE_URL_STRICT));
+        # a relative XML base without an absolute ancestor
+        assertEq("a/c", resolve_url("a/b/", "../c", opt));
+
+        # (reference, expected error) - each is invalid only because of its component grammar
+        list<list<string>> invalid = (
+            # unterminated and malformed IP literals
+            ("http://[bad", "unterminated IP literal"),
+            ("http://[::1", "unterminated IP literal"),
+            ("http://[]/x", "invalid IP literal"),
+            ("http://[1:2:3:4:5:6:7:8:9]/x", "invalid IP literal"),
+            ("http://[1:2:3:4:5:6:7]/x", "invalid IP literal"),
+            ("http://[12345::1]/x", "invalid IP literal"),
+            ("http://[::1::2]/x", "invalid IP literal"),
+            ("http://[:1]/x", "invalid IP literal"),
+            ("http://[::ffff:999.0.2.1]/x", "invalid IP literal"),
+            ("http://[v.fe80]/x", "invalid IP literal"),
+            # nothing but a port may follow "]"
+            ("http://[::1]x/y", "characters after the IP literal"),
+            # a port is digits only
+            ("http://h:8x/y", "invalid port"),
+            ("http://h:80:90/y", "invalid port"),
+            ("http://h:+1/y", "invalid port"),
+            # a reg-name allows neither brackets nor "@"
+            ("http://h[x]/y", "invalid character"),
+            ("http://a@b@h/y", "invalid character"),
+            # punctuation that no production allows, in each component that can hold it
+            ("urn:bad{value", "in its path"),
+            ("urn:bad|value", "in its path"),
+            ("http://h/a<b", "in its path"),
+            ("http://h/a>b", "in its path"),
+            ("http://h/a\"b", "in its path"),
+            ("http://h/a^b", "in its path"),
+            ("http://h/a`b", "in its path"),
+            ("http://h/a}b", "in its path"),
+            ("http://h/a\\b", "in its path"),
+            ("http://h/p?q|r", "in its query"),
+            ("http://h/p#f|g", "in its fragment"),
+            ("http://h/p?q#f{g", "in its fragment"),
+        );
+        foreach list<string> c in (invalid) {
+            assertThrows("RESOLVE-URL-ERROR", c[1], \resolve_url(), ("", c[0], opt),
+                sprintf("reference %y", c[0]));
+        }
+
+        # the base is validated with the same grammar
+        assertThrows("RESOLVE-URL-ERROR", "base URI 'http://\\[bad' has an unterminated IP literal",
+            \resolve_url(), ("http://[bad", "x", RESOLVE_URL_STRICT));
+        assertThrows("RESOLVE-URL-ERROR", "base URI .* invalid port", \resolve_url(),
+            ("http://h:8x/a", "b", RESOLVE_URL_STRICT));
+
+        # without the option nothing is rejected and the octets are returned as given
+        assertEq("urn:bad{value", resolve_url("", "urn:bad{value", RESOLVE_URL_RELATIVE_BASE));
+        assertEq("http://[bad", resolve_url("", "http://[bad", RESOLVE_URL_RELATIVE_BASE));
+    }
+
+    #! RESOLVE_URL_ASCII requires a URI (RFC 3986) where RESOLVE_URL_STRICT accepts an IRI (RFC 3987)
+    asciiOptionTest() {
+        # the IRI policy of RESOLVE_URL_STRICT is unchanged
+        assertEq("http://h/é/ü", resolve_url("http://h/é/x", "ü", RESOLVE_URL_STRICT));
+
+        # with RESOLVE_URL_ASCII the same references are rejected, in the reference and in the base
+        assertThrows("RESOLVE-URL-ERROR", "non-ASCII octet .* in its path", \resolve_url(),
+            ("http://h/a/x", "ü", RESOLVE_URL_ASCII));
+        assertThrows("RESOLVE-URL-ERROR", "base URI .* non-ASCII octet", \resolve_url(),
+            ("http://h/é/x", "y", RESOLVE_URL_ASCII));
+        assertThrows("RESOLVE-URL-ERROR", "non-ASCII octet .* in its host", \resolve_url(),
+            ("", "http://hö/x", RESOLVE_URL_ASCII | RESOLVE_URL_RELATIVE_BASE));
+
+        # percent-encoded non-ASCII is ASCII, so it is accepted
+        assertEq("http://h/a/%C3%BC", resolve_url("http://h/a/x", "%C3%BC", RESOLVE_URL_ASCII));
+
+        # the option implies RESOLVE_URL_STRICT: the component grammar is checked without it being given
+        assertThrows("RESOLVE-URL-ERROR", "in its path", \resolve_url(),
+            ("http://h/a/x", "a}b", RESOLVE_URL_ASCII));
+        assertThrows("RESOLVE-URL-ERROR", "unterminated IP literal", \resolve_url(),
+            ("", "http://[bad", RESOLVE_URL_ASCII | RESOLVE_URL_RELATIVE_BASE));
+
+        # RESOLVE_URL_ENCODE maps an IRI to a URI instead of rejecting it
+        assertEq("http://h/a/%C3%BC", resolve_url("http://h/a/x", "ü", RESOLVE_URL_ENCODE));
+    }
+
+    #! Component validation stops when the thread is cancelled
+    strictCancellationTest() {
+        string reference = strmul("a/", 10000000) + strmul("../", 1000);
+        Counter ready(1);
+        Queue result();
+        int tid;
+        background sub () {
+            tid = gettid();
+            ready.dec();
+            try {
+                string url = resolve_url("http://h/", reference, RESOLVE_URL_STRICT);
+                result.push(url.val() ? "completed" : "empty");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        ready.waitForZero();
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", result.get());
+    }
+
     noFragmentTest() {
         assertEq("http://h/b/g?y", resolve_url("http://h/b/c", "g?y#s", RESOLVE_URL_NO_FRAGMENT));
         assertEq("http://h/b/c?q", resolve_url("http://h/b/c?q#base", "#s", RESOLVE_URL_NO_FRAGMENT));
@@ -323,8 +485,8 @@ public class ResolveUrlTest inherits QUnit::Test {
             tid = gettid();
             ready.dec();
             try {
-                resolve_url("http://h/", reference, RESOLVE_URL_ENCODE);
-                result.push("completed");
+                string url = resolve_url("http://h/", reference, RESOLVE_URL_ENCODE);
+                result.push(url.val() ? "completed" : "empty");
             } catch (hash<ExceptionInfo> ex) {
                 result.push(ex.err);
             }

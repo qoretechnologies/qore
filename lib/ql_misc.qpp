@@ -316,9 +316,26 @@ const QURL_MAINTAIN_CASE = QURL_MAINTAIN_CASE;
  */
 ///@{
 //! Reject arguments that are not valid URI references
-/** Control and space characters, malformed percent-encoded octets, and a relative-path reference whose first
-    segment contains a colon (which would be taken for a URI with a scheme; RFC 3986 section 4.2) raise
-    \c RESOLVE-URL-ERROR.  Non-ASCII characters are accepted, as in IRIs (RFC 3987).
+/** Both the base and the reference must match the RFC 3986 \c URI-reference grammar; anything else raises
+    \c RESOLVE-URL-ERROR.  Every component is validated against the character set and the structure allowed for
+    it:
+    - control and space characters and malformed percent-encoded octets are rejected anywhere
+    - the scheme must be \c ALPHA followed by \c ALPHA / \c DIGIT / \c "+" / \c "-" / \c "."
+    - a bracketed host must be a well formed \c IPv6address or \c IPvFuture, and nothing but a port may follow it
+    - a port must consist of digits only
+    - a path must begin with \c "/" when there is an authority, and cannot begin with \c "//" when there is none
+    - a relative-path reference whose first segment contains a colon is rejected: it would be taken for a URI with
+      a scheme (RFC 3986 section 4.2); prefix it with \c "./"
+    - the path, query, and fragment accept only \c unreserved, percent-encoded, and \c sub-delims octets plus the
+      delimiters their production allows
+
+    Non-ASCII characters are accepted, as in IRIs (RFC 3987); add @ref RESOLVE_URL_ASCII to require a URI.
+
+    @par Example:
+    @code{.py}
+resolve_url("", "urn:bad{value", RESOLVE_URL_RELATIVE_BASE | RESOLVE_URL_STRICT);
+# RESOLVE-URL-ERROR: URI reference 'urn:bad{value' has an invalid character '{' (code 123) in its path
+    @endcode
 */
 const RESOLVE_URL_STRICT = QRU_STRICT;
 
@@ -341,6 +358,13 @@ const RESOLVE_URL_RELATIVE_BASE = QRU_RELATIVE_BASE;
     kept, and the scheme and authority are not changed
 */
 const RESOLVE_URL_ENCODE = QRU_ENCODE;
+
+//! Reject non-ASCII characters, requiring a URI (RFC 3986) rather than an IRI (RFC 3987)
+/** Implies @ref RESOLVE_URL_STRICT.  Use this where a specification calls for RFC 3986 URI syntax and an IRI is
+    not acceptable; without it, non-ASCII characters are accepted wherever the grammar allows a \c pchar.  To turn
+    an IRI into a URI instead of rejecting it, use @ref RESOLVE_URL_ENCODE.
+*/
+const RESOLVE_URL_ASCII = QRU_ASCII;
 ///@}
 
 //! a hash describing a parsed URL
@@ -1314,8 +1338,8 @@ url = resolve_url("http://host/a/b/c.wsdl", "../d/ä e.xsd#frag", RESOLVE_URL_EN
     delimiters are left in place, and a defined empty query (a trailing \c "?") is preserved
 
     @throw RESOLVE-URL-ERROR the base URI has no scheme and @ref RESOLVE_URL_RELATIVE_BASE was not given; with
-    @ref RESOLVE_URL_STRICT: an argument contains a control or space character or a malformed percent-encoded
-    octet, or is a relative-path reference whose first segment contains a colon
+    @ref RESOLVE_URL_STRICT: an argument does not match the RFC 3986 \c URI-reference grammar; with
+    @ref RESOLVE_URL_ASCII: an argument also contains a non-ASCII character
 
     @note
     - no scheme-specific normalization is performed; the scheme, authority, and case are returned as given

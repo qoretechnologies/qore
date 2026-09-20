@@ -101,6 +101,28 @@ struct QoreUriReference {
     */
     DLLLOCAL bool hasColonInFirstRelativeSegment() const;
 
+    //! Validates every component against the RFC 3986 \c URI-reference grammar
+    /** parse() never fails, because recomposing what it produces has to return the input unchanged; this is the
+        separate check that the components it produced are actually well formed.  Each component is validated
+        against the character set allowed for it (\c userinfo, \c reg-name, \c port, \c segment, \c query,
+        \c fragment), a bracketed host must be a well formed \c IPv6address or \c IPvFuture, and the path must
+        satisfy the \c path-abempty / \c path-absolute rules that its context imposes.
+
+        The relative-path colon rule is reported separately by hasColonInFirstRelativeSegment(), which gives a
+        more useful message.
+
+        Non-ASCII octets are accepted wherever a \c pchar is allowed, as in IRIs (RFC 3987), unless @p ascii_only
+        is set.  Percent-encoded octets must be well formed.
+
+        @param what what the reference is, for the exception text (e.g. \c "base URI")
+        @param full the reference as given, for the exception text
+        @param ascii_only if true, a non-ASCII octet is an error rather than an IRI character
+        @param xsink the exception is raised here; cancellation also stops the scan
+
+        @return 0 if valid, -1 if an exception was raised
+    */
+    DLLLOCAL int validate(const char* what, const char* full, bool ascii_only, ExceptionSink* xsink) const;
+
     //! Appends @p in to @p out, percent-encoding octets that cannot appear in a URI
     /** Controls, space, non-ASCII octets, and the characters \c "<>\\^`{|}" are encoded (RFC 3987 section 3.1); existing
         percent-encoded octets and all URI delimiters are kept as given

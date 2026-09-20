@@ -943,6 +943,325 @@ static int uri_check_strict(const char* what, const QoreString& value, Exception
     return 0;
 }
 
+// RFC 3986 section 2.3: unreserved = ALPHA / DIGIT / "-" / "." / "_" / "~"
+// the ctype functions are not used here: they are locale-dependent for octets >= 0x80, which are decided by the
+// IRI policy instead, not by the C library's idea of a letter
+static inline bool uri_is_alpha(unsigned char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+}
+
+static inline bool uri_is_digit(unsigned char c) {
+    return c >= '0' && c <= '9';
+}
+
+static inline bool uri_is_hexdig(unsigned char c) {
+    return uri_is_digit(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+}
+
+static inline bool uri_is_unreserved(unsigned char c) {
+    return uri_is_alpha(c) || uri_is_digit(c) || c == '-' || c == '.' || c == '_' || c == '~';
+}
+
+// RFC 3986 section 2.2: sub-delims
+static inline bool uri_is_sub_delim(unsigned char c) {
+    switch (c) {
+        case '!':
+        case '$':
+        case '&':
+        case '\'':
+        case '(':
+        case ')':
+        case '*':
+        case '+':
+        case ',':
+        case ';':
+        case '=':
+            return true;
+        default:
+            return false;
+    }
+}
+
+//! Validates one component: unreserved / pct-encoded / sub-delims / the ASCII octets in @p extra
+/** @param extra the delimiters the component's production allows on top of the common set, as a NUL-terminated
+    ASCII string; a segment allows ":@", a query or fragment ":@/?", userinfo ":", and a reg-name none
+*/
+static int uri_check_chars(const char* what, const char* part, const char* full, const std::string& value,
+        const char* extra, bool ascii_only, ExceptionSink* xsink) {
+    const char* p = value.data();
+    const size_t len = value.size();
+    UriCancelCheck cancelled(xsink);
+    for (size_t i = 0; i < len; ++i) {
+        if (cancelled()) {
+            return -1;
+        }
+        const unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c == '%') {
+            // uri_check_strict() has already proven every escape in the whole reference well formed; this keeps
+            // validate() usable on its own
+            if (i + 2 >= len || !uri_is_hexdig(static_cast<unsigned char>(p[i + 1]))
+                    || !uri_is_hexdig(static_cast<unsigned char>(p[i + 2]))) {
+                xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has a malformed percent-encoded octet in its "
+                    "%s", what, full, part);
+                return -1;
+            }
+            i += 2;
+            continue;
+        }
+        if (c >= 0x80) {
+            if (!ascii_only) {
+                // accepted as an IRI character (RFC 3987 section 2.2)
+                continue;
+            }
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has a non-ASCII octet (code %d) in its %s; a URI "
+                "can only contain ASCII, and RESOLVE_URL_ASCII was given", what, full, (int)c, part);
+            return -1;
+        }
+        if (uri_is_unreserved(c) || uri_is_sub_delim(c) || (c && strchr(extra, c))) {
+            continue;
+        }
+        xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid character '%c' (code %d) in its %s; "
+            "RFC 3986 does not allow it there", what, full, (char)c, (int)c, part);
+        return -1;
+    }
+    return 0;
+}
+
+//! Returns true if @p s matches the RFC 3986 \c IPv4address production
+/** Leading zeros are not allowed, so \c "010.0.0.1" is not an IPv4 address; as a host it is still a valid
+    \c reg-name, and this is only reached for the \c ls32 tail of an IPv6 address
+*/
+static bool uri_is_ipv4(const char* p, size_t len) {
+    unsigned octets = 0;
+    size_t i = 0;
+    while (i < len) {
+        const size_t start = i;
+        while (i < len && uri_is_digit(static_cast<unsigned char>(p[i]))) {
+            ++i;
+        }
+        const size_t dlen = i - start;
+        // dec-octet = DIGIT / %x31-39 DIGIT / "1" 2DIGIT / "2" %x30-34 DIGIT / "25" %x30-35
+        if (!dlen || dlen > 3 || (dlen > 1 && p[start] == '0')) {
+            return false;
+        }
+        unsigned v = 0;
+        for (size_t j = 0; j < dlen; ++j) {
+            v = v * 10 + static_cast<unsigned>(p[start + j] - '0');
+        }
+        if (v > 255 || ++octets > 4) {
+            return false;
+        }
+        if (i == len) {
+            break;
+        }
+        if (p[i] != '.' || ++i == len) {
+            return false;
+        }
+    }
+    return octets == 4;
+}
+
+//! Counts the 16-bit groups in one side of an IPv6 address, or -1 if a group is malformed
+/** @param allow_ipv4_tail true for the side that ends the address, where the last group can be an \c IPv4address
+    (the \c ls32 production) and then counts as two groups
+*/
+static int uri_ipv6_groups(const std::string& s, bool allow_ipv4_tail) {
+    if (s.empty()) {
+        return 0;
+    }
+    int groups = 0;
+    size_t pos = 0;
+    while (true) {
+        const size_t next = s.find(':', pos);
+        const bool last = next == std::string::npos;
+        const std::string g = s.substr(pos, last ? std::string::npos : next - pos);
+        if (last && allow_ipv4_tail && g.find('.') != std::string::npos) {
+            return uri_is_ipv4(g.data(), g.size()) ? groups + 2 : -1;
+        }
+        // h16 = 1*4HEXDIG
+        if (g.empty() || g.size() > 4) {
+            return -1;
+        }
+        for (const char c : g) {
+            if (!uri_is_hexdig(static_cast<unsigned char>(c))) {
+                return -1;
+            }
+        }
+        ++groups;
+        if (last) {
+            return groups;
+        }
+        pos = next + 1;
+    }
+}
+
+//! Returns true if @p s matches the RFC 3986 \c IPv6address production
+/** The grammar bounds a valid address at 45 octets ("ffff:ffff:ffff:ffff:ffff:ffff:255.255.255.255"), so a longer
+    string is rejected without scanning it and every loop below is bounded
+*/
+static bool uri_is_ipv6(const std::string& s) {
+    if (s.size() > 45) {
+        return false;
+    }
+    const size_t dbl = s.find("::");
+    if (dbl == std::string::npos) {
+        return uri_ipv6_groups(s, true) == 8;
+    }
+    // at most one group of zeros may be elided
+    if (s.find("::", dbl + 2) != std::string::npos) {
+        return false;
+    }
+    const int left = uri_ipv6_groups(s.substr(0, dbl), false);
+    const int right = uri_ipv6_groups(s.substr(dbl + 2), true);
+    return left >= 0 && right >= 0 && left + right <= 7;
+}
+
+//! Returns true if @p s matches the RFC 3986 \c IPvFuture production
+/** Unlike IPv6address this is unbounded, so the scan checks for cancellation; when it is cancelled the exception
+    is in @p xsink and the caller must not raise its own
+*/
+static bool uri_is_ipvfuture(const std::string& s, ExceptionSink* xsink) {
+    // IPvFuture = "v" 1*HEXDIG "." 1*( unreserved / sub-delims / ":" )
+    if (s.size() < 4 || (s[0] != 'v' && s[0] != 'V')) {
+        return false;
+    }
+    // both scans below are over the unbounded bracket content, so both check for cancellation
+    UriCancelCheck cancelled(xsink);
+    size_t i = 1;
+    while (i < s.size() && uri_is_hexdig(static_cast<unsigned char>(s[i]))) {
+        if (cancelled()) {
+            return false;
+        }
+        ++i;
+    }
+    if (i == 1 || i >= s.size() || s[i] != '.' || ++i >= s.size()) {
+        return false;
+    }
+    for (; i < s.size(); ++i) {
+        if (cancelled()) {
+            return false;
+        }
+        const unsigned char c = static_cast<unsigned char>(s[i]);
+        if (!uri_is_unreserved(c) && !uri_is_sub_delim(c) && c != ':') {
+            return false;
+        }
+    }
+    return true;
+}
+
+//! Validates an authority: [ userinfo "@" ] host [ ":" port ]
+static int uri_check_authority(const char* what, const char* full, const std::string& authority, bool ascii_only,
+        ExceptionSink* xsink) {
+    std::string rest = authority;
+    // userinfo cannot itself contain "@", so the last one is the delimiter either way: splitting earlier would
+    // only move the extra "@" into the host, where reg-name rejects it
+    const size_t at = rest.rfind('@');
+    if (at != std::string::npos) {
+        if (uri_check_chars(what, "userinfo", full, rest.substr(0, at), ":", ascii_only, xsink)) {
+            return -1;
+        }
+        rest.erase(0, at + 1);
+    }
+
+    // find where the host ends: an IP literal contains colons, so the port delimiter is the colon after its "]"
+    size_t host_end;
+    if (!rest.empty() && rest[0] == '[') {
+        const size_t close = rest.find(']');
+        if (close == std::string::npos) {
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an unterminated IP literal in its authority; "
+                "RFC 3986 requires \"[\" ( IPv6address / IPvFuture ) \"]\"", what, full);
+            return -1;
+        }
+        host_end = close + 1;
+        if (host_end < rest.size() && rest[host_end] != ':') {
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has characters after the IP literal in its "
+                "authority; only a \":\" port can follow \"]\"", what, full);
+            return -1;
+        }
+    } else {
+        host_end = rest.find(':');
+        if (host_end == std::string::npos) {
+            host_end = rest.size();
+        }
+    }
+
+    if (host_end < rest.size()) {
+        // port = *DIGIT
+        const std::string port = rest.substr(host_end + 1);
+        UriCancelCheck cancelled(xsink);
+        for (size_t i = 0; i < port.size(); ++i) {
+            if (cancelled()) {
+                return -1;
+            }
+            if (!uri_is_digit(static_cast<unsigned char>(port[i]))) {
+                xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid port '%s' in its authority; "
+                    "RFC 3986 allows only digits", what, full, port.c_str());
+                return -1;
+            }
+        }
+    }
+
+    const std::string host = rest.substr(0, host_end);
+    if (!host.empty() && host[0] == '[') {
+        // host_end was set from the "]", so the literal is delimited here
+        const std::string lit = host.substr(1, host.size() - 2);
+        if (!uri_is_ipv6(lit) && !uri_is_ipvfuture(lit, xsink)) {
+            if (*xsink) {
+                return -1;
+            }
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid IP literal '%s' in its authority; "
+                "RFC 3986 requires an IPv6address or an IPvFuture", what, full, host.c_str());
+            return -1;
+        }
+        return 0;
+    }
+    // host = IPv4address / reg-name; a reg-name accepts every IPv4address, so only the character set is checked
+    return uri_check_chars(what, "host", full, host, "", ascii_only, xsink);
+}
+
+//! Validates a path in the context of its reference
+static int uri_check_path(const char* what, const char* full, const QoreUriReference& ref, bool ascii_only,
+        ExceptionSink* xsink) {
+    if (ref.has_authority) {
+        // path-abempty = *( "/" segment )
+        if (!ref.path.empty() && ref.path[0] != '/') {
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an authority and a path that does not begin "
+                "with \"/\"; RFC 3986 requires path-abempty there", what, full);
+            return -1;
+        }
+    } else if (ref.path.size() >= 2 && ref.path[0] == '/' && ref.path[1] == '/') {
+        // without an authority a path cannot begin with "//" (RFC 3986 section 3.3): it would be read back as one
+        xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has no authority and a path that begins with \"//\"; "
+            "it would be taken for an authority", what, full);
+        return -1;
+    }
+    // every segment is *pchar and "/" separates them; the extra rule for the first segment of a relative-path
+    // reference (segment-nz-nc, which has no colon) is reported by hasColonInFirstRelativeSegment()
+    return uri_check_chars(what, "path", full, ref.path, ":@/", ascii_only, xsink);
+}
+
+int QoreUriReference::validate(const char* what, const char* full, bool ascii_only, ExceptionSink* xsink) const {
+    if (has_scheme && !isValidScheme(scheme.c_str(), scheme.size())) {
+        xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has an invalid scheme '%s'; RFC 3986 requires "
+            "ALPHA *( ALPHA / DIGIT / \"+\" / \"-\" / \".\" )", what, full, scheme.c_str());
+        return -1;
+    }
+    if (has_authority && uri_check_authority(what, full, authority, ascii_only, xsink)) {
+        return -1;
+    }
+    if (uri_check_path(what, full, *this, ascii_only, xsink)) {
+        return -1;
+    }
+    // query = fragment = *( pchar / "/" / "?" )
+    if (has_query && uri_check_chars(what, "query", full, query, ":@/?", ascii_only, xsink)) {
+        return -1;
+    }
+    if (has_fragment && uri_check_chars(what, "fragment", full, fragment, ":@/?", ascii_only, xsink)) {
+        return -1;
+    }
+    return 0;
+}
+
 QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& reference, int options,
         ExceptionSink* xsink) {
     TempEncodingHelper b(base, QCS_UTF8, xsink);
@@ -953,7 +1272,9 @@ QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& refer
     if (*xsink) {
         return nullptr;
     }
-    bool strict = options & QRU_STRICT;
+    // QRU_ASCII refines the strict check rather than acting on its own, so it implies it
+    const bool ascii_only = options & QRU_ASCII;
+    const bool strict = (options & QRU_STRICT) || ascii_only;
     if (strict && (uri_check_strict("base URI", **b, xsink) || uri_check_strict("URI reference", **r, xsink))) {
         return nullptr;
     }
@@ -982,6 +1303,11 @@ QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& refer
         if (ref.hasColonInFirstRelativeSegment()) {
             xsink->raiseException("RESOLVE-URL-ERROR", "URI reference '%s' is a relative-path reference whose "
                 "first segment contains a colon; prefix it with \"./\"", r->c_str());
+            return nullptr;
+        }
+        // the octet scan above only rejects what can appear nowhere; this is the component grammar itself
+        if (base_ref.validate("base URI", b->c_str(), ascii_only, xsink)
+                || ref.validate("URI reference", r->c_str(), ascii_only, xsink)) {
             return nullptr;
         }
     }
