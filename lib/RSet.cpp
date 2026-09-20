@@ -484,7 +484,7 @@ void RSet::dbg() {
 
 // if we return 1, the rset has been invalidated already
 int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator, RSetDerefHelper& cleanup) {
-    printd(QRO_LVL, "RSet::canDelete() this: %p valid: %d\n", this, valid);
+    printd(QRO_LVL, "RSet::canDelete() this: %p valid: %d\n", this, (int)valid);
 
     if (q_disable_gc)
         return 0;

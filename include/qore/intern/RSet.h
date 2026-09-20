@@ -404,7 +404,10 @@ public:
     DLLLOCAL void dbg();
 
     DLLLOCAL static bool isValid(const RSet* rs) {
-        return rs ? rs->valid : false;
+        // not "rs ? rs->valid : false": since valid became std::atomic_bool the two arms of the
+        // conditional have unrelated types, each convertible to the other, so the expression is
+        // ambiguous and does not compile
+        return rs && rs->valid;
     }
 #endif
 
