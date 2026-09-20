@@ -708,6 +708,17 @@ private:
 
 class qore_object_private;
 
+//! one in-progress dereference on one thread, linked into an intrusive per-thread stack
+/** Every node is a member of the robject_dereference_helper that owns the dereference, and that
+    helper lives on the C++ stack for exactly the lifetime of the dereference, so the stack of
+    in-progress dereferences needs no allocation and no thread_local destructor.  See
+    t_deref_inprogress in lib/RSet.cpp for what the stack is used for.
+*/
+struct robject_deref_frame {
+    const RObject* o = nullptr;
+    robject_deref_frame* next = nullptr;
+};
+
 /** this class ensures that RObjects will not be deleted until all deref() calls are complete
  */
 class robject_dereference_helper {
@@ -719,6 +730,8 @@ protected:
         do_scan = false,
         deferred_scan,
         handed_off = false;
+    // this thread's entry in the stack of in-progress dereferences; see lib/RSet.cpp
+    robject_deref_frame frame;
 
 public:
     DLLLOCAL robject_dereference_helper(RObject* obj, bool real = false);
