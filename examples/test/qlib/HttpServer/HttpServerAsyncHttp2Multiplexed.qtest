@@ -971,6 +971,35 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         WebSocket is left active at the same time, because stop() only waits for handler tasks when
         there is one.
     */
+    #! Waits for a backgrounded shutdown and reports every thread's call stack if it does not finish
+    /** A shutdown that does not return gives no information by itself: the test just times out, and
+        on a platform that cannot be reproduced locally there is nothing else to go on.  Dumping the
+        call stacks names the thread that is stuck and where, which is the whole diagnosis.
+
+        @param stopped the queue the shutdown thread pushes to when stop() returns
+        @param timeout how long to wait
+
+        @return True if the shutdown completed
+    */
+    private bool waitForShutdown(Queue stopped, date timeout) {
+        try {
+            return stopped.get(timeout) != NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "QUEUE-TIMEOUT") {
+                rethrow;
+            }
+        }
+        printf("server.stop() did not complete within %y; call stacks of all threads follow\n", timeout);
+        hash<string, list<hash<CallStackInfo>>> cs = get_all_thread_call_stacks();
+        foreach string tid in (cs.keyIterator()) {
+            printf("--- TID %s ---\n", tid);
+            foreach hash<CallStackInfo> f in (cs{tid}) {
+                printf("  %s %s() at %s:%d\n", f.type, f.function, f.file, f.line);
+            }
+        }
+        return False;
+    }
+
     testShutdownWithAbortedTlsConnection() {
         MultiplexedWsHandler ws_handler();
         if (m_options.verbose > 2) {
@@ -1040,7 +1069,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             test_server.stop();
             stopped.push(True);
         }();
-        assertTrue(stopped.get(20s) != NOTHING,
+        assertTrue(waitForShutdown(stopped, 20s),
             "server.stop() must complete after a connection was aborted at the TCP layer");
 
         try {
@@ -1121,7 +1150,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             test_server.stop();
             stopped.push(True);
         }();
-        assertTrue(stopped.get(15s) != NOTHING,
+        assertTrue(waitForShutdown(stopped, 15s),
             "server.stop() should complete deterministically with active WebSocket");
 
         # Clean up client connection (may already be disconnected)
