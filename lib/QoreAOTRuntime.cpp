@@ -6732,7 +6732,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             uint16_t opcode = QoreAOTBinaryReader::readU16(ptr);
             auto pi = std::make_unique<QoreIRLValuePathInstruction>(
                 static_cast<QoreIROpcode>(opcode));
-            pi->weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            pi->mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
             pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
@@ -7517,7 +7517,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             const char* ltype = reader.readStringRef(ptr);
             uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
             bool auto_ref = QoreAOTBinaryReader::readU8(ptr) != 0;
-            bool weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
             bool is_closure = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool is_ref = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool read_only = false;
@@ -7541,7 +7541,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 lv->setReadOnly();
             }
             auto* li = new QoreIRLocalInstruction(opcode, lv, auto_ref);
-            li->weak = weak;
+            li->mode = mode;
             li->initial_assignment = initial_assignment;
             li->is_closure = is_closure;
             li->is_ref = is_ref;
@@ -7552,7 +7552,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
 
         case QoreIRInstGroup::Var: {
             const char* vname = reader.readStringRef(ptr);
-            bool weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
             Var* var = nullptr;
             if (vname && *vname) {
                 qore_program_private* pp = qore_program_private::get(*pgm);
@@ -7560,7 +7560,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
             }
             auto* vi = new QoreIRVarInstruction(opcode, var);
-            vi->weak = weak;
+            vi->mode = mode;
             inst.reset(vi);
             break;
         }
@@ -7570,9 +7570,9 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (!error.empty()) {
                 return nullptr;
             }
-            bool weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
             uint32_t lvalue_slot_id = QoreAOTBinaryReader::readU32(ptr);
-            auto* lvi = new QoreIRLValueInstruction(opcode, lvalue, weak);
+            auto* lvi = new QoreIRLValueInstruction(opcode, lvalue, mode);
             lvi->lvalue_slot_id = lvalue_slot_id;
             // LValue constructor refs the value, so deref our copy
             lvalue.discard(nullptr);
@@ -7783,14 +7783,14 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             }
             uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ptr);
             const char* invoke_key_name = reader.readStringRef(ptr);
-            bool weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
             uint16_t normal_idx = QoreAOTBinaryReader::readU16(ptr);
             uint16_t exception_idx = QoreAOTBinaryReader::readU16(ptr);
             auto* ii = new QoreIRInvokeInstruction(expr,
                 resolveBlock(normal_idx), resolveBlock(exception_idx));
             ii->invoke_opcode = static_cast<QoreIROpcode>(invoke_opcode_raw);
             ii->invoke_key_name = invoke_key_name ? invoke_key_name : "";
-            ii->weak = weak;
+            ii->mode = mode;
             expr.discard(nullptr);
             inst.reset(ii);
             break;
@@ -8110,7 +8110,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
 
         case QoreIRInstGroup::LValuePath: {
             auto* pi = new QoreIRLValuePathInstruction(opcode);
-            pi->weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            pi->mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ptr));
             pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));

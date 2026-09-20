@@ -542,6 +542,79 @@ While `rrefs > 0`, DGC will not scan the object. Leaking a `realRef()` without a
 
 Do not use `realRef()` for references stored in C++ state that outlives a single call. Those refs belong in internal members (Pattern A) or must be made visible via a custom scanner (Pattern B).
 
+## Opaque references: a strong reference the scanner does not follow
+
+The `@=` operator (the **opaque reference assignment operator**, gated by
+`QoreParseOptions::ALLOW_OPAQUE_REFERENCES` / `%allow-opaque-references`) stores a reference that is
+**owned** like an ordinary one but that a scan does not follow. It exists because a scan rooted at a
+hub walks the hub's whole container graph: registering one connection in a 2,000-entry registry walked
+6,005 objects and cost 162 ops/s on one thread. Holding the registry's entries with `:=` did not fix
+that — it stayed linear, because the entry hashes are themselves graph nodes — and `:=` would also
+make the holder's own entries collectable while it still uses them.
+
+The two primitives are opposite trades:
+
+| | `:=` (weak) | `@=` (opaque) |
+|---|---|---|
+| owns the target | no | **yes** |
+| scanner follows it | no | no |
+| failure mode when misused | the target is collected while still in use (dangling) | the cycle is never collected (leak) |
+
+`@=` is therefore strictly safer than `:=` — a mistake leaks rather than dangles — but the leak is
+**unrecoverable by cycle detection**. Use it only where the assigned value can be shown not to
+reference its holder back.
+
+### Representation
+
+An opaque reference is stored inline in the `QoreValue` NaN-boxed encoding under the 12-bit tag family
+`0xFFD` (`TAG12_OPAQUE`), with the kind — object, hash or list — in bits 48-51 and the target pointer
+in bits 0-47. It costs no allocation, unlike the `WeakReferenceNode` wrapper that `:=` uses, and it is
+carved out of the double range by one extra comparison in `QoreValue::isFloat()`, exactly as inline
+short strings are.
+
+The representation is **transparent to every consumer except the collector**: `getType()`,
+`getTypeName()`, `getInternalNode()` and `isPointer()` all report the target, so ordinary code,
+serialization, pseudo-methods and binary modules treat an opaque reference exactly like a normal one
+and need no changes. Only four places look at the tag, and they are the four that decide whether the
+collector follows an edge:
+
+- `needs_scan(const QoreValue&)` — `lib/AbstractQoreNode.cpp`
+- the list and hash traversals in `RSetHelper::startNode()` — `lib/RSet.cpp`
+- `qore_object_private::scanMembersIntern()` — `lib/QoreObject.cpp`
+
+This is the whole reason the traversal sites take a `QoreValue` rather than a raw `AbstractQoreNode*`:
+the tag is still in hand where the decision is made. **A new traversal site must check `isOpaque()`,
+or it will follow opaque edges and silently undo the feature** — silently, because following the edge
+is not incorrect, merely slow, so nothing fails.
+
+### Ownership and Program tracking
+
+`QoreValue`'s reference-counting paths treat an opaque reference exactly like a pointer value, which
+`isPointer()` returning true for it gives for free. The one addition is that every strong reference
+held through an opaque value is registered with the target's owning `QoreProgram`
+(`qore_program_private::registerOpaqueTarget()`), balanced in `ref()`, `discard()` and
+`takeNodeIntern()`. Registration counts **references, not assignments**: each copy takes its own
+reference, so each copy must take its own registration, or the first release would untrack a target
+other copies still hold.
+
+`qore_program_private::clearOpaqueTargets()` then deletes every still-registered target during
+`waitForTerminationAndClear()`, next to `clearSavedObjects()` and for the same reason: deleting a
+target releases its members and breaks the cycle the collector could not see, and it has to happen
+while the Program is still valid (`ptid == tid`, data not yet cleared) because the destructors it runs
+are user code. This is what bounds the leak an opaque reference can cause to the lifetime of the
+Program that created it instead of the lifetime of the process.
+
+`opaque_target_lock` is a **leaf lock**: nothing else may be acquired while it is held, and no user
+code runs under it — `clearOpaqueTargets()` copies the set and releases the lock before deleting
+anything.
+
+### Rules
+
+4. An opaque reference is invisible to the scanner. A cycle running through one cannot be collected by
+   cycle detection; it is broken only by the holder releasing it, or by Program teardown.
+5. `@=` is only correct where the programmer can show the target does not reference the holder back,
+   or where the leak is bounded and intended.
+
 ## Debugging a suspected cycle leak
 
 1. **Count survivors.** Instrument `qore_object_private` ctor/dtor with an atexit dump. For each surviving object, also print `references`, `rrefs`, whether `rset` is non-null, and `rcount`. (See `lib/QoreObject.cpp` around the `qo_register`/`qo_unregister` hooks used during the H2-connection-manager leak investigation.)

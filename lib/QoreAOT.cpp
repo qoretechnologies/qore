@@ -3317,7 +3317,7 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
             ref.local = linst->local;
             ref.lifecycle = inst->opcode == QoreIROpcode::InstantiateLocal
                 || inst->opcode == QoreIROpcode::UninstantiateLocal;
-            ref.weak_store = inst->opcode == QoreIROpcode::StoreLocal && linst->weak;
+            ref.weak_store = inst->opcode == QoreIROpcode::StoreLocal && linst->mode != AssignmentMode::Normal;
             ref.unknown = !linst->local;
             cb(ref);
             break;
@@ -3390,7 +3390,7 @@ static void aotOutlineForEachLocalRef(const QoreIRInstruction* inst, F&& cb) {
                     AOTOutlineLocalRef ref;
                     ref.local = reinterpret_cast<const LocalVar*>(root.ref_ptr);
                     ref.weak_store = inst->opcode == QoreIROpcode::LValuePathAssign
-                        && lvp->weak;
+                        && lvp->mode != AssignmentMode::Normal;
                     ref.unknown = !ref.local;
                     cb(ref);
                 }
@@ -6164,7 +6164,7 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::LoadClosure: {
                     const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!explicit_captures || !linst->local || linst->is_ref
-                            || linst->weak || !explicit_captures->count(linst->local)
+                            || linst->mode != AssignmentMode::Normal || !explicit_captures->count(linst->local)
                             || qore_ir_get_scalar_local_kind(linst->local)
                                 == BatchCalleeParamKind::Boxed) {
                         return false;
@@ -10808,7 +10808,7 @@ static bool qore_aot_collect_int_expression_summaries(
                 }
             } else if (inst->opcode == QoreIROpcode::StoreLocal) {
                 const auto* store = static_cast<const QoreIRLocalInstruction*>(inst);
-                if (store->weak || !is_exact_int_local(store->local)
+                if (store->mode != AssignmentMode::Normal || !is_exact_int_local(store->local)
                         || inst->operands.size() != 1) {
                     return false;
                 }
@@ -13245,7 +13245,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     const auto* store =
                         static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!store->local || store->local == self
-                            || store->local->closureUse() || store->weak
+                            || store->local->closureUse() || store->mode != AssignmentMode::Normal
                             || inst->operands.size() != 1) {
                         return false;
                     }
@@ -13277,7 +13277,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     auto source = inst->operands.size() == 1
                         ? value_sources.find(inst->operands[0].id)
                         : value_sources.end();
-                    if (assign->weak || !member || member->empty()
+                    if (assign->mode != AssignmentMode::Normal || !member || member->empty()
                             || source == value_sources.end()) {
                         return false;
                     }
@@ -13380,7 +13380,7 @@ bool qore_ir_resolve_batch_function_summaries(
                     const auto* store =
                         static_cast<const QoreIRLocalInstruction*>(inst);
                     if (!store->local || store->local->closureUse()
-                            || store->weak || inst->operands.size() != 1
+                            || store->mode != AssignmentMode::Normal || inst->operands.size() != 1
                             || store->local == self) {
                         return false;
                     }
@@ -13426,7 +13426,7 @@ bool qore_ir_resolve_batch_function_summaries(
                                 == LVPathStepKind::HashKeyConst) {
                         assigned_member = &assign->path[1].name;
                     }
-                    if (assigned || assign->weak
+                    if (assigned || assign->mode != AssignmentMode::Normal
                             || !assigned_member
                             || assigned_member->empty()
                             || inst->operands.size() != 1) {
@@ -14697,7 +14697,7 @@ static size_t projectAOTNonescapingObjectScalars(
                 object_uses->second.front());
             const LocalVar* local = store->local;
             auto store_position = positions.find(store);
-            if (!local || store->weak || store->is_ref || store->is_closure
+            if (!local || store->mode != AssignmentMode::Normal || store->is_ref || store->is_closure
                     || local->closureUse()
                     || func.isAstVisibleLocal(
                         reinterpret_cast<const void*>(local))
@@ -35309,7 +35309,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const auto* pi = reinterpret_cast<const QoreIRLValuePathInstruction*>(ptr);
         AOTLVPathSlotId& lvid = out.lv_path_insts[slot];
         lvid.opcode = static_cast<uint16_t>(pi->opcode);
-        lvid.weak = pi->weak ? 1 : 0;
+        lvid.weak = pi->mode != AssignmentMode::Normal ? 1 : 0;
         lvid.compound_op = static_cast<uint8_t>(pi->compound_op);
         lvid.unary_op = static_cast<uint8_t>(pi->unary_op);
         lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);

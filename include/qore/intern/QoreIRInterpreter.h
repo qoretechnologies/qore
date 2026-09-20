@@ -74,7 +74,7 @@ public:
             const QoreValue& third, const QoreValue& fourth, ExceptionSink* xsink);
     static QoreValue evalLValueLoad(const QoreValue& lvalue, ExceptionSink* xsink);
     static QoreValue evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
-            bool weak = false);
+            AssignmentMode mode = AssignmentMode::Normal);
     static QoreValue evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink);
     static QoreValue evalLValueBinary(QoreIROpcode op, const QoreValue& lvalue, const QoreValue& right,
             ExceptionSink* xsink);

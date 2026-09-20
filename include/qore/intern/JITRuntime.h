@@ -420,6 +420,7 @@ uint64_t qore_rt_lvalue_load(uint64_t lvalue_bits, ExceptionSink* xsink);
 
 //! LValue store: assigns value to lvalue, returns NaN-boxed result
 uint64_t qore_rt_lvalue_store(uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lvalue_store_opaque(uint64_t lvalue_bits, uint64_t value_bits, ExceptionSink* xsink);
 
 //! LValue unary op (++, --): returns NaN-boxed result
 uint64_t qore_rt_lvalue_unary(int opcode, uint64_t lvalue_bits, ExceptionSink* xsink);
@@ -1327,6 +1328,7 @@ uint64_t qore_rt_lvalue_load_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink
 
 //! LValue store via AOT context slot
 uint64_t qore_rt_lvalue_store_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
+uint64_t qore_rt_lvalue_store_opaque_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink);
 
 //! LValue unary op via AOT context slot
 uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);

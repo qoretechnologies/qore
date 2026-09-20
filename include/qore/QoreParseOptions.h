@@ -317,6 +317,17 @@ public:
     */
     DLLEXPORT static const QoreParseOptions BROKEN_AUTO_CAST;
 
+    //! extended option: allow the @ref opaque_assignment_operator "opaque assignment operator (@=)" (bit 88)
+    /** An opaque reference is a strong reference that the deterministic garbage collector does not
+        follow.  It is unsafe in a way \c := is not: a cycle running through an opaque reference
+        cannot be collected by cycle detection, so misuse causes a standing memory leak that lives
+        until the owning @ref Qore::Program "Program" is torn down.  Only set this option for code
+        that can show the referenced value does not reference the holder back.  Not included in
+        \c PO_MODERN.
+        @since %Qore 3.0
+    */
+    DLLEXPORT static const QoreParseOptions ALLOW_OPAQUE_REFERENCES;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

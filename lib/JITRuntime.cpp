@@ -221,6 +221,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_store_thread_local", reinterpret_cast<void*>(&qore_rt_store_thread_local) },
     { "qore_rt_lvalue_load", reinterpret_cast<void*>(&qore_rt_lvalue_load) },
     { "qore_rt_lvalue_store", reinterpret_cast<void*>(&qore_rt_lvalue_store) },
+    { "qore_rt_lvalue_store_opaque", reinterpret_cast<void*>(&qore_rt_lvalue_store_opaque) },
     { "qore_rt_lvalue_unary", reinterpret_cast<void*>(&qore_rt_lvalue_unary) },
     { "qore_rt_lvalue_binary", reinterpret_cast<void*>(&qore_rt_lvalue_binary) },
     { "qore_rt_lvalue_ternary", reinterpret_cast<void*>(&qore_rt_lvalue_ternary) },
@@ -440,6 +441,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_new_complex_buffer_aot", reinterpret_cast<void*>(&qore_rt_new_complex_buffer_aot) },
     { "qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot) },
     { "qore_rt_lvalue_store_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_aot) },
+    { "qore_rt_lvalue_store_opaque_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_opaque_aot) },
     { "qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot) },
     { "qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot) },
     { "qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot) },
@@ -4270,7 +4272,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_weak(uint64_t lvalue_bits, ui
     QoreValue lvalue = fromBits(lvalue_bits);
     QoreValue value = fromBits(value_bits);
     ValueHolder val_holder(value.refSelf(), xsink);
-    QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink, true);
+    QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink, AssignmentMode::Weak);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_opaque(uint64_t lvalue_bits, uint64_t value_bits,
+        ExceptionSink* xsink) {
+    if (*xsink) {
+        QoreValue value = fromBits(value_bits);
+        value.discard(xsink);
+        return toBits(QoreValue());
+    }
+    QoreValue lvalue = fromBits(lvalue_bits);
+    QoreValue value = fromBits(value_bits);
+    ValueHolder val_holder(value.refSelf(), xsink);
+    QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink, AssignmentMode::Opaque);
     return toBits(result);
 }
 
@@ -12454,6 +12470,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_weak_aot(QoreAOTContext* ctx,
     return qore_rt_lvalue_store_weak(ctx->exprs[idx], val, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_opaque_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val,
+        ExceptionSink* xsink) {
+    assert(ctx);
+    return qore_rt_lvalue_store_opaque(ctx->exprs[idx], val, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lvalue_unary_aot(int op, QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_exprs);
     return qore_rt_lvalue_unary(op, ctx->exprs[idx], xsink);
@@ -12542,7 +12564,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     QoreValue assign_val = val;
     ValueHolder eval_holder(xsink);
     qore_type_t val_type = val.getType();
-    if (!inst->weak && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
+    if (inst->mode != AssignmentMode::Weak
+            && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
         eval_holder = val.eval(xsink);
         if (*xsink) {
             return toBits(QoreValue());
@@ -12554,7 +12577,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
-    if (lvh.assign(assign_val.refSelf(), "<lvalue>", true, inst->weak)) {
+    if (lvh.assign(assign_val.refSelf(), "<lvalue>", true, inst->mode)) {
         return toBits(QoreValue());
     }
     return toBits(lvh.getReferencedValue());
@@ -12583,7 +12606,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
     LValueHelper lvh(xsink);
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)
             || lvh.assign(assign_val.refSelf(), "<self member assign>",
-                true, weak)) {
+                true, assignment_mode_from_weak(weak))) {
         return toBits(QoreValue());
     }
     return toBits(lvh.getReferencedValue());

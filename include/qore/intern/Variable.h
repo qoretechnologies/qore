@@ -928,7 +928,8 @@ public:
         }
     }
 
-    DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true, bool weak_assignment = false);
+    DLLLOCAL int assign(QoreValue val, const char* desc = "<lvalue>", bool check_types = true,
+            AssignmentMode mode = AssignmentMode::Normal);
 
     DLLLOCAL QoreValue removeValue(bool for_del);
     DLLLOCAL QoreValue remove(bool& static_assignment);
@@ -991,5 +992,23 @@ struct lvinfo {
     DLLLOCAL lvinfo(QoreLValueGeneric* val, const QoreTypeInfo* typeInfo) : val(val), typeInfo(typeInfo) {
     }
 };
+
+
+//! replaces a value with the weak or opaque representation the given assignment mode calls for
+/** Applied by the execution tiers that build the stored representation themselves instead of
+    delegating to LValueHelper::assign().  Objects, hashes and lists are converted; every other
+    value is left unchanged.  The returned value holds its own reference, so the caller must
+    release the reference it held before the call once the store has taken its own.
+
+    @param val the value to convert in place
+    @param mode the assignment mode; must not be AssignmentMode::Normal
+*/
+DLLLOCAL void qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode);
+
+//! returns true if the value is a weak or opaque reference to an object, hash or list
+/** These are the representations that hold their target indirectly, so that a store which built
+    one must release the reference taken when it was built.
+*/
+DLLLOCAL bool qore_is_indirect_ref_value(const QoreValue& val);
 
 #endif // _QORE_VARIABLE_H

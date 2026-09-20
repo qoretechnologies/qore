@@ -335,7 +335,7 @@ private:
     bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     QoreIRValue tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
-        bool weak, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
+        AssignmentMode mode, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
         LVUnaryOp unary_op = LVUnaryOp::PreInc,
         LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push,
         const QoreValue& pattern_expr = QoreValue());
@@ -364,7 +364,7 @@ private:
     QoreIRValue loadVarRef(const VarRefNode* var, std::string& error, const char* context,
         const QoreValue& expr);
     bool storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error, const char* context,
-        const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, bool weak = false,
+        const QoreValue* expr = nullptr, const QoreProgramLocation* guard_loc = nullptr, AssignmentMode mode = AssignmentMode::Normal,
         QoreIRValue* store_result = nullptr);
     LocalVar* getLocalVarFromValue(const QoreValue& expr) const;
     const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;

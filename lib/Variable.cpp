@@ -1901,7 +1901,50 @@ void LValueHelper::rollbackVivification() {
     clearPtr();
 }
 
-int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool weak_assignment) {
+void qore_apply_assignment_mode(QoreValue& val, AssignmentMode mode) {
+    assert(mode != AssignmentMode::Normal);
+    switch (val.getType()) {
+        case NT_OBJECT: {
+            QoreObject* o = val.get<QoreObject>();
+            val = mode == AssignmentMode::Weak
+                ? QoreValue(new WeakReferenceNode(o))
+                : QoreValue::makeOpaqueObject(o);
+            break;
+        }
+        case NT_HASH: {
+            QoreHashNode* h = val.get<QoreHashNode>();
+            val = mode == AssignmentMode::Weak
+                ? QoreValue(new WeakHashReferenceNode(h))
+                : QoreValue::makeOpaqueHash(h);
+            break;
+        }
+        case NT_LIST: {
+            QoreListNode* l = val.get<QoreListNode>();
+            val = mode == AssignmentMode::Weak
+                ? QoreValue(new WeakListReferenceNode(l))
+                : QoreValue::makeOpaqueList(l);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+bool qore_is_indirect_ref_value(const QoreValue& val) {
+    if (val.isOpaque()) {
+        return true;
+    }
+    switch (val.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            return true;
+        default:
+            return false;
+    }
+}
+
+int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, AssignmentMode mode) {
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
         n.set(static_cast<AbstractQoreNode*>(nullptr));
@@ -1938,7 +1981,7 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
     QoreTypeInfo::applyNoNarrowCoercion(typeInfo, n, vl.xsink, this);
 
     // process weak assignment
-    if (weak_assignment) {
+    if (mode == AssignmentMode::Weak) {
         if (n.getType() == NT_OBJECT) {
             QoreObject* o = n.get<QoreObject>();
             n = new WeakReferenceNode(o);
@@ -1953,6 +1996,24 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
             QoreListNode* l = n.get<QoreListNode>();
             n = new WeakListReferenceNode(l);
             // cannot dereference a container in lock
+            saveTemp(l);
+        }
+    } else if (mode == AssignmentMode::Opaque) {
+        // an opaque reference keeps the strong reference the value already carries but stores it in
+        // a representation the DGC scanner does not follow; the reference taken by the make*()
+        // calls replaces the one held by "n", which is released through the temporary list because
+        // the target cannot be dereferenced while the lvalue lock is held
+        if (n.getType() == NT_OBJECT) {
+            QoreObject* o = n.get<QoreObject>();
+            n = QoreValue::makeOpaqueObject(o);
+            saveTemp(o);
+        } else if (n.getType() == NT_HASH) {
+            QoreHashNode* h = n.get<QoreHashNode>();
+            n = QoreValue::makeOpaqueHash(h);
+            saveTemp(h);
+        } else if (n.getType() == NT_LIST) {
+            QoreListNode* l = n.get<QoreListNode>();
+            n = QoreValue::makeOpaqueList(l);
             saveTemp(l);
         }
     }

@@ -49,16 +49,16 @@ protected:
     // flag for identical match with assignment types (lvalue & rvalue)
     bool ident = false;
 
-    DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, bool weak_assignment);
+    DLLLOCAL int parseInitIntern(QoreParseContext& parse_context, AssignmentMode mode);
 
-    DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, bool weak_assignment) const;
+    DLLLOCAL QoreValue evalIntern(ExceptionSink* xsink, bool& needs_deref, AssignmentMode mode) const;
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, false);
+        return parseInitIntern(parse_context, AssignmentMode::Normal);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        return evalIntern(xsink, needs_deref, false);
+        return evalIntern(xsink, needs_deref, AssignmentMode::Normal);
     }
 };
 
@@ -75,11 +75,38 @@ public:
 
 protected:
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-        return parseInitIntern(parse_context, true);
+        return parseInitIntern(parse_context, AssignmentMode::Weak);
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        return evalIntern(xsink, needs_deref, true);
+        return evalIntern(xsink, needs_deref, AssignmentMode::Weak);
+    }
+};
+
+//! the opaque reference assignment operator ('@=')
+/** Assigns a strong reference that the deterministic garbage collector does not follow.  Unlike the
+    weak assignment operator, the target is owned, so it cannot be collected while the holder holds
+    it; unlike an ordinary assignment, the edge is invisible to cycle detection, so a cycle running
+    through it can only be broken by the holder releasing it or by QoreProgram teardown.
+*/
+class QoreOpaqueAssignmentOperatorNode : public QoreAssignmentOperatorNode {
+OP_COMMON
+public:
+    DLLLOCAL QoreOpaqueAssignmentOperatorNode(const QoreProgramLocation* loc, QoreValue left, QoreValue right)
+            : QoreAssignmentOperatorNode(loc, left, right) {
+    }
+
+    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
+        return copyBackgroundExplicit<QoreOpaqueAssignmentOperatorNode>(xsink);
+    }
+
+protected:
+    DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
+        return parseInitIntern(parse_context, AssignmentMode::Opaque);
+    }
+
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+        return evalIntern(xsink, needs_deref, AssignmentMode::Opaque);
     }
 };
 

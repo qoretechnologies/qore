@@ -1211,6 +1211,7 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%no-uncontrolled-apis{WS}*$            parse_set_parse_options(yylloc, PO_NO_UNCONTROLLED_APIS);
 ^%no-debugging{WS}*$                    parse_set_parse_options(yylloc, PO_NO_DEBUGGING);
 ^%allow-weak-references{WS}*$           parse_set_parse_options(yylloc, PO_ALLOW_WEAK_REFERENCES);
+^%allow-opaque-references{WS}*$         parse_set_parse_options(yylloc, QoreParseOptions::ALLOW_OPAQUE_REFERENCES);
 ^%allow-debugger{WS}*$                  parse_set_parse_options(yylloc, PO_ALLOW_DEBUGGER);
 ^%broken-list-parsing{WS}*$             parse_set_parse_options(yylloc, PO_BROKEN_LIST_PARSING);
 ^%broken-logic-precedence{WS}*$         parse_set_parse_options(yylloc, PO_BROKEN_LOGIC_PRECEDENCE);
@@ -3286,6 +3287,7 @@ hash\<{WORD}\>\{                        {
 \!==                                    return ABSOLUTE_NE;
 ==                                      return LOGICAL_EQ;
 :=                                      { streaming_any_expression_context = true; return WEAK_ASSIGNMENT; }
+@=                                      { streaming_any_expression_context = true; return OPAQUE_ASSIGNMENT; }
 \<=\>                                   return LOGICAL_CMP;
 &&                                      return LOGICAL_AND;
 \|\|                                    return (getProgram()->getParseOptions() & PO_BROKEN_LOGIC_PRECEDENCE) ? BROKEN_LOGICAL_OR : LOGICAL_OR;

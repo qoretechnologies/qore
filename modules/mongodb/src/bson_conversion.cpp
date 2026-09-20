@@ -190,7 +190,10 @@ QoreHashNode* bson_to_qore_hash(const bson_t* doc, ExceptionSink* xsink) {
     return hash.release();
 }
 
-int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& value, ExceptionSink* xsink) {
+int qore_value_to_bson_append(bson_t* doc, const char* key, const QoreValue& v_in, ExceptionSink* xsink) {
+    // a value read through the language unwraps itself, but walking a container gives the stored
+    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself
+    const QoreValue value = v_in.resolveIndirect();
     switch (value.getType()) {
         case NT_NOTHING:
         case NT_NULL:

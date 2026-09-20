@@ -1704,7 +1704,7 @@ void QoreIRFunction::computeIROnlyLocals() {
                     }
                     // A weak (":=") store assigns through LValueHelper, which
                     // requires the variable on the runtime local stack
-                    if (inst->opcode == QoreIROpcode::StoreLocal && linst->weak) {
+                    if (inst->opcode == QoreIROpcode::StoreLocal && linst->mode != AssignmentMode::Normal) {
                         weak_store_locals.insert(reinterpret_cast<const void*>(linst->local));
                     }
                 }

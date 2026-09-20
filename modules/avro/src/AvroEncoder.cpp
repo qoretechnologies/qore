@@ -594,6 +594,10 @@ int AvroEncoder::selectUnionBranch(const AvroNode* node, QoreValue v) {
 
 int AvroEncoder::encodeIntern(const AvroNode* node, QoreValue v, unsigned depth,
         ExceptionSink* xsink) {
+    // a value read through the language unwraps itself, but walking a container gives the stored
+    // representation, so a value assigned with ':=' or '@=' arrives here as the reference itself
+    v = v.resolveIndirect();
+
     if (depth > AVRO_MAX_NESTING_DEPTH) {
         xsink->raiseException("AVRO-ENCODE-ERROR", "value nesting exceeds the maximum depth of %d",
             AVRO_MAX_NESTING_DEPTH);

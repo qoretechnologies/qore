@@ -20,6 +20,7 @@
     |@ref allow-injection "%allow-injection"|Allows code and dependency injections into the given @ref Qore::Program "Program" object
     |@ref allow-returns "%allow-returns"|Allows the use of the deprecated \c returns keyword<br/><br/>Since %Qore 0.9.4
     |@ref allow-weak-references "%allow-weak-references"|Allows the use of the @ref weak_assignment_operator "weak assignment operator (:=)"<br/><br/>Since %Qore 0.8.13
+    |@ref allow-opaque-references "%allow-opaque-references"|Allows the use of the @ref opaque_assignment_operator "opaque assignment operator (\@=)"<br/><br/>Since %Qore 3.0
     |@ref append-include-path "%append-include-path"|Appends the given directories to qore's include path; also performs environment variable substitution
     |@ref append-module-path "%append-module-path"|Appends a directory to the module search path.  Two forms are supported: the legacy unquoted colon-separated form (writes to the process-global path, pre-3.0 behavior, \c $VAR env-var substitution) and the new quoted single-path form (writes to the per-Program appended list, with \c ${NAME} macro + env-var expansion).<br/><br/>Since %Qore 0.8.6; new quoted form since %Qore 3.0
     |@ref prepend-module-path "%prepend-module-path"|Prepends a directory to the current @ref Qore::Program "Program" object's module search path.  Takes a single quoted path with \c ${NAME} macro + env-var expansion (macros: \c SCRIPT_DIR, \c SCRIPT_NAME, \c SCRIPT_PATH, \c PROGRAM_DIR, \c QORE_VERSION, \c QORE_PREFIX, \c QORE_MODULE_VERSION).  Prepended paths are consulted before \c QORE_MODULE_DIR and the built-in defaults.<br/><br/>Since %Qore 3.0
@@ -81,9 +82,9 @@
     |@ref new-style "%new-style"|Sets both @ref allow-bare-refs "%allow-bare-refs" and @ref assume-local "%assume-local". These two options together make programming in %Qore superficially more like programming in C++ or Java programs; use this if you dislike programming with the \c "$" sign, for example; see also @ref old-style "%old-style" <br/><br/>Since %Qore 0.8.1
     |@ref old-style "%old-style"|Resets default %Qore parsing behavior by setting @ref require-dollar "%require-dollar" and @ref assume-global "%assume-global"; this option is the opposite of @ref new-style "%new-style" <br/><br/>Since %Qore 0.8.4
     |@ref no-debugging "%no-debugging"|Forbids debugging of the current @ref Qore::Program "Program" object <br/><br/>Since %Qore 0.8.13
-    |@ref no-class-defs "%no-class-defs"|Disallows @ref qore_classes "class definitions"; equivalent to @ref Qore::PO_NO_CLASS_DEFS and the <tt>-</tt><tt>-no-class-defs</tt> command line option<br/><br/>Since %Qore 3.0
+    |@ref no-class-defs "%no-class-defs"|Disallows @ref qore_classes "class definitions"; equivalent to @ref Qore::PO_NO_CLASS_DEFS and the <tt>-</tt><tt>-no-class-defs</tt> command line option
     |@ref no-child-restrictions "%no-child-restrictions"|Allows child program objects to have parse option restrictions that are not a strict subset of the parents'; equivalent to parse option @ref Qore::PO_NO_CHILD_PO_RESTRICTIONS and the <tt>-</tt><tt>-no-child-restrictions</tt> command line option
-    |@ref no-constant-defs "%no-constant-defs"|Disallows @ref constants "constant definitions"; @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only parameters" remain allowed because they are runtime local bindings, not constants; equivalent to parse option @ref Qore::PO_NO_CONSTANT_DEFS and the <tt>-</tt><tt>-no-constant-defs</tt> command line option<br/><br/>Since %Qore 3.0
+    |@ref no-constant-defs "%no-constant-defs"|Disallows @ref constants "constant definitions"; @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only parameters" remain allowed because they are runtime local bindings, not constants; equivalent to parse option @ref Qore::PO_NO_CONSTANT_DEFS and the <tt>-</tt><tt>-no-constant-defs</tt> command line option
     |@ref no-database "%no-database"|Disallows access to database functionality (for example the @ref Qore::SQL::Datasource "Datasource class"; equivalent to parse option @ref Qore::PO_NO_DATABASE and the <tt>-</tt><tt>-no-database</tt> command line option
     |@ref no-external-access "%no-external-access"|made up of @ref no-process-control "%no-process-control", @ref no-network "%no-network", @ref no-filesystem "%no-filesystem", @ref no-database "%no-database", @ref no-external-info "%no-external-info", and @ref no-modules "%no-modules"; equivalent to parse option @ref Qore::PO_NO_EXTERNAL_ACCESS and the <tt>-</tt><tt>-no-external-access</tt> command line option
     |@ref no-external-info "%no-external-info"|Disallows any access to functionality that provides external information (see @ref no-external-info "%no-external-info" for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_EXTERNAL_INFO and the <tt>-</tt><tt>-no-external-info</tt> command line option
@@ -94,9 +95,9 @@
     |@ref no-io "%no-io"|Made up of @ref no-gui "%no-gui" \| @ref no-terminal-io "%no-terminal-io" \| @ref no-filesystem "%no-filesystem" \| @ref no-network "%no-network" \| @ref no-database "%no-database"; equivalent to parse option @ref Qore::PO_NO_IO and the \c --no-io command line option
     |@ref no-locale-control "%no-locale-control"|Disallows access to functionality that changes locale information (see %no-locale-control for a list of features not available with this parse option); equivalent to parse option @ref Qore::PO_NO_LOCALE_CONTROL and the <tt>-</tt><tt>-no-locale-control</tt> command line option
     |@ref no-modules "%no-modules"|Disallows loading @ref qore_modules "modules" with the @ref requires "%requires", @ref try-module "%try-module", and @ref try-reexport-module "%try-reexport-module" parse directive or at runtime with load_module(); @ref user_module_children "child modules" declared with @ref try-child-module "%try-child-module" are not attached either, and a \c MODULE-CHILD-SKIPPED warning is raised instead; equivalent to @ref Qore::PO_NO_MODULES and the <tt>-pno-modules</tt> command line option <br/><br/>Since %Qore 0.8.4
-    |@ref no-namespace-defs "%no-namespace-defs"|Disallows new @ref qore_namespaces "namespace definitions"; equivalent to @ref Qore::PO_NO_NAMESPACE_DEFS and the <tt>-</tt><tt>-no-namespace-defs</tt> command line option<br/><br/>Since %Qore 3.0
+    |@ref no-namespace-defs "%no-namespace-defs"|Disallows new @ref qore_namespaces "namespace definitions"; equivalent to @ref Qore::PO_NO_NAMESPACE_DEFS and the <tt>-</tt><tt>-no-namespace-defs</tt> command line option
     |@ref no-network "%no-network"|Disallows access to the network; equivalent to parse option @ref Qore::PO_NO_NETWORK and the <tt>-</tt><tt>-no-network</tt> command line option
-    |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option<br/><br/>Since %Qore 3.0
+    |@ref no-new "%no-new"|Disallows use of the @ref new "new operator"; equivalent to parse option @ref Qore::PO_NO_NEW and the <tt>-</tt><tt>-no-new</tt> command line option
     |@ref no-iterate "%no-iterate"|Disables the <tt>iterate</tt> streaming keyword; equivalent to \c QoreParseOptions::NO_ITERATE<br/><br/>Since %Qore 3.0
     |@ref no-first "%no-first"|Disables the @ref streaming_first "first" streaming keyword and the \c find \c first modifier; equivalent to @ref QoreParseOptions::NO_FIRST<br/><br/>Since %Qore 3.0
     |@ref no-any-operator "%no-any-operator"|Disables the @ref streaming_any "any" streaming operator keyword without disabling the @ref any_type "any" type name; equivalent to @ref QoreParseOptions::NO_ANY_OPERATOR<br/><br/>Since %Qore 3.0
@@ -253,6 +254,34 @@
     - @ref weak_assignment_operator
 
     @since %Qore 0.8.13
+
+    <hr>
+    @section allow-opaque-references %allow-opaque-references
+
+    @par Parse Directive:
+    <tt>%%allow-opaque-references</tt>
+
+    @par Command Line:
+    <tt>-pallow-opaque-references</tt>
+
+    @par Parse Option:
+    Set with @ref Qore::ParseOptions using the string name \c "allow-opaque-references"; this option lies
+    beyond bit 63 of the integer parse option bitfield, so it has no integer parse option constant.
+
+    @par Description:
+    Allows the use of the @ref opaque_assignment_operator "opaque assignment operator (\@=)".
+
+    @par Warning:
+    An opaque reference is a strong reference that the garbage collector does not follow, so a cycle
+    created through one cannot be detected and therefore cannot be collected; it is released only when
+    the holder releases the reference or when the @ref Qore::Program "Program" that created it is
+    destroyed.  Grant this permission only to code that can show the values it assigns this way do not
+    reference their holder back.
+
+    @see
+    - @ref opaque_assignment_operator
+
+    @since %Qore 3.0
 
     <hr>
     @section append-include-path %append-include-path
@@ -1641,8 +1670,6 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new class definitions. Any use of the reserved word \c class will result in a parse exception.
 
-    @since %Qore 3.0
-
     <hr>
     @section no-constant-defs %no-constant-defs
 
@@ -1657,8 +1684,6 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Disallows new @ref constants "constant definitions". \c const remains valid in statement and parameter contexts for @ref readonly_local_variables "read-only local variables" and @ref readonly_function_parameters "read-only parameters", because those declarations create runtime local bindings rather than parse-time constants.
-
-    @since %Qore 3.0
 
     <hr>
     @section no-database %no-database
@@ -1926,8 +1951,6 @@ sub validate_input(int value, int max_value) {
     @par Description:
     Disallows new @ref qore_namespaces "namespace definitions".
 
-    @since %Qore 3.0
-
     <hr>
     @section no-network %no-network
 
@@ -1960,8 +1983,6 @@ sub validate_input(int value, int max_value) {
 
     @par Description:
     Disallows use of the @ref new "new operator".
-
-    @since %Qore 3.0
 
     <hr>
     @section no-iterate %no-iterate

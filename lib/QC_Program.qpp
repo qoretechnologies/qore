@@ -497,9 +497,12 @@ const PO_NO_MODULES = PO_NO_MODULES;
 const PO_NO_CHILD_PO_RESTRICTIONS = PO_NO_CHILD_PO_RESTRICTIONS;
 
 //! Disallows class definitions
-/** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref Qore::ParseOptions with the string name \c "no-class-defs" or the @ref no-class-defs "%no-class-defs"
-    parse directive to enable this option.
+/** @deprecated this constant is <b>non-functional</b>: the option lies beyond bit 63 of the integer
+    parse option bitfield, so the constant is defined as \c 0 and passing it to
+    @ref Qore::Program "Program" silently applies no option at all.  It is retained for backwards
+    compatibility only; use @ref Qore::ParseOptions with the string name \c "no-class-defs" or the
+    @ref no-class-defs "%no-class-defs" parse directive instead.  The option itself is fully enforced at
+    parse time.
 
     @par Example:
     @code{.py}
@@ -508,15 +511,16 @@ Program pgm(opts);
     @endcode
 
     @see @ref no-class-defs "%no-class-defs"
-
-    @since %Qore 3.0
 */
 const PO_NO_CLASS_DEFS = PO_NO_CLASS_DEFS;
 
 //! Disallows constant definitions
-/** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref Qore::ParseOptions with the string name \c "no-constant-defs" or the @ref no-constant-defs "%no-constant-defs"
-    parse directive to enable this option.
+/** @deprecated this constant is <b>non-functional</b>: the option lies beyond bit 63 of the integer
+    parse option bitfield, so the constant is defined as \c 0 and passing it to
+    @ref Qore::Program "Program" silently applies no option at all.  It is retained for backwards
+    compatibility only; use @ref Qore::ParseOptions with the string name \c "no-constant-defs" or the
+    @ref no-constant-defs "%no-constant-defs" parse directive instead.  The option itself is fully enforced at
+    parse time.
 
     @par Example:
     @code{.py}
@@ -525,8 +529,6 @@ Program pgm(opts);
     @endcode
 
     @see @ref no-constant-defs "%no-constant-defs"
-
-    @since %Qore 3.0
 */
 const PO_NO_CONSTANT_DEFS = PO_NO_CONSTANT_DEFS;
 
@@ -593,9 +595,12 @@ const PO_NO_IO = PO_NO_IO;
 const PO_NO_LOCALE_CONTROL = PO_NO_LOCALE_CONTROL;
 
 //! Disallows new namespace definitions
-/** @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref Qore::ParseOptions with the string name \c "no-namespace-defs" or the @ref no-namespace-defs "%no-namespace-defs"
-    parse directive to enable this option.
+/** @deprecated this constant is <b>non-functional</b>: the option lies beyond bit 63 of the integer
+    parse option bitfield, so the constant is defined as \c 0 and passing it to
+    @ref Qore::Program "Program" silently applies no option at all.  It is retained for backwards
+    compatibility only; use @ref Qore::ParseOptions with the string name \c "no-namespace-defs" or the
+    @ref no-namespace-defs "%no-namespace-defs" parse directive instead.  The option itself is fully enforced at
+    parse time.
 
     @par Example:
     @code{.py}
@@ -604,8 +609,6 @@ Program pgm(opts);
     @endcode
 
     @see @ref no-namespace-defs "%no-namespace-defs"
-
-    @since %Qore 3.0
 */
 const PO_NO_NAMESPACE_DEFS = PO_NO_NAMESPACE_DEFS;
 
@@ -621,9 +624,12 @@ const PO_NO_NETWORK = PO_NO_NETWORK;
 Mutex m();
     @endcode
 
-    @note This constant is defined as \c 0 because all 64 bits in the integer bitfield are exhausted.
-    Use @ref Qore::ParseOptions with the string name \c "no-new" or the @ref no-new "%no-new"
-    parse directive to enable this option.
+    @deprecated this constant is <b>non-functional</b>: the option lies beyond bit 63 of the integer
+    parse option bitfield, so the constant is defined as \c 0 and passing it to
+    @ref Qore::Program "Program" silently applies no option at all.  It is retained for backwards
+    compatibility only; use @ref Qore::ParseOptions with the string name \c "no-new" or the
+    @ref no-new "%no-new" parse directive instead.  The option itself is fully enforced at parse
+    time.
 
     @par Example:
     @code{.py}
@@ -632,8 +638,6 @@ Program pgm(opts);
     @endcode
 
     @see @ref no-new "%no-new"
-
-    @since %Qore 3.0
  */
 const PO_NO_NEW = PO_NO_NEW;
 

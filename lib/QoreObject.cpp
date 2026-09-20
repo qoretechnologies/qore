@@ -462,7 +462,8 @@ bool qore_object_private::scanMembersIntern(RSetHelper& rsh, QoreHashNode* odata
                 theclass->getName(), hi.getKey(), v.getInternalNode(), v.getTypeName());
         }
 #endif
-        if (v.hasNode() && scanCheck(rsh, v.getInternalNode())) {
+        // an opaque reference ('@=') is not an edge the collector may follow
+        if (v.hasNode() && !v.isOpaque() && scanCheck(rsh, v.getInternalNode())) {
             return true;
         }
     }

@@ -102,17 +102,17 @@ public:
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr, bool auto_ref = true);
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr, bool weak = false);
+        const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);
     QoreIRLocalInstruction* createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createInstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadClosure(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createStoreClosure(LocalVar* local, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr, bool weak = false);
+        const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);
     QoreIRVarInstruction* createLoadGlobal(Var* var, const QoreProgramLocation* loc = nullptr);
-    QoreIRVarInstruction* createStoreGlobal(Var* var, QoreIRValue value, const QoreProgramLocation* loc = nullptr, bool weak = false);
+    QoreIRVarInstruction* createStoreGlobal(Var* var, QoreIRValue value, const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);
     QoreIRVarInstruction* createLoadThreadLocal(Var* var, const QoreProgramLocation* loc = nullptr);
     QoreIRVarInstruction* createStoreThreadLocal(Var* var, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr, bool weak = false);
+        const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);
     // Hash key access
     QoreIRHashKeyAccessInstruction* createHashKeyAccess(const char* key_name,
         const QoreProgramLocation* loc = nullptr);
@@ -193,7 +193,7 @@ public:
     QoreIRInstruction* createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
-        const QoreProgramLocation* loc = nullptr, bool weak = false);
+        const QoreProgramLocation* loc = nullptr, AssignmentMode mode = AssignmentMode::Normal);
     QoreIRLValueInstruction* createLValueUnaryOp(QoreIROpcode op, const QoreValue& lvalue,
         const QoreProgramLocation* loc = nullptr);
     QoreIRLValueInstruction* createLValueBinaryOp(QoreIROpcode op, const QoreValue& lvalue, QoreIRValue rhs,

@@ -202,7 +202,7 @@ bool qore_ir_get_readonly_scalar_closure_captures(
                     continue;
                 }
                 if (inst->opcode != QoreIROpcode::LoadClosure
-                        || local_inst->is_ref || local_inst->weak) {
+                        || local_inst->is_ref || local_inst->mode != AssignmentMode::Normal) {
                     result.clear();
                     return false;
                 }
@@ -2643,7 +2643,7 @@ static QoreIRFixedAggregateScalarizationStats qore_ir_scalar_replace_fixed_aggre
                 || store_pos->inst->operands.size() != 1
                 || store_pos->inst->result.isValid()
                 || static_cast<const QoreIRLocalInstruction*>(
-                    store_pos->inst)->weak) {
+                    store_pos->inst)->mode != AssignmentMode::Normal) {
             continue;
         }
         auto aggregate_it = definitions.find(store_pos->inst->operands[0].id);
@@ -7355,7 +7355,7 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
             return nullptr;
         }
         auto* store = static_cast<const QoreIRLocalInstruction*>(use_it->second[0].inst);
-        return store->local == local && !store->weak && store->operands.size() == 1
+        return store->local == local && store->mode == AssignmentMode::Normal && store->operands.size() == 1
                 && store->operands[0].id == push.result.id ? store : nullptr;
     };
     auto has_uninterrupted_local_access = [&](const QoreIRInstruction& push,
@@ -7390,7 +7390,7 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
             && store_pos->second.second == 0;
     };
     auto is_exclusive_fresh_store = [&](const QoreIRLocalInstruction& store) {
-        if (store.weak || store.operands.size() != 1) {
+        if (store.mode != AssignmentMode::Normal || store.operands.size() != 1) {
             return false;
         }
         auto def_it = definitions.find(store.operands[0].id);
@@ -7733,13 +7733,13 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         }
         auto* store =
             static_cast<const QoreIRLocalInstruction*>(use_it->second[0].inst);
-        return store->local == local && !store->weak
+        return store->local == local && store->mode == AssignmentMode::Normal
                 && store->operands.size() == 1
                 && store->operands[0].id == append.result.id
             ? store : nullptr;
     };
     auto is_exclusive_fresh_store = [&](const QoreIRLocalInstruction& store) {
-        if (store.weak || store.operands.size() != 1) {
+        if (store.mode != AssignmentMode::Normal || store.operands.size() != 1) {
             return false;
         }
         auto def_it = definitions.find(store.operands[0].id);
@@ -8104,7 +8104,7 @@ static QoreIRNativeLocalPromotionStats qore_ir_promote_native_local_loads(QoreIR
             if (access.inst->opcode == QoreIROpcode::StoreLocal) {
                 auto* store =
                     static_cast<QoreIRLocalInstruction*>(access.inst);
-                if (store->weak || store->is_ref || store->is_closure
+                if (store->mode != AssignmentMode::Normal || store->is_ref || store->is_closure
                         || store->operands.size() != 1) {
                     valid = false;
                     break;
@@ -8659,7 +8659,7 @@ static size_t qore_ir_refine_local_value_facts(QoreIRFunction& func,
             const auto* store =
                 static_cast<const QoreIRLocalInstruction*>(inst);
             if (!store->local || !universe.count(store->local)
-                    || store->operands.size() != 1 || store->weak
+                    || store->operands.size() != 1 || store->mode != AssignmentMode::Normal
                     || store->is_ref || store->is_closure) {
                 if (store->local) {
                     known.erase(store->local);
@@ -8967,7 +8967,7 @@ bool qore_ir_values_proven_assigned_at(const QoreIRFunction& func,
             // does not describe the actual write) but is expected on StoreClosure
             bool closure_store = inst->opcode == QoreIROpcode::StoreClosure;
             if (!store->local || !universe.count(store->local)
-                    || store->operands.size() != 1 || store->weak
+                    || store->operands.size() != 1 || store->mode != AssignmentMode::Normal
                     || store->is_ref
                     || (store->is_closure && !closure_store)) {
                 if (store->local) {
@@ -9379,7 +9379,7 @@ static QoreIRDenseListStats qore_ir_refine_dense_list_facts(
             if (!store->local || !universe.count(store->local)) {
                 return true;
             }
-            if (store->operands.size() != 1 || store->weak
+            if (store->operands.size() != 1 || store->mode != AssignmentMode::Normal
                     || store->is_ref || store->is_closure) {
                 known.erase(store->local);
                 return true;
@@ -10395,7 +10395,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             store = operation.instruction;
             store_operation = &operation;
         }
-        if (!store || !store_operation || store->weak || store->is_ref
+        if (!store || !store_operation || store->mode != AssignmentMode::Normal || store->is_ref
                 || !store->initial_assignment || store->operands.size() != 1) {
             continue;
         }
@@ -11540,7 +11540,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 const AbstractQoreFunctionVariant* callee =
                     qore_ir_get_resolved_effect_callee(
                         inst_ptr.get(), has_ref_args, &closure_values);
-                if (!local || store->weak || !store->initial_assignment
+                if (!local || store->mode != AssignmentMode::Normal || !store->initial_assignment
                         || store->operands.size() != 1
                         || store->operands.front().id
                             != inst_ptr->result.id
@@ -11724,7 +11724,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
             bool has_ref_args = true;
             const AbstractQoreFunctionVariant* callee =
                 qore_ir_get_resolved_effect_callee(call, has_ref_args);
-            if (!local || store->weak || !store->initial_assignment
+            if (!local || store->mode != AssignmentMode::Normal || !store->initial_assignment
                     || store->operands.size() != 1
                     || store->operands.front().id != call->result.id
                     || !callee || has_ref_args
@@ -11961,7 +11961,7 @@ size_t qore_ir_fuse_aggregate_return_projections(QoreIRFunction& func,
                 LocalVar* local = store->local;
                 auto store_position = instruction_positions.find(store);
                 auto local_ops = local_operations.find(local);
-                if (!local || store->weak || store->is_ref
+                if (!local || store->mode != AssignmentMode::Normal || store->is_ref
                         || !store->initial_assignment
                         || store->operands.size() != 1
                         || store->operands.front().id != phi->result.id
@@ -13465,7 +13465,7 @@ size_t qore_ir_specialize_proven_native_operations(QoreIRFunction& func,
                 if (store->local && !store->local->closureUse()
                         && !QoreTypeInfo::isReference(
                             store->local->getTypeInfo())
-                        && !store->weak && !store->is_ref
+                        && store->mode == AssignmentMode::Normal && !store->is_ref
                         && !store->is_closure && facts && native
                         && facts->assigned_state
                             == QoreIRAssignedState::Assigned
@@ -13752,7 +13752,7 @@ size_t qore_ir_propagate_exact_boxed_local_facts(QoreIRFunction& func,
             const auto* store =
                 static_cast<const QoreIRLocalInstruction*>(inst);
             if (!store->local || !universe.count(store->local)
-                    || store->operands.size() != 1 || store->weak
+                    || store->operands.size() != 1 || store->mode != AssignmentMode::Normal
                     || store->is_ref || store->is_closure) {
                 if (store->local) {
                     known.erase(store->local);
@@ -15258,7 +15258,7 @@ size_t qore_ir_fuse_string_producer_consumers(QoreIRFunction& func,
             bool has_ref_args = true;
             const AbstractQoreFunctionVariant* callee =
                 qore_ir_get_resolved_effect_callee(producer, has_ref_args);
-            if (!local || store->weak || !store->initial_assignment
+            if (!local || store->mode != AssignmentMode::Normal || !store->initial_assignment
                     || store->operands.size() != 1
                     || store->operands.front().id != producer->result.id
                     || !callee || has_ref_args

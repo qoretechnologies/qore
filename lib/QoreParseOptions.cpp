@@ -55,6 +55,7 @@ const QoreParseOptions QoreParseOptions::NO_CHAR_TYPE(0, 1LL << 20);       // bi
 const QoreParseOptions QoreParseOptions::NO_STRING_INDEX_CHAR(0, 1LL << 21); // bit 85
 const QoreParseOptions QoreParseOptions::NEGATIVE_OFFSETS(0, 1LL << 22);   // bit 86
 const QoreParseOptions QoreParseOptions::BROKEN_AUTO_CAST(0, 1LL << 23);   // bit 87
+const QoreParseOptions QoreParseOptions::ALLOW_OPAQUE_REFERENCES(0, 1LL << 24); // bit 88
 const QoreParseOptions QoreParseOptions::NO_STREAMING_OPERATORS(
     0,
     (1LL << 8)  // NO_ITERATE

@@ -702,7 +702,7 @@ static bool writeLocal(AOTInstWriteCtx& ctx) {
     ctx.writer.writeStringRef(li->local ? getLocalTypePath(li->local) : "");
     ctx.writer.writeU32(li->slot_id);
     ctx.writer.writeU8(li->auto_ref ? 1 : 0);
-    ctx.writer.writeU8(li->weak ? 1 : 0);
+    ctx.writer.writeU8(static_cast<uint8_t>(li->mode));
     ctx.writer.writeU8(li->is_closure ? 1 : 0);
     ctx.writer.writeU8(li->is_ref ? 1 : 0);
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_READONLY_LOCALS) != 0) {
@@ -720,7 +720,7 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
     const char* ltype = ctx.reader.readStringRef(ctx.ptr);
     uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     bool auto_ref = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     bool is_closure = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool is_ref = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool read_only = false;
@@ -748,7 +748,7 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
         lv->setReadOnly();
     }
     auto* li = new QoreIRLocalInstruction(static_cast<QoreIROpcode>(opcode_raw), lv, auto_ref);
-    li->weak = weak;
+    li->mode = mode;
     li->initial_assignment = initial_assignment;
     li->is_closure = is_closure;
     li->is_ref = is_ref;
@@ -882,7 +882,7 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
 static bool writeVar(AOTInstWriteCtx& ctx) {
     auto* vi = static_cast<const QoreIRVarInstruction*>(ctx.inst);
     ctx.writer.writeStringRef(vi->var ? vi->var->getName() : "");
-    ctx.writer.writeU8(vi->weak ? 1 : 0);
+    ctx.writer.writeU8(static_cast<uint8_t>(vi->mode));
     return true;
 }
 
@@ -891,7 +891,7 @@ static std::unique_ptr<QoreIRInstruction> readVar(
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
     const char* vname = ctx.reader.readStringRef(ctx.ptr);
-    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     Var* var = nullptr;
     if (vname && *vname) {
         qore_program_private* pp = qore_program_private::get(*ctx.pgm);
@@ -899,7 +899,7 @@ static std::unique_ptr<QoreIRInstruction> readVar(
         var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, vname, vns);
     }
     auto* vi = new QoreIRVarInstruction(static_cast<QoreIROpcode>(opcode_raw), var);
-    vi->weak = weak;
+    vi->mode = mode;
     vi->result = QoreIRValue(result_id);
     vi->operands = operands;
     vi->exception_target = exc_target;
@@ -915,7 +915,7 @@ static bool writeLValue(AOTInstWriteCtx& ctx) {
     if (!ctx.writeExpr(ctx.writer, lvi->lvalue)) {
         return false;
     }
-    ctx.writer.writeU8(lvi->weak ? 1 : 0);
+    ctx.writer.writeU8(static_cast<uint8_t>(lvi->mode));
     ctx.writer.writeU32(lvi->lvalue_slot_id);
     return true;
 }
@@ -930,9 +930,9 @@ static std::unique_ptr<QoreIRInstruction> readLValue(
         ctx.error = error;
         return nullptr;
     }
-    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     uint32_t lvalue_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
-    auto* lvi = new QoreIRLValueInstruction(static_cast<QoreIROpcode>(opcode_raw), lvalue, weak);
+    auto* lvi = new QoreIRLValueInstruction(static_cast<QoreIROpcode>(opcode_raw), lvalue, mode);
     lvi->lvalue_slot_id = lvalue_slot_id;
     lvalue.discard(nullptr);
     lvi->result = QoreIRValue(result_id);
@@ -1610,7 +1610,7 @@ static bool writeInvoke(AOTInstWriteCtx& ctx) {
     }
     ctx.writer.writeU16(static_cast<uint16_t>(ii->invoke_opcode));
     ctx.writer.writeStringRef(ii->invoke_key_name.c_str());
-    ctx.writer.writeU8(ii->weak ? 1 : 0);
+    ctx.writer.writeU8(static_cast<uint8_t>(ii->mode));
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0) {
         ctx.writer.writeU8(ii->has_ref_args ? 1 : 0);
     }
@@ -1633,7 +1633,7 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
     }
     uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ctx.ptr);
     const char* invoke_key_name = ctx.reader.readStringRef(ctx.ptr);
-    bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    AssignmentMode mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     bool has_ref_args = (ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CALL_CLOSURE_REF_ARGS) != 0
         ? QoreAOTBinaryReader::readU8(ctx.ptr) != 0
         : static_cast<QoreIROpcode>(invoke_opcode_raw) == QoreIROpcode::CallClosureDirect;
@@ -1643,7 +1643,7 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
         ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
     ii->invoke_opcode = static_cast<QoreIROpcode>(invoke_opcode_raw);
     ii->invoke_key_name = invoke_key_name ? invoke_key_name : "";
-    ii->weak = weak;
+    ii->mode = mode;
     ii->has_ref_args = has_ref_args;
     expr.discard(nullptr);
     ii->result = QoreIRValue(result_id);
@@ -3221,7 +3221,7 @@ static bool readLValuePathPattern(QoreIRLValuePathInstruction* pi,
 static bool writeLValuePath(AOTInstWriteCtx& ctx) {
     auto* pi = static_cast<const QoreIRLValuePathInstruction*>(ctx.inst);
     // Write opcode sub-fields
-    ctx.writer.writeU8(pi->weak ? 1 : 0);
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->mode));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->compound_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->unary_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->binary_mut_op));
@@ -3262,7 +3262,7 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
     auto* pi = new QoreIRLValuePathInstruction(static_cast<QoreIROpcode>(opcode_raw));
-    pi->weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    pi->mode = static_cast<AssignmentMode>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
     pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ctx.ptr));

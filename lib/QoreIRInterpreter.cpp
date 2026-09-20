@@ -2666,7 +2666,8 @@ static bool isInterpreterNativeIntProgram(const QoreIRFunction* ir,
                     const auto* local_inst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                     if (!local_inst->local || !locals.count(local_inst->local)
                             || local_inst->is_closure || local_inst->is_ref
-                            || (inst_ptr->opcode == QoreIROpcode::StoreLocal && local_inst->weak)) {
+                            || (inst_ptr->opcode == QoreIROpcode::StoreLocal
+                                && local_inst->mode != AssignmentMode::Normal)) {
                         return false;
                     }
                     break;
@@ -5139,7 +5140,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (assign) {
                     QoreValue val = getIRValue(values, inv->operands[0]);
                     return QoreIRInterpreter::evalLValueStore(assign->getLeft(), val, xsink,
-                        inv->weak);
+                        inv->mode);
                 }
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -10174,14 +10175,14 @@ load_local_done:
                     break;
                 }
                 ValueHolder weak_eval_holder(xsink);
-                bool normalized_weak_ref = !local_inst->weak
+                bool normalized_weak_ref = local_inst->mode != AssignmentMode::Weak
                     && normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                if (is_ir_only_local && !local_inst->weak
+                if (is_ir_only_local && local_inst->mode == AssignmentMode::Normal
                         && local_inst->slot_id != UINT32_MAX
                         && local_inst->slot_id < locals_slot_cache.size()) {
                     QoreValue stored = coerceIRLocalValue(local_inst->local, val, xsink);
@@ -10227,7 +10228,7 @@ load_local_done:
                     local_owned_slots.insert(operand.id);
                 }
 
-                if (local_inst->weak) {
+                if (local_inst->mode != AssignmentMode::Normal) {
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[local_inst->slot_id].discard(xsink);
@@ -10244,7 +10245,7 @@ load_local_done:
                         return false;
                     }
                     QoreValue stored = val.hasNode() ? val.refSelf() : val;
-                    helper.assign(stored, "<lvalue>", true, true);
+                    helper.assign(stored, "<lvalue>", true, AssignmentMode::Weak);
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
@@ -10836,19 +10837,9 @@ load_local_done:
                 ValueHolder weak_eval_holder(xsink);
 
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
-                if (local_inst->weak && val.hasNode()) {
-                    qore_type_t type = val.getType();
-                    if (type == NT_OBJECT) {
-                        QoreObject* o = val.get<QoreObject>();
-                        val = new WeakReferenceNode(o);
-                    } else if (type == NT_HASH) {
-                        QoreHashNode* h = val.get<QoreHashNode>();
-                        val = new WeakHashReferenceNode(h);
-                    } else if (type == NT_LIST) {
-                        QoreListNode* l = val.get<QoreListNode>();
-                        val = new WeakListReferenceNode(l);
-                    }
-                } else if (!local_inst->weak) {
+                if (local_inst->mode != AssignmentMode::Normal && val.hasNode()) {
+                    qore_apply_assignment_mode(val, local_inst->mode);
+                } else if (local_inst->mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -10861,7 +10852,8 @@ load_local_done:
                 // auto! containers during the write-through below, so normalize the cached value
                 // first as well; otherwise later loads can observe the narrowed RHS type.
                 ValueHolder no_narrow_holder(xsink);
-                if (!local_inst->weak && local_inst->local->isNoNarrowContainer()) {
+                if (local_inst->mode == AssignmentMode::Normal
+                        && local_inst->local->isNoNarrowContainer()) {
                     no_narrow_holder = coerceIRLocalValue(local_inst->local, val, xsink);
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
@@ -10902,10 +10894,7 @@ load_local_done:
                 }
                 // Drop the initial ownership ref from weak node creation;
                 // storeValue() and assignClosureVarValue() each took their own ref
-                if (local_inst->weak && val.hasNode()
-                        && (val.getType() == NT_WEAKREF
-                            || val.getType() == NT_WEAKREF_HASH
-                            || val.getType() == NT_WEAKREF_LIST)) {
+                if (local_inst->mode != AssignmentMode::Normal && qore_is_indirect_ref_value(val)) {
                     val.discard(xsink);
                 }
                 if (xsink && *xsink) {
@@ -10955,19 +10944,9 @@ load_local_done:
                 ValueHolder weak_eval_holder(xsink);
 
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
-                if (var_inst->weak && val.hasNode()) {
-                    qore_type_t type = val.getType();
-                    if (type == NT_OBJECT) {
-                        QoreObject* o = val.get<QoreObject>();
-                        val = new WeakReferenceNode(o);
-                    } else if (type == NT_HASH) {
-                        QoreHashNode* h = val.get<QoreHashNode>();
-                        val = new WeakHashReferenceNode(h);
-                    } else if (type == NT_LIST) {
-                        QoreListNode* l = val.get<QoreListNode>();
-                        val = new WeakListReferenceNode(l);
-                    }
-                } else if (!var_inst->weak) {
+                if (var_inst->mode != AssignmentMode::Normal && val.hasNode()) {
+                    qore_apply_assignment_mode(val, var_inst->mode);
+                } else if (var_inst->mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -10989,10 +10968,7 @@ load_local_done:
                 }
                 // Drop the initial ownership ref from weak node creation;
                 // storeValue() and assignGlobalVarValue() each took their own ref
-                if (var_inst->weak && val.hasNode()
-                        && (val.getType() == NT_WEAKREF
-                            || val.getType() == NT_WEAKREF_HASH
-                            || val.getType() == NT_WEAKREF_LIST)) {
+                if (var_inst->mode != AssignmentMode::Normal && qore_is_indirect_ref_value(val)) {
                     val.discard(xsink);
                 }
                 if (xsink && *xsink) {
@@ -11041,19 +11017,9 @@ load_local_done:
                 ValueHolder weak_eval_holder(xsink);
 
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
-                if (var_inst->weak && val.hasNode()) {
-                    qore_type_t type = val.getType();
-                    if (type == NT_OBJECT) {
-                        QoreObject* o = val.get<QoreObject>();
-                        val = new WeakReferenceNode(o);
-                    } else if (type == NT_HASH) {
-                        QoreHashNode* h = val.get<QoreHashNode>();
-                        val = new WeakHashReferenceNode(h);
-                    } else if (type == NT_LIST) {
-                        QoreListNode* l = val.get<QoreListNode>();
-                        val = new WeakListReferenceNode(l);
-                    }
-                } else if (!var_inst->weak) {
+                if (var_inst->mode != AssignmentMode::Normal && val.hasNode()) {
+                    qore_apply_assignment_mode(val, var_inst->mode);
+                } else if (var_inst->mode == AssignmentMode::Normal) {
                     normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -11074,10 +11040,7 @@ load_local_done:
                 }
                 // Drop the initial ownership ref from weak node creation;
                 // storeValue() and assignGlobalVarValue() each took their own ref
-                if (var_inst->weak && val.hasNode()
-                        && (val.getType() == NT_WEAKREF
-                            || val.getType() == NT_WEAKREF_HASH
-                            || val.getType() == NT_WEAKREF_LIST)) {
+                if (var_inst->mode != AssignmentMode::Normal && qore_is_indirect_ref_value(val)) {
                     val.discard(xsink);
                 }
                 if (xsink && *xsink) {
@@ -12541,7 +12504,7 @@ load_local_done:
                 // else: LVALUE_NON_LOCAL — target is a member/global/static variable,
                 // no local cache invalidation needed
                 QoreValue res = QoreIRInterpreter::evalLValueStore(lval_inst->lvalue, val, xsink,
-                    lval_inst->weak);
+                    lval_inst->mode);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -12592,7 +12555,7 @@ load_local_done:
                 ValueHolder eval_holder(xsink);
                 qore_type_t val_type = val.getType();
                 bool assignment_failed = false;
-                if (!path_inst->weak
+                if (path_inst->mode != AssignmentMode::Weak
                         && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
                     eval_holder = val.eval(xsink);
                     if (*xsink) {
@@ -12611,7 +12574,7 @@ load_local_done:
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         assignment_failed = true;
                     } else if (lvh.assign(assign_val.refSelf(), "<lvalue>",
-                            true, path_inst->weak)) {
+                            true, path_inst->mode)) {
                         assignment_failed = true;
                     } else {
                         res = lvh.getReferencedValue();
@@ -17146,14 +17109,15 @@ QoreValue QoreIRInterpreter::evalLValueLoad(const QoreValue& lvalue, ExceptionSi
 }
 
 QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const QoreValue& value, ExceptionSink* xsink,
-        bool weak) {
+        AssignmentMode mode) {
     LValueHelper helper(lvalue, xsink);
     if (!helper) {
         return QoreValue();
     }
     QoreValue assign_value = value;
     ValueHolder eval_holder(xsink);
-    if (!weak) {
+    // only a weak store keeps a weak reference as-is; an opaque store must reference the target
+    if (mode != AssignmentMode::Weak) {
         normalizeWeakReferenceForAssignment(assign_value, eval_holder, xsink);
         if (xsink && *xsink) {
             return QoreValue();
@@ -17163,7 +17127,7 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     // assignAssume()/takeNode(), but value is a borrowed reference from the
     // caller's values map; without the extra ref, both the variable and the
     // values map would think they own the same single reference
-    if (helper.assign(assign_value.refSelf(), "<lvalue>", true, weak)) {
+    if (helper.assign(assign_value.refSelf(), "<lvalue>", true, mode)) {
         return QoreValue();
     }
     return helper.getReferencedValue();

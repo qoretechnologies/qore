@@ -723,7 +723,8 @@ void RSetHelper::startNode(int id) {
             ListIterator li(static_cast<QoreListNode*>(n.ptr));
             while (li.next()) {
                 QoreValue v = li.getValue();
-                if (v.hasNode()) {
+                // an opaque reference ('@=') is not an edge the collector may follow
+                if (v.hasNode() && !v.isOpaque()) {
                     checkNode(v.getInternalNode());
                 }
             }
@@ -734,7 +735,8 @@ void RSetHelper::startNode(int id) {
             HashIterator hi(static_cast<QoreHashNode*>(n.ptr));
             while (hi.next()) {
                 QoreValue v = hi.get();
-                if (v.hasNode()) {
+                // an opaque reference ('@=') is not an edge the collector may follow
+                if (v.hasNode() && !v.isOpaque()) {
                     checkNode(v.getInternalNode());
                 }
             }

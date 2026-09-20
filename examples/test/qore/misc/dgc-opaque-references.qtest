@@ -1,0 +1,266 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%allow-opaque-references
+# without this, a child Program inherits %allow-opaque-references from this one and the test that
+# the operator is gated could never fail
+%no-child-restrictions
+
+%exec-class DgcOpaqueReferencesTest
+
+#! A node that can reference another node, used to build cycles
+/** The destruction count is a static class variable rather than an object member, so counting
+    destructions does not add a reference out of the cycle under test.
+*/
+class Node {
+    public {
+        auto other;
+        string name;
+        static int destroyed = 0;
+    }
+
+    constructor(string n) {
+        name = n;
+    }
+
+    destructor() {
+        ++Node::destroyed;
+    }
+}
+
+public class DgcOpaqueReferencesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DgcOpaqueReferencesTest", "1.0") {
+        addTestCase("parse option is required", \parseOptionRequired());
+        addTestCase("the target is owned", \targetIsOwned());
+        addTestCase("reads see the target", \readsSeeTheTarget());
+        addTestCase("hash and list targets", \containerTargets());
+        addTestCase("a cycle through @= is not collected", \opaqueCycleNotCollected());
+        addTestCase("overwriting releases the old target", \overwriteReleases());
+        addTestCase("Program teardown breaks an opaque cycle", \teardownBreaksCycle());
+        addTestCase("Program teardown breaks a cycle through a container", \teardownBreaksContainerCycle());
+        addTestCase("Program teardown leaves another Program's objects alone", \teardownLeavesOtherPrograms());
+        set_return_value(main());
+    }
+
+    #! Using @= without the parse option must be a parse error naming the option
+    parseOptionRequired() {
+        Program p(PO_DEFAULT);
+        assertThrows("PARSE-EXCEPTION", "allow-opaque-references", \p.parse(),
+            ("%new-style\nsub t() { hash<auto> h; hash<auto> i = {}; h{\"a\"} @= i; }",
+                "opaque-not-allowed"));
+
+        # the same code parses and runs once the option is set
+        Program allowed(PO_DEFAULT);
+        allowed.parse("%new-style\n"
+            "%allow-opaque-references\n"
+            "our string result;\n"
+            "sub t() { hash<auto> h; hash<auto> i = {\"k\": 1}; h{\"a\"} @= i; result = h.a.type(); }\n"
+            "", "opaque-allowed");
+        allowed.callFunction("t");
+        assertEq("hash", allowed.getGlobalVariable("result"),
+            "the operator assigns a usable value once the option is set");
+    }
+
+    #! Unlike :=, an opaque reference owns its target, so the target outlives every other reference
+    targetIsOwned() {
+        Node::destroyed = 0;
+        hash<auto> holder = {};
+        {
+            Node n("owned");
+            holder{"n"} @= n;
+        }
+        # the local reference is gone; the opaque reference is strong, so the object is still alive
+        assertEq(0, Node::destroyed, "an opaque reference keeps its target alive");
+        assertEq("owned", holder.n.name, "the target is still usable after its other refs are gone");
+
+        # releasing the opaque reference releases the target
+        holder = {};
+        assertEq(1, Node::destroyed, "releasing the opaque reference releases the target");
+    }
+
+    #! An opaque reference reports its target everywhere a normal reference would
+    readsSeeTheTarget() {
+        Node n("readable");
+        hash<auto> opaque = {};
+        hash<auto> plain = {};
+        opaque{"n"} @= n;
+        plain{"n"} = n;
+
+        assertEq(plain.n.type(), opaque.n.type(), "an opaque reference reports its target's type");
+        assertEq(plain.n.typeCode(), opaque.n.typeCode(), "an opaque reference reports its target's type code");
+        assertEq("readable", opaque.n.name, "member access reaches the target");
+        assertTrue(opaque.n instanceof Node, "instanceof sees the target's class");
+        assertEq(sprintf("%y", plain.n), sprintf("%y", opaque.n), "formatting matches a plain reference");
+        assertTrue(opaque.n == plain.n, "an opaque reference compares equal to a plain one");
+    }
+
+    #! @= supports hash and list targets, not only objects
+    containerTargets() {
+        hash<auto> inner = {"a": 1, "b": "two"};
+        list<auto> ilist = (1, 2, 3);
+        hash<auto> holder = {};
+        holder{"h"} @= inner;
+        holder{"l"} @= ilist;
+
+        assertEq(NT_HASH, holder.h.typeCode(), "an opaque hash reference reports a hash");
+        assertEq(NT_LIST, holder.l.typeCode(), "an opaque list reference reports a list");
+        assertEq(1, holder.h.a, "hash member access reaches the target");
+        assertEq(2, holder.l[1], "list indexing reaches the target");
+        assertEq(("a", "b"), holder.h.keys(), "keys() reaches the target");
+        assertEq(3, holder.l.size(), "size() reaches the target");
+    }
+
+    #! The collector follows an ordinary edge and does not follow an opaque one
+    /** This is the whole point of the operator: with '=' on both edges the cycle is collected, and
+        with '@=' on one of them it is not, because the scan cannot see that edge.  The pair of
+        assertions is what makes this meaningful — the first proves the shape really is a
+        collectable cycle, so the second is about the edge and not about the shape.
+    */
+    opaqueCycleNotCollected() {
+        Node::destroyed = 0;
+        {
+            Node a("a");
+            Node b("b");
+            a.other = b;
+            b.other = a;
+        }
+        assertEq(2, Node::destroyed, "a cycle built with '=' is collected");
+
+        Node::destroyed = 0;
+        {
+            Node a("a");
+            Node b("b");
+            a.other = b;
+            b.other @= a;
+        }
+        assertEq(0, Node::destroyed, "a cycle built through '@=' is not collected");
+    }
+
+    #! Assigning over an opaque reference must release the target it held
+    overwriteReleases() {
+        Node::destroyed = 0;
+        hash<auto> holder = {};
+        {
+            Node first("first");
+            holder{"n"} @= first;
+        }
+        assertEq(0, Node::destroyed, "the first target is held by the opaque reference");
+
+        {
+            Node second("second");
+            holder{"n"} @= second;
+        }
+        assertEq(1, Node::destroyed, "overwriting released the first target");
+
+        holder{"n"} = NOTHING;
+        assertEq(2, Node::destroyed, "clearing the slot released the second target");
+    }
+
+    #! A cycle the collector cannot see must still be broken when its Program is torn down
+    /** This is what bounds the leak an opaque reference can cause to the lifetime of the Program
+        that created it, instead of the lifetime of the process.
+    */
+    teardownBreaksCycle() {
+        int destroyed = 0;
+        code report = sub () { ++destroyed; };
+
+        Program p(PO_DEFAULT);
+        p.parse("%new-style\n"
+            "%allow-opaque-references\n"
+            "our code report;\n"
+            "class N {\n"
+            "    public { auto other; }\n"
+            "    destructor() { report(); }\n"
+            "}\n"
+            "sub build() {\n"
+            "    N a(); N b();\n"
+            "    a.other = b;\n"
+            "    b.other @= a;\n"
+            "}\n"
+            "", "opaque-teardown");
+        p.setGlobalVarValue("report", report);
+        p.callFunction("build");
+        assertEq(0, destroyed, "the opaque cycle survives while the Program lives");
+
+        delete p;
+        assertEq(2, destroyed, "Program teardown breaks the cycle the collector cannot see");
+    }
+
+    #! A cycle whose opaque edge points at a hash or a list must also be broken at teardown
+    /** A hash and a list have no owning-Program back-pointer, so the Program that created the
+        reference is the one responsible for it; teardown walks the container and deletes the
+        objects it owns, which releases their members and breaks the cycle.
+    */
+    teardownBreaksContainerCycle() {
+        foreach string kind in (("hash", "list")) {
+            int destroyed = 0;
+            code report = sub () { ++destroyed; };
+            string make = kind == "hash" ? "hash<auto> c = {}; c{\"back\"} = a;" : "list<auto> c = (a,);";
+
+            Program p(PO_DEFAULT);
+            p.parse("%new-style\n"
+                "%allow-opaque-references\n"
+                "our code report;\n"
+                "class N {\n"
+                "    public { auto other; }\n"
+                "    destructor() { report(); }\n"
+                "}\n"
+                "sub build() {\n"
+                "    N a();\n"
+                "    " + make + "\n"
+                "    a.other @= c;\n"
+                "}\n", "opaque-container-" + kind);
+            p.setGlobalVarValue("report", report);
+            p.callFunction("build");
+            assertEq(0, destroyed, sprintf("the %s cycle survives while the Program lives", kind));
+
+            delete p;
+            assertEq(1, destroyed, sprintf("Program teardown breaks the cycle through the opaque %s", kind));
+        }
+    }
+
+    #! Teardown must never delete an object owned by a different Program
+    /** A container reached through an opaque reference may be shared with the Program that created
+        it, so teardown deletes only the objects belonging to the Program being torn down.  Without
+        that restriction a child Program's teardown would corrupt its parent's data.
+    */
+    teardownLeavesOtherPrograms() {
+        Node::destroyed = 0;
+        int child_destroyed = 0;
+        code report = sub () { ++child_destroyed; };
+        Node mine("mine");
+        # auto! so the hash is not narrowed to the parent object's class by this initializer
+        hash<auto!> shared = {"parent_object": mine};
+
+        # the shared hash references the child object and the child references the hash opaquely,
+        # so the cycle survives until teardown and the registry entry is still live then
+        Program p(PO_DEFAULT);
+        p.parse("%new-style\n"
+            "%allow-opaque-references\n"
+            "our hash<auto!> shared;\n"
+            "our code report;\n"
+            "class Child {\n"
+            "    public { auto other; }\n"
+            "    destructor() { report(); }\n"
+            "}\n"
+            "sub build() {\n"
+            "    Child c();\n"
+            "    shared{\"child\"} = c;\n"
+            "    c.other @= shared;\n"
+            "}\n", "opaque-shared");
+        p.setGlobalVarValue("shared", shared);
+        p.setGlobalVarValue("report", report);
+        p.callFunction("build");
+        assertEq(0, child_destroyed, "the cycle survives while the child Program lives");
+        assertEq(0, Node::destroyed, "the parent object is untouched while the child Program lives");
+
+        delete p;
+        assertEq(1, child_destroyed, "teardown deleted the child Program's own object");
+        assertEq(0, Node::destroyed, "teardown did not delete the parent Program's object");
+        assertEq("mine", shared.parent_object.name, "the parent Program's object is still usable");
+    }
+}

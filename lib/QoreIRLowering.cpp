@@ -6378,8 +6378,8 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
 }
 
 bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error,
-        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc, bool weak,
-        QoreIRValue* store_result) {
+        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc,
+        AssignmentMode mode, QoreIRValue* store_result) {
     if (!var) {
         error = std::string("null lvalue in IR lowering (") + context + ")";
         return false;
@@ -6398,7 +6398,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             // always written to the cvstack (not a local alloca). See loadVarRef
             // comment for why closureUse() may be true even for VT_LOCAL.
             if (var->ref.id->closureUse()) {
-                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
@@ -6413,7 +6413,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return true;
             }
             {
-                auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, weak);
+                auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
@@ -6433,7 +6433,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
@@ -6454,7 +6454,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, mode);
                 store_inst->initial_assignment = var->isDecl();
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
@@ -6471,7 +6471,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreGlobal(var->ref.var, value, var->loc, weak);
+                auto* store_inst = builder.createStoreGlobal(var->ref.var, value, var->loc, mode);
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -6487,7 +6487,7 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
                 return false;
             }
             {
-                auto* store_inst = builder.createStoreThreadLocal(var->ref.var, value, var->loc, weak);
+                auto* store_inst = builder.createStoreThreadLocal(var->ref.var, value, var->loc, mode);
                 if (store_result) {
                     store_inst->result = builder.getFunction()->createValue();
                     *store_result = store_inst->result;
@@ -7111,9 +7111,19 @@ const QoreProgramLocation* QoreIRLowering::getExpressionLocation(const QoreValue
 
 QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    // Check for weak assignment first since QoreWeakAssignmentOperatorNode inherits from
-    // QoreAssignmentOperatorNode
-    bool is_weak = dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node) != nullptr;
+    // Check for the weak and opaque assignment operators first, since both
+    // QoreWeakAssignmentOperatorNode and QoreOpaqueAssignmentOperatorNode inherit from
+    // QoreAssignmentOperatorNode; matching the base class alone would silently lower either of
+    // them as a plain assignment and lose the representation the operator asks for
+    AssignmentMode assign_mode = AssignmentMode::Normal;
+    if (dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node)) {
+        assign_mode = AssignmentMode::Weak;
+    } else if (dynamic_cast<const QoreOpaqueAssignmentOperatorNode*>(node)) {
+        assign_mode = AssignmentMode::Opaque;
+    }
+    // true when the store does not use the ordinary strong representation; the container
+    // fast paths below cannot express either alternative representation
+    const bool is_weak = assign_mode != AssignmentMode::Normal;
     auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(node);
     if (!assign) {
         return QoreIRValue();
@@ -7149,7 +7159,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
     }
     if (left_var) {
         QoreIRValue store_result;
-        if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, is_weak,
+        if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, assign_mode,
                 is_weak ? &store_result : nullptr)) {
             return QoreIRValue();
         }
@@ -7212,7 +7222,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                     QoreIROpcode::LValuePathAssign);
                 path_inst->result = builder.getFunction()->createValue();
                 path_inst->path = std::move(lv_path);
-                path_inst->weak = is_weak;
+                path_inst->mode = assign_mode;
                 path_inst->loc = assign->loc;
                 if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
                     path_inst->exception_target = handler;
@@ -7241,13 +7251,13 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* inst = builder.createInvoke(expr, {right}, normal_block, handler, assign->loc);
             inst->invoke_opcode = QoreIROpcode::StoreLValue;
-            inst->weak = is_weak;
+            inst->mode = assign_mode;
             builder.setBlock(normal_block);
             if (is_weak) {
                 return inst->result;
             }
         } else {
-            auto* store_inst = builder.createStoreLValue(assign->getLeft(), right, assign->loc, is_weak);
+            auto* store_inst = builder.createStoreLValue(assign->getLeft(), right, assign->loc, assign_mode);
             if (is_weak) {
                 store_inst->result = builder.getFunction()->createValue();
                 return store_inst->result;
@@ -7340,7 +7350,7 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         // member types (ex: list<auto> fields) or in-place container semantics.
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::AddAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -7540,7 +7550,7 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::SubAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::SubAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -7702,7 +7712,7 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::MulAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::MulAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -7825,7 +7835,7 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::DivAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::DivAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -7936,7 +7946,7 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         // Path-based compound assignment for complex lvalues
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::ModAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::ModAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -8022,7 +8032,7 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         // Path-based compound assignment for complex lvalues
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::AndAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AndAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -8108,7 +8118,7 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         // Path-based compound assignment for complex lvalues
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::OrAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::OrAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -8194,7 +8204,7 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         // Path-based compound assignment for complex lvalues
         {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
-                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::XorAssign);
+                op->getLeft(), &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::XorAssign);
             if (path_result.isValid()) {
                 return path_result;
             }
@@ -8336,7 +8346,7 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
     // Path-based unary for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PreInc);
+            lvexp, nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::PreInc);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -8418,7 +8428,7 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     // Path-based unary for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, base_op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PostInc);
+            lvexp, nullptr, base_op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::PostInc);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -8515,7 +8525,7 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
     // Path-based unary for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PreDec);
+            lvexp, nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::PreDec);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -8595,7 +8605,7 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     // Path-based unary for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvexp, nullptr, base_op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PostDec);
+            lvexp, nullptr, base_op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::PostDec);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -9790,7 +9800,7 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
     // Path-based shift for complex lvalues (must be before guardLValueBase)
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            lvalue, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Shift);
+            lvalue, nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Shift);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -9822,7 +9832,7 @@ QoreIRValue QoreIRLowering::lowerPop(const QoreValue& expr, std::string& error) 
     // Path-based pop for complex lvalues (must be before guardLValueBase)
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Pop);
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Pop);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -9859,7 +9869,7 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
     // and nested hash/list member chains.  This avoids emitting
     // Invoke(UnshiftLValue), which has no source-free AOT lowering.
     QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
-        lvalue, &right, op->loc, error, false, LVCompoundOp::AddAssign,
+        lvalue, &right, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
         LVUnaryOp::PreInc, LVBinaryMutOp::Unshift);
     if (path_result.isValid()) {
         return path_result;
@@ -10026,7 +10036,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             return QoreIRValue();
         }
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
-            left_expr, &push_val, op->loc, error, false, LVCompoundOp::AddAssign,
+            left_expr, &push_val, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
             LVUnaryOp::PreInc, LVBinaryMutOp::Push);
         if (path_result.isValid()) {
             return path_result;
@@ -10265,7 +10275,7 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
     // Path-based remove for all lvalue types — avoids EXPR_TREE serialization
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Remove);
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Remove);
         if (path_result.isValid()) {
             markLocalUnassignmentFromExpression(op->getExp());
             // When the return value is not used (ExpressionStatement), invalidate the
@@ -10322,7 +10332,7 @@ QoreIRValue QoreIRLowering::lowerDelete(const QoreValue& expr, std::string& erro
     // Path-based delete for complex lvalues (must be before lowerExpression)
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Delete);
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Delete);
         if (path_result.isValid()) {
             markLocalUnassignmentFromExpression(op->getExp());
             return path_result;
@@ -10465,7 +10475,7 @@ QoreIRValue QoreIRLowering::lowerTrim(const QoreValue& expr, std::string& error)
     // Path-based trim for complex lvalues — avoids EXPR_TREE serialization
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Trim);
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Trim);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -10493,7 +10503,7 @@ QoreIRValue QoreIRLowering::lowerChomp(const QoreValue& expr, std::string& error
     // AST-eval fallback in the IR interpreter / JIT runtime on simple lvalues.
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Chomp);
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign, LVUnaryOp::Chomp);
         if (path_result.isValid()) {
             return path_result;
         }
@@ -10520,7 +10530,7 @@ QoreIRValue QoreIRLowering::lowerTransliteration(const QoreValue& expr, std::str
     // Path-based transliteration for complex lvalues — avoids EXPR_TREE serialization
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign,
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
             LVUnaryOp::PreInc, LVBinaryMutOp::Transliterate, expr);
         if (path_result.isValid()) {
             return path_result;
@@ -10705,7 +10715,7 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
             }
         } else if (entry.hasNode()) {
             QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathAssign,
-                entry, &element_val, op->loc, error, false);
+                entry, &element_val, op->loc, error, AssignmentMode::Normal);
             if (!path_result.isValid()) {
                 if (error.empty()) {
                     error = "unsupported list assignment lvalue for native lowering: ";
@@ -10735,7 +10745,7 @@ QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& 
     // Path-based regex subst for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
-            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign,
+            op->getExp(), nullptr, op->loc, error, AssignmentMode::Normal, LVCompoundOp::AddAssign,
             LVUnaryOp::PreInc, LVBinaryMutOp::RegexSubst, expr);
         if (path_result.isValid()) {
             return path_result;
@@ -11849,7 +11859,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
 // by existing fast paths (emitHashKeyCompoundOp, etc.) or guardLValueBase fallback.
 QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
-        bool weak, LVCompoundOp compound_op, LVUnaryOp unary_op,
+        AssignmentMode mode, LVCompoundOp compound_op, LVUnaryOp unary_op,
         LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
@@ -11901,7 +11911,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(opcode);
     path_inst->result = builder.getFunction()->createValue();
     path_inst->path = std::move(lv_path);
-    path_inst->weak = weak;
+    path_inst->mode = mode;
     path_inst->compound_op = compound_op;
     path_inst->unary_op = unary_op;
     path_inst->binary_mut_op = binary_mut_op;

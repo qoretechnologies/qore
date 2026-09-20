@@ -932,6 +932,18 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         (parse directive: @ref no-namespace-defs "%no-namespace-defs")
       - @ref Qore::PO_NO_NEW "PO_NO_NEW": prevents use of the @ref new "new" operator
         (parse directive: @ref no-new "%no-new")
+      .
+      These options lie beyond bit 63, so their integer constants cannot carry them; set them with
+      @ref Qore::ParseOptions, with the parse directives above, or with the corresponding command-line
+      options (see @ref qore_3_0_0_deprecated)
+    - new @ref opaque_assignment_operator "opaque reference assignment operator (\@=)", enabled with the
+      @ref allow-opaque-references "%allow-opaque-references" parse directive: assigns a strong reference
+      that the garbage collector does not follow, so that a large object graph such as a registry of live
+      connections is not walked on every scan rooted at its holder.  The reference keeps its target alive
+      and can never dangle, but a cycle created through one cannot be detected and therefore cannot be
+      collected; such a cycle is released only when the holder releases the reference or when the
+      @ref Qore::Program "Program" that created it is destroyed.  Use it only where the value assigned can
+      be shown not to reference its holder back
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
       - new @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
@@ -1543,12 +1555,17 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     @endparblock
 
     @subsection qore_3_0_0_deprecated Deprecated Features
-    - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
-      produce a warning when used, as the underlying parse options were never enforced:
-      - \c --no-class-defs (@ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS") - would have disallowed class definitions
-    - Note: @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS", @ref Qore::PO_NO_CONSTANT_DEFS "PO_NO_CONSTANT_DEFS", @ref Qore::PO_NO_NAMESPACE_DEFS "PO_NO_NAMESPACE_DEFS", and @ref Qore::PO_NO_NEW "PO_NO_NEW" are
-      now defined as 0 (no-op). These parse options were documented but never enforced in the parser. Code that
-      set these options will continue to work but the restrictions will not be applied.
+    - <b>Integer parse option constants</b>: the \c PO_* integer constants are deprecated in favor of
+      @ref Qore::ParseOptions, because an integer cannot express the full 128-bit width of the parse
+      option space.  Any option that lies beyond bit 63 has its constant defined as \c 0 and is
+      therefore <b>non-functional</b>: passing such a constant to @ref Qore::Program "Program" silently
+      applies no option at all.  This affects @ref Qore::PO_NO_CLASS_DEFS "PO_NO_CLASS_DEFS",
+      @ref Qore::PO_NO_CONSTANT_DEFS "PO_NO_CONSTANT_DEFS",
+      @ref Qore::PO_NO_NAMESPACE_DEFS "PO_NO_NAMESPACE_DEFS" and @ref Qore::PO_NO_NEW "PO_NO_NEW", which
+      are retained for backwards compatibility only.  The options themselves are fully enforced at parse
+      time; set them with @ref Qore::ParseOptions using their string names, with the corresponding parse
+      directives, or with the corresponding command-line options.  Options added beyond bit 63 from
+      %Qore 3.0 onwards have no integer constant at all
 
     @subsection qore_3_0_0_known_limitations Known Limitations
     - The integrated REPL in the \c qore binary provides line editing via the built-in

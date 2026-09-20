@@ -1371,6 +1371,13 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         // valid program context instead of failing against a half-destroyed program
         clearSavedObjects(xsink);
 
+        // break any cycle held up by an opaque reference ('@=') for the same reason and at the
+        // same point: the collector cannot see those edges, so nothing else will ever release
+        // them, and deleting the targets runs user destructors that need a program that is still
+        // valid (data not yet cleared, ptid == tid).  This bounds the leak an opaque reference can
+        // cause to the lifetime of the Program that created it.
+        clearOpaqueTargets(xsink);
+
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
 
@@ -2133,6 +2140,94 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
     //    "'%s::'\n", this, vname, readonly, vns, vns->name.c_str(), RootNS, RootNS->getName());
     qore_root_ns_private::get(*tpgm.RootNS)->runtimeImportGlobalVariable(xsink, *qore_ns_private::get(*tns), v,
         readonly, import_as);
+}
+
+QoreThreadLock qore_program_private_base::opaque_lock;
+qore_program_private_base::opaque_target_map_t qore_program_private_base::opaque_targets;
+
+void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
+    // take this Program's entries out of the registry under the lock, then do all the work outside
+    // it: deleting an object runs its destructor, which is user code
+    std::vector<AbstractQoreNode*> roots;
+    {
+        AutoLocker al(opaque_lock);
+        for (auto i = opaque_targets.begin(), e = opaque_targets.end(); i != e;) {
+            if (i->second.pgm == pgm) {
+                roots.push_back(i->first);
+                i = opaque_targets.erase(i);
+            } else {
+                ++i;
+            }
+        }
+    }
+    if (roots.empty()) {
+        return;
+    }
+
+    // Collect every object owned by this Program that is reachable from a registered target through
+    // containers.  Deleting such an object releases its members, which breaks the cycle running
+    // through the opaque edge.  Only this Program's objects are collected, and containers are never
+    // modified: a container reached here may be shared with the Program that created it, and
+    // touching that Program's data would corrupt it.
+    //
+    // The walk is iterative rather than recursive: container nesting is unbounded and this runs
+    // during teardown, where a stack overflow could not be recovered from.  There is deliberately
+    // no qore_check_cancel() here either — teardown must run to completion, or the cycles it exists
+    // to break would be leaked instead.
+    //
+    // The registry holds no reference of its own; a registered target is alive here because the
+    // opaque values referring to it are still in place.
+    SafeDerefHelper sdh(xsink);
+    std::set<AbstractQoreNode*> seen;
+    std::vector<AbstractQoreNode*> pending(roots.begin(), roots.end());
+    std::vector<QoreObject*> targets;
+    while (!pending.empty()) {
+        AbstractQoreNode* n = pending.back();
+        pending.pop_back();
+        if (!n || !seen.insert(n).second) {
+            continue;
+        }
+        switch (n->getType()) {
+            case NT_OBJECT: {
+                QoreObject* o = static_cast<QoreObject*>(n);
+                if (o->getProgram() == pgm && o->isValid()) {
+                    // keep the object alive until it has been deleted below; sdh releases the
+                    // reference even if anything here throws
+                    o->ref();
+                    sdh.deref(QoreValue(o));
+                    targets.push_back(o);
+                }
+                // members are not walked: deleting the object releases them
+                break;
+            }
+            case NT_HASH: {
+                ConstHashIterator hi(static_cast<const QoreHashNode*>(n));
+                while (hi.next()) {
+                    QoreValue v = hi.get();
+                    if (v.hasNode()) {
+                        pending.push_back(v.getInternalNode());
+                    }
+                }
+                break;
+            }
+            case NT_LIST: {
+                ConstListIterator li(static_cast<const QoreListNode*>(n));
+                while (li.next()) {
+                    QoreValue v = li.getValue();
+                    if (v.hasNode()) {
+                        pending.push_back(v.getInternalNode());
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    for (auto* o : targets) {
+        o->doDelete(xsink);
+    }
 }
 
 void qore_program_private::del(ExceptionSink* xsink) {
