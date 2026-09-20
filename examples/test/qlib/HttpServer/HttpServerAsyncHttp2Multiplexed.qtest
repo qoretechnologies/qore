@@ -997,6 +997,30 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 printf("  %s %s() at %s:%d\n", f.type, f.function, f.file, f.line);
             }
         }
+        # A Qore call stack stops at the call into the runtime, so a thread blocked inside C++ shows
+        # only the Qore frame that got there.  The native stacks say which lock or condition it is
+        # actually waiting on, which is the difference between narrowing the problem and finding it.
+        printf("native stacks follow\n");
+        string pid = getpid().toString();
+        # macOS restricts attaching to another process, so the elevated variants are tried as well;
+        # sudo -n never prompts, so a host without passwordless sudo just falls through
+        foreach string cmd in ((
+            "lldb -p " + pid + " -b -o 'thread backtrace all' 2>/dev/null",
+            "sudo -n lldb -p " + pid + " -b -o 'thread backtrace all' 2>/dev/null",
+            "gdb -p " + pid + " -batch -ex 'thread apply all bt' 2>/dev/null",
+            "sudo -n gdb -p " + pid + " -batch -ex 'thread apply all bt' 2>/dev/null",
+            "sample " + pid + " 2 -mayDie 2>/dev/null",
+        )) {
+            try {
+                string out = backquote(cmd);
+                if (out.size() > 200) {
+                    printf("%s\n", out);
+                    break;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # the debugger may be absent or refused; try the next one
+            }
+        }
         return False;
     }
 
