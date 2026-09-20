@@ -2488,7 +2488,10 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return the message body in the reply to this message or @ref nothing in case of an error or an erroneous reply by the server with no body
+    @return the message body in the reply to this message, or @ref nothing in case of an error or an erroneous
+    reply by the server with no body; the media type of the response decides the type of the value returned: a
+    text media type is returned as a string in the character encoding the message declares, and any other type
+    keeps its octets and is returned as binary
 
     @par Events:
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED, @ref EVENT_HOSTNAME_LOOKUP, @ref EVENT_HOSTNAME_RESOLVED, @ref EVENT_START_SSL, @ref EVENT_SSL_ESTABLISHED, @ref EVENT_HTTP_SEND_MESSAGE, @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_MESSAGE_RECEIVED, @ref EVENT_PACKET_READ, @ref EVENT_HTTP_CONTENT_LENGTH, @ref EVENT_HTTP_CHUNKED_START, @ref EVENT_HTTP_CHUNKED_END, @ref EVENT_HTTP_CHUNKED_DATA_RECEIVED, @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED, @ref EVENT_HTTP_REDIRECT
@@ -2514,7 +2517,7 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-*string HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
+*data HTTPClient::get(string path, *hash<auto> headers, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->get(path->c_str(), headers, *ohrh, xsink), xsink);
     return *xsink ? nullptr : rv.release();
@@ -2619,7 +2622,10 @@ httpclient.post("/path", body);
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return the message body in the reply to this message or @ref nothing in case no body was present in the response
+    @return the message body in the reply to this message, or @ref nothing in case no body was present in the
+    response; the media type of the response decides the type of the value returned: a text media type is
+    returned as a string in the character encoding the message declares, and any other type keeps its octets and
+    is returned as binary
 
     @par Events:
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED, @ref EVENT_HOSTNAME_LOOKUP, @ref EVENT_HOSTNAME_RESOLVED, @ref EVENT_START_SSL, @ref EVENT_SSL_ESTABLISHED, @ref EVENT_HTTP_SEND_MESSAGE, @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_MESSAGE_RECEIVED, @ref EVENT_PACKET_READ, @ref EVENT_HTTP_CONTENT_LENGTH, @ref EVENT_HTTP_CHUNKED_START, @ref EVENT_HTTP_CHUNKED_END, @ref EVENT_HTTP_CHUNKED_DATA_RECEIVED, @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED, @ref EVENT_HTTP_REDIRECT
@@ -2644,13 +2650,10 @@ httpclient.post("/path", body);
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-*string HTTPClient::post(string path, string body, *hash<auto> headers,
+*data HTTPClient::post(string path, string body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->post(path->c_str(), headers, *body, *ohrh, xsink), xsink);
-#ifdef DEBUG
-    assert(!rv || rv->getType() == NT_STRING);
-#endif
     return *xsink ? QoreValue() : rv.release();
 }
 
@@ -2690,7 +2693,10 @@ httpclient.post("/path", body);
       lower-case names on the wire; a header received more than once has a list of values
     - \c response-uri: the HTTP response URI
 
-    @return the message body in the reply to this message or @ref nothing in case no body was present in the response
+    @return the message body in the reply to this message, or @ref nothing in case no body was present in the
+    response; the media type of the response decides the type of the value returned: a text media type is
+    returned as a string in the character encoding the message declares, and any other type keeps its octets and
+    is returned as binary
 
     @par Events:
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED, @ref EVENT_HOSTNAME_LOOKUP, @ref EVENT_HOSTNAME_RESOLVED, @ref EVENT_START_SSL, @ref EVENT_SSL_ESTABLISHED, @ref EVENT_HTTP_SEND_MESSAGE, @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_MESSAGE_RECEIVED, @ref EVENT_PACKET_READ, @ref EVENT_HTTP_CONTENT_LENGTH, @ref EVENT_HTTP_CHUNKED_START, @ref EVENT_HTTP_CHUNKED_END, @ref EVENT_HTTP_CHUNKED_DATA_RECEIVED, @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED, @ref EVENT_HTTP_REDIRECT
@@ -2714,13 +2720,10 @@ httpclient.post("/path", body);
 
     @since %Qore 0.9.3 added support for the \c response-headers-raw info key
  */
-*string HTTPClient::post(string path, *binary body, *hash<auto> headers,
+*data HTTPClient::post(string path, *binary body, *hash<auto> headers,
         *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     ReferenceHolder<AbstractQoreNode> rv(client->post(path->c_str(), headers, body ? body->getPtr() : 0, body ? body->size() : 0, *ohrh, xsink), xsink);
-#ifdef DEBUG
-    assert(!rv || rv->getType() == NT_STRING);
-#endif
     return *xsink ? nullptr : rv.release();
 }
 

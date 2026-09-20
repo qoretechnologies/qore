@@ -1338,8 +1338,9 @@ url = resolve_url("http://host/a/b/c.wsdl", "../d/ä e.xsd#frag", RESOLVE_URL_EN
     delimiters are left in place, and a defined empty query (a trailing \c "?") is preserved
 
     @throw RESOLVE-URL-ERROR the base URI has no scheme and @ref RESOLVE_URL_RELATIVE_BASE was not given; with
-    @ref RESOLVE_URL_STRICT: an argument does not match the RFC 3986 \c URI-reference grammar; with
-    @ref RESOLVE_URL_ASCII: an argument also contains a non-ASCII character
+    @ref RESOLVE_URL_STRICT "RESOLVE_URL_STRICT": an argument does not match the RFC 3986
+    \c URI-reference grammar; with
+    @ref RESOLVE_URL_ASCII "RESOLVE_URL_ASCII": an argument also contains a non-ASCII character
 
     @note
     - no scheme-specific normalization is performed; the scheme, authority, and case are returned as given

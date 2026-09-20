@@ -2559,7 +2559,7 @@ static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
 // of the ALPN selection path lands in phase 5 when QoreHttpClientObject's
 // AUTO+SSL flow switches from the legacy bypass to NEGOTIATE.
 
-static void ut_manager_negotiate_requires_ssl(UnitTestCounters& c) {
+static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
     opts.protocol = HttpClientProtocol::NEGOTIATE;
@@ -2569,16 +2569,19 @@ static void ut_manager_negotiate_requires_ssl(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "manager(NEGOTIATE) construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    // Plain HTTP (scheme "http") → NEGOTIATE rejects with
-    // HTTPCLIENT-NEGOTIATE-SSL-REQUIRED.
+    // NEGOTIATE means "HTTP/2 if the server offers it", and that offer is made with ALPN, which
+    // requires TLS; a plaintext target is therefore resolved to HTTP/1 rather than rejected, so the
+    // only failure here is the connection itself -- port 1 is refused.  Rejecting the target up
+    // front with HTTPCLIENT-NEGOTIATE-SSL-REQUIRED would mean the transport was decided by the
+    // client's protocol instead of by the request target.
     HttpClientConnectionBase* conn = mgr->acquireConnection(
         "http", "127.0.0.1", 1, &xsink);
-    UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP returns nullptr");
+    UT_ASSERT(c, !conn, "NEGOTIATE + plain HTTP to a refused port returns nullptr");
     UT_ASSERT(c, xsink.isException(),
-        "NEGOTIATE + plain HTTP raises an exception");
+        "NEGOTIATE + plain HTTP to a refused port raises an exception");
     QoreStringValueHelper err(xsink.getExceptionErr());
-    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-SSL-REQUIRED") == 0,
-        "exception code is HTTPCLIENT-NEGOTIATE-SSL-REQUIRED");
+    UT_ASSERT(c, err && strcmp(err->c_str(), "HTTPCLIENT-NEGOTIATE-SSL-REQUIRED") != 0,
+        "a plaintext target is resolved to HTTP/1, not rejected as requiring SSL");
     xsink.clear();
 }
 
@@ -3992,7 +3995,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http2_connection_alpn_setup(c);
     ut_http1_adopt_socket_simple_request(c);
     ut_http2_adopt_socket_construct(c);
-    ut_manager_negotiate_requires_ssl(c);
+    ut_manager_negotiate_plaintext_uses_h1(c);
     ut_manager_negotiate_refused_port(c);
     ut_negotiate_close_cancels_after_closed_state(c);
     ut_manager_h2_dispatch(c);
