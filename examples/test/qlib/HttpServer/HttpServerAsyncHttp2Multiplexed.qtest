@@ -192,6 +192,25 @@ class MultiplexedWsHandler inherits WebSocketHandler {
     }
 }
 
+#! A WebSocket client that can abort its own connection at the TCP layer
+/** shutdown() sends a FIN without an SSL close_notify, which is what makes the server's read report
+    an EOF that violates the SSL protocol -- the error seen before the shutdown hang in CI.
+*/
+class AbortableWsClient inherits WebSocketClient {
+    constructor(code cb, hash<auto> opts) : WebSocketClient(cb, opts) {
+    }
+
+    #! aborts the underlying connection without closing the WebSocket or the SSL session
+    bool abortConnection() {
+        *Socket sock = getActiveSocket();
+        if (sock) {
+            sock.shutdown();
+            return True;
+        }
+        return False;
+    }
+}
+
 class HttpServerAsyncHttp2MultiplexedTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -298,6 +317,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testH2MultiStreamServerShutdown());
         addTestCase("H2 idle connection receives GOAWAY on shutdown",
             \testH2IdleConnectionGoaway());
+        addTestCase("shutdown with an aborted TLS connection and an active WebSocket",
+            \testShutdownWithAbortedTlsConnection());
 
         set_return_value(main());
     }
@@ -943,6 +964,92 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Test 7: Graceful server shutdown with active WebSocket stream
     #! Verifies that the server shuts down cleanly when a WebSocket connection is active.
+    #! A connection aborted at the TCP layer must not stop the server from shutting down
+    /** A peer that disappears without an SSL close_notify makes the server's read report an EOF
+        that violates the SSL protocol.  The error path closes the socket; if it leaves the
+        connection's handler task running, stop() waits for a task that will never finish.  A
+        WebSocket is left active at the same time, because stop() only waits for handler tasks when
+        there is one.
+    */
+    testShutdownWithAbortedTlsConnection() {
+        MultiplexedWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug = True;
+        }
+
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer test_server(opts);
+        test_server.setHandler("ws-handler", "/ws", NOTHING, ws_handler);
+        test_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+
+        int test_port = test_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        test_server.waitForAsyncIo();
+
+        list<auto> ws_msgs();
+        Mutex ws_mtx();
+        Counter ws_cnt(1);
+        AbortableWsClient wsc(sub (*data msg) {
+            if (exists msg) {
+                AutoLock al(ws_mtx);
+                ws_msgs += msg;
+                ws_cnt.dec();
+            }
+        }, {
+            "url": "wss://localhost:" + test_port + "/ws",
+            "logger": mLogger,
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+        });
+        wsc.connect();
+        wsc.send("abort-test");
+        if (!waitForZeroOrFail(ws_cnt, 10s, "timed out waiting for the WebSocket echo")) {
+            return;
+        }
+
+        # Upgrade a second connection to a WebSocket by hand and then abort it at the TCP layer:
+        # shutdown() sends a FIN without an SSL close_notify, which is what makes the server report
+        # an EOF that violates the SSL protocol.  It has to be an upgraded connection: an idle one
+        # has no dedicated socket handler and so no handler task for the shutdown to wait on.
+        {
+            Socket raw();
+            raw.connectSSL("localhost:" + test_port, 10s);
+            raw.sendHTTPMessage("GET", "/ws", "1.1", {
+                "Host": "localhost:" + test_port,
+                "Upgrade": "websocket",
+                "Connection": "Upgrade",
+                "Sec-WebSocket-Key": make_base64_string(get_random_bytes(16)),
+                "Sec-WebSocket-Version": "13",
+            });
+            hash<auto> resp = raw.readHTTPHeader(10s);
+            assertEq(101, resp.status_code, "the second connection upgraded to a WebSocket");
+            raw.shutdown();
+        }
+
+        # also abort the active HTTP/2 WebSocket's own connection the same way
+        assertTrue(wsc.abortConnection(), "the active WebSocket's connection was aborted");
+
+        Queue stopped();
+        background sub () {
+            test_server.stop();
+            stopped.push(True);
+        }();
+        assertTrue(stopped.get(20s) != NOTHING,
+            "server.stop() must complete after a connection was aborted at the TCP layer");
+
+        try {
+            wsc.disconnect();
+        } catch () {
+        }
+        delete wsc;
+    }
+
     testGracefulShutdownActiveWs() {
         # Create a dedicated server for this test
         MultiplexedWsHandler ws_handler();
