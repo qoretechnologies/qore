@@ -4541,6 +4541,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         bool exit = False;
         bool stopped = False;
+        #! set once the listener's dedicated socket handlers have been signalled to stop
+        /** Registrations are refused from this point on.  Without it, a dedicated socket registered
+            after signalHandlersToStop() has taken its snapshot is never signalled, and the handler
+            pool's stopWait() then waits for a task that will never exit.  This cannot reuse \c exit,
+            because \c exit also makes HttpListener::stop() return immediately, which would skip the
+            listener socket shutdown.
+        */
+        bool no_new_dedicated = False;
         int id;
 
         # socket handler hash
@@ -5415,7 +5423,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         m.lock();
         on_exit m.unlock();
 
-        if (exit) {
+        # a socket registered after the handlers have been signalled would never be told to stop
+        if (exit || no_new_dedicated) {
             return False;
         }
 
@@ -5453,6 +5462,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         {
             m.lock();
             on_exit m.unlock();
+            # refuse new dedicated sockets before snapshotting, so that nothing can be registered
+            # after this point and therefore miss the stop signal below; the handler pool is stopped
+            # immediately afterwards and waits for every handler task to exit
+            no_new_dedicated = True;
             shh_copy = shh;
         }
         foreach AbstractHttpSocketHandlerInterface handler in (shh_copy.iterator()) {
