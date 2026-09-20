@@ -4071,6 +4071,16 @@ static QoreValue f_dbg_get_rset_create_count(const QoreListNode* params, Runtime
     return q_get_rset_create_count();
 }
 
+//! returns the number of times a scan in the current thread gave up a pass and waited to start over
+/** A scan that cannot take the r-section of an object it has to enter registers a notification with the owner,
+    releases everything it holds and waits for that owner before starting the walk again; tests use this to
+    verify that a contended workload really does exercise that path.
+*/
+static QoreValue f_dbg_get_rset_restart_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_rset_restart_count();
+}
+
 //! removes a hash key or object member through QoreTypeSafeReferenceHelper::removeHashObjKey()
 /** @param ref a reference to a hash or object
     @param key the key or member to remove
@@ -4171,6 +4181,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_scan_object_count", f_dbg_get_scan_object_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_rset_restart_count", f_dbg_get_rset_restart_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");

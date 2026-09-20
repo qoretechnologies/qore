@@ -339,6 +339,25 @@ restarts stop converging: every thread sits in `RNotifier::wait()`, no scan fini
 threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
 with nothing running, which reads like a deadlock but is the restart loop failing to converge.
 
+### Every abandoned pass registers the notification its retry waits on
+
+The restart loop in `RSetHelper::RSetHelper()` is deliberately unbounded: a scan that loses a race has to keep
+trying until it wins. What makes it terminate is not a retry limit but `RNotifier::wait()`, which blocks until
+the owner of the lock the pass could not take releases it. Every path that abandons a pass therefore goes
+through `tryRSectionLockNotifyWaitRead()` or `tryRSectionLockSharedNotifyWaitRead()`, which register that
+notification before returning `-1`: `RSetHelper::getNode()` when it cannot enter an object's r-section, and
+`RSetHelper::removeInvalidate()` when it cannot lock a member of a set it has to replace.
+
+**A pass must never ask to be retried without registering a notification.** Such a retry has nothing to wait
+for, so `notifier.wait()` returns at once and the loop becomes a busy spin: the graph is walked from scratch,
+abandoned at the same point, and walked again, at 100% CPU, forever. Nothing is written and no lock is held,
+so from outside the process this is indistinguishable from a slow compile or a long-running script — a single
+`qcc` invocation in this state consumed seven hours of CPU before it was noticed. `RSetHelper::retry_notified`
+records that the notification was registered — it is not read back from the notifier, because the owner may
+release the lock and clear the notification before the constructor looks at it — and the constructor asserts
+it on every retry, so a new abandon path that forgets the notification fails immediately in a debug build
+instead of hanging.
+
 ### Scans that change nothing share the r-section
 
 A scan is a reader of the graph: it needs the objects it walks to hold still, not to have them to itself. Only

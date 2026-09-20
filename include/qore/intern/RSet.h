@@ -56,6 +56,13 @@ DLLLOCAL int64 q_get_rset_create_count();
     of the scans a thread has made; see dbg_get_scan_object_count().
 */
 DLLLOCAL int64 q_get_scan_object_count();
+
+//! Returns the number of times a scan in the current thread gave up a pass and waited to start over
+/** A pass is given up when the scan cannot take the r-section of an object it has to enter; it registers a
+    notification with the owner, releases everything it holds and waits.  Tests use this to verify that a
+    contended workload really does exercise that path; see dbg_get_rset_restart_count().
+*/
+DLLLOCAL int64 q_get_rset_restart_count();
 #endif
 
 class RObject {
@@ -592,6 +599,16 @@ private:
     bool need_exclusive = false;
     // set when the scan found a recursive set that it has to assign, in either mode
     bool changed = false;
+    //! Set when this pass registered a notification with the owner of a lock it could not take
+    /** A scan that gives up asks the constructor to roll back and retry, and the retry only makes progress
+        because notifier.wait() blocks until the owner of the lock releases it.  Every path that abandons a
+        pass therefore has to go through tryRSectionLock*NotifyWaitRead(), which registers the notification
+        the wait needs; a pass abandoned without one has nothing to wait for, so the retry loop spins at 100%
+        CPU forever, producing no output and never completing.  Recorded here rather than read back from the
+        notifier because the owner may release the lock, and clear the notification, before the constructor
+        looks at it.
+    */
+    bool retry_notified = false;
     int next_index = 0;
     // the node whose edges are being reported
     int current = -1;

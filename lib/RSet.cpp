@@ -52,6 +52,13 @@ static thread_local int64 rset_create_count = 0;
 int64 q_get_rset_create_count() {
     return rset_create_count;
 }
+
+//! the number of times a scan in the current thread gave up a pass and waited to start over
+static thread_local int64 rset_restart_count = 0;
+
+int64 q_get_rset_restart_count() {
+    return rset_restart_count;
+}
 #endif
 
 RObject::~RObject() {
@@ -653,6 +660,8 @@ int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
     if (rc) {
         printd(QRO_LVL, "RSetHelper::getNode() obj %p '%s' cannot enter rsection: rsection tid: %d\n", &obj,
             obj.getName(), obj.rml.rSectionTid());
+        // the failed lock registered the notification that the constructor's retry waits for
+        retry_notified = true;
         lock_error = true;
         return -1;
     }
@@ -1019,6 +1028,9 @@ bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
                 printd(QRO_LVL, "RSetHelper::removeInvalidate() obj %p '%s' cannot enter rsection: tid: %d\n", *ri,
                     (*ri)->getName(), (*ri)->rml.rSectionTid());
 
+                // the failed lock registered the notification that the constructor's retry waits for
+                retry_notified = true;
+
                 // release other rsection locks
                 for (unsigned i = 0; i < rovec.size(); ++i) {
                     rovec[i]->rml.rSectionUnlock();
@@ -1119,6 +1131,15 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
 
     while (true) {
         if (scan(obj)) {
+            // The retry below only makes progress because notifier.wait() blocks until the owner of the lock
+            // this pass could not take releases it.  A pass abandoned without registering that notification
+            // has nothing to wait for, so this loop would spin at 100% CPU forever, walking the graph from
+            // scratch every time, producing no output and never completing - a shape that is indistinguishable
+            // from a slow compile from outside the process.
+            assert(retry_notified);
+#ifdef DEBUG
+            ++rset_restart_count;
+#endif
             rollback();
             // wait for foreign transaction to finish if necessary
             notifier.wait();
@@ -1321,6 +1342,7 @@ void RSetHelper::rollback(bool yield) {
     root_rset = nullptr;
     need_exclusive = false;
     changed = false;
+    retry_notified = false;
     next_index = 0;
     current = -1;
     tr_out.clear();
