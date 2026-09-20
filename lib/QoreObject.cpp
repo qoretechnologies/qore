@@ -1290,6 +1290,22 @@ void qore_object_private::unsetRealReference() {
 
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);
+
+    // Keep this object ALLOCATED for the duration of the call.
+    //
+    // A scan started here holds references on the graph it walks and releases them when it ends
+    // (RSetHelper::releaseHeld(), called from ~RSetHelper inside this frame).  Releasing them runs
+    // destructors, and that can cascade back into dereferencing this very object: its last
+    // reference goes away, it is deleted, its last weak reference goes away, and its memory is
+    // freed -- while this frame is still using its lock.  Without this guard that is a use-after-
+    // free on rml; the wait in RObject::derefDone() used to hide it by deadlocking instead.
+    //
+    // A weak reference does not keep the object alive, only allocated (see design/dgc.md), so this
+    // does not change when the object is deleted or when its destructor runs -- only that the
+    // storage this frame is still touching cannot be handed back underneath it.
+    tRef();
+    ON_BLOCK_EXIT_OBJ(*this, &qore_object_private::tDeref);
+
     RSetDerefHelper cycle_cleanup(xsink);
 
     {

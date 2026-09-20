@@ -124,6 +124,46 @@ void RObject::derefRealIntern() {
     --rrefs;
 }
 
+// The objects this thread is currently dereferencing, innermost last.
+//
+// RObject::derefDone() waits for in-progress dereferences to finish before deleting, so that a
+// delete cannot race with another thread that is mid-dereference.  That wait must exclude the
+// dereferences this thread owns: a dereference can re-enter the same object on the same thread --
+// RSetHelper::releaseHeld() drops the references a scan held on the edges it walked, and running
+// those destructors can lead straight back to the object whose dereference started the scan -- and
+// waiting for those would be waiting for itself, which no other thread can ever release.
+//
+// robject_dereference_helper is the only thing that starts and finishes a dereference, and it is
+// an RAII object, so entries are pushed and popped in strict LIFO order on each thread.  This is on
+// the path of every object dereference, so it is a vector rather than a map: a push and a pop with
+// no allocation once the vector has grown, against an allocating insert and erase per dereference.
+// Nesting is a handful of frames at most, so the scan in deref_inprogress_own() is trivial.
+static thread_local std::vector<const RObject*> t_deref_inprogress;
+
+//! records that this thread has started a dereference of \a o
+static void deref_inprogress_push(const RObject* o) {
+    t_deref_inprogress.push_back(o);
+}
+
+//! returns the number of dereferences of \a o that this thread owns
+static unsigned deref_inprogress_own(const RObject* o) {
+    unsigned rv = 0;
+    for (const RObject* i : t_deref_inprogress) {
+        if (i == o) {
+            ++rv;
+        }
+    }
+    return rv;
+}
+
+//! records that this thread has finished a dereference of \a o
+static void deref_inprogress_pop(const RObject* o) {
+    assert(!t_deref_inprogress.empty());
+    assert(t_deref_inprogress.back() == o);
+    (void)o;
+    t_deref_inprogress.pop_back();
+}
+
 int RObject::deref(bool real, bool& do_scan, bool& rescan) {
     // the mutex ensures atomicity
     AutoLocker al(rlck);
@@ -149,12 +189,14 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
 
     // mark that we have a dereference action in progress
     ++ref_inprogress;
+    deref_inprogress_push(this);
 
     return rv_refs;
 }
 
 void RObject::derefDone(bool del, bool wait_only) {
     AutoLocker al(rlck);
+    deref_inprogress_pop(this);
     // decrement the in progress count, if it's the last thread, and there are waiting threads, then wake one up
     if ((!--ref_inprogress) && ref_waiting) {
         // we have to use broadcast here because the condition variable is shared
@@ -164,7 +206,12 @@ void RObject::derefDone(bool del, bool wait_only) {
         // either we will delete the object ourselves, or we handed off deletion but still need
         // other in-progress derefs to complete before our caller performs its weak-ref release
         // (otherwise that release can trigger deleteObject() while another thread is mid-deref)
-        while (ref_inprogress) {
+        //
+        // only dereferences owned by OTHER threads are waited for: a dereference that re-entered
+        // this object on this thread is still on the stack below us and cannot make progress until
+        // we return, so waiting for it would deadlock (see t_deref_inprogress)
+        unsigned own = deref_inprogress_own(this);
+        while (ref_inprogress > own) {
             ++ref_waiting;
             rcond.wait(rlck);
             --ref_waiting;
