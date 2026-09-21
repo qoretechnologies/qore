@@ -30,6 +30,9 @@
 
 # don't use "$" signs for variables and class members, assume local variable scope
 %modern
+# a table holds its column, index, constraint and trigger descriptions with "@=" so that
+# dereferencing a table does not scan them; see AbstractTable's members for the invariant
+%allow-opaque-references
 
 # require type definitions everywhere
 
@@ -1251,7 +1254,7 @@ auto v = c.name;
                         if (primaryKey.size() > 1 || primaryKey.firstKey() != c.name)
                             throw "AUTO-INCREMENT-ERROR", sprintf("column %y.%y which has \"auto-increment\" set and is also flagged as a primary key for the table does not match with the existing primary key column definition: %y", name, c.name, primaryKey.keys());
                     } else
-                        primaryKey = new Sqlite3PrimaryKey(columns{c.name,});
+                        primaryKey @= new Sqlite3PrimaryKey(columns{c.name,});
                     uk = primaryKey;
                 } else {
                     # see if a unique constraint already exists with this name
@@ -1264,7 +1267,7 @@ auto v = c.name;
                             throw "AUTO-INCREMENT-ERROR", sprintf("column %y.%y which has \"auto-increment\" set and is also flagged as a unique constraint for the table does not match with the existing unique constraint's column definition: %y", name, c.name, uk.keys());
                     } else {
                         if (!constraints)
-                            constraints = new Constraints();
+                            constraints @= new Constraints();
                         uk = new Sqlite3UniqueConstraint(c.name, columns.(list(c.name)));
                         constraints.add(c.name, uk);
                     }
