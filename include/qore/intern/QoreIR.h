@@ -2176,6 +2176,89 @@ public:
     std::string name;
 };
 
+//! @name Inline call-state cache publication
+/** Several direct-call instructions memoize resolved call state (the callee IR, its
+    UserVariantBase, its return type and, for object-method calls, the receiver class,
+    class context and method) directly into the instruction, which every thread executing
+    the enclosing function shares.  Those payload fields are ordinary non-atomic members,
+    so they are governed by a single publication protocol:
+
+    - A thread may write the payload only while it holds the claim, which it takes by
+      winning a CAS from QORE_IR_INLINE_UNCHECKED to QORE_IR_INLINE_CLAIMED.  That makes
+      the payload single-writer.
+    - A thread may read the payload only after an acquire load of the state returns a
+      value > 0.  That load is the only edge ordering the writer's stores against the
+      reader; a plain read at any other state is a data race and can observe a
+      half-published cache.
+    - A claim holder writes the payload only immediately before publishing its verdict, so
+      a holder that bails out early leaves the payload untouched and can safely return the
+      state to QORE_IR_INLINE_UNCHECKED for a later attempt.
+
+    Threads that fail to take the claim fall back to the generic call path for that pass;
+    the cache is a pure optimization, so losing a race only costs one non-inlined call.
+*/
+//@{
+//! No call state has been resolved yet; the payload is not readable.
+constexpr int8_t QORE_IR_INLINE_UNCHECKED = 0;
+//! This call site can never be inlined; the payload is not readable.
+constexpr int8_t QORE_IR_INLINE_INELIGIBLE = -1;
+//! A thread is filling the payload; no other thread may read or write it.
+constexpr int8_t QORE_IR_INLINE_CLAIMED = -2;
+//! Eligible for inlining with direct (unboxed) parameter passing.
+constexpr int8_t QORE_IR_INLINE_DIRECT_PARAMS = 1;
+//! Eligible for inlining with parameters instantiated on the local variable stack.
+constexpr int8_t QORE_IR_INLINE_BOXED_PARAMS = 2;
+
+//! Scoped claim on an instruction's inline call-state cache payload.
+/** Construct one before writing any payload field.  If held() is false another thread owns
+    the cache (or has already resolved it) and this thread must not touch the payload.
+
+    If the holder never publishes a verdict — including when it returns early or the stack
+    unwinds — the destructor returns the state to QORE_IR_INLINE_UNCHECKED so the call site
+    can be resolved on a later call.  The release is itself a CAS from
+    QORE_IR_INLINE_CLAIMED, so it can never undo a verdict the holder did publish.
+*/
+class QoreIRInlineStateClaim {
+public:
+    //! Attempts to claim @p state
+    /** @param state the instruction's inline call-state flag
+        @param already_held true when an enclosing scope already holds the claim, in which
+        case this object neither takes nor releases it
+    */
+    DLLLOCAL QoreIRInlineStateClaim(std::atomic<int8_t>& state, bool already_held = false)
+            : state(state), owned(false), held_flag(already_held) {
+        if (already_held) {
+            return;
+        }
+        int8_t expected = QORE_IR_INLINE_UNCHECKED;
+        owned = state.compare_exchange_strong(expected, QORE_IR_INLINE_CLAIMED,
+            std::memory_order_acq_rel, std::memory_order_acquire);
+        held_flag = owned;
+    }
+
+    DLLLOCAL ~QoreIRInlineStateClaim() {
+        if (owned) {
+            int8_t expected = QORE_IR_INLINE_CLAIMED;
+            state.compare_exchange_strong(expected, QORE_IR_INLINE_UNCHECKED,
+                std::memory_order_release, std::memory_order_relaxed);
+        }
+    }
+
+    QoreIRInlineStateClaim(const QoreIRInlineStateClaim&) = delete;
+    QoreIRInlineStateClaim& operator=(const QoreIRInlineStateClaim&) = delete;
+
+    //! Returns true if the caller may write the payload fields
+    DLLLOCAL bool held() const {
+        return held_flag;
+    }
+
+private:
+    std::atomic<int8_t>& state;
+    bool owned;      //!< true if this object took the claim and must release it
+    bool held_flag;  //!< true if the caller may write the payload
+};
+//@}
+
 //! Common metadata for exact calls whose string result is consumed in AOT lowering.
 class QoreIRStringConsumerCallInstruction : public QoreIRInstruction {
 public:

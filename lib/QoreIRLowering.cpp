@@ -13048,32 +13048,10 @@ QoreIRValue QoreIRLowering::lowerCallReference(const QoreValue& expr, std::strin
     return result;
 }
 
-// Helper function for Phase 3: cache direct-call target metadata. Runtime
-// eligibility still depends on the caller program, argument count, and whether
-// the callee was promoted to native code, so the interpreter validates before use.
-template <typename DirectCallInst>
-static void tryCacheCalleeIRForInlining(const AbstractQoreFunctionVariant* variant,
-        DirectCallInst* inst) {
-    if (!variant || !inst) {
-        return;
-    }
-
-    const UserVariantBase* uvb = variant->getUserVariantBase();
-    if (!uvb) {
-        return;
-    }
-
-    // Get the cached IR function from the variant
-    const QoreIRFunction* callee_ir = uvb->getCachedIR();
-    if (!callee_ir) {
-        return;
-    }
-
-    const UserSignature* sig = uvb->getUserSignature();
-    inst->cached_callee_ir = callee_ir;
-    inst->cached_uvb = uvb;
-    inst->cached_return_type = sig ? sig->getReturnTypeInfo() : nullptr;
-}
+// Direct-call target metadata is NOT pre-seeded into the instruction here.  The inline
+// call-state payload may only be read behind an eligible inline_ir_state (see
+// QoreIRInlineStateClaim in QoreIR.h), so a value written at lowering time would never be
+// read; the interpreter resolves the same values from the variant on first execution.
 
 QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
@@ -13122,14 +13100,10 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* invoke_inst = builder.createInvokeMethodDirect(method, qc, variant, operands,
                     normal_block, handler, expr, call->loc);
-            // Phase 3: Try to cache the callee IR for inlining
-            tryCacheCalleeIRForInlining(variant, invoke_inst);
             builder.setBlock(normal_block);
             result = invoke_inst->result;
         } else {
             auto* call_inst = builder.createCallMethodDirect(method, qc, variant, operands, expr, call->loc);
-            // Phase 3: Try to cache the callee IR for inlining
-            tryCacheCalleeIRForInlining(variant, call_inst);
             result = call_inst->result;
         }
         return finish_call(result);
@@ -13187,11 +13161,6 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             invoke_inst->explicit_type_param_inst =
                 call->getExplicitTypeParamInstantiation();
             builder.setCallResultOwnership(invoke_inst->result, variant);
-            // Phase 3: Try to cache the callee IR for inlining
-            auto* call_static_inst = dynamic_cast<QoreIRCallStaticDirectInstruction*>(invoke_inst);
-            if (call_static_inst) {
-                tryCacheCalleeIRForInlining(variant, call_static_inst);
-            }
             builder.setBlock(normal_block);
             result = invoke_inst->result;
         } else {
@@ -13200,8 +13169,6 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
             call_static_inst->receiver_type_info = call->getReceiverTypeInfo();
             call_static_inst->explicit_type_param_inst =
                 call->getExplicitTypeParamInstantiation();
-            // Phase 3: Try to cache the callee IR for inlining
-            tryCacheCalleeIRForInlining(variant, call_static_inst);
             result = call_static_inst->result;
         }
         return finish_call(result);

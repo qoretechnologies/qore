@@ -884,7 +884,8 @@ protected:
     // Tiered compilation state
     mutable std::atomic<uint64_t> exec_count{0};
     mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
-    mutable QoreIRFunction* cached_ir = nullptr;
+    //! Published IR body for this variant; see getCachedIR() for the publication contract.
+    mutable std::atomic<QoreIRFunction*> cached_ir{nullptr};
     //! Private IR lowerings used for batch JIT compilation.  JIT-compiled code
     //! embeds raw pointers into these instructions (LValuePath step vectors and
     //! friends), so the IR has to outlive the machine code that reads it.  Every
@@ -1191,8 +1192,14 @@ public:
     }
 
     //! Returns the cached IR function (if at IR tier or higher), or nullptr
+    /** The IR body is published exactly once with a release store (claim-then-publish: the
+        first writer to win the CAS owns the slot, every later writer discards its own
+        lowering), so the acquire load here is what orders the pointee's initialization
+        against this reader.  Callers that dereference the result more than once must hoist
+        it into a local rather than calling this repeatedly.
+    */
     DLLLOCAL const QoreIRFunction* getCachedIR() const {
-        return cached_ir;
+        return cached_ir.load(std::memory_order_acquire);
     }
 
     //! Set cached IR for a variant reconstructed from AOT binary.

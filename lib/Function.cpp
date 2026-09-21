@@ -4858,7 +4858,7 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
 
 UserVariantBase::~UserVariantBase() {
     delete cached_aot_ctx.load(std::memory_order_relaxed);
-    delete cached_ir;
+    delete cached_ir.load(std::memory_order_relaxed);
     delete gate;
     delete aot_entry_statement;
     delete statements;
@@ -4975,8 +4975,9 @@ const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
         return ctx->all_body_locals;
     }
-    assert(cached_ir);
-    return cached_ir->all_body_locals;
+    const QoreIRFunction* ir = getCachedIR();
+    assert(ir);
+    return ir->all_body_locals;
 }
 
 bool UserVariantBase::areAllBodyLocalsIROnly() const {
@@ -4990,29 +4991,38 @@ const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
     if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
         return ctx->all_body_locals;
     }
-    assert(cached_ir);
-    return cached_ir->ast_visible_body_locals;
+    const QoreIRFunction* ir = getCachedIR();
+    assert(ir);
+    return ir->ast_visible_body_locals;
 }
 
 void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const {
+    // Own the body for the whole preparation phase: nothing below may leak it if an
+    // allocation throws, and the claim-then-publish CAS at the end may reject it.
+    std::unique_ptr<QoreIRFunction> ir_holder(ir);
+    // Derived variant metadata is applied only after this body wins publication, so a
+    // losing writer cannot clobber the fields describing the generation that did win.
+    bool derived_all_body_locals_ir_only = all_body_locals_ir_only;
+    bool derived_uses_argv = uses_argv;
+    bool derived_uses_self = uses_self;
     if (ir) {
         ir->computeIROnlyLocals();
-        all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
+        derived_all_body_locals_ir_only = ir->areAllBodyLocalsIROnly();
         if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
-            uses_argv = signature.argvid != nullptr;
-            uses_self = signature.selfid != nullptr;
+            derived_uses_argv = signature.argvid != nullptr;
+            derived_uses_self = signature.selfid != nullptr;
         } else {
             QoreIRFunction::ContextUsage usage =
                 ir->getContextUsage(signature.argvid, signature.selfid);
-            uses_argv = usage.argv;
-            uses_self = usage.self;
+            derived_uses_argv = usage.argv;
+            derived_uses_self = usage.self;
         }
 
         if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
             if (!ir->ir_only_locals.empty()) {
                 ir->ir_only_locals.clear();
                 ir->ast_visible_body_locals = ir->all_body_locals;
-                all_body_locals_ir_only = false;
+                derived_all_body_locals_ir_only = false;
             }
         }
 
@@ -5058,9 +5068,25 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
         }
         ir->cached_pre_instantiated = cached_pre_inst;
     }
-    // Publish only fully initialized IR. The tier/ready release stores below
-    // provide the acquire edge used by runtime dispatch.
-    cached_ir = ir;
+    // Publish only fully initialized IR, and publish it exactly once.  The release
+    // store in the CAS is what orders every mutation above against the acquire load in
+    // getCachedIR().  Claim-then-publish rather than overwrite: a published generation
+    // is kept alive by jit_owned_ir because JIT code embeds raw pointers into it, so
+    // replacing the pointer would strand readers on a body nothing owns.  A racing
+    // attemptIRLowering() or AOT materialization therefore keeps the winner's body and
+    // discards its own, which is safe precisely because the loser's body was never
+    // published and so has no other reference.
+    if (ir_holder) {
+        QoreIRFunction* expected = nullptr;
+        if (cached_ir.compare_exchange_strong(expected, ir_holder.get(),
+                std::memory_order_release, std::memory_order_acquire)) {
+            ir_holder.release();
+            all_body_locals_ir_only = derived_all_body_locals_ir_only;
+            uses_argv = derived_uses_argv;
+            uses_self = derived_uses_self;
+        }
+        // else: another thread published first; ir_holder deletes our unpublished body
+    }
     std::call_once(ir_lower_once, []{});  // consume the flag safely
     if (promote_to_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
@@ -5072,7 +5098,7 @@ bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsi
         return false;
     }
     std::lock_guard<std::mutex> lock(aot_debug_ir_mutex);
-    if (cached_ir) {
+    if (getCachedIR()) {
         return true;
     }
     QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire);
@@ -5095,7 +5121,7 @@ bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsi
 
 bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lock(aot_lazy_closure_ir_mutex);
-    if (cached_ir || hasCachedAOT()) {
+    if (getCachedIR() || hasCachedAOT()) {
         aot_lazy_closure_ir.reset();
         has_aot_lazy_closure_ir.store(false, std::memory_order_release);
         return true;
@@ -5127,7 +5153,7 @@ bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSi
         return ensureAOTContext(name, xsink);
     }
     std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
-    if (cached_ir || hasCachedAOT()) {
+    if (getCachedIR() || hasCachedAOT()) {
         aot_lazy_function_ir.reset();
         aot_lazy_function_ir_index = 0;
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
@@ -5843,16 +5869,25 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure,
     static std::atomic<uint64_t> variant_counter{0};
     std::string unique_name = std::string(name) + "@" + std::to_string(reinterpret_cast<uintptr_t>(this))
         + "_" + std::to_string(variant_counter.fetch_add(1));
-    QoreIRFunction* func = lowerIRFunction(name, unique_name, nullptr, nullptr, true, raise_on_failure);
+    std::unique_ptr<QoreIRFunction> func(
+        lowerIRFunction(name, unique_name, nullptr, nullptr, true, raise_on_failure));
     if (!func) {
         return;
     }
-    cached_ir = func;
+    // Claim-then-publish; see setCachedIR() for why the winner's body is never replaced.
+    // The ir_lower_once flag serialises lowerings against each other but gives no edge to
+    // setCachedIR(), which publishes without holding it, so the CAS is what makes this safe.
+    const int num_guards = func->num_guards;
+    QoreIRFunction* expected = nullptr;
+    if (cached_ir.compare_exchange_strong(expected, func.get(),
+            std::memory_order_release, std::memory_order_acquire)) {
+        func.release();
+    }
     if (promote_to_ir) {
         current_tier.store(TIER_IR, std::memory_order_release);
     }
     printd(3, "UserVariantBase::attemptIRLowering() '%s' cached IR%s (%d guards)\n",
-        name, promote_to_ir ? " and promoted to IR tier" : "", func->num_guards);
+        name, promote_to_ir ? " and promoted to IR tier" : "", num_guards);
 }
 
 // Check if a callee is eligible for Approach B (direct LLVM arg passing).
@@ -6071,7 +6106,9 @@ static std::vector<QoreJIT::BatchCallee> collectBatchCallees(const QoreIRFunctio
 }
 
 void UserVariantBase::attemptJITCompilation() const {
-    assert(cached_ir);
+    // One acquire load for the whole function: the published body never changes.
+    QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
+    assert(ir);
 
     // Atomically claim JIT compilation (CAS 0→1).
     // This is the single point of guard — callers should NOT do their own CAS.
@@ -6083,7 +6120,7 @@ void UserVariantBase::attemptJITCompilation() const {
     // Keep an oversized function on the fully functional IR tier rather than enqueueing native
     // compilation work that costs far more than it returns; see QoreJIT::getMaxJITIRInstructions().
     const size_t jit_ir_budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
-    const size_t instruction_count = cached_ir->getInstructionCount();
+    const size_t instruction_count = ir->getInstructionCount();
     if (jit_ir_budget && instruction_count > jit_ir_budget) {
         // Mark the decision complete so OSR and invocation thresholds cannot repeatedly resubmit
         // the same oversized function.
@@ -6091,7 +6128,7 @@ void UserVariantBase::attemptJITCompilation() const {
         jit_compile_state.store(2, std::memory_order_release);
         if (getenv("QORE_JIT_TIMING")) {
             fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (compilation budget exceeded; "
-                "%zu IR instructions; limit %zu)\n", cached_ir->name.c_str(), instruction_count,
+                "%zu IR instructions; limit %zu)\n", ir->name.c_str(), instruction_count,
                 jit_ir_budget);
         }
         return;
@@ -6116,7 +6153,7 @@ void UserVariantBase::attemptJITCompilation() const {
     void* deopt_ptr = getDeoptCounterPtr();
 
     // Collect direct callees that have cached IR for batch compilation
-    auto callees = collectBatchCallees(*cached_ir, pgm);
+    auto callees = collectBatchCallees(*ir, pgm);
 
     // A small root can still produce an oversized LLVM module when many direct callees are folded
     // into its batch.  In that case compile only the root, leaving its callees behind the normal
@@ -6129,7 +6166,7 @@ void UserVariantBase::attemptJITCompilation() const {
         if (batch_instruction_count > jit_ir_budget) {
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] disabled oversized batch for '%s' (compilation budget exceeded; "
-                    "%zu IR instructions; limit %zu)\n", cached_ir->name.c_str(), batch_instruction_count,
+                    "%zu IR instructions; limit %zu)\n", ir->name.c_str(), batch_instruction_count,
                     jit_ir_budget);
             }
             callees.clear();
@@ -6140,12 +6177,12 @@ void UserVariantBase::attemptJITCompilation() const {
         std::shared_ptr<QoreIRFunction> compile_ir;
         if (statements && !getenv("QORE_DISABLE_JIT_INTERPROCEDURAL_REWRITES")) {
             compile_ir.reset(lowerIRFunction(
-                cached_ir->getDisplayName().c_str(), cached_ir->name,
+                ir->getDisplayName().c_str(), ir->name,
                 nullptr, nullptr, false, false));
         }
         if (getenv("QORE_BATCH_DEBUG")) {
             printd(5, "BATCH: '%s' enqueued with %d callees:",
-                cached_ir->name.c_str(), (int)callees.size());
+                ir->name.c_str(), (int)callees.size());
             for (const auto& c : callees) {
                 printd(5, " %s%s", c.ir_func->name.c_str(),
                     c.approach_b_eligible ? "(B)" : "");
@@ -6153,16 +6190,16 @@ void UserVariantBase::attemptJITCompilation() const {
             printd(5, "\n");
         }
         printd(3, "UserVariantBase::attemptJITCompilation() '%s' batch enqueued with %d callees\n",
-            cached_ir->name.c_str(), (int)callees.size());
-        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir,
+            ir->name.c_str(), (int)callees.size());
+        QoreJIT::instance().enqueueBgCompile(self_variant, ir,
             deopt_ptr, &callees, std::move(compile_ir));
     } else {
         // No eligible callees: single-function background compilation
-        QoreJIT::instance().enqueueBgCompile(self_variant, cached_ir, deopt_ptr);
+        QoreJIT::instance().enqueueBgCompile(self_variant, ir, deopt_ptr);
     }
 
     printd(3, "UserVariantBase::attemptJITCompilation() '%s' enqueued for background compilation\n",
-        cached_ir->name.c_str());
+        ir->name.c_str());
 }
 
 void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode_t exec_mode) const {
@@ -6193,7 +6230,7 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
     // / evalTiered).  Eagerly compiling every function to native at parse-commit
     // floods the background compile queue and stalls program teardown (which
     // drains that queue), so it is intentionally avoided.
-    if ((exec_mode == QEM_JIT || exec_mode == QEM_TIERED || exec_mode == QEM_IR) && cached_ir) {
+    if ((exec_mode == QEM_JIT || exec_mode == QEM_TIERED || exec_mode == QEM_IR) && getCachedIR()) {
         current_tier.store(TIER_IR, std::memory_order_release);
         printd(3, "UserVariantBase::eagerlyCompileForExecMode() '%s' eager IR lowering complete "
             "(native compilation deferred to on-demand promotion)\n", name);
@@ -6201,7 +6238,9 @@ void UserVariantBase::eagerlyCompileForExecMode(const char* name, qore_exec_mode
 }
 
 void UserVariantBase::attemptJITRecompilation() const {
-    assert(cached_ir);
+    // One acquire load for the whole function: the published body never changes.
+    QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
+    assert(ir);
 
     // Try to acquire the compile lock non-blocking
     if (!QoreJIT::instance().tryAcquireCompileLock()) {
@@ -6218,16 +6257,16 @@ void UserVariantBase::attemptJITRecompilation() const {
     deopt_count.store(0, std::memory_order_relaxed);
 
     // Use a versioned name so LLVM ORC creates a new symbol (old one stays in memory)
-    std::string orig_name = cached_ir->name;
-    cached_ir->name = orig_name + "_reopt";
+    std::string orig_name = ir->name;
+    ir->name = orig_name + "_reopt";
     // Pre-copy the lookup name before compilation — LLVM 21 corrupts adjacent heap on Linux
-    const std::string lookup_name = cached_ir->name;
+    const std::string lookup_name = ir->name;
 
     // Recompile with the accumulated type profiles and deopt tracking
     std::string error;
-    if (!QoreJIT::instance().compileFunctionLocked(*cached_ir, error,
+    if (!QoreJIT::instance().compileFunctionLocked(*ir, error,
             const_cast<void*>(static_cast<const void*>(&deopt_count)))) {
-        cached_ir->name = orig_name;
+        ir->name = orig_name;
         QoreJIT::instance().releaseCompileLock();
         jit_recompile_state.store(2, std::memory_order_release);
         printd(2, "UserVariantBase::attemptJITRecompilation() '%s' failed: %s\n",
@@ -6235,7 +6274,7 @@ void UserVariantBase::attemptJITRecompilation() const {
         return;
     }
     JitFunctionPtr fn = QoreJIT::instance().lookupFunction(lookup_name);
-    cached_ir->name = orig_name;
+    ir->name = orig_name;
     QoreJIT::instance().releaseCompileLock();
     if (!fn) {
         jit_recompile_state.store(2, std::memory_order_release);
@@ -6440,7 +6479,8 @@ void UserVariantBase::recordFastCallExecution() const {
     // reached only as a callee never accrues exec_count there and would never be
     // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
     // promotion tail here so hot tiered-mode functions still reach the JIT tier.
-    if (jit_compile_failed.load(std::memory_order_acquire) || !cached_ir) {
+    QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
+    if (jit_compile_failed.load(std::memory_order_acquire) || !ir) {
         return;
     }
     // Already native — nothing to promote.
@@ -6452,8 +6492,8 @@ void UserVariantBase::recordFastCallExecution() const {
     // On-demand promotion: explicit --exec-mode=jit promotes on the first call
     // (threshold 1); tiered mode promotes once the function is hot.
     uint64_t threshold = (pgm && pgm->getExecMode() == QEM_JIT) ? 1 : QoreJIT::getJITThreshold();
-    if (cached_ir->osr_jit_requested) {
-        cached_ir->osr_jit_requested = false;
+    if (ir->osr_jit_requested) {
+        ir->osr_jit_requested = false;
         attemptJITCompilation();
     } else if (count >= threshold) {
         attemptJITCompilation();
@@ -6510,6 +6550,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // JIT/AOT tier: execute native function
     // Load cached_jit_fn atomically; if it was invalidated by recompilation, fall through to IR tier
     JitFunctionPtr jit_fn = cached_jit_fn.load(std::memory_order_acquire);
+    // Load the published IR body once for the rest of the call.  It cannot change under
+    // us (publication is single-shot), and the IR tier below dereferences it on every
+    // instantiated local, so repeating the acquire load per use would be pure overhead.
+    // This must come after materializeAOTDebugIR() above, which can publish the body.
+    QoreIRFunction* ir = cached_ir.load(std::memory_order_acquire);
     if (tier == TIER_JIT && (jit_fn || cached_aot_fn)) {
         if (cached_aot_fn && !ensureAOTContext(name, xsink)) {
             return QoreValue();
@@ -6559,7 +6604,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // are never accessed by AST callbacks).
                 const std::vector<LocalVar*>& body_locals = aot_ctx
                     ? aot_ctx->all_body_locals
-                    : cached_ir->ast_visible_body_locals;
+                    : ir->ast_visible_body_locals;
 
                 // Instantiate AST-visible body locals so that AST Invoke callbacks
                 // can find them on the thread-local stack.  Closure-use vars must
@@ -6669,7 +6714,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // Check if profiled guards triggered deopts; if so, attempt recompilation
         // with updated type profiles (one-time, non-blocking)
         uint32_t deopts = deopt_count.load(std::memory_order_relaxed);
-        if (deopts >= 10 && cached_ir) {
+        if (deopts >= 10 && ir) {
             int expected = 0;
             if (jit_recompile_state.compare_exchange_strong(expected, 1)) {
                 attemptJITRecompilation();
@@ -6697,7 +6742,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     // IR tier: execute via IR interpreter
     // Also handles JIT→IR fallback when cached_jit_fn was invalidated by recompilation
-    if ((tier == TIER_IR || (tier == TIER_JIT && !jit_fn && !cached_aot_fn)) && cached_ir) {
+    if ((tier == TIER_IR || (tier == TIER_JIT && !jit_fn && !cached_aot_fn)) && ir) {
         // Push frame boundary for debugger introspection (get_local_vars, etc.)
         // Only when the caller hasn't already pushed one (eval() does via
         // UserVariantExecHelper; callTieredPublic() does not).
@@ -6718,7 +6763,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Instantiate AST-visible body locals (excludes IR-only locals that
                 // are never accessed by AST callbacks) so that AST Invoke callbacks
                 // can find them on the thread-local variable stack.
-                for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
+                for (LocalVar* lv : ir->ast_visible_body_locals) {
                     // Skip closure-use vars: the cvstack is LIFO and pre-instantiating
                     // all closure-use vars at once breaks block-scope cleanup ordering.
                     // The IR interpreter handles them on-demand via ensureLocalInstantiated().
@@ -6751,8 +6796,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;
                 StatementBlock* debug_statements = statements ? statements : aot_entry_statement;
-                bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
-                    nullptr, nullptr, cached_ir->cached_pre_instantiated, excluded_selfid, debug_statements, pgm);
+                bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xsink, nullptr,
+                    nullptr, nullptr, ir->cached_pre_instantiated, excluded_selfid, debug_statements, pgm);
 
                 if (ok && !*xsink) {
                     val = ir_return_value;
@@ -6764,9 +6809,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     // non-%modern programs to QEM_AST so evalTiered is never reached),
                     // this is a bug in the IR interpreter, not a recoverable condition.
                     // Silent fallback to AST is disabled so the bug surfaces immediately.
-                    for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
-                        if (!cached_ir->ast_visible_body_locals[i]->closureUse()) {
-                            cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                    for (int i = (int)ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
+                        if (!ir->ast_visible_body_locals[i]->closureUse()) {
+                            ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                         }
                     }
                     fell_back_to_ast = true;
@@ -6789,9 +6834,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Only uninstantiate pre-instantiated AST-visible locals if we didn't already
                 // do it before the AST fallback
                 if (!fell_back_to_ast) {
-                    for (int i = (int)cached_ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
-                        if (!cached_ir->ast_visible_body_locals[i]->closureUse()) {
-                            cached_ir->ast_visible_body_locals[i]->uninstantiate(xsink);
+                    for (int i = (int)ir->ast_visible_body_locals.size() - 1; i >= 0; --i) {
+                        if (!ir->ast_visible_body_locals[i]->closureUse()) {
+                            ir->ast_visible_body_locals[i]->uninstantiate(xsink);
                         }
                     }
                 }
@@ -6817,10 +6862,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // (threshold 1); tiered mode promotes once the function is hot.
         uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
             ? 1 : QoreJIT::getJITThreshold();
-        if (cached_ir->osr_jit_requested && !jit_compile_failed.load(std::memory_order_acquire)) {
-            cached_ir->osr_jit_requested = false;  // Reset flag
+        if (ir->osr_jit_requested && !jit_compile_failed.load(std::memory_order_acquire)) {
+            ir->osr_jit_requested = false;  // Reset flag
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
-                cached_ir->name.c_str());
+                ir->name.c_str());
             attemptJITCompilation();
         } else if (count >= jit_promote_threshold && !jit_compile_failed.load(std::memory_order_acquire)) {
             attemptJITCompilation();
@@ -6849,7 +6894,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
 
     // Check for JIT promotion (IR already cached from a previous call)
-    if (count >= QoreJIT::getJITThreshold() && cached_ir
+    if (count >= QoreJIT::getJITThreshold() && getCachedIR()
             && !jit_compile_failed.load(std::memory_order_acquire)) {
         attemptJITCompilation();
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
@@ -6857,7 +6902,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     // Check for IR promotion
     if (count >= QoreJIT::getIRThreshold() && !ir_lower_failed) {
-        if (cached_ir) {
+        // Re-read rather than reuse the entry-time value: another thread may have
+        // published a body since this call started, and that body must promote the tier.
+        if (getCachedIR()) {
             // Batch compilation can lower an internal closure without publishing
             // its IR tier.  Publish that already-cached body once the closure
             // independently reaches the normal IR threshold.
@@ -6924,10 +6971,11 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // Also dispatch to evalTiered for AOT-only functions (no AST body) that are already at TIER_JIT
     if (pgm) {
         bool has_aot = current_tier.load(std::memory_order_acquire) == TIER_JIT && cached_aot_fn;
-        if (statements || has_aot || cached_ir) {
+        const QoreIRFunction* ir = getCachedIR();
+        if (statements || has_aot || ir) {
             qore_exec_mode_t mode = pgm->getExecMode();
             printd(3, "evalIntern '%s': mode=%d pgm=%p statements=%p has_aot=%d cached_ir=%p\n",
-                name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot, (void*)cached_ir);
+                name, (int)mode, (void*)pgm, (void*)statements, (int)has_aot, (const void*)ir);
             // AOT dispatch: always use evalTiered when a cached AOT function is
             // available (tier==TIER_JIT && cached_aot_fn). This covers both
             // strip-source (no AST body) and normal AOT with AST body.
@@ -6938,7 +6986,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             }
             // IR-only dispatch: closure variants reconstructed from AOT binary
             // with cached IR but no AST body and no native AOT function
-            if (!statements && cached_ir) {
+            if (!statements && ir) {
                 return evalTiered(name, argv, self, xsink, true);
             }
             // Tiered promotion for JIT/IR/tiered modes with %modern code.
