@@ -1205,6 +1205,16 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         // submitRequest failed — release the reservation we made via
         // acquireConnection's tryReserveStream.
         releaseConnection(conn);
+        // A connection that refused the request because it is closed must not
+        // stay in the pool: the next checkout would find it, fail the same way
+        // and report this connection's stored error as that request's failure.
+        // A connection that is merely at its stream limit, or that rejected the
+        // request for any other reason, is still healthy and stays pooled.
+        if (conn->isClosed()) {
+            ExceptionSink evict_xsink;
+            closeAndEvict(conn, &evict_xsink);
+            evict_xsink.clear();
+        }
         return nullptr;
     }
 

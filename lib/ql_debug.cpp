@@ -1551,6 +1551,21 @@ public:
         pool_[key].push_back(conn);
     }
 
+    //! Pools a connection under the key a real checkout for this origin uses.
+    /** addPooled() above uses a fixed key, which is enough for tests that reach
+        into the pool directly; a test that goes through acquireConnection()
+        needs the key that poolKey() derives from the origin.
+    */
+    DLLLOCAL void addPooledForOrigin(HttpClientConnectionBase* conn, const char* host,
+            int port, bool ssl) {
+        const std::string key = poolKey(host, port, ssl);
+        conn->setPoolKey(key);
+        conn->setManager(this);
+        conn->ref();
+        std::unique_lock<std::shared_mutex> wl(pool_lock_);
+        pool_[key].push_back(conn);
+    }
+
     DLLLOCAL bool reserveWhileHoldingPool(HttpClientConnectionBase* conn) {
         std::shared_lock<std::shared_mutex> rl(pool_lock_);
         return conn->tryReserveStream();
@@ -2075,10 +2090,237 @@ static void ut_http1_submit_after_ssl_error_preserves_error(UnitTestCounters& c)
     xsink.clear();
 }
 
+//! Records the connection's state at the instant the waiter is notified.
+/** A completion action runs on the I/O thread at exactly the point where the
+    waiting application thread is released, so it observes the state that thread
+    will see when it resumes.
+*/
+class UtCloseOrderAction : public AbstractAsyncAction {
+public:
+    DLLLOCAL UtCloseOrderAction(HttpClientConnectionBase* conn, QoreCounter* counter)
+        : conn(conn), counter(counter) {
+        assert(conn);
+        assert(counter);
+    }
+
+    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
+        output.discard(xsink);
+        record(xsink);
+    }
+
+    DLLLOCAL void executeError(const char* err, const char* desc,
+            ExceptionSink* xsink) override {
+        errored.store(true, std::memory_order_release);
+        record(xsink);
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
+        conn = nullptr;
+        counter = nullptr;
+    }
+
+    DLLLOCAL bool wasClosedAtNotify() const {
+        return closed_at_notify.load(std::memory_order_acquire);
+    }
+
+    DLLLOCAL bool wasErrored() const {
+        return errored.load(std::memory_order_acquire);
+    }
+
+private:
+    DLLLOCAL void record(ExceptionSink* xsink) {
+        if (conn) {
+            closed_at_notify.store(conn->isClosed(), std::memory_order_release);
+        }
+        if (counter) {
+            counter->dec(xsink);
+        }
+    }
+
+    HttpClientConnectionBase* conn;
+    QoreCounter* counter;
+    std::atomic<bool> closed_at_notify{false};
+    std::atomic<bool> errored{false};
+};
+
+// A connection whose response read fails must already be closed — and so
+// unusable for a pool checkout — by the time the waiting caller is released.
+// Notifying first leaves a dead connection advertising itself as Ready with a
+// free stream slot, so the woken caller's next checkout gets it back and fails
+// on it with this request's stored error, without reaching the wire.
+static void ut_http1_connection_closed_before_waiter_notified(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    // Take the whole request, then close without answering it.
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+    });
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !xsink, "waitForReadyOrError succeeds (no error)");
+    UT_ASSERT(c, ready, "connection is ready");
+    if (!ready || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    QoreCounter counter;
+    counter.inc();
+    ReferenceHolder<UtCloseOrderAction> action(
+        new UtCloseOrderAction(*conn, &counter), &xsink);
+    action->ref();  // the poll op takes this reference
+    int64_t stream_id = conn->submitRequestWithAction("GET", "/", nullptr,
+        nullptr, 0, *action, &xsink);
+    UT_ASSERT(c, !xsink, "submitRequestWithAction succeeds");
+    UT_ASSERT(c, stream_id >= 0, "submitRequestWithAction returns a stream id");
+    if (stream_id < 0 || xsink) {
+        xsink.clear();
+        conn->closeConnection(&xsink);
+        xsink.clear();
+        return;
+    }
+
+    UT_ASSERT_EQ(c, 0, counter.waitForZero(&xsink, 5000),
+        "the request completes within the test budget");
+    UT_ASSERT(c, !xsink, "waiting for the request raises nothing");
+    UT_ASSERT(c, action->wasErrored(),
+        "a peer that closes without responding fails the request");
+    UT_ASSERT(c, action->wasClosedAtNotify(),
+        "the connection is already closed when the waiting caller is released");
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
 // --- HttpClientConnectionManagerBase (Phase P3) tests ---
 //
 // Exercise the C++ pool, per-key creation serialization, eviction via
 // onClosedHook, and the convenience request() method.
+
+//! Refuses every request, optionally closing itself first.
+/** Models the two reasons a pooled connection rejects a checkout: it is dead
+    (and must leave the pool), or it is healthy but cannot take this request
+    (and must stay).
+*/
+class UtRefusingConnection : public HttpClientConnectionBase {
+public:
+    DLLLOCAL UtRefusingConnection(bool close_on_submit)
+        : HttpClientConnectionBase("unit-test.invalid", 80, false),
+          close_on_submit(close_on_submit) {
+        onConnectionReady();
+    }
+
+    DLLLOCAL HttpClientProtocol getProtocol() const override {
+        return HttpClientProtocol::H1;
+    }
+
+    DLLLOCAL QoreHashNode* submitRequest(const char* method, const char* path,
+            const QoreHashNode* headers, const void* body, size_t body_len,
+            ExceptionSink* xsink, HttpClientEventSink* event_sink) override {
+        ++submit_calls;
+        if (close_on_submit) {
+            setClosed();
+            xsink->raiseException("SOCKET-CLOSED", "stored error from the "
+                "exchange that killed this connection");
+        } else {
+            xsink->raiseException("HTTPCLIENT-CAPACITY-ERROR",
+                "connection cannot take this request");
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL int getSubmitCalls() const {
+        return submit_calls;
+    }
+
+private:
+    bool close_on_submit;
+    int submit_calls = 0;
+};
+
+// A pooled connection that refuses a request because it is closed must be
+// evicted by the failure it causes.  Leaving it pooled makes every later
+// checkout fail the same way, reporting this connection's stored error as the
+// next request's failure.
+static void ut_manager_request_evicts_connection_closed_on_submit(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtRefusingConnection> conn(
+        new UtRefusingConnection(true), &xsink);
+    UT_ASSERT(c, !xsink, "closed-on-submit fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooledForOrigin(*conn, "unit-test.invalid", 80, false);
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "the connection starts in the pool");
+
+    ReferenceHolder<QoreHashNode> resp(
+        mgr->request("GET", "http", "unit-test.invalid", 80, "/", nullptr,
+            nullptr, 0, 5000, &xsink, nullptr), &xsink);
+    UT_ASSERT(c, !resp, "the request fails on the closed connection");
+    UT_ASSERT(c, xsink.isException(), "the failure is reported to the caller");
+    QoreStringValueHelper err(xsink.getExceptionErr());
+    UT_ASSERT(c, !strcmp(err->c_str(), "SOCKET-CLOSED"),
+        "the connection's stored error reaches the caller");
+    xsink.clear();
+
+    UT_ASSERT_EQ(c, 1, conn->getSubmitCalls(), "the pooled connection was used once");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(),
+        "a connection that refused the request because it is closed is evicted");
+    xsink.clear();
+}
+
+// A connection that refuses a request while still healthy keeps its place: the
+// eviction above must key on the connection being closed, not on the refusal.
+static void ut_manager_request_keeps_open_connection_that_refuses(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<UtCloseQueueManager> mgr(
+        new UtCloseQueueManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
+    ReferenceHolder<UtRefusingConnection> conn(
+        new UtRefusingConnection(false), &xsink);
+    UT_ASSERT(c, !xsink, "open-refusal fixtures construct");
+    if (xsink || !mgr || !conn) {
+        xsink.clear();
+        return;
+    }
+
+    mgr->addPooledForOrigin(*conn, "unit-test.invalid", 80, false);
+    ReferenceHolder<QoreHashNode> resp(
+        mgr->request("GET", "http", "unit-test.invalid", 80, "/", nullptr,
+            nullptr, 0, 5000, &xsink, nullptr), &xsink);
+    UT_ASSERT(c, !resp, "the request fails");
+    UT_ASSERT(c, xsink.isException(), "the refusal is reported to the caller");
+    xsink.clear();
+
+    UT_ASSERT(c, !conn->isClosed(), "the connection is still open");
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
+        "a connection that is still open stays in the pool");
+    UT_ASSERT_EQ(c, 0, conn->getPendingStreamCount(),
+        "the failed checkout releases its stream reservation");
+    mgr->closeAll(&xsink);
+    xsink.clear();
+}
 
 static void ut_manager_acquire_first_request(UnitTestCounters& c) {
     ExceptionSink xsink;
@@ -2762,6 +3004,11 @@ static void ut_qorevalue_resolve_indirect_opaque(UnitTestCounters& c) {
         UT_ASSERT_EQ(c, (int)NT_LIST, (int)r.getType(), "a resolved opaque list reference reports NT_LIST");
         UT_ASSERT(c, r.get<const QoreListNode>() == *l,
             "a resolved opaque list reference yields its target through get<T>()");
+
+        // makeOpaqueList() took a reference and resolveIndirect() returned a borrowed value, so
+        // the opaque value owns the only reference this scope added; discard() is what releases
+        // it, since QoreValue has no destructor and the ReferenceHolder holds a separate one
+        op.discard(&xsink);
     }
 
     {
@@ -2774,6 +3021,9 @@ static void ut_qorevalue_resolve_indirect_opaque(UnitTestCounters& c) {
         UT_ASSERT_EQ(c, (int)NT_HASH, (int)r.getType(), "a resolved opaque hash reference reports NT_HASH");
         UT_ASSERT(c, r.get<const QoreHashNode>() == *h,
             "a resolved opaque hash reference yields its target through get<T>()");
+
+        // as above: release the reference makeOpaqueHash() took
+        op.discard(&xsink);
     }
 
     // a value that is not an indirect reference at all must come back untouched
@@ -4212,8 +4462,11 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_connection_timeout(c);
     ut_http1_connection_connect_refused(c);
     ut_http1_submit_after_ssl_error_preserves_error(c);
+    ut_http1_connection_closed_before_waiter_notified(c);
     ut_http1_onclosed_hook_one_shot(c);
     ut_http1_onclosed_hook_app_thread_close(c);
+    ut_manager_request_evicts_connection_closed_on_submit(c);
+    ut_manager_request_keeps_open_connection_that_refuses(c);
     ut_manager_abandon_h1_evicts_connection(c);
     ut_manager_abandon_multiplexed_keeps_connection(c);
     ut_manager_abandon_completed_request_is_a_no_op(c);
