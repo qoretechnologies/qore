@@ -56,6 +56,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testGraphTransitionIsSurvivedAndAttributed());
         addTestCase("a compile is preloaded from its own component's predecessors",
             \testPreloadFollowsTheComponentNotTheIndex());
+        addTestCase("a preload closes over content dependencies, not required edges alone",
+            \testPreloadClosesOverContentDependencies());
         addTestCase("an external source edit is still reported as one",
             \testExternalSourceEditIsReported());
         addTestCase("a frozen graph removes the transition entirely",
@@ -115,10 +117,20 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Writes NAME's depfile so that it records a compile against \a providers.
-    private writeDepfile(string qo_dir, string name, softlist<string> providers) {
+    #! Writes one member's depfile with \a providers as required edges.
+    /** \a content names providers recorded as DECLARATION contracts instead: what a compile
+        records when it folds a provider's constant rather than importing a symbol from it.
+        Those are deliberately not ordering edges -- promoting them would collapse the
+        decomposition -- but a parse resolving against shells still needs them preloaded.
+    */
+    private writeDepfile(string qo_dir, string name, softlist<string> providers,
+            *softlist<string> content) {
         list<string> deps = (dirname(qo_dir) + "/src/" + name + ".qc",);
         foreach string provider in (providers) {
             push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
+        }
+        foreach string provider in (content ?? ()) {
+            push deps, qo_dir + "/" + provider + ".qo.aggregate-contract.stamp";
         }
         write(qo_dir + "/" + name + ".qo.d",
             qo_dir + "/" + name + ".qo.stamp:"
@@ -491,6 +503,53 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "b.qo", "b.qo.compile-contract.stamp", "b.qo.idx.json"),
             sort(preloaded),
             "the preload holds every member of c's one predecessor component");
+    }
+
+    #! A preload must reach a provider that only a CONTENT dependency names.
+    /** A compile records a provider's compile contract when it imports a symbol from it, and only
+        its declaration contract when it folds a constant or resolves a type from it.  The second
+        kind is deliberately not an ordering edge: promoting it would make a comment in a widely
+        folded source rebuild every consumer, and it collapsed one 875-source group from 820
+        components to 435.  But the preload closure is a different question from the ordering, and
+        walking required edges alone left those providers out of the parse entirely.
+
+        Here `a` folds a constant declared in `e`, and `c` requires `a`.  Nothing connects `c` to
+        `e` over a required edge, yet `a`'s object carries a reference to `e`'s constant, so a
+        compile of `c` that preloads `a` without `e` cannot resolve it.
+    */
+    testPreloadClosesOverContentDependencies() {
+        TmpDir tmp("qore-aot-driver-preload-content-");
+        hash<auto> fx = fixture(tmp.path, (), True, ("e",));
+        string qo_dir = fx.qo_dir;
+
+        # a folds a constant declared in e; b is a's cycle peer, c requires a
+        writeDepfile(qo_dir, "a", "b", "e");
+
+        hash<auto> component = componentFor(qo_dir, "c");
+        hash<auto> result = runTool(("--scc-preload", fx.context, component.key));
+        assertEq(0, result.rc, "--scc-preload for c: " + result.output);
+        list<string> preloaded = ();
+        foreach string line in (result.output.split("\n")) {
+            if (trim(line)) {
+                push preloaded, basename(trim(line));
+            }
+        }
+        assertEq(("a.qo", "b.qo", "e.qo"), sort(preloaded),
+            "the preload reaches the content-dependency provider of a required prerequisite: "
+                + result.output);
+        assertEq(-1, result.output.find("/c.qo"),
+            "a component is never preloaded with its own members: " + result.output);
+        assertEq(-1, result.output.find("/d.qo"),
+            "an unrelated member is not preloaded: " + result.output);
+
+        # widening the preload must not merge components: e stays its own component, and c's
+        # required prerequisites are still the a<->b cycle alone
+        hash<auto> prerequisites = runTool(("--scc-prerequisites", fx.context, component.key));
+        assertEq(0, prerequisites.rc, "--scc-prerequisites for c: " + prerequisites.output);
+        assertEq(-1, prerequisites.output.find("\te"),
+            "a content dependency is not promoted to an ordering edge: " + prerequisites.output);
+        assertEq(1, componentFor(qo_dir, "e").size.toInt(),
+            "the content-dependency provider keeps its own component");
     }
 
     testExternalSourceEditIsReported() {

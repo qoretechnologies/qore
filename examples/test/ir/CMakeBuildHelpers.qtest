@@ -61,6 +61,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testQccDepsTrackInstalledLibqore());
         addTestCase("cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
+        addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
+            \testIncrementalConstantOwnerPreload());
 
         set_return_value(main());
     }
@@ -2071,6 +2073,124 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
     #! Counts non-overlapping occurrences of \a needle in \a text.
     private int occurrences(string text, string needle) {
         return text.split(needle).size() - 1;
+    }
+
+    #! An incremental compile must be preloaded with the owner of every constant its siblings reference.
+    /** The group here is the shape a Qorus incremental build failed on.  `typeinfo.qc` aliases a class
+        constant declared in `catalogue.qc`; `handler.qc` calls a function in `typeinfo.qc` and knows
+        nothing about the catalogue.  Editing `handler.qc` alone leaves one component stale, which the
+        coordinator compiles standalone, preloading what `handler.qc` requires -- and the alias's object
+        serializes its constant as a reference to the catalogue's, so loading that object without the
+        catalogue's own object cannot resolve it:
+
+          error: sibling .qo cross-resolution failed: AOT cannot deserialize value for class constant
+            'QorusTypeInfoRestClass::QorusDataTypeInfo': cannot resolve const_ref
+            'QorusDataTypeCatalogue::Info' in the current program
+
+        Two independent defects produced that, and both are covered here because the build only
+        succeeds when both are repaired:
+
+          * the shared parse that built the group recorded NO dependency from the alias to the
+            catalogue at all.  A constant initializer is resolved at parse commit, after every source
+            in the batch has been parsed, and the scoped resolvers did not pass the referring
+            expression's location down -- so the batch had no consumer to attribute the fold to; and
+          * the standalone preload closure walked required edges only.  A folded constant records its
+            provider as a content dependency, deliberately, so that a comment in the provider does not
+            rebuild every consumer -- and a closure that ignores those edges leaves the owner out even
+            once the dependency is recorded.
+
+        The edit is a comment, which is the case that matters: it changes nothing the alias can see,
+        so nothing else in the group goes stale and the plan really does take the standalone path.
+    */
+    testIncrementalConstantOwnerPreload() {
+        TmpDir tmp("qore-cmake-qcc-const-preload-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        write(snippets_dir + "/catalogue.qc", "%new-style
+public class DataTypeCatalogue {
+    public {
+        const Info = {
+            \"string\": {\"desc\": \"a string\"},
+            \"int\": {\"desc\": \"an int\"},
+        };
+    }
+}
+");
+        # the alias: its object records `Info` as a reference to the catalogue's constant
+        write(snippets_dir + "/typeinfo.qc", "%new-style
+public class TypeInfoRestClass {
+    public {
+        const DataTypeInfo = DataTypeCatalogue::Info;
+    }
+}
+string sub typeInfoDesc() {
+    return TypeInfoRestClass::DataTypeInfo.string.desc;
+}
+");
+        # the consumer: a required edge to the alias, none to the catalogue
+        write(snippets_dir + "/handler.qc", "%new-style
+string sub handlerDesc() {
+    code ref = \\typeInfoDesc();
+    return ref();
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoConstPreload NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP constpreload
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/catalogue.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/typeinfo.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/handler.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
+            "configured the constant-owner group: " + configure);
+
+        string clean = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(3, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles every member in one shared parse: " + clean);
+
+        # the shared parse must record the fold; without it nothing downstream can preload the owner
+        string alias_dep = read(glob(build_dir + "/qo/*typeinfo_qc.qo.d")[0]);
+        assertTrue(alias_dep.find("catalogue") != -1,
+            "the shared parse records the aliased constant's owner: " + alias_dep);
+
+        # a comment in the consumer: one stale component, compiled on the standalone path
+        string member = snippets_dir + "/handler.qc";
+        write(member, read(member) + "# documentation-only correction\n");
+        string edited = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(-1, edited.find("cross-resolution failed"),
+            "the stale component is preloaded with the owner of every constant its siblings "
+                "reference: " + edited);
+        assertEq(-1, edited.find("cannot resolve const_ref"),
+            "no preloaded sibling is left holding an unresolvable constant reference: " + edited);
+        assertEq(1, occurrences(edited, "one at a time"),
+            "the plan really does take the standalone path this covers: " + edited);
+        assertEq(1, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited component is recompiled: " + edited);
+
+        string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            "the build after the incremental compile converges: " + converged);
     }
 
     testCyclicComponentBuilds() {

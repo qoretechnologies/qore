@@ -260,7 +260,9 @@ PARSE-EXCEPTION: enum 'X' conflicts with existing namespace 'X' in namespace '::
 
 The per-file path has always staged its preloads this way (`--scc-preload` into a
 `.qcc-preload.*` directory); a parse of several sources needs the union of their
-predecessors, which is what `--scc-preload-set` reports.
+predecessors, which is what `--scc-preload-set` reports. Both answer from one
+closure (`componentPreloadOutputs()`), so what a source is preloaded with does not
+depend on which path compiled it.
 
 The partial parse is nevertheless **opt-in** (`QORE_QCC_SUBSET_PARSE=1`); what
 the default waits on is below. The coordinator falls back to the group's own
@@ -323,8 +325,8 @@ here, and both come from the same fact: **a `.qo` carries the declarations it wa
 against**.
 
 *Completeness (fixed).* The preload set was the members reachable over **required edges**
-only, and a required edge is recorded only when a compile folds a provider's value or
-bakes its link-time hash. A source that uses another's declaration purely as a **type**
+only, and a required edge is recorded only when a compile imports a symbol from a provider
+or bakes its link-time hash. A source that uses another's declaration purely as a **type**
 records no such edge — only the provider's source-content digest — so those providers were
 left out of the parse altogether. The type then resolved to a deferred placeholder, and an
 initializer that has to *construct* it at parse commit got nothing:
@@ -336,11 +338,55 @@ RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
 
 `Classes/GroupRuntimeContext.qc` declares `static OmqMap host_map();` and names
 `Classes/OmqMap.qc` in its depfile *only* as `OmqMap_qc.sha256` — no compile contract — so
-`OmqMap.qc` was neither compiled nor preloaded. `--scc-preload-set` now closes over
+`OmqMap.qc` was neither compiled nor preloaded. The preload set now closes over
 prerequisites **and** content dependencies together, iterating to a fixpoint: a shell added
 for either reason brings its own unmet requirements, and preloading a class whose base is
 absent fails the parse just as surely. These are not ordering edges, so the decomposition
 is untouched — no components merge and nothing extra goes stale.
+
+A **folded constant** is the second reference that records no required edge, and it fails
+harder than a type does. The aliasing object serializes its constant as a reference naming
+the *owner's* constant rather than as a copy, so a preload without the owner cannot
+deserialize it at all:
+
+```
+error: sibling .qo cross-resolution failed: AOT cannot deserialize value for class
+  constant 'QorusTypeInfoRestClass::QorusDataTypeInfo': cannot resolve const_ref
+  'QorusDataTypeCatalogue::Info' in the current program
+```
+
+This is why the closure is `componentPreloadOutputs()`, one helper shared by every caller —
+`--scc-preload` and `--scc-compile-plan` for the standalone path, `--scc-preload-set` for
+the subset parse. Widening only the subset parse left the **default** path, one component
+at a time, with the defect: on Qorus a documentation-only edit to
+`Classes/QorusRestApiHandlerV9.qc` left one stale component whose preloaded
+`Classes/QorusRestApiHandlerV8.qc` aliases a constant owned by
+`Classes/QorusDataTypeCatalogue.qc`, and the rebuild stopped on the message above.
+
+*Upgrading an existing object tree.* The attribution fix changes what a compile RECORDS,
+not what it emits, so it is deliberately not part of the `qcc` format fingerprint -- the
+files it touches are ordinary parser sources that change constantly, and fingerprinting them
+would invalidate every AOT cache on every unrelated edit. The consequence is that installing
+the fixed compiler does not repair a tree built by the old one: a provider that is not itself
+edited never has its depfile rewritten, so the missing content dependency persists and the
+`const_ref` failure recurs on the next incremental build. One whole-group parse fixes it,
+because that is the only operation that rewrites every depfile in the group -- either
+`QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT=0` for one build, or `rm -rf <OUTPUT_DIR>`, which
+is a complete invalidation and needs no `cmake` re-run. After that, ordinary incremental
+builds are correct.
+
+*Attribution (fixed).* Completing the closure is no use if the dependency it follows was
+never recorded, and for a folded constant reached by a **scoped** reference it was not. A
+folded value leaves no trace in the emitted object, so it is recorded when the reference is
+*resolved*; a batch attributes that record to the consuming source, taken from the referring
+expression's location. A batch resolves constant initializers at parse commit, after every
+source in it has been parsed, so the source "currently being parsed" is gone by then and the
+location is the only consumer available — and the scoped resolvers (`Owner::CONST`) did not
+pass it down to the constant lookup. An unscoped `CONST` was unaffected, because its
+resolver always has. The result was not a weaker edge but no edge at all: a whole-group
+parse recorded nothing from an aliasing source to the source it aliased, so the fold was
+invisible both to the preload closure and to currency. The lookups now carry the consumer
+location, and a batch records what the standalone compile of the same source records.
 
 *Convexity (open).* Completing the preload set is necessary but not sufficient. The
 compiled set must also be **convex**: no preloaded source may depend on a source the parse
