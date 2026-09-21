@@ -1957,8 +1957,11 @@ static const QoreIRFunction* getInterpreterDirectCallEffectCallee(
     if (!inst.variant) {
         return nullptr;
     }
-    const UserVariantBase* uvb = inst.cached_uvb ? inst.cached_uvb : inst.variant->getUserVariantBase();
-    return inst.cached_callee_ir ? inst.cached_callee_ir : (uvb ? uvb->getCachedIR() : nullptr);
+    // Resolve through the variant, never through the instruction's inline cache: analysis
+    // runs while other threads may be executing this function, and the cache payload may
+    // only be read behind an eligible inline_ir_state.  The variant yields the same body.
+    const UserVariantBase* uvb = inst.variant->getUserVariantBase();
+    return uvb ? uvb->getCachedIR() : nullptr;
 }
 
 static bool refineInterpreterEffectSummary(const QoreIRFunction& root, ExceptionSink* xsink) {
@@ -2245,20 +2248,35 @@ private:
     bool argv_instantiated = false;
 };
 
+//! Resolves and memoizes a direct call site's inline call state.
+/** @param payload_claimed true when the caller already holds the instruction's inline
+    call-state claim (see QoreIRInlineStateClaim); the payload writes below then extend
+    the caller's claim rather than taking a second one.
+    @return a state > 0 when the call site may be inlined; any value <= 0 means the caller
+    must use the generic call path.
+*/
 template <typename DirectCallInst>
 static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, const QoreMethod* method,
-        const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs, bool reject_copy_method) {
+        const AbstractQoreFunctionVariant* variant, QoreProgram* caller_pgm, int nargs, bool reject_copy_method,
+        bool payload_claimed = false) {
     (void)caller_pgm;
     auto reject = [&]() -> int8_t {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
-        return -1;
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
+        return QORE_IR_INLINE_INELIGIBLE;
     };
     int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
     if (state > 0 && inst->cached_callee_ir && inst->cached_uvb) {
+        // the acquire load above is the edge that publishes the payload to this thread
         return state;
     }
-    if (state == -1) {
-        return -1;
+    if (state == QORE_IR_INLINE_INELIGIBLE) {
+        return QORE_IR_INLINE_INELIGIBLE;
+    }
+
+    // Exactly one thread fills the payload; the rest take the generic path this pass.
+    QoreIRInlineStateClaim claim(inst->inline_ir_state, payload_claimed);
+    if (!claim.held()) {
+        return QORE_IR_INLINE_UNCHECKED;
     }
 
     if (!variant || inst->has_ref_args || !method) {
@@ -2268,13 +2286,16 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
         return reject();
     }
 
-    const UserVariantBase* uvb = inst->cached_uvb ? inst->cached_uvb : variant->getUserVariantBase();
+    // Resolve from the variant rather than from the instruction's own cache: the payload is
+    // only readable behind an eligible state, and these values are exactly what the cache
+    // would hold anyway.
+    const UserVariantBase* uvb = variant->getUserVariantBase();
     if (!uvb || uvb->hasCachedFunction()
             || !methodVariantFastCallEligibleForInterpreter(variant)) {
         return reject();
     }
 
-    const QoreIRFunction* callee_ir = inst->cached_callee_ir ? inst->cached_callee_ir : uvb->getCachedIR();
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
     const UserSignature* sig = uvb->getUserSignature();
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
@@ -2285,11 +2306,15 @@ static int8_t ensureInterpreterResolvedInlineIRCallState(DirectCallInst* inst, c
         return reject();
     }
 
+    // Payload writes happen only here, immediately before the verdict, so a claim holder
+    // that bailed out above left the cache untouched.  The release store below is what
+    // makes these three writes visible to a reader that acquire-loads an eligible state.
     inst->cached_callee_ir = callee_ir;
     inst->cached_uvb = uvb;
     inst->cached_return_type = sig->getReturnTypeInfo();
     int8_t eligible_state = callee_ir->direct_params_eligible
-        && nargs >= static_cast<int>(sig->numParams()) ? 1 : 2;
+        && nargs >= static_cast<int>(sig->numParams())
+        ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
 }
@@ -2370,15 +2395,22 @@ static std::string qore_ir_method_call_name(const QoreMethod* method) {
 static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction* inst,
         QoreProgram* caller_pgm, int nargs) {
     auto reject = [&]() -> int8_t {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
-        return -1;
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
+        return QORE_IR_INLINE_INELIGIBLE;
     };
     int8_t state = inst->inline_ir_state.load(std::memory_order_acquire);
     if (state > 0 && inst->cached_callee_ir && inst->cached_uvb) {
+        // the acquire load above is the edge that publishes the payload to this thread
         return state;
     }
-    if (state == -1) {
-        return -1;
+    if (state == QORE_IR_INLINE_INELIGIBLE) {
+        return QORE_IR_INLINE_INELIGIBLE;
+    }
+
+    // Exactly one thread fills the payload; the rest take the generic path this pass.
+    QoreIRInlineStateClaim claim(inst->inline_ir_state);
+    if (!claim.held()) {
+        return QORE_IR_INLINE_UNCHECKED;
     }
 
     if (!caller_pgm) {
@@ -2387,13 +2419,16 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
     if (!inst->variant || inst->has_ref_args || !caller_pgm) {
         return reject();
     }
-    const UserVariantBase* uvb = inst->cached_uvb ? inst->cached_uvb : inst->variant->getUserVariantBase();
+    // Resolve from the variant rather than from the instruction's own cache: the payload is
+    // only readable behind an eligible state, and these values are exactly what the cache
+    // would hold anyway.
+    const UserVariantBase* uvb = inst->variant->getUserVariantBase();
     if (!uvb || uvb->pgm != caller_pgm || uvb->hasCachedFunction()
             || !uvb->isStaticallyFastCallEligible()) {
         return reject();
     }
 
-    const QoreIRFunction* callee_ir = inst->cached_callee_ir ? inst->cached_callee_ir : uvb->getCachedIR();
+    const QoreIRFunction* callee_ir = uvb->getCachedIR();
     const UserSignature* sig = uvb->getUserSignature();
     if (!callee_ir || !sig
             || sig->needsTypeParameterSubstitution()
@@ -2404,11 +2439,15 @@ static int8_t ensureInterpreterInlineIRFunctionState(QoreIRCallDirectInstruction
         return reject();
     }
 
+    // Payload writes happen only here, immediately before the verdict, so a claim holder
+    // that bailed out above left the cache untouched.  The release store below is what
+    // makes these three writes visible to a reader that acquire-loads an eligible state.
     inst->cached_callee_ir = callee_ir;
     inst->cached_uvb = uvb;
     inst->cached_return_type = sig->getReturnTypeInfo();
     int8_t eligible_state = callee_ir->direct_params_eligible
-        && nargs >= static_cast<int>(sig->numParams()) ? 1 : 2;
+        && nargs >= static_cast<int>(sig->numParams())
+        ? QORE_IR_INLINE_DIRECT_PARAMS : QORE_IR_INLINE_BOXED_PARAMS;
     inst->inline_ir_state.store(eligible_state, std::memory_order_release);
     return eligible_state;
 }
@@ -3653,12 +3692,12 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
 
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
     QoreProgram* exec_pgm = uvb->pgm;
     if (!exec_pgm) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -3672,7 +3711,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     QoreIRInlineCallStackLocation stack_loc(qore_ir_user_variant_location(uvb),
         qore_ir_function_call_name(inst->func), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
-    bool use_direct_params = inline_state == 1;
+    bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
             && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
         result = QoreValue();
@@ -3702,7 +3741,7 @@ static bool tryExecuteInterpreterInlineIRFunction(QoreIRCallDirectInstruction* i
     }
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
 
@@ -3731,13 +3770,13 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
         bool* may_invalidate_external_caches = nullptr) {
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
 
     QoreProgram* exec_pgm = qore_ir_method_execution_program(method, uvb);
     if (!exec_pgm) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -3765,7 +3804,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     const LocalVar* selfid = sig->selfid ? sig->selfid : findIRSelfLocalForInterpreter(callee_ir);
     SelfInstantiationHelper self_helper(selfid, self);
 
-    bool use_direct_params = inline_state == 1;
+    bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
             && instantiateInterpreterFastCallParams(sig, num_params, args, xsink, receiver_type_info) < 0) {
         result = QoreValue();
@@ -3791,7 +3830,7 @@ static bool executeInterpreterInlineIRMethodTarget(DirectMethodInst* inst, const
     }
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
 
@@ -3900,19 +3939,33 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         return executeInterpreterInlineIRMethodTarget(inst, inst->cached_method, self, nullptr,
             state, args, nargs, result, xsink, may_invalidate_external_caches);
     }
-    if (state == -1) {
+    if (state == QORE_IR_INLINE_INELIGIBLE) {
         return false;
     }
 
     const QoreMethod* method = inst->method;
     const AbstractQoreFunctionVariant* variant = inst->variant;
-    if (method) {
-        if ((inst->qc && object_class != inst->qc) && object_class != method->getClass()) {
-            return false;
-        }
-    } else {
+    // Reject a receiver this statically resolved method does not apply to before claiming:
+    // a polymorphic call site takes this branch on every call and must not pay for a CAS
+    // pair it can never make progress with.
+    if (method && (inst->qc && object_class != inst->qc) && object_class != method->getClass()) {
+        return false;
+    }
+
+    // Claim the cache for the whole resolution below: this receiver/method triple and the
+    // callee state filled by ensureInterpreterResolvedInlineIRCallState() are published
+    // together by that function's release store, so they need a single writer.  Every bail
+    // out between here and the payload writes leaves the cache untouched, and the claim is
+    // released by the guard so a later call can retry.
+    QoreIRInlineStateClaim claim(inst->inline_ir_state);
+    if (!claim.held()) {
+        // another thread is resolving this call site; use the generic path this pass
+        return false;
+    }
+
+    if (!method) {
         if (!strcmp(method_name, "copy")) {
-            inst->inline_ir_state.store(-1, std::memory_order_release);
+            inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
         }
         const qore_class_private* priv = qore_class_private::get(*object_class);
@@ -3926,7 +3979,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
         }
         variant = getSingleInterpreterMethodVariant(method);
         if (!variant) {
-            inst->inline_ir_state.store(-1, std::memory_order_release);
+            inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
             return false;
         }
     }
@@ -3934,7 +3987,7 @@ static bool tryExecuteInterpreterInlineIRDotEvalMethod(DotEvalInst* inst, QoreVa
     inst->cached_object_class = object_class;
     inst->cached_class_ctx = class_ctx;
     inst->cached_method = method;
-    state = ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, true);
+    state = ensureInterpreterResolvedInlineIRCallState(inst, method, variant, caller_pgm, nargs, true, true);
     if (state <= 0) {
         return false;
     }
@@ -3954,13 +4007,13 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
 
     const UserVariantBase* uvb = inst->cached_uvb;
     if (uvb->hasCachedFunction()) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
 
     QoreProgram* exec_pgm = qore_ir_method_execution_program(inst->method, uvb);
     if (!exec_pgm) {
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
     ProgramThreadCountContextHelper ptcch(xsink, exec_pgm, true);
@@ -3975,7 +4028,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
         qore_ir_method_call_name(inst->method), inst->variant ? inst->variant->getCallType() : CT_USER);
     unsigned num_params = sig->numParams();
     ClassOnlySubstitutionHelper cosh(qore_class_private::get(*inst->method->getClass()));
-    bool use_direct_params = inline_state == 1;
+    bool use_direct_params = inline_state == QORE_IR_INLINE_DIRECT_PARAMS;
     if (!use_direct_params
             && instantiateInterpreterFastCallParams(sig, num_params, args, xsink) < 0) {
         result = QoreValue();
@@ -4001,7 +4054,7 @@ static bool tryExecuteInterpreterInlineIRStaticMethod(QoreIRCallStaticDirectInst
     }
     if (!ok && !(xsink && *xsink)) {
         ir_return_value.discard(xsink);
-        inst->inline_ir_state.store(-1, std::memory_order_release);
+        inst->inline_ir_state.store(QORE_IR_INLINE_INELIGIBLE, std::memory_order_release);
         return false;
     }
 
@@ -10253,7 +10306,11 @@ load_local_done:
                         return false;
                     }
                     QoreValue stored = val.hasNode() ? val.refSelf() : val;
-                    helper.assign(stored, "<lvalue>", true, AssignmentMode::Weak);
+                    // the store's own mode, not Weak: this branch is taken for every
+                    // non-Normal mode, and assigning as Weak here made '@=' on a local give up
+                    // the ownership that separates it from ':=', destroying a target whose only
+                    // reference was the opaque one
+                    helper.assign(stored, "<lvalue>", true, local_inst->mode);
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;

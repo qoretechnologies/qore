@@ -89,6 +89,45 @@ semantics remain predictable; JIT-compiled native code also emits
 statement-boundary debug events (gated on `PO_ALLOW_DEBUGGER` and dormant until a
 debugger attaches) so an already-running native frame stays debuggable.
 
+### Publication of Shared Tiering Caches
+
+Promotion writes into state that every thread executing the function shares, while
+other threads are already running it. Two caches carry that traffic, and both follow
+the same contract: one writer publishes with a release store, and no reader touches
+the payload without first taking the matching acquire edge. The caches are strictly
+optimizations, so a thread that loses a race takes the generic path for that call
+rather than blocking.
+
+`UserVariantBase::cached_ir` holds the variant's lowered IR body. It is published
+exactly once, by whichever writer wins a CAS from `nullptr`
+(`UserVariantBase::setCachedIR()` and `UserVariantBase::attemptIRLowering()` are both
+writers, and the `ir_lower_once` flag orders lowerings against each other but gives
+no edge to `setCachedIR()`, which publishes without holding it). The winner's body is
+never replaced: a published generation is kept alive by `jit_owned_ir` because JIT
+code embeds raw pointers into its instructions, so overwriting the pointer would
+strand readers on a body nothing owns. A losing writer deletes its own body, which is
+safe precisely because that body was never published. Readers go through
+`getCachedIR()`, whose acquire load is what orders the pointee's initialization; a
+reader that dereferences the result repeatedly hoists it into a local, because the
+value cannot change once published.
+
+The interpreter's per-instruction inline call caches (`inline_ir_state` and the
+`cached_callee_ir` / `cached_uvb` / `cached_return_type` / `cached_object_class` /
+`cached_class_ctx` / `cached_method` payload on the direct-call instructions) are
+governed by `QoreIRInlineStateClaim` in `include/qore/intern/QoreIR.h`. A thread may
+write the payload only while holding the claim it takes by winning a CAS from
+`QORE_IR_INLINE_UNCHECKED` to `QORE_IR_INLINE_CLAIMED`, and may read it only after an
+acquire load of the state returns a value greater than zero. A claim holder writes the
+payload only immediately before publishing its verdict, so a holder that bails out
+early leaves the cache untouched and returns the state to `QORE_IR_INLINE_UNCHECKED`
+for a later attempt; the release is itself a CAS from `QORE_IR_INLINE_CLAIMED`, so it
+cannot undo a verdict that was published. Because nothing may read the payload at
+`QORE_IR_INLINE_UNCHECKED`, IR lowering does not pre-seed it -- the interpreter
+resolves the same values from the variant on first execution instead. The claim is
+never held across execution of the callee, and a failed claim never blocks, so a call
+site that re-enters itself recursively during resolution simply takes the generic
+path.
+
 ## AOT Compiler
 
 `qcc` is the dedicated AOT compiler. It supports:

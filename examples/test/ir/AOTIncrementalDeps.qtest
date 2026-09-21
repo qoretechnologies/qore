@@ -55,6 +55,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("declaration-contract dependencies require a source-content map",
             \testDeclarationContractRequiresSourceContentMap());
         addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
+        addTestCase("a batch attributes a folded scoped constant to its consumer",
+            \testBatchScopedConstantDeps());
         addTestCase("module depfiles use deterministic dependency forms",
             \testModuleDependencyForms());
         addTestCase("cross-file fast entry is a build dependency", \testCrossFileFastEntryDep());
@@ -392,6 +394,81 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string deps = provider_dep + consumer_dep;
         assertEq(-1, deps.find("qorus-bootstrap-fallback"),
             "batch depfiles are real qcc depfiles, not wrapper fallback depfiles: " + deps);
+    }
+
+    #! A batch must attribute a folded SCOPED constant reference to the source that made it.
+    /** A batch parses every source before it commits, and a constant initializer is resolved at
+        the commit -- so the "source currently being parsed" that batch dependency attribution
+        hangs on is gone by the time the reference is folded.  An UNSCOPED reference survived
+        that anyway, because its resolver passes the referring expression's own location down to
+        the constant lookup; the scoped resolvers (`Owner::CONST`) did not, so the dependency was
+        not recorded at all -- not as a weaker edge, absent.
+
+        The lost dependency is worse than a missed rebuild.  The aliasing object serializes its
+        constant as a `const_ref` naming the OWNER's constant, so a later incremental compile
+        that preloads the alias alone has nothing to resolve it against, and the whole compile
+        fails:
+
+          sibling .qo cross-resolution failed: AOT cannot deserialize value for class constant
+            'ScopeAlias::AliasInfo': cannot resolve const_ref 'ScopeCat::Info'
+
+        That is the shape a Qorus incremental build stopped on after a clean shared-parse build.
+        Every case below is a scoped reference resolved at parse commit: a class constant aliased
+        by another class's constant, a namespace constant aliased by another namespace's, and
+        both folded inside a function body instead of a constant initializer.
+    */
+    testBatchScopedConstantDeps() {
+        TmpDir tmp = initDirs();
+        string cat = tmp_dir + "/scope_cat.qc";
+        string ns = tmp_dir + "/scope_ns.qc";
+        string alias = tmp_dir + "/scope_alias.qc";
+        string body = tmp_dir + "/scope_body.qc";
+        write(cat, "%new-style\npublic class ScopeCat { public { const Info = {\"k\": 5}; } }\n");
+        write(ns, "%new-style\npublic namespace ScopeNs { public const TopInfo = {\"k\": 6}; }\n");
+        write(alias, "%new-style\npublic class ScopeAlias {\n"
+            + "    public {\n"
+            + "        const AliasInfo = ScopeCat::Info;\n"
+            + "        const AliasTop = ScopeNs::TopInfo;\n"
+            + "    }\n}\n");
+        write(body, "%new-style\nint sub scopeBodyFunc() {\n"
+            + "    return ScopeCat::Info.k + ScopeNs::TopInfo.k;\n}\n");
+
+        string out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s %s %s %s",
+            env, qcc_bin, lib_dir, lib_dir, cat, ns, alias, body));
+        string alias_dep = run(sprintf("cat %s/*scope_alias_qc.qo.d", lib_dir));
+        string body_dep = run(sprintf("cat %s/*scope_body_qc.qo.d", lib_dir));
+        assertTrue(alias_dep.find("scope_cat.qc") != -1,
+            "a constant aliasing a scoped class constant depends on its owner: " + alias_dep);
+        assertTrue(alias_dep.find("scope_ns.qc") != -1,
+            "a constant aliasing a scoped namespace constant depends on its owner: " + alias_dep);
+        assertTrue(body_dep.find("scope_cat.qc") != -1,
+            "a body folding a scoped class constant depends on its owner: " + body_dep);
+        assertTrue(body_dep.find("scope_ns.qc") != -1,
+            "a body folding a scoped namespace constant depends on its owner: " + body_dep);
+
+        # the reverse edges must not appear: attribution is per consumer, not per batch
+        string cat_dep = run(sprintf("cat %s/*scope_cat_qc.qo.d", lib_dir));
+        string ns_dep = run(sprintf("cat %s/*scope_ns_qc.qo.d", lib_dir));
+        assertEq(-1, cat_dep.find("scope_alias.qc"),
+            "the owner does not depend on the source that aliases it: " + cat_dep);
+        assertEq(-1, ns_dep.find("scope_body.qc"),
+            "the owner does not depend on the source that folds it: " + ns_dep);
+
+        # a standalone compile of the same alias records the same provider; the batch must not
+        # publish a weaker dependency set than the compile it is meant to replace
+        string single_lib = tmp_dir + "/single";
+        mkdir(single_lib);
+        run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/scope_cat.qo %s",
+            env, qcc_bin, single_lib, single_lib, cat));
+        run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/scope_ns.qo %s",
+            env, qcc_bin, single_lib, single_lib, ns));
+        string single_dep = single_lib + "/scope_alias.qo.d";
+        run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s -o %s/scope_alias.qo %s",
+            env, qcc_bin, single_lib, single_dep, single_lib, alias));
+        string single = File::readTextFile(single_dep);
+        assertTrue(single.find("scope_cat.qc") != -1 && single.find("scope_ns.qc") != -1,
+            "the standalone compile records both scoped owners: " + single);
     }
 
     testModuleDependencyForms() {

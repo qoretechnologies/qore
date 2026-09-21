@@ -1128,7 +1128,7 @@ int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_cont
         } else {
             bool found;
             n = qore_class_private::parseFindConstantValue(const_cast<QoreClass*>(qc), c_str,
-                parse_context.typeInfo, found, qore_class_private::get(*qc));
+                parse_context.typeInfo, found, qore_class_private::get(*qc), loc);
             if (found) {
                 n.ref();
                 //printd(5, "FunctionCallNode::parseInitImpl() this: %p n: %p (%d -> %d)\n", this, n,

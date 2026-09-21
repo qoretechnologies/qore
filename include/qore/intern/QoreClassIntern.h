@@ -1801,7 +1801,8 @@ public:
             bool check, bool toplevel) const;
 
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool &found,
-            const qore_class_private* class_ctx, bool allow_internal) const;
+            const qore_class_private* class_ctx, bool allow_internal,
+            const QoreProgramLocation* consumer_loc = nullptr) const;
 
     DLLLOCAL int addBaseClassesToSubclass(QoreClass* child, bool is_virtual);
 
@@ -1899,7 +1900,8 @@ public:
     DLLLOCAL void parseResolveAbstract();
 
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
-            const qore_class_private* class_ctx, bool allow_internal) const;
+            const qore_class_private* class_ctx, bool allow_internal,
+            const QoreProgramLocation* consumer_loc = nullptr) const;
 
     DLLLOCAL QoreVarInfo* parseFindStaticVar(const char* vname, const QoreClass*& qc, ClassAccess& access, bool check,
             bool toplevel) const;
@@ -3048,12 +3050,13 @@ public:
         return constlist.inList(cname);
     }
 
-    DLLLOCAL QoreValue parseFindLocalConstantValue(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found) {
+    DLLLOCAL QoreValue parseFindLocalConstantValue(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
+            const QoreProgramLocation* consumer_loc = nullptr) {
         parseInitConstants();
 
         // first check committed constants
         ClassAccess access = Public;
-        QoreValue rv = constlist.find(cname, cTypeInfo, access, found);
+        QoreValue rv = constlist.find(cname, cTypeInfo, access, found, consumer_loc);
 
         // check for accessibility to private constants
         if (found && (access > Public)) {
@@ -3071,13 +3074,13 @@ public:
     }
 
     DLLLOCAL QoreValue parseFindConstantValue(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
-            const qore_class_private* class_ctx) {
+            const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc = nullptr) {
         found = false;
-        return parseFindConstantValueIntern(cname, cTypeInfo, found, class_ctx);
+        return parseFindConstantValueIntern(cname, cTypeInfo, found, class_ctx, consumer_loc);
     }
 
     DLLLOCAL QoreValue parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo, bool& found,
-            const qore_class_private* class_ctx);
+            const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc = nullptr);
 
     DLLLOCAL QoreVarInfo* parseFindLocalStaticVar(const char* vname) const {
         QoreVarInfo* vi = vars.find(vname);
@@ -3884,8 +3887,9 @@ public:
 
     // searches only the current class, returns 0 if private found and not accessible in the current parse context
     DLLLOCAL static QoreValue parseFindLocalConstantValue(QoreClass* qc, const char* cname,
-            const QoreTypeInfo*& typeInfo, bool& found) {
-        return qc->priv->parseFindLocalConstantValue(cname, typeInfo, found);
+            const QoreTypeInfo*& typeInfo, bool& found,
+            const QoreProgramLocation* consumer_loc = nullptr) {
+        return qc->priv->parseFindLocalConstantValue(cname, typeInfo, found, consumer_loc);
     }
 
     // searches only the current class, returns 0 if private found and not accessible in the current parse context
@@ -3895,8 +3899,9 @@ public:
 
     // searches this class and all superclasses
     DLLLOCAL static QoreValue parseFindConstantValue(QoreClass* qc, const char* cname, const QoreTypeInfo*& typeInfo,
-            bool& found, const qore_class_private* class_ctx) {
-        return qc->priv->parseFindConstantValue(cname, typeInfo, found, class_ctx);
+            bool& found, const qore_class_private* class_ctx,
+            const QoreProgramLocation* consumer_loc = nullptr) {
+        return qc->priv->parseFindConstantValue(cname, typeInfo, found, class_ctx, consumer_loc);
     }
 
     // searches this class and all superclasses, if check = false, then assumes parsing from within the class

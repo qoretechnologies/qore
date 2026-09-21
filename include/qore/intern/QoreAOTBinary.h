@@ -177,8 +177,19 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      reads them (see ConstantEntry::setAOTParseShellValue())
 //! v16: native function descriptors encode whether their contexts contain closures, allowing closure-free
 //!      ordinary function contexts to be reconstructed safely on first execution
+//! v17: serialized LValuePath instructions record the full assignment mode rather than a weak flag, so an
+//!      opaque assignment ('@=') is no longer written as a weak one.  The byte is the one the flag used and
+//!      Normal/Weak are still 0/1, so a v9-v16 file reads back unchanged; the version is what tells an
+//!      artifact produced before this fix -- which silently stores '@=' as ':=' -- from one produced after
+//! v18: serialized numbers record the precision they were computed at beside their digits.  A number was
+//!      written as digits alone and rebuilt with QoreNumberNode(const char*), which derives a precision from
+//!      the string LENGTH (strlen * 5) -- so a folded constant came back as a different number from the one
+//!      the runtime computes and the two compared unequal (issue #5461).  A v9-v17 file carries no precision
+//!      and is read exactly as before.
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 16;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 18;
+//! First format version recording a serialized number's precision beside its digits.
+constexpr uint16_t QORE_AOT_NUMBER_PRECISION_VERSION = 18;
 //! First format version recording a compile-time value beside a pending constant's init-function flag.
 constexpr uint16_t QORE_AOT_CONST_PARSE_VALUE_VERSION = 15;
 //! First format version storing lazy debugger IR in a separate section.
@@ -1690,7 +1701,8 @@ enum class AOTExprKind : uint8_t {
     SELF_VARREF        = 6,   //!< Self variable reference (self keyword)
     LOCAL_VARREF       = 7,   //!< Local variable reference: ref1=local_slot_index (as string)
     GLOBAL_VARREF      = 8,   //!< Global variable reference: ref1=global_slot_index or "name:<global-name>"
-    CONST_NUMBER       = 9,   //!< Number constant: ref1=string representation
+    CONST_NUMBER       = 9,   //!< Number constant: ref1=string representation,
+                              //!< ref2=precision from QORE_AOT_NUMBER_PRECISION_VERSION
     CONST_BINARY       = 10,  //!< Binary constant: ref1=hex-encoded bytes
     CLOSURE_CREATE     = 11,  //!< Closure/lambda: ref1=enclosing class name (empty if none)
     CALL_REF           = 12,  //!< Call reference call: ref1=function_name (if function ref)
@@ -2033,7 +2045,10 @@ struct AOTLVPathStepId {
 //! Identity for a LValuePath instruction slot
 struct AOTLVPathSlotId {
     uint16_t opcode;           //!< QoreIROpcode (LValuePathAssign etc.)
-    uint8_t weak;              //!< weak assignment flag
+    //! AssignmentMode for LValuePathAssign; the reader reads the whole byte, so Opaque (2)
+    //! survives the round trip.  Narrowing this to a boolean made the source-stripped AOT slot
+    //! identity write 1 for '@=' and reconstruct it as a weak assignment.
+    uint8_t mode;
     uint8_t compound_op;       //!< LVCompoundOp
     uint8_t unary_op;          //!< LVUnaryOp
     uint8_t binary_mut_op;     //!< LVBinaryMutOp

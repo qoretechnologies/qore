@@ -50,14 +50,13 @@ enum class AssignmentMode : unsigned char {
     Opaque = 2,
 };
 
-//! returns the assignment mode for a legacy boolean \c weak flag
-/** Used where an interface still carries the pre-opaque boolean; a mode that must distinguish
-    opaque assignment cannot be recovered from a boolean, so every such interface that can see an
-    opaque assignment has to carry the mode itself.
+//! Every interface that can see an assignment mode carries the mode itself.
+/** There is deliberately no helper here that makes an AssignmentMode out of a boolean.  A boolean
+    cannot express Opaque, so one existed as a bridge for interfaces that still carried the
+    pre-opaque flag -- and the remaining bridges were exactly where '@=' was compiled as ':=' and
+    lost the ownership that distinguishes them.  A new store path must thread AssignmentMode through
+    rather than reconstruct it from a flag; see AssignmentMode above.
 */
-static inline AssignmentMode assignment_mode_from_weak(bool weak) {
-    return weak ? AssignmentMode::Weak : AssignmentMode::Normal;
-}
 DLLLOCAL void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out);
 
 template <typename U = qore_value_u>

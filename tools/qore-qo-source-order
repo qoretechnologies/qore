@@ -2824,6 +2824,115 @@ class SourceOrderEngine {
         return order;
     }
 
+    #! The member objects a parse of \a selected must resolve its references against.
+    /** Every member of every transitive predecessor of \a selected, plus every
+        member reached over a CONTENT dependency from anything already in the
+        closure, minus the members the parse compiles itself.  Preloading one of
+        those would read the generation this compile replaces -- and worse, a
+        `.qo` carries the declarations it was compiled against, so preloading a
+        CONSUMER of one of these sources brings that source's own declarations
+        back and the parse can no longer make them.
+
+        Two edge kinds reach a preload, and both are needed:
+
+          * PREREQUISITES, the members reachable over required edges -- recorded
+            when a compile folds a provider's value or bakes its link-time hash;
+            and
+          * CONTENT dependencies, the providers a compile recorded only as a
+            source-content or declaration digest.  Neither a reference that uses
+            another source's declaration purely as a TYPE nor one that folds a
+            constant leaves a required edge, so prerequisites alone leave that
+            provider out of the parse entirely.  A type then resolves to a
+            deferred placeholder, and an initializer that has to CONSTRUCT it at
+            parse commit gets nothing:
+
+              RUNTIME-TYPE-ERROR: <return statement> expects type
+                'object<::OmqMap>', but got no value instead
+
+            while a folded constant leaves the preloaded sibling that aliased it
+            holding a serialized reference to a constant nothing declares:
+
+              sibling .qo cross-resolution failed: AOT cannot deserialize value
+                for class constant 'QorusTypeInfoRestClass::QorusDataTypeInfo':
+                cannot resolve const_ref 'QorusDataTypeCatalogue::Info'
+
+        The closure has to be taken over both together, and over the preloaded
+        members as well as the compiled ones: a shell added for either reason
+        brings its own unmet requirements, and preloading a class whose base is
+        absent fails the parse just as surely ("cannot resolve base class ... for
+        class ...").
+
+        These are not ordering edges.  Widening the preload set leaves the
+        decomposition alone: it neither merges components nor changes what the
+        build considers stale.
+
+        \param components the decomposition the parse is planned against
+        \param context_info the group's sources and objects
+        \param selected the components the parse compiles itself
+
+        \return the preload member outputs, in dependency order
+    */
+    list<string> componentPreloadOutputs(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, softlist<int> selected) {
+        hash<string, int> component_of_output = {};
+        for (int component = 0; component < components.members.size(); ++component) {
+            foreach int node in (components.members[component]) {
+                component_of_output{context_info.outputs[node]} = component;
+            }
+        }
+        hash<string, bool> compiled = {};
+        hash<string, bool> reached = {};
+        list<int> pending = ();
+        foreach int resolved in (selected) {
+            foreach int node in (components.members[resolved]) {
+                compiled{context_info.outputs[node]} = True;
+            }
+            string resolved_key = string(resolved);
+            if (!exists reached{resolved_key}) {
+                reached{resolved_key} = True;
+                push pending, resolved;
+            }
+        }
+        # A breadth-first walk over DIRECT predecessors reaches every transitive
+        # one, so the closure stays linear in the graph rather than resolving a
+        # transitive prerequisite set per component.
+        while (pending) {
+            int component = pop pending;
+            list<int> providers = components.predecessors[component];
+            list<string> member_outputs = ();
+            foreach int node in (components.members[component]) {
+                push member_outputs, context_info.outputs[node];
+            }
+            foreach string output in (contentDependencyOutputs(context_info, member_outputs)) {
+                *int provider = component_of_output{output};
+                if (exists provider) {
+                    push providers, provider;
+                }
+            }
+            foreach int provider in (providers) {
+                string provider_key = string(provider);
+                if (exists reached{provider_key}) {
+                    continue;
+                }
+                reached{provider_key} = True;
+                push pending, provider;
+            }
+        }
+        list<string> preload = ();
+        foreach int candidate in (components.topological_order) {
+            if (!exists reached{string(candidate)}) {
+                continue;
+            }
+            foreach int node in (components.members[candidate]) {
+                string output = context_info.outputs[node];
+                if (!compiled{output}) {
+                    push preload, output;
+                }
+            }
+        }
+        return preload;
+    }
+
     #! Every component a rebuild of \a seeds would leave stale, seeds included.
     /** A compile rewrites its member's compile contract, and every component
         that consumes it is published against that contract, so rebuilding one
@@ -4210,85 +4319,8 @@ int sub main() {
                 push selected, resolved;
             }
             if (component_command == "preload-set") {
-                # What a parse of these components must resolve against, and
-                # nothing more: every member of every transitive predecessor,
-                # minus the members the parse compiles itself.  Preloading one of
-                # those would read the generation this compile replaces -- and
-                # worse, a `.qo` carries the declarations it was compiled
-                # against, so preloading a CONSUMER of one of these sources
-                # brings that source's own declarations back and the parse can no
-                # longer make them.
-                hash<string, bool> compiled = {};
-                foreach int resolved in (selected) {
-                    foreach int node in (components.members[resolved]) {
-                        compiled{context_info.outputs[node]} = True;
-                    }
-                }
-                # What the parse must be able to resolve against.  Two edge
-                # kinds reach it, and both are needed:
-                #
-                #   * PREREQUISITES, the members reachable over required edges --
-                #     recorded when a compile folds a provider's value or bakes
-                #     its link-time hash; and
-                #   * CONTENT dependencies, the providers a compile recorded only
-                #     as a source-content digest.  A reference that uses another
-                #     source's declaration purely as a TYPE leaves no required
-                #     edge, so prerequisites alone leave that provider out of the
-                #     parse entirely.  The type then resolves to a deferred
-                #     placeholder, and an initializer that has to CONSTRUCT it at
-                #     parse commit gets nothing:
-                #
-                #       RUNTIME-TYPE-ERROR: <return statement> expects type
-                #         'object<::OmqMap>', but got no value instead
-                #
-                # The closure has to be taken over both together: a shell added
-                # for either reason brings its own unmet requirements, and
-                # preloading a class whose base is absent fails the parse just as
-                # surely ("cannot resolve base class ... for class ...").
-                #
-                # These are not ordering edges.  Widening the preload set leaves
-                # the decomposition alone: it neither merges components nor
-                # changes what the build considers stale.
-                hash<string, bool> emitted = {};
-                hash<string, int> component_of = {};
-                for (int component = 0; component < components.members.size(); ++component) {
-                    foreach int node in (components.members[component]) {
-                        component_of{context_info.outputs[node]} = component;
-                    }
-                }
-                list<string> preload = ();
-                list<string> pending = ();
-                foreach int resolved in (selected) {
-                    foreach int node in (components.members[resolved]) {
-                        push pending, context_info.outputs[node];
-                    }
-                }
-                while (pending) {
-                    list<string> reached = ();
-                    foreach string output in (pending) {
-                        *int component = component_of{output};
-                        if (exists component) {
-                            foreach int prerequisite in (
-                                    engine.componentPrerequisites(components, component)) {
-                                foreach int node in (components.members[prerequisite]) {
-                                    push reached, context_info.outputs[node];
-                                }
-                            }
-                        }
-                    }
-                    reached += engine.contentDependencyOutputs(context_info, pending);
-                    list<string> next = ();
-                    foreach string output in (reached) {
-                        if (compiled{output} || emitted{output}) {
-                            continue;
-                        }
-                        emitted{output} = True;
-                        push preload, output;
-                        push next, output;
-                    }
-                    pending = next;
-                }
-                foreach string output in (preload) {
+                foreach string output in (
+                        engine.componentPreloadOutputs(components, context_info, selected)) {
                     printf("%s\n", output);
                 }
                 return 0;
@@ -4361,16 +4393,14 @@ int sub main() {
                 }
                 return 0;
             case "preload":
-                # Every member of every transitive predecessor component, in
+                # Everything this component's parse must resolve against, in
                 # dependency order, and deliberately not the component's own
                 # members: a component compiles its own members together, so
                 # preloading a sibling would mean reading the generation this
                 # compile is about to replace.
-                foreach int prerequisite in (
-                        engine.componentPrerequisites(components, component)) {
-                    foreach int node in (components.members[prerequisite]) {
-                        printf("%s\n", context_info.outputs[node]);
-                    }
+                foreach string output in (
+                        engine.componentPreloadOutputs(components, context_info, component)) {
+                    printf("%s\n", output);
                 }
                 return 0;
             case "prerequisites":
@@ -4424,11 +4454,9 @@ int sub main() {
                 # been planned from the graph that superseded it.
                 printf("graph-generation\t%s\n",
                     engine.graphGeneration(context_path, context_info));
-                foreach int prerequisite in (
-                        engine.componentPrerequisites(components, component)) {
-                    foreach int node in (components.members[prerequisite]) {
-                        printf("preload\t%s\n", context_info.outputs[node]);
-                    }
+                foreach string output in (
+                        engine.componentPreloadOutputs(components, context_info, component)) {
+                    printf("preload\t%s\n", output);
                 }
                 int member = components.members[component][0];
                 foreach int provider in (

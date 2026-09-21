@@ -91,22 +91,32 @@ public:
         RECV_CHUNK_DATA,
         RECV_CHUNK_CRLF,
         RECV_BODY_CLOSE,
+        AWAIT_SEND,         //!< response complete; a buffered request body is still being sent
         PROTOCOL_SWITCHED   //!< raw bidirectional data after 101
     };
 
-    //! Request-send sub-states for full-duplex chunked streaming
-    /** Tracks the chunked request-body send direction, which runs
-        concurrently with the response-receive @ref ReqState machine on the
-        same socket (send and receive use independent non-blocking
-        directions).  Only active for streaming-send requests; INACTIVE
-        otherwise (half-duplex / non-streaming requests send the whole request
-        before reading the response).
+    //! Request-send sub-states for full-duplex request-body sends
+    /** Tracks the request-body send direction, which runs concurrently with
+        the response-receive @ref ReqState machine on the same socket (send and
+        receive use independent non-blocking directions).
+
+        Two kinds of request body use it:
+        - a streaming (chunked TE) send, whose body the application pushes
+          incrementally through @ref pushSendData; the send side is activated
+          as soon as the request headers have been written
+        - a buffered (@c Content-Length) send whose body did not fit in the
+          socket's send buffer; the send side takes over the remainder of the
+          request once the header block has reached the wire
+          (@ref startBufferedFullDuplex)
+
+        INACTIVE means the whole request went out in one operation, so there is
+        no concurrent send to drive.
     */
     enum class SendState {
-        INACTIVE,   //!< not a full-duplex streaming-send request
+        INACTIVE,   //!< no concurrent request-body send is in progress
         IDLE,       //!< full-duplex active, no send in flight, awaiting queued data
         SENDING,    //!< a request-body chunk (or the final terminator) is being sent
-        DONE        //!< the end sentinel was processed; the request body is fully sent
+        DONE        //!< the request body is fully sent
     };
 
     //! Creates the poll operation with an initial TCP connect operation
@@ -393,6 +403,46 @@ private:
     */
     bool send_final_pending = false;
 
+    //! True when @ref send_op carries the remainder of a buffered request body
+    /** Set by @ref startBufferedFullDuplex when the in-flight request send
+        operation is handed over to the concurrent send side.  Unlike a chunked
+        streaming send there is no incremental queue behind it: the operation
+        already holds the whole rest of the request, so its completion means the
+        request body is fully sent.  Cleared by @ref resetSendState.
+        I/O thread only.
+
+        @since %Qore 3.0
+    */
+    bool send_buffered_body = false;
+
+    //! True when the response waiting in @ref ReqState::AWAIT_SEND is a streaming end-of-stream
+    /** Selects which dispatch the deferred response resumes into - dispatchStreamingEnd() for a
+        streaming (Channel) response, dispatchResponse() otherwise.  I/O thread only.
+
+        @since %Qore 3.0
+    */
+    bool deferred_streaming_end = false;
+
+    //! Byte length of the header block of the request currently being sent
+    /** Used to recognize, after a partial write of the combined
+        header + body buffer, that the request headers have reached the wire and
+        the response may therefore be read concurrently with the rest of the
+        body.  I/O thread only; taken from @ref pending_request_header_len when
+        the request is picked up in handleIdle().
+
+        @since %Qore 3.0
+    */
+    size_t request_header_len = 0;
+
+    //! Number of "100 Continue" responses received for the request in flight
+    /** Bounds the work a peer can make the client do - and the recursion depth
+        in handleRecvHeader() - by streaming interim responses without ever
+        sending a final one.  Reset when a request starts.  I/O thread only.
+
+        @since %Qore 3.0
+    */
+    int interim_response_count = 0;
+
     //! Response status code
     int response_status_code = 0;
 
@@ -493,6 +543,12 @@ private:
     //! Pending request binary data (ref'd or nullptr)
     BinaryNode* pending_request_data = nullptr;
 
+    //! Byte length of the header block at the start of @ref pending_request_data
+    /** @see request_header_len
+        @since %Qore 3.0
+    */
+    size_t pending_request_header_len = 0;
+
     //! Whether the current request uses streaming mode
     bool streaming_active = false;
 
@@ -520,6 +576,8 @@ private:
 
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr size_t STREAMING_CHUNK_SIZE = 16384;
+    //! Maximum number of "100 Continue" responses accepted before the final response
+    static constexpr int MAX_INTERIM_RESPONSES = 16;
 
     // --- Internal methods (I/O thread only) ---
 
@@ -530,6 +588,57 @@ private:
     DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* dispatchReqState(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleFullDuplex(ExceptionSink* xsink);
+
+    //! Hands an incompletely-written buffered request over to the concurrent send side
+    /** Called from handleSending() as soon as a partial write of the combined
+        header + body buffer has put the whole request header block on the wire.
+        The in-flight send operation moves from @ref current_op to @ref send_op
+        and @ref current_op becomes the response header read, so the rest of the
+        request body and the response travel at the same time.
+
+        Without this, a peer that writes a response larger than the socket
+        buffers before draining the upload deadlocks against a client that will
+        not read until the upload is finished; SOAP 1.2 Part 2 §§6.2.3 and 7.5.1
+        require the requesting node to accept response information while it is
+        still transmitting, precisely to avoid that.
+
+        @param xsink exception sink
+
+        @return the poll info for the merged send/receive interest, or
+        @ref nullptr if the response completed or an error was raised
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* startBufferedFullDuplex(ExceptionSink* xsink);
+
+    //! Drives the rest of a buffered request body while a complete response waits to be delivered
+    /** Entered through @ref ReqState::AWAIT_SEND when the response completed before the request
+        did.  The request declared a @c Content-Length, so stopping short of it would leave the peer
+        with a request it cannot process; and unlike a chunked streaming send - whose remaining body
+        only the application can supply - the whole body is already in hand, so finishing it costs
+        nothing but the writes it already promised.
+
+        @param xsink exception sink
+
+        @return the poll info for the remaining send, or the result of the resumed dispatch once the
+        request body is complete (or once the peer refused the rest of it)
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* awaitBufferedSend(ExceptionSink* xsink);
+
+    //! Resumes the dispatch of the response that @ref ReqState::AWAIT_SEND deferred
+    DLLLOCAL QoreHashNode* completeDeferredResponse(ExceptionSink* xsink);
+
+    //! Gives up on the unfinished buffered request body and delivers the response that was waiting
+    /** Used when the peer answered and then stopped reading: the response in hand is complete and
+        authoritative, so it is what the caller gets.  @ref send_state is deliberately left at
+        @ref SendState::SENDING so the dispatch forces the connection closed - it can never be reused
+        with a half-written request on it.
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL QoreHashNode* abandonBufferedSendAndDeliver(ExceptionSink* xsink);
 
     DLLLOCAL void startSslUpgrade(ExceptionSink* xsink);
     DLLLOCAL void startProxyConnect(ExceptionSink* xsink);

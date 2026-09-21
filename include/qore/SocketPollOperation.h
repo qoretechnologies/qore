@@ -305,6 +305,22 @@ public:
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
+    //! Returns the number of payload bytes already written to the socket
+    /** Non-decreasing; equal to the payload size once @ref goalReached() returns @ref True.  Only the thread
+        driving @ref continuePoll() may call it, since that call is what advances the count.
+
+        Lets a caller that concatenated several logical units into one send tell which of them have reached the
+        wire after a partial write - the HTTP/1.1 client uses it to detect that the request header block of a
+        buffered request has been transmitted, so it can start reading the response while the body is still
+        going out.
+
+        @return the number of payload bytes written to the socket so far; 0 before the operation has written
+        anything, and the full payload size once it has reached its goal
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT size_t getBytesSent() const;
+
 private:
     SimpleRefHolder<SimpleValueQoreNode> data;
     const char* buf;

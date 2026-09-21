@@ -2444,7 +2444,8 @@ bool BCNode::runtimeIsPrivateMember(const char* str, bool toplevel) const {
     return sclass->priv->runtimeIsPrivateMemberIntern(str, false);
 }
 
-QoreValue BCNode::parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found, const qore_class_private* class_ctx, bool allow_internal) const {
+QoreValue BCNode::parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+        const qore_class_private* class_ctx, bool allow_internal, const QoreProgramLocation* consumer_loc) const {
     // sclass can be 0 if the class could not be found during parse initialization
     if (!sclass)
         return QoreValue();
@@ -2452,7 +2453,7 @@ QoreValue BCNode::parseFindConstantValue(const char* cname, const QoreTypeInfo*&
     if (access >= Internal && !allow_internal)
         return QoreValue();
 
-    return sclass->priv->parseFindConstantValueIntern(cname, typeInfo, found, class_ctx);
+    return sclass->priv->parseFindConstantValueIntern(cname, typeInfo, found, class_ctx, consumer_loc);
 }
 
 bool BCNode::parseCheckHierarchy(const QoreClass* cls, ClassAccess& n_access, bool toplevel) const {
@@ -2847,12 +2848,13 @@ void BCList::resolveCopy() {
     sml.resolveCopy();
 }
 
-QoreValue BCList::parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found, const qore_class_private* class_ctx, bool allow_internal) const {
+QoreValue BCList::parseFindConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+        const qore_class_private* class_ctx, bool allow_internal, const QoreProgramLocation* consumer_loc) const {
     if (!valid)
         return QoreValue();
 
     for (auto& i : *this) {
-       QoreValue rv = (*i).parseFindConstantValue(cname, typeInfo, found, class_ctx, allow_internal);
+       QoreValue rv = (*i).parseFindConstantValue(cname, typeInfo, found, class_ctx, allow_internal, consumer_loc);
        if (found)
            return rv;
     }
@@ -3580,13 +3582,13 @@ const QoreMethod* qore_class_private::parseResolveSelfMethodIntern(const QorePro
 }
 
 QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, const QoreTypeInfo*& cTypeInfo,
-        bool& found, const qore_class_private* class_ctx) {
+        bool& found, const qore_class_private* class_ctx, const QoreProgramLocation* consumer_loc) {
     // issue #4967: initializing all class constants here would result in recursive constant definition exceptions
     // being raised
     // check constant list
     ClassAccess access = Public;
     // NOTE: the following function call will initialize any constant found
-    QoreValue rv = constlist.find(cname, cTypeInfo, access, found);
+    QoreValue rv = constlist.find(cname, cTypeInfo, access, found, consumer_loc);
 
     // check for accessibility to private constants
     if (found) {
@@ -3605,7 +3607,9 @@ QoreValue qore_class_private::parseFindConstantValueIntern(const char* cname, co
         }
     }
 
-    return scl ? scl->parseFindConstantValue(cname, cTypeInfo, found, class_ctx, class_ctx == this) : QoreValue();
+    return scl
+        ? scl->parseFindConstantValue(cname, cTypeInfo, found, class_ctx, class_ctx == this, consumer_loc)
+        : QoreValue();
 }
 
 int qore_class_private::parseCheckClassHierarchyMembers(const char* mname, const QoreMemberInfo& b_mi,

@@ -1,0 +1,300 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTOpaqueReferenceOwnershipTest
+
+# Regression tests that the opaque reference assignment operator '@=' keeps its target in every
+# execution tier, not only in the AST interpreter.
+#
+# '@=' assigns a strong reference that the deterministic garbage collector does not follow: owned
+# like '=', invisible to a scan like ':='.  The ownership is the whole difference between it and
+# ':=', and the difference cannot be recovered from a boolean -- which is exactly how it was lost.
+# Five separate places narrowed the three-valued AssignmentMode to "is it Normal?" and then stored
+# whatever was not Normal as a weak reference:
+#
+#   - the IR interpreter's StoreLocal passed a literal AssignmentMode::Weak to LValueHelper::assign()
+#   - the LLVM lowering called qore_rt_make_weak_value() for any non-Normal StoreLocal, StoreGlobal,
+#     StoreThreadLocal and StoreClosure
+#   - the LLVM lowering passed `mode != Normal ? 1 : 0` to qore_rt_self_member_assign(), which then
+#     read it back through assignment_mode_from_weak()
+#   - the source-stripped AOT slot identity wrote `mode != Normal ? 1 : 0` for LValuePathAssign
+#
+# The result is silent: an object whose only reference is opaque is destroyed at the assignment, so
+# the member reads back as NOTHING or throws OBJECT-ALREADY-DELETED on the next call, with nothing
+# pointing at the assignment that caused it.  A table description held this way made
+# SqlUtil::AbstractTable::describe() fail on every table with
+# "RUNTIME-TYPE-ERROR: <return statement> expects type 'object<Columns>', but got no value instead".
+#
+# WHY THIS TEST RUNS THE TIERS RATHER THAN ASSERTING IN ONE PROCESS.
+# examples/test/qore/misc/dgc-opaque-references.qtest already covers the operator's semantics, but it
+# runs interpreted, and the AST interpreter was the one tier that was always correct.  The only way to
+# catch a lowering that drops ownership is to execute the same source in each tier and compare, so
+# every case here runs under --exec-mode=ast, ir, jit and tiered AND AOT-compiled with qcc, and
+# asserts all five agree.  ast is the reference: it is the tier the operator was specified against.
+#
+# THE LVALUE KINDS BELOW ARE LOAD-BEARING.  Each one reaches a different store path, and the defects
+# were not all in the same one:
+#
+#   self member     compiles to a direct self-member store (qore_rt_self_member_assign) -- the path
+#                   the original report hit, and the only one an AOT'd .qo of the reproducer used
+#   object member   compiles to LValuePathAssign through the AOT slot identity table
+#   local variable  broken in ir/jit/tiered as well as AOT -- i.e. under the %modern default
+#   global variable
+#   closure variable
+#   hash key        the shape dgc-opaque-references.qtest already covers, kept here as the control
+#                   that was passing before the fix
+#
+# Each case is written so the opaque reference is the ONLY reference to its target: a second
+# ordinary reference held by the caller masks the bug completely, because that reference keeps the
+# object alive and the read succeeds whether or not the opaque one contributes ownership.  The
+# "caller holds another reference" case is included for exactly that reason -- it must pass both
+# before and after the fix, and it proves the failing cases are about ownership and not about
+# reading an opaque value back.
+class AOTOpaqueReferenceOwnershipTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! The execution tiers the same source must agree on; "ast" is the reference tier
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! A target that reports its own destruction, so a lost reference is visible in the output
+        /** The count is a static class variable rather than an object member so that counting
+            destructions does not add a reference out of the object under test.
+        */
+        const TargetClass = "%allow-opaque-references
+class Target {
+    public {
+        int x;
+        static int destroyed = 0;
+    }
+
+    constructor(int n) {
+        x = n;
+    }
+
+    int get() {
+        return x;
+    }
+
+    destructor() {
+        ++Target::destroyed;
+    }
+}
+
+class Holder {
+    public {
+        *Target m;
+    }
+
+    setSole() {
+        # the opaque reference is the only reference to the new object
+        m @= new Target(1);
+    }
+
+    setShared(Target t) {
+        # the caller holds an ordinary reference as well
+        m @= t;
+    }
+
+    *Target get() {
+        return m;
+    }
+}
+
+our *Target global_target;
+
+#! Prints \"<name>=<value read back>/<destructions so far>\"
+sub report(string name, auto value) {
+    printf(\"%s=%y/%d\\n\", name, value, Target::destroyed);
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTOpaqueReferenceOwnershipTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a sole opaque reference to a self member survives every tier", \testSelfMember());
+        addTestCase("a sole opaque reference to another object's member survives every tier",
+            \testObjectMember());
+        addTestCase("a sole opaque reference in a local variable survives every tier", \testLocalVar());
+        addTestCase("a sole opaque reference in a global variable survives every tier", \testGlobalVar());
+        addTestCase("a sole opaque reference in a closure variable survives every tier",
+            \testClosureVar());
+        addTestCase("a sole opaque reference in a hash key survives every tier", \testHashKey());
+        addTestCase("a second ordinary reference keeps the target alive in every tier",
+            \testSharedReference());
+        addTestCase("overwriting an opaque reference releases the old target in every tier",
+            \testOverwriteReleases());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Runs \a body in every execution tier and AOT-compiled, and checks they all agree with \a expected
+    /** @param name the lvalue kind under test, used in assertion messages and the temp dir name
+        @param body the statements exercising '@=', appended to TargetClass
+        @param expected the exact stdout the source must produce, which is what the AST tier produces
+
+        The AST tier's own output is asserted against \a expected first: without that the comparison
+        would pass if every tier were broken in the same way, and it also pins the semantics the
+        operator is specified to have rather than whatever the reference tier happens to do.
+    */
+    private checkAllTiers(string name, string body, string expected) {
+        TmpDir tmp("qore-aot-opaque-ownership-" + name + "-");
+        string src_path = tmp.path + "/opaque.qr";
+        writeFile(src_path, TargetClass + body);
+
+        # -b disables signal handling, which valgrind and some CI runners need
+        string qore_env = sprintf("LD_LIBRARY_PATH=%s", libqore_dir);
+        hash<auto> tier_output;
+        foreach string mode in (ExecModes) {
+            string out = run(sprintf("%s %s -b --enable-debug --exec-mode=%s %s",
+                qore_env, qore_bin, mode, src_path));
+            tier_output{mode} = out;
+        }
+
+        assertEq(expected, tier_output.ast,
+            name + ": the AST tier produces the specified result: " + tier_output.ast);
+        foreach string mode in (ExecModes) {
+            if (mode == "ast") {
+                continue;
+            }
+            assertEq(tier_output.ast, tier_output{mode},
+                sprintf("%s: the %s tier agrees with the AST tier: %s", name, mode,
+                    tier_output{mode}));
+        }
+
+        # AOT: the tier every .qmod and every Qorus module actually uses
+        string exe_path = tmp.path + "/opaque";
+        string compile_out = run(sprintf("%s QORE_LIBDIR=%s %s -o %s %s",
+            qore_env, libqore_dir, qcc_bin, exe_path, src_path));
+        assertTrue(is_file(exe_path), name + ": the source compiles with qcc: " + compile_out);
+        string aot_out = run(sprintf("%s %s", qore_env, exe_path));
+        assertEq(tier_output.ast, aot_out,
+            name + ": the AOT-compiled program agrees with the AST tier: " + aot_out);
+    }
+
+    #! `self.m @= new Target(1)` inside a method — the direct self-member store
+    testSelfMember() {
+        checkAllTiers("self-member", "sub t() {
+    Holder h();
+    h.setSole();
+    report(\"sole\", h.get() ? h.get().get() : NOTHING);
+}
+t();
+", "sole=1/0\n");
+    }
+
+    #! `h.m @= new Target(1)` from outside the class — LValuePathAssign
+    testObjectMember() {
+        checkAllTiers("object-member", "sub t() {
+    Holder h();
+    h.m @= new Target(2);
+    report(\"member\", h.m ? h.m.get() : NOTHING);
+}
+t();
+", "member=2/0\n");
+    }
+
+    #! `l @= new Target(3)` — StoreLocal, which was also wrong in ir, jit and tiered
+    testLocalVar() {
+        checkAllTiers("local-var", "sub t() {
+    *Target l;
+    l @= new Target(3);
+    report(\"local\", l ? l.get() : NOTHING);
+}
+t();
+", "local=3/0\n");
+    }
+
+    #! `global_target @= new Target(4)` — StoreGlobal
+    testGlobalVar() {
+        checkAllTiers("global-var", "sub t() {
+    global_target @= new Target(4);
+    report(\"global\", global_target ? global_target.get() : NOTHING);
+}
+t();
+", "global=4/0\n");
+    }
+
+    #! `c @= new Target(5)` where a closure captures c — StoreClosure
+    testClosureVar() {
+        checkAllTiers("closure-var", "sub t() {
+    *Target c;
+    code read = sub () {
+        report(\"closure\", c ? c.get() : NOTHING);
+    };
+    c @= new Target(5);
+    read();
+}
+t();
+", "closure=5/0\n");
+    }
+
+    #! `h{\"k\"} @= new Target(6)` — the case that was already correct, kept as the control
+    testHashKey() {
+        checkAllTiers("hash-key", "sub t() {
+    hash<auto> h;
+    h{\"k\"} @= new Target(6);
+    report(\"hash\", h.k ? h.k.get() : NOTHING);
+}
+t();
+", "hash=6/0\n");
+    }
+
+    #! A second ordinary reference masks the bug, so this passed before the fix as well
+    /** Its value is the contrast: it proves the other cases fail because the opaque reference
+        contributes no ownership, and not because an opaque value cannot be read back.
+    */
+    testSharedReference() {
+        checkAllTiers("shared-reference", "sub t() {
+    Holder h();
+    Target owned(7);
+    h.setShared(owned);
+    report(\"shared\", h.get() ? h.get().get() : NOTHING);
+}
+t();
+", "shared=7/0\n");
+    }
+
+    #! Releasing the opaque reference must release the target — the other half of ownership
+    /** A fix that made '@=' behave like '=' but never released would pass every case above and leak.
+        Overwriting the only opaque reference to an object must run its destructor immediately, which
+        the destruction count in the second field of each line reports.
+    */
+    testOverwriteReleases() {
+        checkAllTiers("overwrite-releases", "sub t() {
+    Holder h();
+    h.setSole();
+    report(\"before\", h.get() ? h.get().get() : NOTHING);
+    h.m @= new Target(8);
+    report(\"after\", h.get() ? h.get().get() : NOTHING);
+    h.m = NOTHING;
+    report(\"cleared\", h.get() ? h.get().get() : NOTHING);
+}
+t();
+", "before=1/0\nafter=8/1\ncleared=null/2\n");
+    }
+}

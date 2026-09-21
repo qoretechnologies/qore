@@ -211,6 +211,7 @@ module.exports = grammar({
         // Other common directives
         '%strict-args',
         '%allow-weak-references',
+        '%allow-opaque-references',
         '%no-global-vars',
         '%no-child-restrictions',
         '%no-typedef',
@@ -593,7 +594,7 @@ module.exports = grammar({
     // SCOPED_REF names for our and thread_local
     _scoped_variable_declarator: $ => seq(
       field('name', $.scoped_identifier),
-      optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
+      optional(seq(choice('=', '+=', ':=', '@='), field('value', $._expression))),
     ),
 
     variable_declarator: $ => variableDeclarator($, $._declared_name),
@@ -950,7 +951,10 @@ module.exports = grammar({
       field('operator', choice(
         '=', '+=', '-=', '*=', '/=', '%=',
         '&=', '|=', '^=', '<<=', '>>=',
-        ':=',
+        // ':=' is the weak assignment operator and '@=' the opaque one; both are accepted
+        // by the core parser, so both have to be accepted here or qdx cannot parse a file
+        // that uses them and the documentation build fails
+        ':=', '@=',
       )),
       field('right', $._expression),
     )),
@@ -1791,14 +1795,14 @@ function variableDeclarator($, name) {
   return choice(
     seq(
       field('name', $.variable_name),
-      optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
+      optional(seq(choice('=', '+=', ':=', '@='), field('value', $._expression))),
     ),
     // Object construction: identifier(args) or just identifier
     // Also: hash member init: hash sd.type = 'event'
     seq(
       field('name', name),
       optional(choice(
-        seq(choice('=', '+=', ':='), field('value', $._expression)),
+        seq(choice('=', '+=', ':=', '@='), field('value', $._expression)),
         $.argument_list,  // Constructor arguments
         // Hash member init via dot notation: hash sd.member = value
         // Also supports dynamic member: hash rv.(expr) = value

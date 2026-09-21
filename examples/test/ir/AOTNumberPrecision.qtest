@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTNumberPrecisionTest
+
+#! A number is its digits AND the precision it was computed at.
+/** An AOT object recorded only the digits, and rebuilt the value with `QoreNumberNode(const char*)`, which
+    derives a precision from the string LENGTH (`strlen * 5`).  A folded constant therefore came back at a
+    precision decided by how wide it happened to print -- `2n / 3n` prints 81 characters, so it returned at
+    405 bits where every other execution mode computes it at 256 -- and compared UNEQUAL to the same value
+    computed at run time.
+
+    The failure is easy to misread: both operands display identically and their difference prints as `-0`,
+    which looks like a formatting quirk rather than a different number.  `prec()` is what separates them,
+    so these tests assert on it directly as well as on the equality that failed.
+
+    Every case is asserted by running the SAME source in every execution mode and requiring identical
+    output.  That is deliberate: the defect was invisible to any single mode, and pinning expected digits
+    here would just move the guess into the test.  See issue #5461.
+*/
+class AOTNumberPrecisionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! Shapes that reach a serialized number by a different route in the object.
+        const Probe = "%modern
+number sub runtime_rate(int matching, int population) { return number(matching) / number(population); }
+
+class NumHolder {
+    public {
+        const ClassRatio = 2n / 3n;
+    }
+}
+
+const TopRatio = 2n / 3n;
+const NumList = (2n / 3n, 1n / 7n);
+const NumHash = {\"ratio\": 2n / 3n};
+
+number global_ratio = 2n / 3n;
+
+# the reported shape: a folded constant against the same value computed from runtime integers
+number expected = 2n / 3n;
+number actual = runtime_rate(2, 3);
+printf(\"equal=%y\\n\", expected == actual);
+printf(\"diff-sign=%d\\n\", (expected - actual).sign());
+
+# the precision each route carries
+printf(\"prec-folded=%d\\n\", expected.prec());
+printf(\"prec-runtime=%d\\n\", actual.prec());
+printf(\"prec-top=%d\\n\", TopRatio.prec());
+printf(\"prec-class=%d\\n\", NumHolder::ClassRatio.prec());
+printf(\"prec-global=%d\\n\", global_ratio.prec());
+printf(\"prec-list=%d\\n\", NumList[0].prec());
+printf(\"prec-hash=%d\\n\", NumHash.ratio.prec());
+
+# the exact binary value each route carries
+printf(\"rt-folded=%s\\n\", expected.toStringRoundTrip());
+printf(\"rt-top=%s\\n\", TopRatio.toStringRoundTrip());
+printf(\"rt-class=%s\\n\", NumHolder::ClassRatio.toStringRoundTrip());
+printf(\"rt-list=%s\\n\", NumList[0].toStringRoundTrip());
+
+# every constant route must agree with the value computed at run time
+printf(\"top-eq=%y class-eq=%y global-eq=%y list-eq=%y hash-eq=%y\\n\",
+    TopRatio == actual, NumHolder::ClassRatio == actual, global_ratio == actual,
+    NumList[0] == actual, NumHash.ratio == actual);
+
+# edge values: signed zero and the specials must survive the round trip
+const Zero = 0n;
+const NegZero = -0n;
+const Nan = number(\"nan\");
+const Inf = number(\"inf\");
+const NegInf = number(\"-inf\");
+printf(\"zero=%s negzero=%s zero-sign=%d negzero-sign=%d\\n\",
+    Zero.toStringRoundTrip(), NegZero.toStringRoundTrip(), Zero.sign(), NegZero.sign());
+printf(\"nan=%s inf=%s neginf=%s\\n\", Nan.toString(), Inf.toString(), NegInf.toString());
+printf(\"rt-nan=%s rt-inf=%s rt-neginf=%s\\n\",
+    Nan.toStringRoundTrip(), Inf.toStringRoundTrip(), NegInf.toStringRoundTrip());
+# a number at the default precision must not be widened either
+printf(\"prec-default=%d\\n\", (1n).prec());
+";
+    }
+
+    constructor() : QUnit::Test("AOTNumberPrecisionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("an AOT-folded number equals the same value computed at run time",
+            \testFoldedNumberEqualsRuntimeValue());
+        addTestCase("every execution mode agrees on a serialized number",
+            \testAllExecutionModesAgree());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote("{ " + cmd + "; } 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+        f.close();
+    }
+
+    #! Runs the probe in \a mode and returns its output.
+    private string runMode(string source, string mode) {
+        return run(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s",
+            libqore_dir, qore_bin, mode, source));
+    }
+
+    #! Compiles the probe with ordinary optimized qcc and returns the executable's output.
+    private string runAot(string source, string out) {
+        string compile = run(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s",
+            libqore_dir, libqore_dir, qcc_bin, out, source));
+        assertTrue(is_file(out), "the probe compiles to an AOT executable: " + compile);
+        return run(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, out));
+    }
+
+    #! The reported failure: the folded constant compared unequal to the runtime value under AOT only.
+    testFoldedNumberEqualsRuntimeValue() {
+        TmpDir tmp("qore-aot-number-precision-");
+        string source = tmp.path + "/probe.qr";
+        write(source, Probe);
+        string aot = runAot(source, tmp.path + "/probe-aot");
+
+        assertTrue(aot.find("equal=True") != -1,
+            "the AOT-folded constant equals the value computed at run time: " + aot);
+        assertTrue(aot.find("top-eq=True class-eq=True global-eq=True list-eq=True hash-eq=True") != -1,
+            "every route to a folded number agrees with the runtime value: " + aot);
+        # the precision is what actually differed; assert it rather than only the equality it broke
+        *list<*string> folded = aot.regexExtract("prec-folded=([0-9]+)");
+        *list<*string> runtime = aot.regexExtract("prec-runtime=([0-9]+)");
+        assertEq(runtime[0], folded[0],
+            "the folded constant keeps the precision it was computed at: " + aot);
+    }
+
+    #! No single mode could see this defect, so the assertion is that they all agree.
+    testAllExecutionModesAgree() {
+        TmpDir tmp("qore-aot-number-precision-modes-");
+        string source = tmp.path + "/probe.qr";
+        write(source, Probe);
+
+        string ast = runMode(source, "ast");
+        assertTrue(ast.find("equal=True") != -1, "the interpreter agrees with itself: " + ast);
+        foreach string mode in (("ir", "jit")) {
+            assertEq(ast, runMode(source, mode),
+                mode + " produces the same numbers as the interpreter");
+        }
+        assertEq(ast, runAot(source, tmp.path + "/probe-aot"),
+            "the AOT executable produces the same numbers as the interpreter");
+    }
+}

@@ -133,9 +133,14 @@ static bool write_slot_GLOBAL_VARREF(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! CONST_NUMBER: ref1 = string representation
+//! CONST_NUMBER: ref1 = string representation, ref2 = precision (from QORE_AOT_NUMBER_PRECISION_VERSION)
+/** The precision is not decoration: QoreNumberNode(const char*) derives one from the string LENGTH, so
+    digits alone rebuild a number that differs from the one the value was computed at.  See issue #5461.
+    Readers of an older artifact see one stringref here and keep the old behaviour.
+*/
 static bool write_slot_CONST_NUMBER(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
     return true;
 }
 

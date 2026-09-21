@@ -1,0 +1,168 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+
+%exec-class TieredCacheConcurrencyTest
+
+# Number of threads hammering each call site at once.  The point is to have several
+# threads inside the tiered-promotion window simultaneously, so this must be > 1.
+const NUM_THREADS = 8;
+# Comfortably past both the IR (100) and JIT (1000) promotion thresholds, so every call
+# site below is promoted while the other threads are already executing it.
+const ITERATIONS = 2500;
+
+int sub tcc_add(int a, int b) {
+    return a + b;
+}
+
+int sub tcc_scale(int v) {
+    return v * 3 - 1;
+}
+
+class TccBase {
+    private:internal {
+        int base;
+    }
+
+    constructor(int n) {
+        base = n;
+    }
+
+    int value() {
+        return base;
+    }
+
+    int blend(int v) {
+        return v * 2 + base;
+    }
+
+    static int combine(int a, int b) {
+        return a * 5 - b;
+    }
+}
+
+class TccOther inherits TccBase {
+    constructor(int n) : TccBase(n + 1) {
+    }
+
+    int blend(int v) {
+        return v * 4 + value();
+    }
+}
+
+class TieredCacheConcurrencyTest inherits QUnit::Test {
+    constructor() : QUnit::Test("TieredCacheConcurrencyTest", "1.0", \ARGV) {
+        addTestCase("concurrent tier promotion keeps dispatch correct", \testConcurrentPromotion());
+        addTestCase("concurrent polymorphic dispatch keeps dispatch correct", \testConcurrentPolymorphicDispatch());
+        set_return_value(main());
+    }
+
+    # Each call site below is resolved and memoized into shared state the first time it
+    # executes (the variant's IR body, and the interpreter's per-instruction inline call
+    # cache).  Driving every thread through the same sites at once exercises that
+    # publication: a torn or stale cache dispatches to the wrong body, which shows up here
+    # as a wrong checksum rather than as a crash.  A race is timing-dependent, so this is a
+    # stress harness rather than a deterministic reproducer — run it under ThreadSanitizer
+    # to prove the absence of the race itself.
+    private static int workload() {
+        int sum = 0;
+        TccBase obj(7);
+        for (int i = 0; i < ITERATIONS; ++i) {
+            sum += tcc_add(i, 1);
+            sum += tcc_scale(i);
+            sum += obj.blend(i);
+            sum += TccBase::combine(i, 2);
+        }
+        return sum;
+    }
+
+    # Alternating receiver classes keep the dot-eval inline cache from settling on a single
+    # receiver, so the resolution path runs on every call instead of only the first one.
+    private static int polymorphicWorkload() {
+        int sum = 0;
+        TccBase first(3);
+        TccOther second(3);
+        for (int i = 0; i < ITERATIONS; ++i) {
+            TccBase obj = i % 2 ? second : first;
+            sum += obj.blend(i);
+            sum += obj.value();
+        }
+        return sum;
+    }
+
+    private static int expectedWorkload() {
+        int sum = 0;
+        for (int i = 0; i < ITERATIONS; ++i) {
+            sum += i + 1;
+            sum += i * 3 - 1;
+            sum += i * 2 + 7;
+            sum += i * 5 - 2;
+        }
+        return sum;
+    }
+
+    private static int expectedPolymorphicWorkload() {
+        int sum = 0;
+        for (int i = 0; i < ITERATIONS; ++i) {
+            sum += i % 2 ? i * 4 + 4 : i * 2 + 3;
+            sum += i % 2 ? 4 : 3;
+        }
+        return sum;
+    }
+
+    # Runs @ref body on NUM_THREADS threads released together, and returns every result.
+    private list<int> runConcurrently(code<int()> body) {
+        Counter gate(1);
+        Counter running(NUM_THREADS);
+        Queue results();
+        for (int t = 0; t < NUM_THREADS; ++t) {
+            background sub () {
+                on_exit running.dec();
+                # release all threads at once so they promote the same call sites together
+                gate.waitForZero();
+                results.push(body());
+            }();
+        }
+        gate.dec();
+        running.waitForZero();
+
+        list<int> rv = ();
+        for (int t = 0; t < NUM_THREADS; ++t) {
+            rv += results.get();
+        }
+        return rv;
+    }
+
+    testConcurrentPromotion() {
+        int expected = expectedWorkload();
+        # guard the expectation itself: a workload that computed nothing would pass vacuously
+        assertGt(0, expected, "workload produces a non-trivial checksum");
+        assertEq(expected, workload(), "single-threaded workload matches the expectation");
+
+        list<int> results = runConcurrently(\TieredCacheConcurrencyTest::workload());
+        assertEq(NUM_THREADS, results.size(), "every thread reported a result");
+        foreach int result in (results) {
+            assertEq(expected, result, "concurrent tier promotion preserved dispatch");
+        }
+    }
+
+    testConcurrentPolymorphicDispatch() {
+        int expected = expectedPolymorphicWorkload();
+        assertGt(0, expected, "polymorphic workload produces a non-trivial checksum");
+        assertEq(expected, polymorphicWorkload(),
+            "single-threaded polymorphic workload matches the expectation");
+
+        list<int> results = runConcurrently(\TieredCacheConcurrencyTest::polymorphicWorkload());
+        assertEq(NUM_THREADS, results.size(), "every thread reported a result");
+        foreach int result in (results) {
+            assertEq(expected, result, "concurrent polymorphic dispatch preserved resolution");
+        }
+    }
+}
