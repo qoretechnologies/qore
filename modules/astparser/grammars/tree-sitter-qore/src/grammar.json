@@ -461,6 +461,10 @@
             },
             {
               "type": "STRING",
+              "value": "%allow-opaque-references"
+            },
+            {
+              "type": "STRING",
               "value": "%no-global-vars"
             },
             {
@@ -2822,6 +2826,10 @@
                     {
                       "type": "STRING",
                       "value": ":="
+                    },
+                    {
+                      "type": "STRING",
+                      "value": "@="
                     }
                   ]
                 },
@@ -2876,6 +2884,10 @@
                         {
                           "type": "STRING",
                           "value": ":="
+                        },
+                        {
+                          "type": "STRING",
+                          "value": "@="
                         }
                       ]
                     },
@@ -2930,6 +2942,10 @@
                             {
                               "type": "STRING",
                               "value": ":="
+                            },
+                            {
+                              "type": "STRING",
+                              "value": "@="
                             }
                           ]
                         },
@@ -5244,6 +5260,10 @@
                 {
                   "type": "STRING",
                   "value": ":="
+                },
+                {
+                  "type": "STRING",
+                  "value": "@="
                 }
               ]
             }

@@ -137,6 +137,10 @@
             "named": false
           },
           {
+            "type": "@=",
+            "named": false
+          },
+          {
             "type": "^=",
             "named": false
           },
@@ -7133,6 +7137,10 @@
     "named": false
   },
   {
+    "type": "%allow-opaque-references",
+    "named": false
+  },
+  {
     "type": "%allow-reparse",
     "named": false
   },
@@ -7770,6 +7778,10 @@
   },
   {
     "type": "??",
+    "named": false
+  },
+  {
+    "type": "@=",
     "named": false
   },
   {
