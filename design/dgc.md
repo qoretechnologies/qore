@@ -82,6 +82,17 @@ container from a recursive set: the container's one physical reference to an obj
 entirely internal, and the smaller set would be collected prematurely. Including the owner completes the
 cycle, and its real references keep `references > rcount`, preventing collection.
 
+**A deferred scan discards the recursive set recorded for the object, every time it is deferred.** Because a
+scan rooted elsewhere assigns a set to an object that has real references, a set can be attached between one
+deferred scan and the next, and it describes the graph as it was when that scan ran. `checkDeferScan()`
+therefore invalidates the set on each deferral rather than only on the first: a hub whose container is grown
+one entry at a time, while the hub is held by a real reference for each of those mutations, otherwise keeps
+the `rcount` it was given when the container was shortest. `RSet::canDelete()` reads the difference as a live
+reference from outside the set and returns 0 for the life of the object, so the cycle is never collected —
+`rref_wait` counts the invalidations in flight, because more than one thread can be making one at a time and
+the real references may only reach zero once the last has finished.
+`examples/test/qore/misc/dgc-deferred-scan-sets.qtest` covers it for list and hash containers.
+
 ### Watched nodes
 
 Releasing an outside reference to a list, hash, closure or reference in a recursive set does not dereference any
@@ -652,3 +663,5 @@ anything.
   keep the mark accurate, and collection through and around them.
 - `examples/test/qore/misc/dgc-unchanged-sets.qtest` — a scan that finds the set already in place leaves it,
   its watches and its counts alone.
+- `examples/test/qore/misc/dgc-deferred-scan-sets.qtest` — a container grown one entry at a time while its
+  holder has real references: every deferred scan discards the set recorded for the holder.

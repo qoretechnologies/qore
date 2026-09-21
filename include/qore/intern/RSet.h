@@ -148,11 +148,15 @@ public:
     bool deferred_scan;
     // do we need to call isValidImpl()?  set at construction and never written again
     bool needs_is_valid;
-    // rset invalidation in progress; written under rlck
-    bool rref_wait;
+    // the number of rset invalidations in progress; written under rlck
+    /** A count rather than a flag: a scan deferred while the object has real references invalidates the recursive
+        set recorded for it, and more than one thread can be doing that at once, so the real references may only
+        be released once the last of them has finished.
+    */
+    unsigned rref_wait;
 
     DLLLOCAL RObject(std::atomic_int& n_refs, bool niv = false) :
-        references(n_refs), deferred_scan(false), needs_is_valid(niv), rref_wait(false) {
+        references(n_refs), deferred_scan(false), needs_is_valid(niv), rref_wait(0) {
     }
 
     DLLLOCAL virtual ~RObject();

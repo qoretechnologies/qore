@@ -238,26 +238,29 @@ int RObject::checkDeferScan() {
                 rrefs.load());
             return 0;
         }
-        if (deferred_scan) {
-            printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d deferred_scan already set\n", this,
-                getName(), rrefs.load());
-            return -1;
-        }
-        printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d setting deferred_scan\n", this, getName(),
-            rrefs.load());
+        printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d deferring scan (already deferred: %d)\n",
+            this, getName(), rrefs.load(), (int)deferred_scan);
         deferred_scan = true;
-        // if there is no rset, we can return immediately, no rset can be attached while rrefs > 0
+        // A scan started at another object reaches this one and assigns it a recursive set even while rrefs > 0,
+        // so a set can be attached between one deferred scan and the next.  The graph has just changed again, so
+        // a set recorded here no longer describes it and has to go, however many scans were deferred before:
+        // returning early because deferred_scan was already set leaves such a set, and the rcount it recorded, in
+        // place for the life of the object, and RSet::canDelete() then reads rcount != references as a live
+        // reference from outside the set for ever.
         if (!rset)
             return -1;
         // otherwise we need to invalidate the rset and ensure that
         // rrefs does not go to zero until this is done
-        rref_wait = true;
+        ++rref_wait;
     }
 
     removeInvalidateRSet();
     AutoLocker al(rlck);
-    rref_wait = false;
-    if (rref_waiting)
+    // more than one thread can be invalidating at once, so the real references may only be released once the
+    // last of them has finished
+    assert(rref_wait);
+    --rref_wait;
+    if (!rref_wait && rref_waiting)
         rcond.broadcast();
 
     return -1;
