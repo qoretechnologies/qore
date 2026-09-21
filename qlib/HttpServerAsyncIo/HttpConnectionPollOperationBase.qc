@@ -35,6 +35,13 @@ public namespace HttpServerAsyncIo {
 public class HttpConnectionPollOperationBase inherits AbstractPollOperation<auto> {
     private {
         #! Controller for completion dispatch
+        /** Assigned with the opaque reference operator \c "@=": the reference is owned as
+            normally, but the collector does not follow it.  The controller registers this
+            operation for the life of the connection and removes it on close, so nothing
+            reachable only through this edge can ever be collectable - while the controller is
+            reachable, so is everything it registers.  Following it made every dereference of an
+            operation scan the controller's entire graph.
+        */
         *HttpAsyncSocketIoController completion_controller;
 
         #! Connection unique hash for result correlation
@@ -64,7 +71,13 @@ public class HttpConnectionPollOperationBase inherits AbstractPollOperation<auto
     */
     setCompletionContext(HttpAsyncSocketIoController controller, string uh, string state,
             *HttpAsyncTarget target) {
-        completion_controller = controller;
+        # The controller owns this operation for as long as the connection is registered, and
+        # removes it on close, so this back-reference can never hold a collectable cycle: while
+        # the controller is reachable, everything it registers is reachable with it.  A scan
+        # rooted at an operation would otherwise walk the controller's entire graph - every
+        # listener, every other connection, the handler pool and the logger - on every
+        # dereference, which is what made concurrent accepts serialize on cycle scans.
+        completion_controller @= controller;
         completion_uh = uh;
         completion_state = state;
         completion_target = target;

@@ -50,6 +50,11 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
         auto key;
 
         #! Controller for completion callback
+        /** Assigned with the opaque reference operator \c "@=" - see
+            @ref HttpServerAsyncIo::HttpConnectionPollOperationBase::completion_controller
+            "HttpConnectionPollOperationBase::completion_controller" for why the collector must
+            not follow an operation's reference back to its controller.
+        */
         *HttpAsyncSocketIoController completion_controller;
 
         #! Listener socket for completion callback
@@ -169,7 +174,13 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
     */
     nothing setCompletionContext(HttpAsyncSocketIoController controller, Socket listener,
             HttpAsyncTarget target, string http_version, string owner) {
-        completion_controller = controller;
+        # The controller owns this operation for as long as the connection is registered, and
+        # removes it on close, so this back-reference can never hold a collectable cycle: while
+        # the controller is reachable, everything it registers is reachable with it.  A scan
+        # rooted at an operation would otherwise walk the controller's entire graph - every
+        # listener, every other connection, the handler pool and the logger - on every
+        # dereference, which is what made concurrent accepts serialize on cycle scans.
+        completion_controller @= controller;
         completion_listener = listener;
         completion_target = target;
         completion_http_version = http_version;
