@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class DivisionUnknownOperandTypesTest
+
+# issue #5462: the '/' operator reported the divisor's type as the type of the division expression
+# whenever either operand's type was unknown at parse time.  Every optimized execution tier selects its
+# arithmetic opcode from that parse-time type, so "<unknown> / int" was typed "int" and an enclosing
+# multiplication by an int ran as integer arithmetic, truncating the quotient to 0.  Only the AST
+# evaluator was correct, so this test pins every tier to the AST result, and to the expected value, so
+# that a uniformly wrong answer cannot pass.
+class DivisionUnknownOperandTypesTest inherits QUnit::Test {
+    public {
+        const ExpectedOutput = "200|number|200|number|200|number|200|200|integer|float|number\n";
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("DivisionUnknownOperandTypesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("all execution modes agree", \testExecutionModes());
+        addTestCase("AOT agrees", \testAot());
+
+        set_return_value(main());
+    }
+
+    private string sourceCode() {
+        return "%modern
+const GB_DAY = 1073741824 * 86400;
+
+# the parse-time type of a pseudo-method call on an \"auto\" value is unknown, because a user-defined
+# method of the same name on an object receiver takes precedence over the pseudo-method
+number sub priced(auto bytes, int rate) {
+    return bytes.toNumber() / GB_DAY * rate;
+}
+
+int sub main() {
+    auto v = 927712935936;
+    int rate = 20000;
+    auto one = 1;
+    int mult = 800;
+    float fdiv = 92771293593600.0;
+    number ndiv = 92771293593600n;
+
+    # the expression from the issue report, at the top level and in a function body
+    printf(\"%y|%s|\", v.toNumber() / GB_DAY * rate, (v.toNumber() / GB_DAY * rate).type());
+    printf(\"%y|%s|\", priced(v, rate), priced(v, rate).type());
+    # 1 / 4 is exact in binary floating point; before the fix this was (int)0.25 * 800 == 0
+    printf(\"%y|%s|\", (one.toNumber() / 4) * mult, ((one.toNumber() / 4) * mult).type());
+    # the leaked type was the divisor's, so a float divisor failed differently from an int divisor
+    printf(\"%y|%y|\", (v.toNumber() / fdiv) * rate, (v.toNumber() / ndiv) * rate);
+    # the result type of a division with an unknown operand follows the runtime operands
+    printf(\"%s|%s|%s\\n\", (one / 2).type(), (one / 2.0).type(), (one / 2n).type());
+    return 0;
+}
+
+main();
+";
+    }
+
+    private string writeSource(string dir) {
+        string path = dir + "/division-unknown-operand-types.qr";
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sourceCode());
+        f.close();
+        return path;
+    }
+
+    private string run(string cmd) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, cmd));
+    }
+
+    testExecutionModes() {
+        TmpDir tmp("qore-division-unknown-operand-types-");
+        string source = writeSource(tmp.path);
+
+        string ast = run(sprintf("%s --exec-mode=ast %s", qore_bin, source));
+        # pin the reference itself, so that a uniformly wrong result in every tier cannot pass
+        assertEq(ExpectedOutput, ast, "ast");
+
+        foreach string mode in (("ir", "jit", "tiered")) {
+            assertEq(ast, run(sprintf("%s --exec-mode=%s %s", qore_bin, mode, source)), mode);
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null || true").val()) {
+            testSkip("qcc is not available");
+        }
+
+        TmpDir tmp("qore-division-unknown-operand-types-aot-");
+        string source = writeSource(tmp.path);
+        string exe = tmp.path + "/division-unknown-operand-types";
+
+        string compile = run(sprintf("%s -O3 -o %s %s", qcc_bin, exe, source));
+        assertTrue(is_file(exe), "qcc compiled the test program: " + compile);
+        assertEq(ExpectedOutput, run(exe), "aot");
+    }
+}

@@ -40,6 +40,10 @@ class InjBaseClass {}
 class InjChildClass inherits InjBaseClass {}
 class InjProxyClass inherits InjBaseClass {}
 
+# issue #5462: int constants used as divisors by the division-operator regression test
+const DIV_GB_DAY = 1073741824 * 86400;
+const DIV_INT_DIVISOR = 92771293593600;
+
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("operators", "1.0", \ARGV) {
         addTestCase("minor hash test", \minusHashTest());
@@ -65,6 +69,7 @@ class Test inherits QUnit::Test {
         addTestCase("absolute", \absolute());
         addTestCase("plus", \plus());
         addTestCase("minus", \minus());
+        addTestCase("division with unknown operand types", \divisionUnknownOperandType());
         addTestCase("range test", \rangeAndSlice());
         addTestCase("push & += tests", \pushPlusEqualsTests());
         addTestCase("NULL += lvalue tests", \nullPlusEqualsLValueTests());
@@ -1106,6 +1111,150 @@ class Test inherits QUnit::Test {
         assertEq(True, True - NOTHING);
         assertEq(NOTHING, False - NULL);
         assertEq(NULL, NULL - NOTHING);
+    }
+
+    # issue #5462: the '/' operator used to report the DIVISOR's type as the type of the division
+    # expression whenever either operand's type was unknown at parse time, because the result type was
+    # written into the parse context, which still held the right-hand side's type.  Every optimized
+    # execution tier (IR, JIT, AOT) selects its arithmetic opcode from that type, so
+    # "<unknown> / int" was typed "int" and the enclosing multiplication ran as integer arithmetic,
+    # truncating the number to 0.  The AST evaluator was unaffected, so this only showed up in %modern
+    # code.
+    # issue #5462: the '/' operator reported the DIVISOR's type as the type of the division expression
+    # whenever either operand's type was unknown at parse time, because the result type was written into
+    # the parse context, which still held the right-hand side's type.  Every optimized execution tier
+    # (IR, JIT and AOT) selects its arithmetic opcode from that type, so "<unknown> / int" was typed
+    # "int" and an enclosing multiplication by an int ran as integer arithmetic, truncating the quotient
+    # to 0.  The AST evaluator was unaffected, which is why this only showed up in %modern code.
+    divisionUnknownOperandType() {
+        # a pseudo-method call on an "auto" value has no parse-time type, because a user-defined method
+        # of the same name on an object receiver takes precedence over the pseudo-method
+        auto one = 1;
+        int mult = 800;
+        # 1 / 4 is exact in binary floating point, so the product can be compared exactly; before the
+        # fix this was (int)0.25 * 800 == 0, typed "integer"
+        assertEq(200n, (one.toNumber() / 4) * mult);
+        assertEq("number", ((one.toNumber() / 4) * mult).type());
+        assertEq(200n, one.toNumber() / 4 * mult);
+
+        # the expression from the issue report; a decimal quotient like 0.01 is not exact in binary
+        # floating point, so the product is compared with a tolerance
+        auto v = 927712935936;
+        int rate = 20000;
+        assertNumberNear(200n, v.toNumber() / DIV_GB_DAY * rate, "issue 5462 unparenthesized");
+        assertNumberNear(200n, (v.toNumber() / DIV_GB_DAY) * rate, "issue 5462 parenthesized");
+        # the same expression in a function body, not only at the top level
+        assertNumberNear(200n, divisionHelper(v, rate), "issue 5462 in a function");
+
+        # the leaked type was always the divisor's type, so each divisor type failed differently: an int
+        # divisor produced integer multiplication (0), a float divisor produced float multiplication
+        # (200.0), and a number divisor happened to give the right answer
+        float fdiv = 92771293593600.0;
+        number ndiv = 92771293593600n;
+        assertNumberNear(200n, (v.toNumber() / DIV_INT_DIVISOR) * rate, "int divisor");
+        assertNumberNear(200n, (v.toNumber() / fdiv) * rate, "float divisor");
+        assertNumberNear(200n, (v.toNumber() / ndiv) * rate, "number divisor");
+
+        # shapes that never triggered the defect must keep working
+        number n = v.toNumber() / DIV_GB_DAY;
+        assertNumberNear(200n, n * rate, "number variable");
+        assertNumberNear(200n, 0.01n * rate, "number literal");
+        assertNumberNear(200n, v.toNumber() * rate / DIV_GB_DAY, "multiply before divide");
+        assertNumberNear(200n, 927712935936.toNumber() / DIV_GB_DAY * rate, "int literal receiver");
+        auto d = v.toNumber() / DIV_GB_DAY;
+        assertNumberNear(200n, d * rate, "quotient through an auto variable");
+
+        # an operand with an unknown type must not give the division the other operand's type; the
+        # result type is whatever the runtime operands produce
+        assertEq("integer", (one / 2).type());
+        assertEq("float", (one / 2.0).type());
+        assertEq("number", (one / 2n).type());
+        assertEq("integer", (4 / one).type());
+        assertEq("number", (4n / one).type());
+
+        # divisions with types known on both sides keep their parse-time types
+        int i = 4;
+        float f = 4.0;
+        number nm = 4n;
+        assertEq("integer", (i / 2).type());
+        assertEq("float", (f / 2.0).type());
+        assertEq("float", (i / 2.0).type());
+        assertEq("float", (f / 2).type());
+        assertEq("number", (nm / 2).type());
+        assertEq("number", (2 / nm).type());
+        assertEq("number", (nm / f).type());
+
+        # or-nothing, soft and non-numeric operand types resolve the same way in every tier; the last
+        # group exercises the "any other type is converted to a float" fall-through
+        *int oi = 4;
+        *float of = 4.0;
+        *number on = 4n;
+        softint si = 4;
+        assertEq("integer", (oi / 2).type());
+        assertEq("float", (of / 2).type());
+        assertEq("number", (on / 2).type());
+        assertEq("integer", (si / 2).type());
+        assertEq("integer", (i / oi).type());
+        assertEq("number", (one / on).type());
+        assertEq("integer", (oi / one).type());
+        assertEq("integer", (c'8' / 2).type());
+        assertEq("float", (True / 2).type());
+        assertEq("float", (2026-01-01 / 2).type());
+        assertEq("float", ("8" / 2).type());
+        # a NOTHING dividend or divisor converts to 0, so dividing by one raises
+        assertThrows("DIVISION-BY-ZERO", sub () {*int nz; auto r = 4 / nz; remove r;});
+
+        # a buffer on the other side of a number still gives a buffer, so the result type of a division
+        # with a number operand can only be assumed to be a number when the other side cannot be a buffer
+        buffer<int64> b = buffer<int64>::filled(size: 2, value: 10);
+        auto ab = b;
+        assertEq("buffer<decimal128>", (b / 2n).fullType());
+        assertEq("buffer<decimal128>", (ab / 2n).fullType());
+        assertEq("buffer<decimal128>", (2n / ab).fullType());
+
+        # division by zero still raises at runtime for every operand type
+        assertThrows("DIVISION-BY-ZERO", sub () {auto z = 0; auto r = 1 / z; remove r;});
+        assertThrows("DIVISION-BY-ZERO", sub () {int z = 0; auto r = 1 / z; remove r;});
+        assertThrows("DIVISION-BY-ZERO", sub () {float z = 0.0; auto r = 1 / z; remove r;});
+        assertThrows("DIVISION-BY-ZERO", sub () {number z = 0n; auto r = 1 / z; remove r;});
+
+        # ... folding both operands at parse time raises the runtime exception directly
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("DIVISION-BY-ZERO", "integer expression", \p.parse(), ("int i = 1 / 0;", "test"));
+        }
+        # ... and a parse-time-zero divisor with a runtime dividend is rejected while parsing
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", "division by zero", \p.parse(),
+                ("auto v = 1; int i = v / 0;", "test"));
+        }
+
+        # a division with an operand of unknown type must not be rejected at parse time on the strength
+        # of the divisor's type; that check belongs at runtime
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("auto v = 1; const C = 100; string s = v / C; return s;", "test");
+            assertThrows("RUNTIME-TYPE-ERROR", \p.run());
+        }
+        # the same assignment with both types known is still a parse-time error
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "type 'int'", \p.parse(),
+                ("int v = 1; const C = 100; string s = v / C;", "test"));
+        }
+    }
+
+    # "number" arithmetic is binary floating point, so decimal quotients are not exact; assert that the
+    # value is a number within a small tolerance of the expected value, which is what distinguishes a
+    # correct result from the integer-truncated 0 that issue #5462 produced
+    private assertNumberNear(number expected, auto actual, string label) {
+        assertEq("number", actual.type(), label + ": type");
+        assertLt(0.000001n, abs(actual - expected), label + ": value");
+    }
+
+    static number divisionHelper(auto v, int rate) {
+        return v.toNumber() / DIV_GB_DAY * rate;
     }
 
     multiplication() {

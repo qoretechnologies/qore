@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -111,28 +111,42 @@ int QoreDivisionOperatorNode::parseInitIntern(const char* name, QoreValue& val, 
     const QoreTypeInfo* bufferResultTypeInfo = qore_buffer_binary_op_type(lti, rti,
         QoreBufferBinaryOperation::Divide);
     if (bufferResultTypeInfo) {
-        parse_context.typeInfo = bufferResultTypeInfo;
         typeInfo = bufferResultTypeInfo;
+        parse_context.typeInfo = typeInfo;
         set_binary_analysis_div(parse_context, left_analysis, right_analysis);
         return err;
     }
 
     // check for optimizations based on type; but only if types are known on both sides, although the highest
     // priority (number) can be assigned if either side is known to have it can be assigned if either side is a float
-    if (QoreTypeInfo::isType(lti, NT_NUMBER) || QoreTypeInfo::isType(rti, NT_NUMBER)) {
-        parse_context.typeInfo = numberTypeInfo;
+    //
+    // NOTE: the result type must be determined in a local variable and assigned unconditionally below; the parse
+    // context's type is still set to the right-hand side's type here, so any path that does not assign it would
+    // report the divisor's type as the type of the division expression (issue #5462)
+    const QoreTypeInfo* returnTypeInfo = nullptr;
+    if ((QoreTypeInfo::isType(lti, NT_NUMBER)
+            && QoreTypeInfo::parseReturns(rti, NT_BUFFER) == QTI_NOT_EQUAL)
+        || (QoreTypeInfo::isType(rti, NT_NUMBER)
+            && QoreTypeInfo::parseReturns(lti, NT_BUFFER) == QTI_NOT_EQUAL)) {
+        // a number on either side gives a number result, as long as the other side cannot be a buffer, in which
+        // case the result is a buffer
+        returnTypeInfo = numberTypeInfo;
     } else if (QoreTypeInfo::hasType(lti) && QoreTypeInfo::hasType(rti)) {
         if (QoreTypeInfo::isType(lti, NT_FLOAT) || QoreTypeInfo::isType(rti, NT_FLOAT)) {
             pfunc = &QoreDivisionOperatorNode::floatDivision;
-            parse_context.typeInfo = floatTypeInfo;
+            returnTypeInfo = floatTypeInfo;
         } else if ((QoreTypeInfo::isType(lti, NT_INT) || QoreTypeInfo::isType(lti, NT_CHAR))
                 && (QoreTypeInfo::isType(rti, NT_INT) || QoreTypeInfo::isType(rti, NT_CHAR))) {
             pfunc = &QoreDivisionOperatorNode::bigIntDivision;
-            parse_context.typeInfo = bigIntTypeInfo;
+            returnTypeInfo = bigIntTypeInfo;
         } else {
-            parse_context.typeInfo = floatTypeInfo;
+            returnTypeInfo = floatTypeInfo;
         }
     }
+    // if the type could not be determined above, then the result type is unknown; it depends on the runtime types
+    // of the operands
+    typeInfo = returnTypeInfo;
+    parse_context.typeInfo = typeInfo;
 
     set_binary_analysis_div(parse_context, left_analysis, right_analysis);
     return err;
