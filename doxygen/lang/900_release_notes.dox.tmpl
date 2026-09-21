@@ -3252,6 +3252,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       unchanged graph run at the same time instead of aborting and restarting each other, while a scan that has
       to assign a recursive set still takes the r-section to itself.  Threads that repeatedly scan one shared
       graph without changing it went from no gain at all on eight threads to four times the throughput of one
+    - Fixed every dereference of an object taking that object's r-section exclusively, which serialized all
+      threads calling any method on a shared object -- whatever the object held and whatever the method did,
+      since a method call releases a reference to the object when its frame is torn down.  An object that is
+      in no recursive set has no collection decision to make, and that is now established with no lock at all;
+      only an object that really does belong to a cycle takes the r-section.  Calls on one shared object went
+      from peaking at four threads and losing throughput beyond that to scaling past it, and the same fix
+      applies to a variable captured by more than one closure
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

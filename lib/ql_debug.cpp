@@ -174,7 +174,7 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
             rrefs = priv->rrefs.load();
             rcount = priv->rcount;
             tref_count = priv->tRefs.reference_count();
-            rset = priv->rset;
+            rset = priv->rset.load(std::memory_order_relaxed);
             deferred_scan = priv->deferred_scan;
             scan_private_data = priv->scan_private_data;
             status = priv->status;
@@ -4572,6 +4572,18 @@ static QoreValue f_dbg_get_rset_restart_count(const QoreListNode* params, Runtim
     return q_get_rset_restart_count();
 }
 
+//! returns the number of times a dereference in the current thread took an object's exclusive r-section
+/** An object dereference that has a collection decision to make takes the object's r-section exclusively, which
+    serializes every thread dereferencing that object.  A dereference of an object that is in no recursive set
+    has nothing to decide and takes no lock at all, so tests use this to verify that calling a method on a
+    shared object outside a cycle does not serialize on it.  A dereference that has to rescan takes the
+    r-section once per pass.
+*/
+static QoreValue f_dbg_get_deref_rsection_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_deref_rsection_count();
+}
+
 //! removes a hash key or object member through QoreTypeSafeReferenceHelper::removeHashObjKey()
 /** @param ref a reference to a hash or object
     @param key the key or member to remove
@@ -4674,6 +4686,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_rset_create_count", f_dbg_get_rset_create_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_rset_restart_count", f_dbg_get_rset_restart_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_deref_rsection_count", f_dbg_get_deref_rsection_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");

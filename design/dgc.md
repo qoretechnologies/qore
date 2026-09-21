@@ -406,6 +406,53 @@ assertions that a scan holds the r-section of the object it is walking accept ei
 `examples/test/qore/misc/concurrent-cycle-scans.qtest` runs read-only scans beside scans that change the graph;
 starvation there shows up as a test case that never returns.
 
+### A dereference that has nothing to decide takes no lock
+
+Almost every dereference of an object has no collection decision to make. The object is in no recursive set,
+so there is no set to consult and nothing to collect, and the dereference returns having done nothing. That
+outcome is the overwhelmingly common one: the reference a method call frame holds on `self` is released this
+way on every call.
+
+`qore_object_private::customDeref()` used to reach that outcome through the **exclusive** r-section. It took
+the read lock, upgraded to the r-section with `QoreSafeRSectionReadLocker::acquireRSection()`, read `rset` and
+`rcount`, and returned. The ordering was inverted: the lock was taken in order to read the state that decides
+whether the lock was needed. Because `upgradeReadToRSection()` waits while `rs_tid != -1 || rs_shared`, every
+thread calling *any* method on an object shared between threads serialized on that object — whatever the
+object holds, whatever the method does and whether or not a scan was ever needed. Throughput on a shared
+object peaked at four threads and went negative beyond it, while the same workload on a static method scaled.
+This is the singleton, manager, registry and cached-table shape. `ClosureVarValue::deref()` had the same
+shape for a variable captured by more than one closure, and took the r-section exclusively from the start.
+
+Both now decide on a plain atomic load of `rset`:
+
+- `RObject::rset` is `std::atomic<RSet*>`. It is still written only under the r-section held exclusively, by
+  `setRSet()` and `removeInvalidateRSetIntern()`.
+- **A null `rset` implies `rcount == 0`.** `setRSet()` is the only function that assigns a non-zero `rcount`,
+  and it is passed 0 whenever the set is null (asserted there); `removeInvalidateRSetIntern()` clears both. Each
+  publishes `rset` last, with release ordering, so a dereference that reads the pointer with acquire ordering
+  never pairs it with the other value's previous state.
+- A dereference that reaches the decision has already established `ref_copy != 0`, so `rcount != ref_copy`
+  follows from a null set and the comparison never has to be made. The only other input is the deferred-scan
+  flag, which `RObject::deref()` captured under `rlck` before any of this.
+
+So a null set plus no deferred scan means "nothing to do", and that is read with no lock at all. Anything
+else takes the read lock and the exclusive r-section exactly as before, and reads the state again there.
+
+This is safe because the r-section never ordered a dereference against a scan that starts *after* it, only
+against one already in progress. A dereference that took the r-section first saw the same null set that the
+lock-free load sees, and the scan committed its set afterwards either way. The error in the other direction
+cannot happen: a stale *non-null* read only costs one unnecessary upgrade, and the slow path re-reads
+everything under the r-section. The fast path may only ever decline to skip, never skip wrongly.
+
+Debug builds count the r-section acquisitions made by dereferences per thread
+(`dbg_get_deref_rsection_count()`);
+`examples/test/qore/misc/dgc-deref-fast-path.qtest` asserts that method calls on a shared object outside a
+cycle take none, that an object inside one still does, and that cycles built around an object and through a
+captured variable are still collected.
+
+The per-object `rlck` mutex that `RObject::deref()`, `RObject::derefDone()` and `QoreObject::customRef()`
+take is what now limits how far a shared object scales; unlike the r-section it never blocks on a scan.
+
 ### A scan may be re-entered under a write lock the calling thread already holds
 
 The rollback-and-wait protocol is deadlock-free only while every lock a scan waits on belongs to *another*
@@ -635,8 +682,8 @@ anything.
 
 ## Related files
 
-- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, `rclosed`, the
-  container-edge and per-container counting memos.
+- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, `rclosed`, `rset` and
+  its `rcount` invariant, the container-edge and per-container counting memos.
 - `include/qore/intern/RSection.h` — r-section lock semantics.
 - `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation, and the scanner proper
   (`RSetHelper::scan()`: the component search, and `countInternalReferences()`: `rcount` assignment).
@@ -665,3 +712,5 @@ anything.
   its watches and its counts alone.
 - `examples/test/qore/misc/dgc-deferred-scan-sets.qtest` — a container grown one entry at a time while its
   holder has real references: every deferred scan discards the set recorded for the holder.
+- `examples/test/qore/misc/dgc-deref-fast-path.qtest` — dereferences outside a recursive set take no
+  r-section, dereferences inside one still do, and cycles formed around shared values are still collected.
