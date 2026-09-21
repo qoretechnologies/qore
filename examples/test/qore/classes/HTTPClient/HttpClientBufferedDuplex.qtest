@@ -1,0 +1,714 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  HttpClientBufferedDuplex.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/1.1 request with a buffered body - a string or binary payload sent under Content-Length,
+    not a chunked streaming send - must read the response while the body is still going out.  A peer
+    that commits to a response larger than the socket buffers before it drains the upload otherwise
+    deadlocks against a client that reads only after it has finished sending: neither side's write
+    can drain, and both block until something times out.  SOAP 1.2 Part 2 sections 6.2.3 and 7.5.1
+    require a requesting node to accept response information while it is still transmitting for
+    exactly this reason (W3C assertions x2-bindformdesc-dlock, x2-http-reqsoapnode-dlock).
+
+    The converse also has to hold: a request that declared a Content-Length must send all of it, so a
+    response that completes first waits for the upload rather than truncating it.  Only a peer that
+    stops reading may cut the upload short, and the connection it happened on must not be reused.
+
+    Every assertion here is made against a raw peer that observes the transport directly: whether it
+    got its whole response out before it read anything, and how much of the upload it then read.
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class HttpClientBufferedDuplexTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+#! Byte pattern both directions are built from; its period divides every payload size used here
+const Pattern = "0123456789abcdef";
+
+#! What the raw peer should do for one exchange
+hashdecl PeerPlan {
+    #! final response status code
+    int status = 200;
+
+    #! response body framing: \c "length", \c "chunked" or \c "close"
+    string framing = "length";
+
+    #! size of the response body in bytes; must be a multiple of @ref ChunkSize
+    int body_size = 0;
+
+    #! number of \c "100 Continue" interim responses to write before the final response
+    int interim = 0;
+
+    #! if True the peer reads the rest of the request body after writing its response
+    bool drain = True;
+
+    #! if True the peer closes the connection instead of writing any response
+    bool eof_before_response = False;
+
+    #! if True the peer writes no response and holds the connection until the test releases it
+    bool hold = False;
+
+    #! if True the peer closes the connection after the exchange instead of keeping it open
+    bool close_after = False;
+}
+
+#! What the raw peer observed during one exchange
+hashdecl PeerObserved {
+    #! the request target
+    string path;
+
+    #! the \c Content-Length the request declared
+    int request_length = 0;
+
+    #! True once the peer's whole response reached the socket
+    /** The peer writes its response before it reads a single body byte, so against a payload larger
+        than the socket buffers this can only become True if the client read the response while its
+        own upload was still in flight.
+    */
+    bool response_written = False;
+
+    #! request body bytes the peer read after writing its response
+    int body_read = 0;
+
+    #! the error the peer saw while draining the request body, if any
+    *string drain_error;
+}
+
+#! A raw HTTP/1.1 peer that writes its whole response before it reads any of the request body
+class BufferedDuplexPeer {
+    public {
+        #! upper bound on any blocking peer-side operation; reaching it fails the test
+        const PeerTimeout = 60s;
+
+        #! granularity of the peer's reads and of its chunked writes
+        const ChunkSize = 65536;
+    }
+
+    private {
+        Socket listener();
+        int port;
+        bool tls;
+        Queue observed();
+
+        #! one entry per request whose headers the peer has read, pushed before it answers
+        /** Lets a test act on a request that is still in flight - a held exchange reports on
+            @ref observed only once it is over.
+        */
+        Queue started();
+
+        Counter done(1);
+
+        #! released by the test to let a @ref PeerPlan::hold exchange finish
+        Counter release(1);
+
+        *hash<ExceptionInfo> peer_ex;
+    }
+
+    constructor(list<hash<PeerPlan>> plans, bool tls = False) {
+        self.tls = tls;
+        if (tls) {
+            listener.setCertificate(new SSLCertificate(CertPem));
+            listener.setPrivateKey(new SSLPrivateKey(KeyPem));
+        }
+        listener.bind("localhost:0", True);
+        listener.listen();
+        port = listener.getPort();
+        background serve(plans);
+    }
+
+    string getUrl() {
+        return sprintf("%s://localhost:%d", tls ? "https" : "http", port);
+    }
+
+    #! Returns the next exchange the peer observed
+    hash<PeerObserved> getObserved() {
+        return observed.get(PeerTimeout);
+    }
+
+    #! Returns the target of the next request whose headers the peer has read
+    string waitForRequestStart() {
+        return started.get(PeerTimeout);
+    }
+
+    #! Lets a held exchange finish
+    releaseHold() {
+        release.dec();
+    }
+
+    #! Waits for the peer thread to finish and rethrows anything it caught
+    stopAndCheck() {
+        if (release.getCount()) {
+            release.dec();
+        }
+        if (done.waitForZero(PeerTimeout)) {
+            throw "PEER-ERROR", "the raw peer did not finish";
+        }
+        if (peer_ex) {
+            throw "PEER-ERROR", sprintf("the raw peer failed: %s: %s", peer_ex.err, peer_ex.desc);
+        }
+    }
+
+    #! Builds @a size bytes of @ref Pattern
+    static binary makeBody(int size) {
+        return binary(strmul(Pattern, size / Pattern.size()));
+    }
+
+    private serve(list<hash<PeerPlan>> plans) {
+        on_exit done.dec();
+        *Socket conn;
+        on_exit {
+            if (conn) {
+                try { conn.close(); } catch (hash<ExceptionInfo> ex) {}
+            }
+            try { listener.close(); } catch (hash<ExceptionInfo> ex) {}
+        }
+        try {
+            foreach hash<PeerPlan> plan in (plans) {
+                if (!conn) {
+                    conn = listener.accept(PeerTimeout);
+                    conn.setNoDelay(True);
+                    if (tls) {
+                        conn.upgradeServerToSSL();
+                    }
+                }
+                hash<auto> hdr = conn.readHTTPHeader(PeerTimeout);
+                hash<PeerObserved> row = <PeerObserved>{
+                    "path": hdr.path,
+                    "request_length": hdr."content-length" ? hdr."content-length".toInt() : 0,
+                };
+                started.push(row.path);
+
+                if (plan.eof_before_response) {
+                    conn.close();
+                    delete conn;
+                    observed.push(row);
+                    continue;
+                }
+
+                for (int i = 0; i < plan.interim; ++i) {
+                    conn.send("HTTP/1.1 100 Continue\r\n\r\n", PeerTimeout);
+                }
+
+                if (plan.hold) {
+                    release.waitForZero(PeerTimeout);
+                    conn.close();
+                    delete conn;
+                    observed.push(row);
+                    continue;
+                }
+
+                # this write blocks until the client consumes it, which it can only do while its own
+                # upload is still outstanding
+                writeResponse(conn, plan);
+                row.response_written = True;
+
+                if (plan.drain) {
+                    int remaining = row.request_length;
+                    try {
+                        while (remaining > 0) {
+                            int n = remaining > ChunkSize ? ChunkSize : remaining;
+                            binary b = conn.recvBinary(n, PeerTimeout);
+                            remaining -= b.size();
+                            row.body_read += b.size();
+                        }
+                    } catch (hash<ExceptionInfo> ex) {
+                        row.drain_error = ex.err;
+                    }
+                }
+
+                if (plan.close_after || plan.framing == "close") {
+                    conn.close();
+                    delete conn;
+                }
+                observed.push(row);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            peer_ex = ex;
+            # unblock a test waiting for an exchange that will never be observed
+            started.push(sprintf("%s: %s", ex.err, ex.desc));
+            observed.push(<PeerObserved>{"path": sprintf("%s: %s", ex.err, ex.desc)});
+        }
+    }
+
+    private writeResponse(Socket conn, hash<PeerPlan> plan) {
+        string hdrs = sprintf("HTTP/1.1 %d %s\r\nContent-Type: application/octet-stream\r\n",
+            plan.status, plan.status == 200 ? "OK" : "Payload Too Large");
+        switch (plan.framing) {
+            case "length": {
+                hdrs += sprintf("Content-Length: %d\r\n\r\n", plan.body_size);
+                conn.send(hdrs, PeerTimeout);
+                if (plan.body_size) {
+                    conn.send(BufferedDuplexPeer::makeBody(plan.body_size), PeerTimeout);
+                }
+                break;
+            }
+            case "chunked": {
+                hdrs += "Transfer-Encoding: chunked\r\n\r\n";
+                conn.send(hdrs, PeerTimeout);
+                int remaining = plan.body_size;
+                while (remaining > 0) {
+                    int n = remaining > ChunkSize ? ChunkSize : remaining;
+                    conn.send(sprintf("%x\r\n", n), PeerTimeout);
+                    conn.send(BufferedDuplexPeer::makeBody(n), PeerTimeout);
+                    conn.send("\r\n", PeerTimeout);
+                    remaining -= n;
+                }
+                conn.send("0\r\n\r\n", PeerTimeout);
+                break;
+            }
+            case "close": {
+                # no Content-Length and no chunked framing: the body ends when the peer closes, which
+                # it does only after it has drained the upload
+                hdrs += "Connection: close\r\n\r\n";
+                conn.send(hdrs, PeerTimeout);
+                if (plan.body_size) {
+                    conn.send(BufferedDuplexPeer::makeBody(plan.body_size), PeerTimeout);
+                }
+                break;
+            }
+            default:
+                throw "PEER-ERROR", sprintf("unknown framing %y", plan.framing);
+        }
+    }
+}
+
+public class HttpClientBufferedDuplexTest inherits QUnit::Test {
+    public {
+        #! Request body size
+        /** Large enough that the client's own send blocks well before the upload is complete: it has
+            to exceed the client's send buffer plus the peer's receive buffer, and the peer does not
+            read at all until its response is out.
+        */
+        const UploadSize = 8 * 1024 * 1024;
+
+        #! Response body size, large enough that the peer's write blocks before the upload finishes
+        const ResponseSize = 8 * 1024 * 1024;
+
+        #! Upper bound on any blocking client-side operation; reaching it fails the test
+        const ClientTimeout = 60s;
+
+        #! A response small enough to fit in the socket buffers, for the cases that need an early answer
+        const SmallResponseSize = 64 * 1024;
+    }
+
+    private {
+        #! the request body, built once
+        string upload;
+
+        #! the expected response body for the large-response cases
+        binary expected_response;
+    }
+
+    constructor() : Test("HttpClientBufferedDuplexTest", "1.0") {
+        upload = strmul(Pattern, UploadSize / Pattern.size());
+        expected_response = BufferedDuplexPeer::makeBody(ResponseSize);
+
+        addTestCase("buffered upload reads a Content-Length response concurrently",
+            \bufferedDuplexContentLengthTest());
+        addTestCase("buffered upload with a binary body", \bufferedDuplexBinaryBodyTest());
+        addTestCase("buffered upload reads a chunked response concurrently",
+            \bufferedDuplexChunkedResponseTest());
+        addTestCase("buffered upload reads a close-delimited response concurrently",
+            \bufferedDuplexCloseFramingTest());
+        addTestCase("buffered upload over TLS", \bufferedDuplexTlsTest());
+        addTestCase("a response that completes first waits for the upload",
+            \responseBeforeUploadCompletesTest());
+        addTestCase("an early fault from a peer that stops reading is delivered",
+            \earlyFaultStopsUploadTest());
+        addTestCase("100 Continue responses during the upload are discarded",
+            \interimResponsesDuringUploadTest());
+        addTestCase("peer EOF during the upload is reported and recovered from", \peerEofDuringUploadTest());
+        addTestCase("a request timeout during the upload is recovered from", \timeoutDuringUploadTest());
+        addTestCase("cancelling during the upload closes the transport", \cancelDuringUploadTest());
+        addTestCase("a small buffered request still goes out in one write and reuses the connection",
+            \smallBufferedRequestTest());
+        set_return_value(main());
+    }
+
+    #! Builds a client for @a peer
+    private HTTPClient client(BufferedDuplexPeer peer, timeout to = ClientTimeout) {
+        return new HTTPClient({
+            "url": peer.getUrl(),
+            "timeout": to,
+            "connect_timeout": 15s,
+            "error_passthru": True,
+            "ssl_verify_cert": False,
+        });
+    }
+
+    #! A peer that answers with a large response of the given framing, then drains the upload
+    private hash<PeerPlan> largeResponsePlan(string framing) {
+        return <PeerPlan>{"framing": framing, "body_size": ResponseSize};
+    }
+
+    #! Runs one large-response exchange and asserts both directions completed in full
+    private checkLargeExchange(string framing, bool tls = False, bool binary_body = False) {
+        BufferedDuplexPeer peer((largeResponsePlan(framing),), tls);
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> response = hc.send(binary_body ? binary(upload) : upload, "POST", "/upload",
+            {"Content-Type": "application/octet-stream"}, True);
+
+        assertEq(200, response.status_code, "the response arrives instead of deadlocking");
+        assertEq(ResponseSize, response.body.size(), "the whole response body is delivered");
+        assertEq(expected_response, response.body, "the response body is delivered intact");
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq("/upload", row.path, "the peer served the upload request");
+        assertEq(UploadSize, row.request_length, "the request declared its buffered body length");
+        assertTrue(row.response_written,
+            "the peer got its whole response out, which it can only do while the client is still uploading");
+        assertEq(NOTHING, row.drain_error, "the peer drained the request body without error");
+        assertEq(UploadSize, row.body_read, "the client sent the whole Content-Length body it declared");
+    }
+
+    #! The core case: a Content-Length response bigger than the socket buffers, read while uploading
+    bufferedDuplexContentLengthTest() {
+        checkLargeExchange("length");
+    }
+
+    #! The same with a binary request body rather than a string one
+    bufferedDuplexBinaryBodyTest() {
+        checkLargeExchange("length", False, True);
+    }
+
+    #! The same with a chunked response, so the chunked receive path runs concurrently with the send
+    bufferedDuplexChunkedResponseTest() {
+        checkLargeExchange("chunked");
+    }
+
+    #! The same with a close-delimited response body
+    bufferedDuplexCloseFramingTest() {
+        checkLargeExchange("close");
+    }
+
+    #! The same over TLS, where reads and writes share one SSL object
+    bufferedDuplexTlsTest() {
+        checkLargeExchange("length", True);
+    }
+
+    #! A peer that answers early and keeps reading gets the whole declared request body
+    /** The response is small enough to be delivered long before the upload can finish, so the
+        exchange completes only if the client keeps sending after it has the response in hand.
+        Truncating a body the request promised under Content-Length would leave the peer with a
+        request it cannot process.
+    */
+    responseBeforeUploadCompletesTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> response = hc.send(upload, "POST", "/early",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, response.status_code, "the early response is delivered");
+        assertEq(SmallResponseSize, response.body.size(), "the early response body is delivered");
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq("/early", row.path, "the peer served the upload request");
+        assertEq(NOTHING, row.drain_error, "the peer drained the request body without error");
+        assertEq(UploadSize, row.body_read,
+            "the client finished the Content-Length body it declared before completing the exchange");
+
+        # the request and the response both completed, so the connection is still healthy
+        hash<auto> second = hc.send("x", "POST", "/second",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the connection stays usable after a completed exchange");
+
+        hash<PeerObserved> second_row = peer.getObserved();
+        assertEq("/second", second_row.path, "the second request reaches the peer");
+        assertEq(1, second_row.body_read, "the second request body reaches the peer");
+    }
+
+    #! A peer that answers with a fault and stops reading gets its fault delivered, not a write error
+    /** The client's remaining upload cannot be delivered once the peer has closed, but the response
+        already in hand is complete and authoritative, so that is what the caller gets.  The
+        connection carried a half-written request and must not be reused.
+    */
+    earlyFaultStopsUploadTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{
+                "status": 413,
+                "framing": "length",
+                "body_size": SmallResponseSize,
+                "drain": False,
+                "close_after": True,
+            },
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> response = hc.send(upload, "POST", "/toobig",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(413, response.status_code, "the peer's fault is delivered rather than the write error it caused");
+        assertEq(SmallResponseSize, response.body.size(), "the fault response body is delivered");
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq("/toobig", row.path, "the peer served the rejected request");
+        assertTrue(row.response_written, "the peer got its fault response out");
+
+        # the abandoned upload must not poison a later request: the peer only accepts a second
+        # connection, so a client that tried to reuse the first one would never be served
+        hash<auto> second = hc.send("x", "POST", "/after-fault",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the same client recovers on a fresh connection");
+
+        hash<PeerObserved> second_row = peer.getObserved();
+        assertEq("/after-fault", second_row.path, "the recovery request reaches the peer");
+    }
+
+    #! "100 Continue" responses arriving mid-upload are discarded and the final response is delivered
+    /** A peer answering a large upload early answers "100 Continue" first whenever the request
+        carried "Expect: 100-continue" - HttpServer.qm does exactly that - and reading the response
+        concurrently with the body is what makes those interim responses arrive while the request is
+        still in flight.  RFC 9110 section 15.2.1 makes 100 the server's promise of a final response
+        to come, so it is never the answer itself.
+    */
+    interimResponsesDuringUploadTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{"framing": "length", "body_size": ResponseSize, "interim": 3},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> response = hc.send(upload, "POST", "/expect", {
+            "Content-Type": "application/octet-stream",
+            "Expect": "100-continue",
+        }, True);
+
+        assertEq(200, response.status_code, "the final response is delivered, not the interim one");
+        assertEq(ResponseSize, response.body.size(), "the final response body is delivered");
+        assertEq(expected_response, response.body, "the final response body is intact");
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertTrue(row.response_written, "the peer got its whole response out");
+        assertEq(UploadSize, row.body_read, "the whole request body still reaches the peer");
+    }
+
+    #! A peer that closes without answering surfaces a connection error, and the client recovers
+    peerEofDuringUploadTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{"eof_before_response": True},
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        hash<auto> failure;
+        try {
+            hc.send(upload, "POST", "/eof", {"Content-Type": "application/octet-stream"}, True);
+            fail("a peer that closes without answering must not produce a response");
+        } catch (hash<ExceptionInfo> ex) {
+            failure = {"err": ex.err, "desc": ex.desc};
+        }
+        assertTrue(failure.err =~ /^(SOCKET-CLOSED|HTTP1-|SOCKET-SEND-ERROR|SOCKET-RECV-ERROR)/,
+            sprintf("the peer EOF is reported as a transport error (got %y: %y)", failure.err, failure.desc));
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq("/eof", row.path, "the peer read the request headers before closing");
+
+        hash<auto> second = hc.send("x", "POST", "/after-eof",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the same client recovers after a peer EOF");
+
+        hash<PeerObserved> second_row = peer.getObserved();
+        assertEq("/after-eof", second_row.path, "the recovery request reaches the peer");
+    }
+
+    #! A request whose peer never answers times out and leaves the client usable
+    timeoutDuringUploadTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{"hold": True},
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer, 2s);
+        on_exit hc.disconnect();
+
+        assertThrows("SOCKET-TIMEOUT", sub () {
+            hc.send(upload, "POST", "/held", {"Content-Type": "application/octet-stream"}, True);
+        }, NOTHING, "an upload whose peer never answers times out");
+
+        peer.releaseHold();
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq("/held", row.path, "the peer read the request headers of the timed-out request");
+
+        hc.setTimeout(ClientTimeout);
+        hash<auto> second = hc.send("x", "POST", "/after-timeout",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the same client recovers after a timed-out upload");
+
+        hash<PeerObserved> second_row = peer.getObserved();
+        assertEq("/after-timeout", second_row.path, "the recovery request reaches the peer");
+    }
+
+    #! Cancelling the caller during the upload abandons the exchange and closes the transport
+    cancelDuringUploadTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{"hold": True},
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        Counter worker_done(1);
+        Queue result();
+        int tid = background sub () {
+            on_exit worker_done.dec();
+            try {
+                hc.send(upload, "POST", "/cancelled", {"Content-Type": "application/octet-stream"}, True);
+                result.push({"err": "UNEXPECTED-SUCCESS"});
+            } catch (hash<ExceptionInfo> ex) {
+                # the cancellation flag is sticky: read it before clearing it so this thread can run
+                # its own cleanup without re-raising
+                bool cancelled = thread_cancelled();
+                clear_thread_cancel();
+                result.push({"err": ex.err, "cancelled": cancelled});
+            }
+        }();
+
+        # the peer holds the exchange open, so the upload is still in flight once it reports the
+        # request headers - cancel exactly there, with the request body still on the wire
+        assertEq("/cancelled", peer.waitForRequestStart(),
+            "the peer read the request headers of the request that is then cancelled");
+
+        assertTrue(cancel_thread(tid, "abandoned upload"), "the uploading caller is cancellable");
+        peer.releaseHold();
+        assertEq(0, worker_done.waitForZero(ClientTimeout), "the cancelled uploader completes");
+
+        hash<auto> row2 = result.get(ClientTimeout);
+        assertEq("THREAD-CANCELLED", row2.err, "cancellation reaches the caller unconverted");
+        assertTrue(row2.cancelled, "the caller observes its own sticky cancellation flag");
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq("/cancelled", row.path, "the peer reports the cancelled exchange");
+
+        hash<auto> second = hc.send("x", "POST", "/after-cancel",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the same client recovers after a cancelled upload");
+
+        hash<PeerObserved> second_row = peer.getObserved();
+        assertEq("/after-cancel", second_row.path, "the recovery request reaches the peer");
+    }
+
+    #! A request that fits in the socket buffers is unaffected and leaves the connection poolable
+    /** The peer serves both requests on one accepted connection: a client that closed the transport
+        after the first exchange would leave the second request on a connection the peer never
+        accepts, so this also proves the full-duplex handover did not fire for a request that never
+        needed it.
+    */
+    smallBufferedRequestTest() {
+        BufferedDuplexPeer peer((
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+            <PeerPlan>{"framing": "length", "body_size": SmallResponseSize},
+        ));
+        on_exit peer.stopAndCheck();
+
+        HTTPClient hc = client(peer);
+        on_exit hc.disconnect();
+
+        string small = strmul(Pattern, 64);
+        hash<auto> first = hc.send(small, "POST", "/small",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, first.status_code, "a small buffered request is answered");
+        assertEq(SmallResponseSize, first.body.size(), "the small request's response body is delivered");
+
+        hash<PeerObserved> row = peer.getObserved();
+        assertEq(small.size(), row.request_length, "the peer saw the declared body length");
+        assertEq(small.size(), row.body_read, "the peer read the whole small body");
+
+        hash<auto> second = hc.send(small, "POST", "/small-again",
+            {"Content-Type": "application/octet-stream"}, True);
+        assertEq(200, second.status_code, "the second request runs on the connection the client kept open");
+
+        hash<PeerObserved> second_row = peer.getObserved();
+        assertEq("/small-again", second_row.path, "the second request reaches the peer on the same connection");
+        assertEq(small.size(), second_row.body_read, "the peer read the whole second body");
+    }
+}

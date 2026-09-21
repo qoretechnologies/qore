@@ -12216,6 +12216,18 @@ bool SocketSendPollOperation::goalReached() const {
     return sent;
 }
 
+size_t SocketSendPollOperation::getBytesSent() const {
+    if (sent) {
+        return size;
+    }
+    if (!poll_state) {
+        // either the operation has not been initialized yet or it failed; in both cases nothing was written
+        return 0;
+    }
+    assert(dynamic_cast<SocketSendPollState*>(poll_state.get()));
+    return static_cast<SocketSendPollState*>(poll_state.get())->getBytesSent();
+}
+
 const char* SocketSendPollOperation::getStateImpl() const {
     return sent ? "sent" : "sending";
 }

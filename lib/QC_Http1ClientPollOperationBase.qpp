@@ -546,6 +546,8 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchReqState(ExceptionSink* xsin
             return handleRecvChunkCrlf(xsink);
         case ReqState::RECV_BODY_CLOSE:
             return handleRecvBodyClose(xsink);
+        case ReqState::AWAIT_SEND:
+            return awaitBufferedSend(xsink);
         case ReqState::PROTOCOL_SWITCHED:
             return handleProtocolSwitched(xsink);
     }
@@ -556,8 +558,68 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchReqState(ExceptionSink* xsin
 // --- Full-duplex streaming (concurrent chunked request-body send + response
 //     receive on one socket, driven on the I/O thread) ---
 
+QoreHashNode* Http1ClientPollOperationPriv::startBufferedFullDuplex(ExceptionSink* xsink) {
+    assert(current_op);
+    assert(!send_op);
+
+    // Create the response read first: if it fails, the request send operation is still on current_op and
+    // req_state is still SENDING, so the state machine is left exactly as it was found.
+    sock_obj->ref();
+    SocketPollOperationBase* read_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+    if (*xsink) {
+        read_op->deref(xsink);
+        return nullptr;
+    }
+    read_op->setSelf(*self);
+
+    // Hand the partially-written request over to the concurrent send side.  The operation already holds the
+    // whole remainder of the request, so unlike a chunked streaming send there is no queue behind it: when it
+    // reaches its goal the request body is complete.
+    send_op = current_op;
+    current_op = read_op;
+    send_state = SendState::SENDING;
+    send_buffered_body = true;
+    send_final_pending = false;
+    req_state = ReqState::RECV_HEADER;
+
+    ASYNC_IO_TRACE("H1 handleSending: request headers sent, buffered body still going -> full-duplex "
+        "(RECV_HEADER + concurrent send) fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+    printd(5, "Http1ClientPollOperationPriv::startBufferedFullDuplex() headers sent, reading the response "
+        "while the buffered request body is still being sent\n");
+    return handleFullDuplex(xsink);
+}
+
 QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsink) {
-    // 1) Make progress on the chunked request-body send side.
+    // The response is already complete and only the rest of the buffered request body is left; there is
+    // nothing to receive, so drive the send side alone until it finishes and the response can be delivered.
+    if (req_state == ReqState::AWAIT_SEND) {
+        return awaitBufferedSend(xsink);
+    }
+
+    // 1) Make progress on the response-receive side first.  The RECV_* handlers drive current_op and, on
+    //    response completion, reset the response state and tear down the send side (dispatchStreamingEnd /
+    //    dispatchResponse -> resetSendState), returning either the idle poll info or nullptr (close).
+    //
+    //    Receive before send: a peer that answers early - a 413 or another fault raised before it has drained
+    //    the request body - very often stops reading or closes right after writing its response, which makes
+    //    the next request-body write fail with EPIPE or ECONNRESET.  Draining the response first means the
+    //    caller gets the peer's actual answer instead of the write error that answer caused.
+    QoreHashNode* recv_info = dispatchReqState(xsink);
+    if (!recv_info) {
+        // Response completed with a connection close, or an error was raised.
+        return nullptr;
+    }
+    ReferenceHolder<QoreHashNode> info(recv_info, xsink);
+
+    // The response completed and resetSendState() put the send side back to INACTIVE; any unsent request
+    // bytes were abandoned there, and dispatchResponse() / dispatchStreamingEnd() forced the connection
+    // closed so it cannot be reused with a half-written request on it.  AWAIT_SEND means the opposite: the
+    // response is complete and waiting, and awaitBufferedSend() has already driven the send side this cycle.
+    if (send_state == SendState::INACTIVE || req_state == ReqState::AWAIT_SEND) {
+        return info.release();
+    }
+
+    // 2) Make progress on the request-body send side.
     int send_events = driveSendSide(xsink);
     if (send_events < 0) {
         // Error already surfaced (setError() closed the connection, or the
@@ -566,26 +628,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleFullDuplex(ExceptionSink* xsin
         return nullptr;
     }
 
-    // 2) Make progress on the response-receive side.  The RECV_* handlers drive
-    //    current_op and, on response completion, reset the response state and
-    //    tear down the send side (dispatchStreamingEnd / dispatchResponse ->
-    //    resetSendState), returning either the idle poll info or nullptr (close).
-    QoreHashNode* recv_info = dispatchReqState(xsink);
-    if (!recv_info) {
-        // Response completed with a connection close, or an error was raised.
-        return nullptr;
-    }
-
-    // 3) If a request-body chunk is still mid-send (partial write), fold its
-    //    desired POLLOUT into the receive poll info so the controller wakes us
-    //    for either direction.  If the response already completed above,
-    //    resetSendState() set send_state back to INACTIVE and there is nothing
-    //    to merge.
+    // 3) If the request body is still mid-send (partial write), fold its desired POLLOUT into the receive poll
+    //    info so the controller wakes us for either direction.
     if (send_events && send_state != SendState::INACTIVE) {
-        int64_t ev = recv_info->getKeyValue("events").getAsBigInt();
-        recv_info->setKeyValue("events", ev | send_events, xsink);
+        int64_t ev = info->getKeyValue("events").getAsBigInt();
+        info->setKeyValue("events", ev | send_events, xsink);
     }
-    return recv_info;
+    return info.release();
 }
 
 int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
@@ -615,7 +664,12 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
             }
             // Chunk fully sent
             releaseSendOp(xsink);
-            if (send_final_pending) {
+            if (send_buffered_body) {
+                // the operation carried the whole rest of the request, so the request body is complete
+                send_state = SendState::DONE;
+                ASYNC_IO_TRACE("H1 driveSendSide: buffered request body sent, request done fd=%d\n",
+                    sock_obj ? sock_obj->getSocket() : -1);
+            } else if (send_final_pending) {
                 send_final_pending = false;
                 send_state = SendState::DONE;
                 ASYNC_IO_TRACE("H1 driveSendSide: final chunk sent, request body done fd=%d\n",
@@ -625,6 +679,15 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
 
         if (send_state == SendState::DONE) {
             return 0;
+        }
+
+        // A buffered request body is a single send operation with no queue behind it, so losing the operation
+        // before it reached its goal would silently truncate the request on the wire
+        if (send_buffered_body) {
+            assert(false);
+            setError("HTTP1-INTERNAL-ERROR",
+                "the buffered request body lost its send operation before the request was complete", xsink);
+            return -1;
         }
 
         // Pull the next queued request-body chunk (nullptr = end-of-body sentinel)
@@ -706,6 +769,52 @@ int Http1ClientPollOperationPriv::driveSendSide(ExceptionSink* xsink) {
     }
 }
 
+QoreHashNode* Http1ClientPollOperationPriv::awaitBufferedSend(ExceptionSink* xsink) {
+    assert(send_buffered_body);
+    if (send_op) {
+        ExceptionSink poll_xsink;
+        QoreHashNode* poll_info = send_op->continuePoll(&poll_xsink);
+        if (poll_xsink) {
+            // The peer answered and then stopped reading: it closed its read side or reset the connection,
+            // so the rest of the request can never be delivered.  The response in hand is complete and
+            // authoritative, so that is what the caller gets rather than the write error it caused.
+            ASYNC_IO_TRACE("H1 awaitBufferedSend: peer refused the rest of the request body after "
+                "responding - delivering the response fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+            poll_xsink.clear();
+            return abandonBufferedSendAndDeliver(xsink);
+        }
+        if (poll_info) {
+            // Partial write: wait for the socket to become writable again.  There is nothing to receive -
+            // the response is complete - so the send interest is the whole poll interest here.
+            ReferenceHolder<QoreHashNode> info(poll_info, xsink);
+            int events = (int)info->getKeyValue("events").getAsBigInt();
+            return getSocketPollInfoHash(xsink, events ? events : SOCK_POLLOUT);
+        }
+        if (!send_op->goalReached()) {
+            return abandonBufferedSendAndDeliver(xsink);
+        }
+        releaseSendOp(xsink);
+        send_state = SendState::DONE;
+        ASYNC_IO_TRACE("H1 awaitBufferedSend: buffered request body complete, delivering the response "
+            "fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+    }
+    return completeDeferredResponse(xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::abandonBufferedSendAndDeliver(ExceptionSink* xsink) {
+    releaseSendOp(xsink);
+    // send_state stays at SENDING so the dispatch below forces the connection closed; clearing
+    // send_buffered_body is what stops the dispatch from deferring this response a second time
+    send_buffered_body = false;
+    return completeDeferredResponse(xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::completeDeferredResponse(ExceptionSink* xsink) {
+    bool streaming_end = deferred_streaming_end;
+    deferred_streaming_end = false;
+    return streaming_end ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
+}
+
 void Http1ClientPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
     if (send_op) {
         send_op->deref(xsink);
@@ -717,6 +826,7 @@ void Http1ClientPollOperationPriv::resetSendState(ExceptionSink* xsink) {
     releaseSendOp(xsink);
     send_state = SendState::INACTIVE;
     send_final_pending = false;
+    send_buffered_body = false;
     AutoLocker al(stream_lock);
     for (auto* s : send_body_queue) {
         if (s) {
@@ -737,10 +847,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     BinaryNode* req_data = nullptr;
     bool is_streaming = false;
     bool is_streaming_send = false;
+    size_t header_len = 0;
     {
         AutoLocker al(stream_lock);
         req_data = pending_request_data;
         pending_request_data = nullptr;
+        header_len = pending_request_header_len;
+        pending_request_header_len = 0;
         is_streaming = streaming_active;
         is_streaming_send = streaming_send;
         if (req_data) {
@@ -785,6 +898,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                 {
                     AutoLocker al(stream_lock);
                     pending_request_data = req_data;
+                    pending_request_header_len = header_len;
                     streaming_active = is_streaming;
                 }
                 if (idle_xsink) {
@@ -811,6 +925,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                 {
                     AutoLocker al(stream_lock);
                     pending_request_data = req_data;
+                    pending_request_header_len = header_len;
                     streaming_active = is_streaming;
                 }
                 sock_obj->closeIo(xsink);
@@ -830,6 +945,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         sock_obj->ref();
         streaming_active_io = is_streaming;
         streaming_send_io = is_streaming_send;
+        request_header_len = header_len;
+        interim_response_count = 0;
         current_op = new SocketSendPollOperation(xsink, req_data, sock_obj);
         if (*xsink) {
             current_op->deref(xsink);
@@ -993,6 +1110,20 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
     }
 
     if (poll_info) {
+        // The socket would not take the whole request.  If the header block has nonetheless reached the wire,
+        // the peer can already be answering, so hand the rest of the request over to the concurrent send side
+        // and start reading the response now.  Waiting for the upload to finish first deadlocks against any
+        // peer that writes a response bigger than the socket buffers before it drains the request body.
+        if (!streaming_send_io && send_state == SendState::INACTIVE && req_state == ReqState::SENDING
+                && request_header_len) {
+            // in ReqState::SENDING with no concurrent send active, current_op is the request send operation
+            // created by handleIdle()
+            assert(dynamic_cast<SocketSendPollOperation*>(current_op));
+            if (static_cast<SocketSendPollOperation*>(current_op)->getBytesSent() >= request_header_len) {
+                poll_info->deref(xsink);
+                return startBufferedFullDuplex(xsink);
+            }
+        }
         return poll_info;
     }
 
@@ -1383,6 +1514,44 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
             releaseCurrentOp(xsink);
             return handleProtocolSwitched(xsink);
+        }
+
+        // 100 Continue: RFC 9110 section 15.2.1 defines it as the server's promise to send a final response
+        // once the request body has been received, so it is never itself an answer - the client discards it
+        // and goes on reading.  This is not theoretical here: a peer answering a large request body early
+        // answers "100 Continue" first whenever the request carried "Expect: 100-continue" (HttpServer.qm
+        // does exactly that), and since startBufferedFullDuplex() reads the response while the body is still
+        // going out, that interim response now arrives mid-upload.  Treating it as the answer would leave
+        // the real response unread on the connection, where the next request finds it and closes the
+        // connection with HTTP1-UNEXPECTED-DATA.
+        //
+        // Only 100 is consumed: 101 ends HTTP framing and is handled above, and the remaining 1xx codes keep
+        // the behavior a handler returning one relies on (see the 102 case in HttpServer.qtest's issue3116),
+        // since nothing forces a final response to follow those.
+        if (response_status_code == 100) {
+            if (++interim_response_count > MAX_INTERIM_RESPONSES) {
+                // setError() takes a literal description, not a format string
+                QoreString desc;
+                desc.sprintf("server sent more than the maximum of %d \"100 Continue\" responses without "
+                    "sending a final response", MAX_INTERIM_RESPONSES);
+                setError("HTTP1-RECV-ERROR", desc.c_str(), xsink);
+                return nullptr;
+            }
+            ASYNC_IO_TRACE("H1 handleRecvHeader: 100 Continue (%d of max %d), reading the next header "
+                "fd=%d\n", interim_response_count, MAX_INTERIM_RESPONSES,
+                sock_obj ? sock_obj->getSocket() : -1);
+            releaseCurrentOp(xsink);
+            sock_obj->ref();
+            current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+            if (*xsink) {
+                current_op->deref(xsink);
+                current_op = nullptr;
+                return nullptr;
+            }
+            current_op->setSelf(*self);
+            // req_state stays RECV_HEADER; the interim response's parsed values are overwritten by the next
+            // header block
+            return handleRecvHeader(xsink);
         }
 
         bool no_body = (method == "HEAD")
@@ -1877,6 +2046,21 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink
 QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsink) {
     empty_read_count = 0;
 
+    // The response is complete but a buffered request body is not.  The request declared a
+    // Content-Length, so stopping short of it would leave the peer holding a request it cannot process -
+    // and unlike a chunked streaming send, whose remaining body only the application can produce, the whole
+    // body is already in hand here.  Park the finished response in ReqState::AWAIT_SEND and let the send
+    // side run to its goal; awaitBufferedSend() re-enters this method when it does, or delivers the
+    // response anyway if the peer stops reading.
+    if (send_buffered_body && send_state != SendState::DONE) {
+        ASYNC_IO_TRACE("H1 dispatchResponse: response complete with the request body still going out "
+            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+        releaseCurrentOp(xsink);
+        deferred_streaming_end = false;
+        req_state = ReqState::AWAIT_SEND;
+        return awaitBufferedSend(xsink);
+    }
+
     // Take ownership of stream_action atomically and clear stream_action /
     // active_stream_count / active_sid in the same critical section.  This
     // closes a race against abort() / notifyPendingStreams() which read
@@ -2040,6 +2224,21 @@ void Http1ClientPollOperationPriv::dispatchStreamingData(const BinaryNode* data,
 
 QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* xsink) {
     empty_read_count = 0;
+
+    // The response is complete but a buffered request body is not.  The request declared a
+    // Content-Length, so stopping short of it would leave the peer holding a request it cannot process -
+    // and unlike a chunked streaming send, whose remaining body only the application can produce, the whole
+    // body is already in hand here.  Park the finished response in ReqState::AWAIT_SEND and let the send
+    // side run to its goal; awaitBufferedSend() re-enters this method when it does, or delivers the
+    // response anyway if the peer stops reading.
+    if (send_buffered_body && send_state != SendState::DONE) {
+        ASYNC_IO_TRACE("H1 dispatchStreamingEnd: response complete with the request body still going out "
+            "- waiting for it fd=%d\n", sock_obj ? sock_obj->getSocket() : -1);
+        releaseCurrentOp(xsink);
+        deferred_streaming_end = true;
+        req_state = ReqState::AWAIT_SEND;
+        return awaitBufferedSend(xsink);
+    }
 
     int stream_id;
     AbstractAsyncAction* action = nullptr;
@@ -2462,7 +2661,12 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     }
     req->concat("\r\n");
 
-    // Convert to binary and append body (not for streaming send)
+    // Convert to binary and append body (not for streaming send).  The header block and the body stay in one
+    // buffer so that a request small enough to fit in the socket's send buffer still reaches the wire in a
+    // single write - splitting every request in two would cost an extra syscall and, worse, expose every small
+    // POST to the write-write-read delay that Nagle plus delayed ACK produces.  handleSending() uses
+    // header_len to recognize when a partial write has nonetheless put the whole header block out.
+    size_t header_len = req->size();
     BinaryNode* bin = new BinaryNode();
     bin->append(req->c_str(), req->size());
     if (!streaming_send_flag && body_len > 0 && body) {
@@ -2531,6 +2735,7 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             pending_request_data->deref(xsink);
         }
         pending_request_data = bin;
+        pending_request_header_len = header_len;
     }
 
     return stream_id;
