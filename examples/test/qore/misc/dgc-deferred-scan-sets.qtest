@@ -1,0 +1,160 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcDeferredScanSetsTest
+
+#! An object outside any cycle, referenced by entries to keep their component from being closed
+class Outside {
+    public {
+        string name = "outside";
+    }
+}
+
+#! An entry that references the hub holding it, closing a cycle through the hub's container
+class Entry {
+    public {
+        auto hub;
+        auto outside;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Entry::destroyed;
+    }
+}
+
+#! A hub whose container is grown one entry at a time
+class ListHub {
+    public {
+        list<auto> entries = ();
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++ListHub::destroyed;
+    }
+}
+
+#! A hub whose member hash is grown one entry at a time
+class HashHub {
+    public {
+        hash<auto> entries;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++HashHub::destroyed;
+    }
+}
+
+public class DgcDeferredScanSetsTest inherits QUnit::Test {
+    public {}
+
+    constructor() : QUnit::Test("deferred scans and stale recursive sets", "1.0") {
+        addTestCase("A cycle through a growing list is collected", \growingListIsCollected());
+        addTestCase("A cycle through a growing hash is collected", \growingHashIsCollected());
+        addTestCase("An open component is still collected", \openComponentIsCollected());
+        addTestCase("Growing the graph rebuilds the recursive set", \growingTheGraphRebuildsTheSet());
+        set_return_value(main());
+    }
+
+    #! Adds an entry to the hub
+    /** The hub is a parameter, so it has real references while its container changes and the scan that the
+        assignment triggers is deferred.  Each deferred scan has to discard the recursive set recorded for the
+        hub: a scan rooted at the new entry attaches one in between, and a set left in place keeps the rcount it
+        was given when the container was shorter.
+    */
+    private static addToList(ListHub hub) {
+        Entry e();
+        e.hub = hub;
+        push hub.entries, e;
+    }
+
+    private static addToHash(HashHub hub, string key) {
+        Entry e();
+        e.hub = hub;
+        hub.entries{key} = e;
+    }
+
+    private static addToListWithOutsideRef(ListHub hub, Outside o) {
+        Entry e();
+        e.hub = hub;
+        e.outside = o;
+        push hub.entries, e;
+    }
+
+    growingListIsCollected() {
+        int n = 20;
+        Entry::destroyed = 0;
+        ListHub::destroyed = 0;
+        {
+            ListHub hub();
+            for (int i = 0; i < n; ++i) {
+                DgcDeferredScanSetsTest::addToList(hub);
+            }
+            assertEq(n, hub.entries.size());
+        }
+        assertEq(n, Entry::destroyed, "every entry of the cycle is collected");
+        assertEq(1, ListHub::destroyed, "the hub of the cycle is collected");
+    }
+
+    growingHashIsCollected() {
+        int n = 20;
+        Entry::destroyed = 0;
+        HashHub::destroyed = 0;
+        {
+            HashHub hub();
+            for (int i = 0; i < n; ++i) {
+                DgcDeferredScanSetsTest::addToHash(hub, sprintf("e%d", i));
+            }
+            assertEq(n, hub.entries.size());
+        }
+        assertEq(n, Entry::destroyed, "every entry of the cycle is collected");
+        assertEq(1, HashHub::destroyed, "the hub of the cycle is collected");
+    }
+
+    #! A component whose nodes reference an object outside it is never closed; it must keep collecting
+    openComponentIsCollected() {
+        int n = 20;
+        Outside o();
+        Entry::destroyed = 0;
+        ListHub::destroyed = 0;
+        {
+            ListHub hub();
+            for (int i = 0; i < n; ++i) {
+                DgcDeferredScanSetsTest::addToListWithOutsideRef(hub, o);
+            }
+        }
+        assertEq(n, Entry::destroyed, "every entry of the open component is collected");
+        assertEq(1, ListHub::destroyed, "the hub of the open component is collected");
+        assertEq("outside", o.name, "the object outside the component survives it");
+    }
+
+    #! The set recorded for the hub is discarded by each deferred scan, so the graph is re-derived as it grows
+    growingTheGraphRebuildsTheSet() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("recursive set counts require a debug build");
+        }
+        int n = 20;
+        Entry::destroyed = 0;
+        ListHub::destroyed = 0;
+        int rsets = DgcDeferredScanSetsTest::rsetCreateCount();
+        {
+            ListHub hub();
+            for (int i = 0; i < n; ++i) {
+                DgcDeferredScanSetsTest::addToList(hub);
+            }
+        }
+        int created = DgcDeferredScanSetsTest::rsetCreateCount() - rsets;
+        assertGt(1, created, "the hub's recursive set is rebuilt as the container grows");
+        assertEq(n, Entry::destroyed, "every entry of the cycle is collected");
+    }
+
+    private static int rsetCreateCount() {
+        return call_function("dbg_get_rset_create_count");
+    }
+}

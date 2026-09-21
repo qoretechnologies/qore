@@ -200,7 +200,7 @@ qore_object_private::~qore_object_private() {
     assert(!cdmap);
     assert(!data);
     assert(!privateData);
-    assert(!rset);
+    assert(!rset.load(std::memory_order_relaxed));
     if (QoreStringNode* h = unique_hash.load(std::memory_order_relaxed)) {
         h->deref();
     }
@@ -1328,6 +1328,31 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
         bool rrf = false;
         if (ref_copy) {
+            // Fast path: a dereference of an object that is in no recursive set has nothing to decide, and
+            // deciding that takes no lock at all.
+            //
+            // The locking path below reaches its "nothing to do" return through rset == nullptr, rcount !=
+            // ref_copy and no deferred scan.  rcount is zero whenever rset is null (see RObject::rset) and
+            // ref_copy is non-zero here, so rcount != ref_copy holds by construction: the whole decision is
+            // the null set plus the deferred-scan flag, which this dereference already captured under rlck in
+            // RObject::deref().  Neither needs the rsection.
+            //
+            // That matters because the rsection is EXCLUSIVE: taking it to reach a return that does nothing
+            // serialized every thread that called any method on a shared object, whatever the object holds
+            // and whatever the method does, since the reference the call frame holds is released here.  See
+            // design/dgc.md, "A dereference that has nothing to decide takes no lock".
+            //
+            // A scan committing a set concurrently with this load is not a missed collection: the rsection
+            // orders this dereference against a scan already in progress, not against one that starts after
+            // it, so the locking path reaches the same conclusion whenever it wins that race.  The reverse
+            // error cannot happen -- a stale non-null read only costs one unnecessary upgrade, and the state
+            // is read again under the rsection there.
+            if (!rset.load(std::memory_order_acquire) && !qodh.hasDeferredScan()) {
+                printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' no rset, no deferred scan; "
+                    "nothing to do\n", this, status == OS_OK ? getClassName() : "<deleted>");
+                return;
+            }
+
             while (true) {
                 bool recalc = false;
                 {
@@ -1339,16 +1364,22 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
                     // rset can be changed unless the rsection is acquired
                     sl.acquireRSection();
-
-                    printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' rset: %p (valid: %d) "
-                        "rcount: %d refs: %d/%d rrefs: %d (deferred: %d do_scan: %d)\n", this, getClassName(), rset,
-                        RSet::isValid(rset), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan,
-                        qodh.doScan());
+#ifdef DEBUG
+                    q_inc_deref_rsection_count();
+#endif
 
                     int rc;
-                    RSet* rs = rset;
+                    RSet* rs = rset.load(std::memory_order_relaxed);
+
+                    printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' rset: %p (valid: %d) "
+                        "rcount: %d refs: %d/%d rrefs: %d (deferred: %d do_scan: %d)\n", this, getClassName(), rs,
+                        RSet::isValid(rs), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan,
+                        qodh.doScan());
 
                     if (!rs) {
+                        // an object in no recursive set has no recursive references either; the fast path
+                        // above relies on this to skip the comparison without reading rcount
+                        assert(!rcount);
                         if (rcount == ref_copy) {
                             // this must be true if we really are dealing with an object with no more valid
                             // (non-recursive) references

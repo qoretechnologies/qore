@@ -30,6 +30,9 @@
 
 # don't use "$" signs for variables and class members, assume local variable scope
 %modern
+# a table holds its column, index, constraint and trigger descriptions with "@=" so that
+# dereferencing a table does not scan them; see AbstractTable's members for the invariant
+%allow-opaque-references
 
 # require type definitions everywhere
 
@@ -2537,7 +2540,7 @@ end";
                     /*
                     else {
                         if (!indexes)
-                            indexes = new Indexes();
+                            indexes @= new Indexes();
                         ix = new MysqlIndex(c.name, True, columns.(list(c.name)));
                         indexes.add(c.name, ix);
                     }
@@ -2551,7 +2554,7 @@ end";
                                 throw "AUTO-INCREMENT-ERROR", sprintf("column %y.%y which has \"auto-increment\" set and is also flagged as a primary key for the table does not match with the existing primary key column definition: %y", name, c.name, primaryKey.keys());
                         }
                         else
-                            primaryKey = new MysqlPrimaryKey(columns.(list(c.name)));
+                            primaryKey @= new MysqlPrimaryKey(columns.(list(c.name)));
                         uk = primaryKey;
                     } else {
                         # see if a unique constraint already exists with this name
@@ -2564,7 +2567,7 @@ end";
                                 throw "AUTO-INCREMENT-ERROR", sprintf("column %y.%y which has \"auto-increment\" set and is also flagged as a unique constraint for the table does not match with the existing unique constraint's column definition: %y", name, c.name, uk.keys());
                         } else {
                             if (!constraints)
-                                constraints = new Constraints();
+                                constraints @= new Constraints();
                             uk = new MysqlUniqueConstraint(c.name, columns.(list(c.name)));
                             constraints.add(c.name, uk);
                         }

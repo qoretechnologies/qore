@@ -529,16 +529,36 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         #! the table's name
         string name;
         #! column description object
+        /** This and the other description members below are assigned with the opaque reference
+            operator \c "@=": the table owns them as it always has, but the collector does not
+            follow the edge.  A table's descriptions are a deep graph - every column, index,
+            constraint and trigger is an object, and an index or constraint holds a
+            @ref SqlUtil::Columns "Columns" object of its own - and following it made every
+            dereference of a table scan all of it, including for a table cached and shared
+            between threads.  Nothing reachable only through these edges can be collectable
+            garbage: a description belongs to exactly one table and holds no reference back to
+            it, so it is released with the table by its reference count.
+        */
         Columns columns;
         #! primary key description
+        /** Held with \c "@="; see @ref columns.
+        */
         AbstractPrimaryKey primaryKey;
         #! index descriptions
+        /** Held with \c "@="; see @ref columns.
+        */
         Indexes indexes;
         #! foreign constraints description
+        /** Held with \c "@="; see @ref columns.
+        */
         ForeignConstraints foreignConstraints;
         #! constraint descriptions
+        /** Held with \c "@="; see @ref columns.
+        */
         Constraints constraints;
         #! trigger descriptions
+        /** Held with \c "@="; see @ref columns.
+        */
         Triggers triggers;
         #! partitioning strategy
         *PartitionStrategy partitionStrategy;
@@ -588,17 +608,17 @@ public class AbstractTable inherits AbstractSqlUtilBase {
     copy(AbstractTable old) {
         # copy container objects
         if (columns)
-            columns = columns.copy();
+            columns @= columns.copy();
         if (primaryKey)
-            primaryKey = primaryKey.copy();
+            primaryKey @= primaryKey.copy();
         if (indexes)
-            indexes = indexes.copy();
+            indexes @= indexes.copy();
         if (foreignConstraints)
-            foreignConstraints = foreignConstraints.copy();
+            foreignConstraints @= foreignConstraints.copy();
         if (constraints)
-            constraints = constraints.copy();
+            constraints @= constraints.copy();
         if (triggers)
-            triggers = triggers.copy();
+            triggers @= triggers.copy();
         if (partitionStrategy) {
             hash<PartitionStrategy> ps(partitionStrategy);
             partitionStrategy = ps;
@@ -1612,7 +1632,7 @@ list l = table.getAddColumnSql("name", ("qore_type": Type::String, "size": 50), 
     private AbstractColumn addColumnUnlocked(string cname, hash<auto> opt, bool nullable = True, *reference lsql,
             bool do_exec = True, bool modify_table = True) {
         if (!columns)
-            columns = new Columns();
+            columns @= new Columns();
         else if (columns.hasKey(cname))
             throw "COLUMN-ERROR", sprintf("%s column %y: this column already exists", getDesc(), cname);
 
@@ -1933,7 +1953,7 @@ printf("%s;\n", sql);
     }
 
     private setPrimaryKeyUnlocked(AbstractPrimaryKey pk) {
-        primaryKey = pk;
+        primaryKey @= pk;
     }
 
     private AbstractPrimaryKey addPrimaryKeyUnlocked(string pkname, softlist cols, *hash<auto> opt, *reference<string> sql) {
@@ -2196,7 +2216,7 @@ printf("%s;\n", sql);
         on_success if (opt.sql_callback_executed) {
             # set as constraint for the table
             if (!constraints)
-                constraints = new Constraints();
+                constraints @= new Constraints();
             constraints.add(cname, uk);
             manual = True;
         }
@@ -2209,7 +2229,7 @@ printf("%s;\n", sql);
         execSql(sql);
         # set as constraint for the table
         if (!constraints)
-            constraints = new Constraints();
+            constraints @= new Constraints();
         constraints.add(cname, uk);
         return uk;
     }
@@ -2333,7 +2353,7 @@ printf("%s;\n", sql);
                 AbstractUniqueConstraint uk = addUniqueConstraintUnlockedIntern(iname, cols, opt, \csql);
                 uk.setIndexBase(ix.name);
                 if (!constraints)
-                    constraints = new Constraints();
+                    constraints @= new Constraints();
                 constraints.add(iname, uk);
                 ix.setSupportingConstraint(uk);
             }
@@ -2347,7 +2367,7 @@ printf("%s;\n", sql);
             getIndexesUnlocked();
 
         if (!indexes)
-            indexes = new Indexes();
+            indexes @= new Indexes();
         else if (indexes.hasKey(iname))
             throw "INDEX-ERROR", sprintf("%s: already has an index named %y with columns: %y", getDesc(), iname, indexes{iname}.columns.keys());
 
@@ -2567,7 +2587,7 @@ printf("%s;\n", sql);
 
             # set as foreign constraint for the table
             if (!foreignConstraints)
-                foreignConstraints = new ForeignConstraints();
+                foreignConstraints @= new ForeignConstraints();
             foreignConstraints.add(cname, fk);
             manual = True;
         }
@@ -2599,7 +2619,7 @@ printf("%s;\n", sql);
 
         # set as foreign constraint for the table
         if (!foreignConstraints)
-            foreignConstraints = new ForeignConstraints();
+            foreignConstraints @= new ForeignConstraints();
         foreignConstraints.add(cname, fk);
         return fk;
     }
@@ -2776,7 +2796,7 @@ printf("%s;\n", sql);
         on_success if (opt.sql_callback_executed) {
             # set as constraint for the table
             if (!constraints)
-                constraints = new Constraints();
+                constraints @= new Constraints();
             constraints.add(cname, cc);
             manual = True;
         }
@@ -2789,7 +2809,7 @@ printf("%s;\n", sql);
 
         # set as constraint for the table
         if (!constraints)
-            constraints = new Constraints();
+            constraints @= new Constraints();
         constraints.add(cname, cc);
 
         # return the new constraint
@@ -3098,7 +3118,7 @@ printf("%s;\n", sql);
         on_success if (opt.sql_callback_executed) {
             # store trigger in trigger container
             if (!triggers)
-                triggers = new Triggers();
+                triggers @= new Triggers();
 
             triggers.add(tname, trig);
             manual = True;
@@ -3112,7 +3132,7 @@ printf("%s;\n", sql);
 
         # store trigger in trigger container
         if (!triggers)
-            triggers = new Triggers();
+            triggers @= new Triggers();
 
         triggers.add(tname, trig);
 
@@ -10365,7 +10385,7 @@ list<auto> l = table.getAlignSql(table2);
         }
 
         if (!columns) {
-            columns = new Columns();
+            columns @= new Columns();
         }
 
         AbstractTable this = opt.sql_callback_executed ? self : self.copy();
@@ -11788,10 +11808,10 @@ on_exit printf("SQL> %s\n", sql);
         if (columns)
             return;
         if (manual) {
-            columns = new Columns();
+            columns @= new Columns();
             return;
         }
-        columns = describeImpl();
+        columns @= describeImpl();
         inDb = True;
     }
 
@@ -11799,11 +11819,11 @@ on_exit printf("SQL> %s\n", sql);
         if (primaryKey || manual)
             return;
         getColumnsUnlocked();
-        primaryKey = getPrimaryKeyImpl();
+        primaryKey @= getPrimaryKeyImpl();
 
         # get indexes
         if (!manual && !indexes)
-            indexes = getIndexesImpl();
+            indexes @= getIndexesImpl();
 
         if (!primaryKey.empty())
             primaryKey.findMatchingIndex(indexes);
@@ -11816,7 +11836,7 @@ on_exit printf("SQL> %s\n", sql);
         if (indexes)
             return;
         if (manual) {
-            indexes = new Indexes();
+            indexes @= new Indexes();
             return;
         }
         # make sure columns are loaded
@@ -11827,7 +11847,7 @@ on_exit printf("SQL> %s\n", sql);
             # make sure constraints are also loaded
             getConstraintsUnlocked();
         }
-        indexes = getIndexesImpl();
+        indexes @= getIndexesImpl();
         inDb = True;
     }
 
@@ -11836,12 +11856,12 @@ on_exit printf("SQL> %s\n", sql);
             return;
         }
         if (manual) {
-            foreignConstraints = new ForeignConstraints();
+            foreignConstraints @= new ForeignConstraints();
             return;
         }
 
         getColumnsUnlocked();
-        foreignConstraints = getForeignConstraintsImpl(opt);
+        foreignConstraints @= getForeignConstraintsImpl(opt);
 
         # update cached tables with foreign constraint source info
         if (opt.table_cache) {
@@ -11886,14 +11906,14 @@ on_exit printf("SQL> %s\n", sql);
             return;
         }
         if (manual) {
-            constraints = new Constraints();
+            constraints @= new Constraints();
             return;
         }
         getColumnsUnlocked();
-        constraints = getConstraintsImpl();
+        constraints @= getConstraintsImpl();
         # get indexes
         if (!manual && !indexes) {
-            indexes = getIndexesImpl();
+            indexes @= getIndexesImpl();
         }
 
         foreach AbstractConstraint c in (constraints.iterator()) {
@@ -11911,10 +11931,10 @@ on_exit printf("SQL> %s\n", sql);
         if (triggers)
             return;
         if (manual) {
-            triggers = new Triggers();
+            triggers @= new Triggers();
             return;
         }
-        triggers = getTriggersImpl();
+        triggers @= getTriggersImpl();
         inDb = True;
     }
 

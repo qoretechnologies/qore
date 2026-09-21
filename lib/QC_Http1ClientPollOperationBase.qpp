@@ -2441,7 +2441,8 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     if (send_op) {
         send_op->abort(xsink);
     }
-    notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
+    // Close before notifying, so a caller woken by notifyPendingStreams() cannot
+    // check out this connection again — see setError() for the full rationale.
     {
         AutoLocker al(stream_lock);
         if (connection_priv) {
@@ -2449,6 +2450,7 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
         }
         connection_priv = nullptr;
     }
+    notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
     // Note: do NOT close socket or delete current_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
 }
@@ -2471,7 +2473,19 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
     if (sock_obj && sock_obj->getSocket() >= 0) {
         sock_obj->closeIo(xsink);
     }
-    notifyPendingStreams(err, desc, xsink);
+    // Mark the connection closed BEFORE notifying the pending streams, for the
+    // same reason dispatchResponse() closes before resolving the response
+    // Future: notifyPendingStreams() resolves the waiting caller's Promise, so
+    // it is a thread wakeup, and everything after it races with a caller that
+    // is already running again.  A caller that wakes while the connection is
+    // still Ready in the manager's pool gets this dead connection back from its
+    // very next checkout — findReusableLocked() screens only on
+    // isClosed()/isDraining() and a free stream slot, and notifyPendingStreams()
+    // has already zeroed the stream count.  Its submitRequest() then fails on
+    // the connection and re-raises the error stored just above (via
+    // getStoredError() below, or HttpClientConnectionBase::raiseClosedSubmitError())
+    // without ever reaching the wire, so the caller sees this request's failure
+    // reported as the next request's failure.
     {
         AutoLocker al(stream_lock);
         if (connection_priv) {
@@ -2479,6 +2493,7 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
         }
         connection_priv = nullptr;
     }
+    notifyPendingStreams(err, desc, xsink);
 }
 
 bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string& desc) const {
@@ -2775,14 +2790,20 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         }
     }
 
-    if (action) {
-        action->executeError("HTTP1-CANCELLED", "request cancelled", xsink);
-        action->deref(xsink);
-    }
-
+    // Close first when the exchange reached the wire: settling the action below
+    // wakes the cancelled caller, and a connection that is still Ready in the
+    // pool at that moment is handed straight back out — see setError() for the
+    // full rationale.  setError() cannot settle this action itself: it was taken
+    // out of stream_action under the lock above, so notifyPendingStreams() finds
+    // nothing to notify and this remains the only report of the cancellation.
     if (in_flight) {
         printd(5, "Http1ClientPollOperationPriv::cancelStream() in-flight - closing connection\n");
         setError("HTTP1-CANCELLED", "connection closed due to in-flight cancellation", xsink);
+    }
+
+    if (action) {
+        action->executeError("HTTP1-CANCELLED", "request cancelled", xsink);
+        action->deref(xsink);
     }
 
     return true;

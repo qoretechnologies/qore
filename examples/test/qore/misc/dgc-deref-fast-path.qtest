@@ -1,0 +1,223 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcDerefFastPathTest
+
+#! An object with no references to anything: nothing reachable from it can form a cycle
+class Plain {
+    public {
+        string name = "plain";
+        int n = 1;
+    }
+
+    string readMember() {
+        return name;
+    }
+
+    string touchNothing() {
+        return "x";
+    }
+}
+
+#! A node of a cycle, which a recursive set has to describe before it can be collected
+class Node {
+    public {
+        *Node peer;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Node::destroyed;
+    }
+
+    string touchNothing() {
+        return "x";
+    }
+}
+
+#! Holds a value, so that assigning to it scans the graph reachable from the assigned value
+class ValueHolder {
+    public {
+        auto value;
+    }
+}
+
+public class DgcDerefFastPathTest inherits QUnit::Test {
+    public {
+        #! the number of method calls each check makes on the shared object
+        const Calls = 2000;
+        #! the number of threads that share one object in the concurrent checks
+        const Threads = 4;
+    }
+
+    private {
+        #! the object that the threads of a concurrent check share
+        Plain shared_plain();
+        #! the total r-section acquisitions the worker threads' dereferences made
+        int worker_rsections = 0;
+        #! guards worker_rsections
+        Mutex worker_lock();
+    }
+
+    constructor() : QUnit::Test("dgc deref fast path", "1.0") {
+        addTestCase("A dereference outside a cycle takes no r-section", \derefOutsideACycleTakesNoRSection());
+        addTestCase("A dereference inside a cycle does take the r-section", \derefInsideACycleTakesTheRSection());
+        addTestCase("Threads sharing an object do not serialize on it", \sharedObjectDerefsDoNotSerialize());
+        addTestCase("A captured variable outside a cycle takes no r-section",
+            \capturedVariableDerefTakesNoRSection());
+        addTestCase("A cycle built around a shared object is still collected", \sharedObjectCycleIsCollected());
+        addTestCase("A cycle through a captured variable is still collected", \capturedVariableCycleIsCollected());
+        set_return_value(main());
+    }
+
+    #! Calling a method on an object that is in no recursive set must not take the object's r-section
+    /** The r-section is exclusive, so taking it on a path whose only outcome is "nothing to do" made every
+        thread calling any method on a shared object serialize on that object.
+    */
+    derefOutsideACycleTakesNoRSection() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("r-section dereference counts require a debug build");
+        }
+        Plain p();
+        int before = derefRSectionCount();
+        for (int i = 0; i < Calls; ++i) {
+            p.touchNothing();
+            p.readMember();
+        }
+        int taken = derefRSectionCount() - before;
+        if (m_options.verbose) {
+            printf("%d method calls outside a cycle: %d r-section acquisitions\n", Calls * 2, taken);
+        }
+        assertEq(0, taken, "no method call on an object outside a cycle takes the r-section");
+    }
+
+    #! The counter must move for an object that really does have a collection decision to make
+    /** Without this the check above would pass even if the counter never counted anything.
+    */
+    derefInsideACycleTakesTheRSection() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("r-section dereference counts require a debug build");
+        }
+        Node a();
+        a.peer = new Node();
+        a.peer.peer = a;
+        int before = derefRSectionCount();
+        # the object is in a recursive set now, so its dereferences have to consult the set
+        a.touchNothing();
+        int taken = derefRSectionCount() - before;
+        if (m_options.verbose) {
+            printf("one method call inside a cycle: %d r-section acquisitions\n", taken);
+        }
+        assertGt(0, taken, "a dereference of an object in a recursive set takes the r-section");
+        remove a;
+    }
+
+    #! Threads calling methods on one shared object must not take its r-section at all
+    /** This is the shape that collapsed: a singleton, manager, registry or cached table that many threads call
+        accessors on.  An r-section taken per dereference is per object, so the threads block on each other
+        however trivial the method is.
+    */
+    sharedObjectDerefsDoNotSerialize() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("r-section dereference counts require a debug build");
+        }
+        worker_rsections = 0;
+        Counter cnt();
+        for (int i = 0; i < Threads; ++i) {
+            cnt.inc();
+            background sharedObjectWorker(cnt);
+        }
+        cnt.waitForZero();
+        if (m_options.verbose) {
+            printf("%d threads x %d calls on one shared object: %d r-section acquisitions\n", Threads, Calls,
+                worker_rsections);
+        }
+        assertEq(0, worker_rsections, "no thread takes the r-section of the shared object");
+        assertEq("plain", shared_plain.readMember(), "the shared object is still usable");
+    }
+
+    private sharedObjectWorker(Counter cnt) {
+        on_exit cnt.dec();
+        int before = derefRSectionCount();
+        for (int i = 0; i < Calls; ++i) {
+            shared_plain.touchNothing();
+        }
+        int taken = derefRSectionCount() - before;
+        AutoLock al(worker_lock);
+        worker_rsections += taken;
+    }
+
+    #! Releasing a reference to a captured variable outside a cycle must not take its r-section either
+    /** ClosureVarValue::deref() has the same shape as the object path: a variable shared between closures is
+        dereferenced whenever one of them goes out of scope.
+    */
+    capturedVariableDerefTakesNoRSection() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("r-section dereference counts require a debug build");
+        }
+        # captured by reference, so the variable becomes a ClosureVarValue shared by both closures
+        string captured = "value";
+        code read = string sub () { return captured; };
+        code write = sub (string v) { captured = v; };
+        write("other");
+        int read_back = 0;
+        int before = derefRSectionCount();
+        for (int i = 0; i < Calls; ++i) {
+            # each copy of the closure takes and releases a reference to the captured variable
+            code c = read;
+            if (c() == "other") {
+                ++read_back;
+            }
+        }
+        int taken = derefRSectionCount() - before;
+        if (m_options.verbose) {
+            printf("%d closure calls over a captured variable: %d r-section acquisitions\n", Calls, taken);
+        }
+        assertEq(Calls, read_back, "every call reads the value written through the other closure");
+        assertEq(0, taken, "a captured variable outside a cycle takes no r-section");
+    }
+
+    #! A cycle built around an object that threads are already sharing must still be collected
+    /** The fast path reads the recursive set with no lock, so the transition from "no set" to "in a set" is
+        the case that must not be missed.
+    */
+    sharedObjectCycleIsCollected() {
+        int destroyed = Node::destroyed;
+        ValueHolder holder();
+        {
+            Node head();
+            # the object is reachable and scanned before it is part of any cycle
+            holder.value = head;
+            Node tail();
+            head.peer = tail;
+            # this assignment closes the cycle and is what assigns the recursive set
+            tail.peer = head;
+            holder.value = NOTHING;
+        }
+        assertEq(destroyed + 2, Node::destroyed, "the cycle is collected once its last outside reference goes");
+    }
+
+    #! A cycle running through a captured variable must still be collected
+    capturedVariableCycleIsCollected() {
+        int destroyed = Node::destroyed;
+        {
+            Node n();
+            # the closure captures the variable holding the object, and the object holds the closure: a cycle
+            # through the captured variable itself
+            auto self_ref;
+            self_ref = Node sub () { return n; };
+            n.peer = new Node();
+            n.peer.peer = n;
+        }
+        assertEq(destroyed + 2, Node::destroyed, "a cycle through a captured variable is collected");
+    }
+
+    #! Returns the number of dereferences in this thread that took an object's exclusive r-section
+    private static int derefRSectionCount() {
+        return call_function("dbg_get_deref_rsection_count");
+    }
+}

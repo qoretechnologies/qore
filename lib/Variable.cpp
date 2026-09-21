@@ -3428,7 +3428,8 @@ void ClosureVarValue::deref(ExceptionSink* xsink) {
     RSetDerefHelper cycle_cleanup(xsink);
     // NOTE: do not access val here without holding rml; val may be modified concurrently
     // by another thread that holds a reference to this ClosureVarValue
-    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p\n", this, references.load(), references.load() - 1, rcount, rset);
+    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p\n", this,
+        references.load(), references.load() - 1, rcount, rset.load(std::memory_order_relaxed));
 
     int ref_copy;
     bool do_del = false;
@@ -3439,19 +3440,31 @@ void ClosureVarValue::deref(ExceptionSink* xsink) {
         if (!ref_copy) {
             do_del = true;
         }
-        else {
+        // Fast path: a captured variable that is in no recursive set has nothing for this dereference to
+        // decide, and the loop below takes the rsection EXCLUSIVELY to reach that conclusion, serializing
+        // every thread that releases a reference to a variable shared between closures.  rcount is zero
+        // whenever rset is null (see RObject::rset) and ref_copy is non-zero here, so the loop would find
+        // ref_copy != rcount and break without doing anything.  See design/dgc.md, "A dereference that has
+        // nothing to decide takes no lock".
+        else if (rset.load(std::memory_order_acquire)) {
             while (true) {
                 {
                     QoreRSectionLocker al(rml);
+#ifdef DEBUG
+                    q_inc_deref_rsection_count();
+#endif
 
-                    if (!rset) {
+                    RSet* rs = rset.load(std::memory_order_relaxed);
+                    if (!rs) {
+                        // a variable in no recursive set has no recursive references either
+                        assert(!rcount);
                         if (ref_copy == rcount) {
                             do_del = true;
                         }
                         break;
                     }
                     if (!qodh.deferredScan()) {
-                        int rc = rset->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
+                        int rc = rs->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
                         if (rc == 1) {
                             printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive reference; deleting value\n", this);
                             do_del = true;

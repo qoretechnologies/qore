@@ -33,6 +33,9 @@
 
 # don't use "$" signs for variables and class members, assume local variable scope
 %modern
+# a table holds its column, index, constraint and trigger descriptions with "@=" so that
+# dereferencing a table does not scan them; see AbstractTable's members for the invariant
+%allow-opaque-references
 
 # require type definitions everywhere
 

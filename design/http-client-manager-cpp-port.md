@@ -738,6 +738,73 @@ channel being handed to the caller.  Because that span has many failure exits
 cleanup is a scope guard disarmed at the two delivery points rather than a call
 repeated at each exit.
 
+### 7.10 A connection leaves the pool before its waiter wakes
+
+Resolving a caller's `QorePromise` is a **thread wakeup**, so every statement
+after it races with a caller that is already running again.  A teardown path
+that notifies first and closes second therefore publishes a dead connection to
+a thread that is free to check it straight back out.
+
+**Contract:** in every path that both ends a connection and settles the requests
+riding on it, the connection reaches `CLOSED` **before** any completion action
+is executed.
+
+| Path | Notifier |
+|---|---|
+| `Http1/2/3ClientPollOperationPriv::setError()` | `notifyPendingStreams()` |
+| `Http1/2/3ClientPollOperationPriv::abort()` | `notifyPendingStreams()` |
+| `Http1ClientPollOperationPriv::cancelStream()`, in-flight exchange | `action->executeError()` |
+| `Http1ClientPollOperationPriv::dispatchResponse()` / `dispatchStreamingEnd()`, `Connection: close` | `action->execute()` |
+
+The rule binds only the paths that *close* the connection.
+`Http3ClientPollOperationPriv::setError()` has one branch that does not: while
+happy-eyeballs attempts are still racing, the failure is handed to the owner
+(`onInnerHandshakeFailed()`), which decides whether any candidate remains.  That
+branch keeps its original order, because it has nothing to settle — a connection
+still racing its handshake never reached `READY`, so it was never pooled — and
+because the callback tears the losing attempts down, including the poll op
+running `setError()`.
+
+The last row was always correct; the rest were not, and the resulting defect is
+worth recording because nothing about it looks like a race from the outside.
+`findReusableLocked()` screens a pool candidate on exactly two things —
+`isClosed() || isDraining()`, and a free stream slot — and a connection between
+"notified" and "closed" passes both, because `notifyPendingStreams()` zeroes the
+stream count before it executes the action.  The woken caller's next checkout
+gets the dead connection, and `submitRequest()` fails on it by **re-raising the
+error stored by the exchange that killed it** (`getStoredError()` in the poll
+op, or `HttpClientConnectionBase::raiseClosedSubmitError()`).  So the caller
+sees a well-formed transport error for a request that never reached the wire,
+carrying the previous request's error code *and* its description, and the
+connection stays pooled for the next request to hit as well.
+
+Ordering is the fix, not timing.  The window is a handful of instructions, but
+it is entered from a wakeup — the point at which the kernel is most likely to
+preempt the waking thread in favour of the woken one — so under load the
+application thread wins it routinely rather than rarely.
+
+Two properties make closing first safe:
+
+- **The error is already stored.**  `setError()` fills `error_info` in its first
+  statement, so a thread woken by `setClosed()`'s `ready_cond` broadcast (in
+  `waitForReadyOrError()`) still reports the real failure.
+- **The close does not reach into the pool.**  `onClosedHook()` only appends to
+  the close-notification queue (see 7.1), so no pool lock is taken on the I/O
+  thread and the ordering change introduces no new lock interaction.
+
+For H1 and H2 `connection_priv` is a raw back-pointer nulled under `stream_lock`
+by `disarmConnectionPriv()`, so `setClosed()` stays inside that lock, exactly as
+before — only its position moved.  H3 holds a counted reference and releases it
+after the notification, so the connection cannot be freed while `setError()` is
+still running.
+
+**Defence in depth.**  `HttpClientConnectionManagerBase::request()` evicts a
+pooled connection whose `submitRequest()` failed *and* which reports
+`isClosed()`.  A connection that merely refused the request — at its stream
+limit, for instance — is still healthy and stays pooled.  This does not replace
+the ordering rule: it bounds the damage of any future violation to one request
+instead of every subsequent one.
+
 ---
 
 ## 8. Risks

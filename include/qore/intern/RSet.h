@@ -63,6 +63,16 @@ DLLLOCAL int64 q_get_scan_object_count();
     contended workload really does exercise that path; see dbg_get_rset_restart_count().
 */
 DLLLOCAL int64 q_get_rset_restart_count();
+
+//! Returns the number of times a dereference in the current thread took an object's exclusive r-section
+/** A dereference of an object that is in no recursive set has nothing to decide and takes no lock at all, so
+    this stays put while threads call methods on a shared object that is not part of a cycle.  A dereference
+    that has to rescan takes the r-section once per pass; see dbg_get_deref_rsection_count().
+*/
+DLLLOCAL int64 q_get_deref_rsection_count();
+
+//! Records that a dereference took an object's exclusive r-section
+DLLLOCAL void q_inc_deref_rsection_count();
 #endif
 
 class RObject {
@@ -112,8 +122,21 @@ public:
     // atomic because it is read without rlck in some paths (customDeref, scanMembersIntern)
     std::atomic_int rrefs{0};
 
-    // set of objects in a cyclic directed graph
-    RSet* rset = nullptr;
+    //! The recursive set this object belongs to, or nullptr when it is in none
+    /** Written only under the rsection held exclusively, by setRSet() and removeInvalidateRSetIntern().
+
+        Atomic because a dereference reads it with no lock at all to decide whether it has anything to do:
+        an object that is in no recursive set has no collection decision to make, so
+        qore_object_private::customDeref() and ClosureVarValue::deref() return on a plain load instead of
+        upgrading to the exclusive rsection.  See design/dgc.md, "A dereference that has nothing to decide
+        takes no lock".
+
+        Invariant: a null rset implies rcount == 0.  setRSet() is the only function that assigns a non-zero
+        rcount and it is passed 0 whenever the set is null (asserted there); removeInvalidateRSetIntern()
+        clears both.  The lock-free dereference path relies on this to skip the rcount comparison it cannot
+        read atomically.
+    */
+    std::atomic<RSet*> rset{nullptr};
 
     //! The object's recursive set while that set is closed, otherwise nullptr
     /** A set is closed when no value of any of its nodes references a node outside the set. Nothing in such a
@@ -148,11 +171,15 @@ public:
     bool deferred_scan;
     // do we need to call isValidImpl()?  set at construction and never written again
     bool needs_is_valid;
-    // rset invalidation in progress; written under rlck
-    bool rref_wait;
+    // the number of rset invalidations in progress; written under rlck
+    /** A count rather than a flag: a scan deferred while the object has real references invalidates the recursive
+        set recorded for it, and more than one thread can be doing that at once, so the real references may only
+        be released once the last of them has finished.
+    */
+    unsigned rref_wait;
 
     DLLLOCAL RObject(std::atomic_int& n_refs, bool niv = false) :
-        references(n_refs), deferred_scan(false), needs_is_valid(niv), rref_wait(false) {
+        references(n_refs), deferred_scan(false), needs_is_valid(niv), rref_wait(0) {
     }
 
     DLLLOCAL virtual ~RObject();
@@ -218,7 +245,7 @@ public:
     DLLLOCAL void confirmRSet(bool advance_generation) {
         // a scan that changes nothing holds the rsection in shared mode
         assert(rml.checkRSectionHeld());
-        if (rset) {
+        if (rset.load(std::memory_order_relaxed)) {
             int refs = references.load(std::memory_order_relaxed);
             if (scan_refs.load(std::memory_order_relaxed) != refs) {
                 scan_refs.store(refs, std::memory_order_relaxed);
@@ -251,7 +278,7 @@ public:
 
     // very fast check if the object might have recursive references
     DLLLOCAL bool mightHaveRecursiveReferences() const {
-        return rset || rcount;
+        return rset.load(std::memory_order_relaxed) || rcount;
     }
 
     // if the object is valid (and can be deleted)
@@ -760,6 +787,15 @@ public:
     // return our reference count as captured atomically in the constructor
     DLLLOCAL int getRefs() const {
         return refs;
+    }
+
+    //! Returns true if this dereference captured a deferred scan, without consuming it
+    /** The lock-free fast path in qore_object_private::customDeref() has to know whether a rescan was
+        requested before it decides to skip the rsection, and the slow path still has to consume the flag
+        with deferredScan() afterwards.
+    */
+    DLLLOCAL bool hasDeferredScan() const {
+        return deferred_scan;
     }
 
     // return an indicator if we have a deferred scan or not

@@ -59,10 +59,21 @@ static thread_local int64 rset_restart_count = 0;
 int64 q_get_rset_restart_count() {
     return rset_restart_count;
 }
+
+//! the number of times a dereference in the current thread took an object's exclusive r-section
+static thread_local int64 deref_rsection_count = 0;
+
+int64 q_get_deref_rsection_count() {
+    return deref_rsection_count;
+}
+
+void q_inc_deref_rsection_count() {
+    ++deref_rsection_count;
+}
 #endif
 
 RObject::~RObject() {
-   assert(!rset);
+   assert(!rset.load(std::memory_order_relaxed));
 }
 
 RSetDerefHelper::~RSetDerefHelper() {
@@ -80,13 +91,15 @@ bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
 
 void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
     assert(rml.checkRSectionExclusive());
+    // the lock-free dereference path reads rset alone and infers rcount from it; see RObject::rset
+    assert(rs || !rcnt);
     printd(QRO_LVL, "RObject::setRSet() this: %p %s rs: %p rcnt: %d closed: %d\n", this, getName(), rs, rcnt,
         (int)closed);
-    if (rset) {
+    RSet* old = rset.load(std::memory_order_relaxed);
+    if (old) {
         // invalidating the rset removes the weak references to all contained objects and marks them as not closed
-        rset->invalidateDeref();
+        old->invalidateDeref();
     }
-    rset = rs;
     rcount = rcnt;
     // set after the old set is invalidated, which clears this flag for every object of that set
     rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
@@ -106,6 +119,10 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
         // valid
         tRef();
     }
+    // The set is published last, with release ordering, so that everything that goes with it is already in
+    // place for the dereference path that reads it with no lock.  That dereference only distinguishes a null
+    // set from a non-null one and takes the rsection for anything else, where it reads all of this again.
+    rset.store(rs, std::memory_order_release);
     // increment transaction count
     ++rcycle;
 }
@@ -238,26 +255,29 @@ int RObject::checkDeferScan() {
                 rrefs.load());
             return 0;
         }
-        if (deferred_scan) {
-            printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d deferred_scan already set\n", this,
-                getName(), rrefs.load());
-            return -1;
-        }
-        printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d setting deferred_scan\n", this, getName(),
-            rrefs.load());
+        printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d deferring scan (already deferred: %d)\n",
+            this, getName(), rrefs.load(), (int)deferred_scan);
         deferred_scan = true;
-        // if there is no rset, we can return immediately, no rset can be attached while rrefs > 0
-        if (!rset)
+        // A scan started at another object reaches this one and assigns it a recursive set even while rrefs > 0,
+        // so a set can be attached between one deferred scan and the next.  The graph has just changed again, so
+        // a set recorded here no longer describes it and has to go, however many scans were deferred before:
+        // returning early because deferred_scan was already set leaves such a set, and the rcount it recorded, in
+        // place for the life of the object, and RSet::canDelete() then reads rcount != references as a live
+        // reference from outside the set for ever.
+        if (!rset.load(std::memory_order_relaxed))
             return -1;
         // otherwise we need to invalidate the rset and ensure that
         // rrefs does not go to zero until this is done
-        rref_wait = true;
+        ++rref_wait;
     }
 
     removeInvalidateRSet();
     AutoLocker al(rlck);
-    rref_wait = false;
-    if (rref_waiting)
+    // more than one thread can be invalidating at once, so the real references may only be released once the
+    // last of them has finished
+    assert(rref_wait);
+    --rref_wait;
+    if (!rref_wait && rref_waiting)
         rcond.broadcast();
 
     return -1;
@@ -268,7 +288,7 @@ void RObject::clearRSetClosed() {
     RSet* rs = rclosed.load(std::memory_order_relaxed);
     if (rs) {
         // the object holds a reference to the set, which its rsection keeps in place
-        assert(rs == rset);
+        assert(rs == rset.load(std::memory_order_relaxed));
         rs->clearClosed();
     }
 }
@@ -280,11 +300,14 @@ void RObject::removeInvalidateRSet() {
 
 void RObject::removeInvalidateRSetIntern() {
     assert(rml.checkRSectionExclusive());
-    if (rset) {
+    RSet* rs = rset.load(std::memory_order_relaxed);
+    if (rs) {
         // invalidating the rset removes the weak references to all contained objects
-        rset->invalidateDeref();
-        rset = 0;
+        rs->invalidateDeref();
         rcount = 0;
+        // published last with release ordering, so that a dereference that reads a null set with acquire
+        // ordering never sees the rcount that went with the set just released
+        rset.store(nullptr, std::memory_order_release);
     }
 }
 
@@ -991,12 +1014,12 @@ void RSetHelper::findUnchangedComponents() {
         RObject* obj = static_cast<RObject*>(n.ptr);
         if (!component_cyclic[c]) {
             // the scan assigns no set to the objects of a component without a cycle
-            if (obj->rset) {
+            if (obj->rset.load(std::memory_order_relaxed)) {
                 component_unchanged[c] = 0;
             }
             continue;
         }
-        RSet* rs = obj->rset;
+        RSet* rs = obj->rset.load(std::memory_order_relaxed);
         if (!rs || !rs->active() || obj->rcount != n.internal
             || obj->rclosed.load(std::memory_order_relaxed) != (component_closed[c] ? rs : nullptr)) {
             component_unchanged[c] = 0;
@@ -1061,7 +1084,8 @@ bool RSetHelper::prepareCommit() {
         }
         RObject* obj = static_cast<RObject*>(n.ptr);
         // the members of the object's current set that were not scanned are locked until the set is replaced
-        if (obj->rset && removeInvalidate(obj->rset, tid)) {
+        RSet* ors = obj->rset.load(std::memory_order_relaxed);
+        if (ors && removeInvalidate(ors, tid)) {
             return true;
         }
     }
@@ -1120,7 +1144,7 @@ bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
 
     for (unsigned i = 0; i < rovec.size(); ++i) {
         assert(rovec[i]->rml.hasRSectionLock());
-        assert(rovec[i]->rset == ors);
+        assert(rovec[i]->rset.load(std::memory_order_relaxed) == ors);
         tr_out.insert(rovec[i]);
     }
 
@@ -1334,7 +1358,7 @@ void RSetHelper::commit() {
             // the object already has exactly this recursive set; the generation still advances, because this
             // scan changed another component and holds the rsection exclusively
             printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
-                obj->rset);
+                obj->rset.load(std::memory_order_relaxed));
             obj->confirmRSet(true);
             continue;
         }
@@ -1351,7 +1375,7 @@ void RSetHelper::commit() {
         }
         assert(rs->size() == rs->getCount());
         for (rset_t::iterator ri = rs->begin(), re = rs->end(); ri != re; ++ri) {
-            assert((*ri)->rset == rs);
+            assert((*ri)->rset.load(std::memory_order_relaxed) == rs);
         }
     }
 #endif
