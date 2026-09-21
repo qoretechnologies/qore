@@ -135,6 +135,13 @@ neither did:
    `tools/qore-qo-source-order` closes over both kinds for every caller: the
    standalone compile, the subset parse and the compile plan alike.
 
+One case still loses its provider: an enum's members are registered with
+`ConstantList::add()`, which stamps a builtin location, so folding `SomeEnum::Member`
+records no dependency on the source declaring the enum. It is latent today because the
+enum name also produces a required source-summary edge, which is what actually keeps the
+consumer correct — see
+[#5460](https://github.com/qoretechnologies/qore/issues/5460).
+
 Coverage: `AOTIncrementalDeps.qtest` (the batch records the fold),
 `AOTSccIncrementalDriver.qtest` (the closure reaches the provider) and
 `CMakeBuildHelpers.qtest` (the whole path, through a real incremental build).

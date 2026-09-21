@@ -388,7 +388,7 @@ parse recorded nothing from an aliasing source to the source it aliased, so the 
 invisible both to the preload closure and to currency. The lookups now carry the consumer
 location, and a batch records what the standalone compile of the same source records.
 
-*Convexity (open).* Completing the preload set is necessary but not sufficient. The
+*Convexity (open — [#5458](https://github.com/qoretechnologies/qore/issues/5458)).* Completing the preload set is necessary but not sufficient. The
 compiled set must also be **convex**: no preloaded source may depend on a source the parse
 compiles. On Qorus, `Classes/AbstractCompilableMetadata.qc` is preloaded while its own base
 `Classes/AbstractMetadata.qc` is compiled — so the shell brings back the *previous*
@@ -589,7 +589,7 @@ contract was emitted twice**, so an object's contract depended on the parity of 
 length rather than on its declarations. 697 of 875 Qorus contracts carried duplicated rows.
 The symbol path now trims to the length the header records.
 
-**The cascade is not yet gone.** A comment-only edit to `Classes/QorusRestApiHandler.qc` from
+**The cascade is not yet gone** ([#5459](https://github.com/qoretechnologies/qore/issues/5459)). A comment-only edit to `Classes/QorusRestApiHandler.qc` from
 a group-parse state still rebuilds 13 objects in 4m49, because contracts are compared whole
 and 12 symbols still differ in `body_contract_hash`. But the ordering above is now
 discharged: body-contract granularity is what remains, and it is now both sufficient and
