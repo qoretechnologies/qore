@@ -614,11 +614,12 @@ public:
     DLLLOCAL QoreValue parseFindLocalConstantValue(const QoreProgramLocation* loc, const NamedScope& ns, unsigned& m,
             const QoreTypeInfo*& typeInfo, bool& found, bool abr) const;
 
-    DLLLOCAL QoreValue parseFindLocalConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found);
+    DLLLOCAL QoreValue parseFindLocalConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+            const QoreProgramLocation* consumer_loc = nullptr);
     DLLLOCAL QoreNamespace* parseFindLocalNamespace(const char* nname);
 
     DLLLOCAL QoreValue parseMatchScopedConstantValue(const NamedScope& name, unsigned& matched,
-            const QoreTypeInfo*& typeInfo, bool& found);
+            const QoreTypeInfo*& typeInfo, bool& found, const QoreProgramLocation* consumer_loc = nullptr);
 
     DLLLOCAL FunctionEntry* addPendingVariantIntern(const char* fname, AbstractQoreFunctionVariant* v, bool& new_func);
 
@@ -1710,7 +1711,7 @@ protected:
         QoreClass* pc = parse_get_class();
         if (pc) {
             QoreValue rv = qore_class_private::parseFindConstantValue(pc, cname, typeInfo, found,
-                pc ? qore_class_private::get(*pc) : nullptr);
+                pc ? qore_class_private::get(*pc) : nullptr, loc);
             if (found) {
                 return rv;
             }

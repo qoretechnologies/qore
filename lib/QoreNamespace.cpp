@@ -1761,7 +1761,7 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
 
         // now try to find a class constant with this name
         QoreValue rv = qore_class_private::parseFindConstantValue(pc, bword, typeInfo, found,
-            qore_class_private::get(*pc));
+            qore_class_private::get(*pc), loc);
         if (found) {
             return rv.refSelf();
         }
@@ -2357,7 +2357,7 @@ QoreValue qore_root_ns_private::parseFindReferencedConstantValueIntern(const Qor
         NamespaceMapIterator nmi(nsmap, scname[0]);
         while (nmi.next()) {
             //printd(5, "qore_root_ns_private::parseFindConstantValueIntern(%s) ns: %p (%s)\n", nscope.ostr, nmi.get(), nmi.get()->name.c_str());
-            rv = nmi.get()->parseMatchScopedConstantValue(scname, m, typeInfo, found);
+            rv = nmi.get()->parseMatchScopedConstantValue(scname, m, typeInfo, found, loc);
             if (found) {
                 return rv.refSelf();
             }
@@ -4703,7 +4703,8 @@ const QoreClass* qore_ns_private::runtimeMatchScopedClassWithMethod(const NamedS
 QoreValue qore_ns_private::parseResolveReferencedClassConstant(const QoreProgramLocation* loc, QoreClass* qc,
         const char* name, const QoreTypeInfo*& typeInfo, bool& found) {
     assert(!found);
-    QoreValue rv = qore_class_private::parseFindConstantValue(qc, name, typeInfo, found, parse_get_class_priv());
+    QoreValue rv = qore_class_private::parseFindConstantValue(qc, name, typeInfo, found, parse_get_class_priv(),
+        loc);
     if (found) {
         return rv.refSelf();
     }
@@ -4721,7 +4722,7 @@ QoreValue qore_ns_private::parseResolveReferencedClassConstant(const QoreProgram
 }
 
 QoreValue qore_ns_private::parseMatchScopedConstantValue(const NamedScope& nscope, unsigned& matched,
-        const QoreTypeInfo*& typeInfo, bool& found) {
+        const QoreTypeInfo*& typeInfo, bool& found, const QoreProgramLocation* consumer_loc) {
     assert(!found);
     printd(5, "qore_ns_private::parseMatchScopedConstantValue) trying to find %s in %s\n", nscope.getIdentifier(),
         name.c_str());
@@ -4745,7 +4746,10 @@ QoreValue qore_ns_private::parseMatchScopedConstantValue(const NamedScope& nscop
                 // then check for a class constant
                 if (i == (last - 1)) {
                     QoreClass* qc = fns->priv->parseFindLocalClass(oname);
-                    return qc ? qore_class_private::parseFindLocalConstantValue(qc, nscope.getIdentifier(), typeInfo, found) : QoreValue();
+                    return qc
+                        ? qore_class_private::parseFindLocalConstantValue(qc, nscope.getIdentifier(), typeInfo,
+                            found, consumer_loc)
+                        : QoreValue();
                 }
                 return QoreValue();
             }
@@ -4755,7 +4759,7 @@ QoreValue qore_ns_private::parseMatchScopedConstantValue(const NamedScope& nscop
         }
     }
 
-    return fns->priv->getConstantValue(nscope.getIdentifier(), typeInfo, found);
+    return fns->priv->getConstantValue(nscope.getIdentifier(), typeInfo, found, consumer_loc);
 }
 
 QoreValue qore_ns_private::parseCheckScopedReference(const QoreProgramLocation* loc, const NamedScope& nsc,
@@ -4791,7 +4795,7 @@ QoreValue qore_ns_private::parseCheckScopedReference(const QoreProgramLocation* 
     }
 
     // matched all namespaces, now try to find a constant
-    QoreValue rv = pns->priv->parseFindLocalConstantValue(nsc.getIdentifier(), typeInfo, found);
+    QoreValue rv = pns->priv->parseFindLocalConstantValue(nsc.getIdentifier(), typeInfo, found, loc);
     if (!found && abr) {
         Var* v = pns->priv->var_list.parseFindVar(nsc.getIdentifier());
         if (v) {
@@ -4804,9 +4808,10 @@ QoreValue qore_ns_private::parseCheckScopedReference(const QoreProgramLocation* 
     return found ? rv.refSelf() : QoreValue();
 }
 
-QoreValue qore_ns_private::parseFindLocalConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found) {
+QoreValue qore_ns_private::parseFindLocalConstantValue(const char* cname, const QoreTypeInfo*& typeInfo, bool& found,
+        const QoreProgramLocation* consumer_loc) {
     assert(!found);
-    return constant.find(cname, typeInfo, found);
+    return constant.find(cname, typeInfo, found, consumer_loc);
 }
 
 QoreNamespace* qore_ns_private::parseFindLocalNamespace(const char* nname) {

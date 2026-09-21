@@ -90,6 +90,55 @@ need not match how they were declared, but they are harmless: the preload is the
 unit's transitive predecessor set, so a reference into it resolves for every
 consumer of the unit as well.
 
+### What the rule requires of the build
+
+The rule makes a reference resolvable *in principle*: it always names a constant
+declared upstream of the one holding it. Whether it resolves *in practice* is the
+build's half of the contract, and it is a real obligation rather than a
+consequence:
+
+> **Every preloaded object's constant owner must be preloaded with it.**
+
+An alias serializes its value as a `VT_CONST_REF` naming the owner's constant,
+not as a copy, so a consumer that preloads the alias and not the owner has
+nothing to resolve it against and the whole compile stops:
+
+```
+error: sibling .qo cross-resolution failed: AOT cannot deserialize value for
+  class constant 'QorusTypeInfoRestClass::QorusDataTypeInfo': cannot resolve
+  const_ref 'QorusDataTypeCatalogue::Info' in the current program
+```
+
+`qore_aot_resolve_constant_path_value()` can defer a constant it can *see* but
+whose value is not ready yet; it cannot defer one the program does not declare at
+all, so this is fatal rather than deferred.
+
+Two things carry the obligation, and a Qorus incremental build failed because
+neither did:
+
+1. **The fold must be recorded as a dependency.** A folded constant leaves no
+   trace in the emitted object, so it is recorded at resolution time
+   (`ConstantList::find()` → `qore_aot_note_referenced_decl()`) and narrowed to
+   the provider's declaration contract. A batch attributes that record to the
+   *consumer*, which it takes from the referring expression's own location — so
+   every constant lookup that can record one has to be handed that location.
+   `Owner::CONST` reaches the lookup through the scoped resolvers, and those did
+   not pass it down; a batch resolves constant initializers at parse commit,
+   after every source has been parsed, so there was no other consumer to fall
+   back on and the dependency was dropped entirely. An unscoped `CONST` was
+   unaffected: its resolver has always passed the location.
+2. **The preload closure must follow that dependency.** It is deliberately a
+   content dependency and not an ordering edge — see
+   `design/qcc-incremental-scc-scheduler.md`, where promoting it collapsed an
+   875-source group from 820 components to 435 — so a closure over required edges
+   alone does not reach the owner. `componentPreloadOutputs()` in
+   `tools/qore-qo-source-order` closes over both kinds for every caller: the
+   standalone compile, the subset parse and the compile plan alike.
+
+Coverage: `AOTIncrementalDeps.qtest` (the batch records the fold),
+`AOTSccIncrementalDriver.qtest` (the closure reaches the provider) and
+`CMakeBuildHelpers.qtest` (the whole path, through a real incremental build).
+
 Nothing breaks a cycle at load time, and both of its outcomes are build-stopping:
 
 | Cycle reached with | Failure |
