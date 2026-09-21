@@ -34309,12 +34309,20 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
-    // QoreNumberNode: number literal constant
+    // QoreNumberNode: number literal constant.  ref2 carries the precision the value was computed at: a
+    // number rebuilt from digits alone gets a precision derived from the string LENGTH, which is unrelated
+    // to its own, so the folded constant is a DIFFERENT number from the one the runtime computes (#5461).
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
         id.kind = AOTExprKind::CONST_NUMBER;
         QoreString str;
-        num->toString(str);
+        ExceptionSink xsink;
+        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
+            xsink.clear();
+            str.clear();
+            num->toString(str);
+        }
         id.ref1 = str.c_str();
+        id.ref2 = std::to_string(num->getPrec());
         return id;
     }
 

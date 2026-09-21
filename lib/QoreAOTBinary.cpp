@@ -1997,9 +1997,19 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         case QoreAOTValueTag::VT_INT64:
         case QoreAOTValueTag::VT_FLOAT64:
         case QoreAOTValueTag::VT_STRING:
-        case QoreAOTValueTag::VT_NUMBER:
         case QoreAOTValueTag::VT_CONST_REF:
             return skip_fixed(8, "scalar value payload");
+
+        // a number carries its precision after the digits from QORE_AOT_NUMBER_PRECISION_VERSION;
+        // skipping only the 8-byte string payload would leave the stream 4 bytes short of the next value
+        case QoreAOTValueTag::VT_NUMBER:
+            if (!skip_fixed(8, "number value payload")) {
+                return false;
+            }
+            if (reader.getHeader().version >= QORE_AOT_NUMBER_PRECISION_VERSION) {
+                return skip_fixed(4, "number value precision");
+            }
+            return true;
 
         case QoreAOTValueTag::VT_CHAR:
             return skip_fixed(4, "char value");
@@ -3820,14 +3830,24 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NUMBER));
             const QoreNumberNode* num = v.get<const QoreNumberNode>();
             if (num) {
-                // Serialize as string representation for portability
+                // Serialize as string representation for portability, followed by the precision the value
+                // was computed at: the reader's QoreNumberNode(const char*) derives a precision from the
+                // string LENGTH, which is unrelated to the number's own, so digits alone rebuild a
+                // DIFFERENT number.  See issue #5461 and QORE_AOT_NUMBER_PRECISION_VERSION.
                 QoreString str;
-                num->toString(str, QORE_NF_RAW);
+                ExceptionSink xsink;
+                if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
+                    xsink.clear();
+                    str.clear();
+                    num->toString(str, QORE_NF_RAW);
+                }
                 writeU32(static_cast<uint32_t>(str.size()));
                 writeStringRef(str.c_str(), str.size());
+                writeU32(static_cast<uint32_t>(num->getPrec()));
             } else {
                 writeU32(0);
                 writeStringRef("0", 1);
+                writeU32(0);
             }
             return true;
         }
@@ -4680,7 +4700,19 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 error = "invalid string offset in number value";
                 return QoreValue();
             }
-            return QoreValue(new QoreNumberNode(str));
+            // the precision is only present from v18; an older file is read exactly as it was
+            if (getHeader().version < QORE_AOT_NUMBER_PRECISION_VERSION) {
+                return QoreValue(new QoreNumberNode(str));
+            }
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading number precision";
+                return QoreValue();
+            }
+            uint32_t prec = readU32(ptr);
+            if (!prec) {
+                return QoreValue(new QoreNumberNode(str));
+            }
+            return QoreValue(new QoreNumberNode(str, static_cast<unsigned>(prec)));
         }
 
         case QoreAOTValueTag::VT_BINARY: {
@@ -12294,12 +12326,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         return write_args_prefer_qore(no->getArgs(), no->getParseArgs());
     }
 
-    // QoreNumberNode: number literal constant
+    // QoreNumberNode: number literal constant; the precision follows the digits (see #5461 and
+    // QORE_AOT_NUMBER_PRECISION_VERSION) because digits alone rebuild a different number
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         QoreString str;
-        num->toString(str);
+        ExceptionSink xsink;
+        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
+            xsink.clear();
+            str.clear();
+            num->toString(str);
+        }
         writer.writeStringRef(str.c_str());
+        writer.writeStringRef(std::to_string(num->getPrec()).c_str());
         return true;
     }
 

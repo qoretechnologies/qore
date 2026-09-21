@@ -1605,7 +1605,14 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            QoreNumberNode* num = new QoreNumberNode(ref1);
+            // ref2 is the precision the value was computed at, absent in artifacts written before
+            // QORE_AOT_NUMBER_PRECISION_VERSION.  Rebuilding from digits alone derives a precision from the
+            // string LENGTH, which produced a constant that compared unequal to the runtime value (#5461).
+            unsigned prec = 0;
+            if (ref2 && *ref2) {
+                prec = static_cast<unsigned>(strtoul(ref2, nullptr, 10));
+            }
+            QoreNumberNode* num = prec ? new QoreNumberNode(ref1, prec) : new QoreNumberNode(ref1);
             return toBitsNB(QoreValue(num));
         }
 
@@ -2751,9 +2758,18 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    // CONST_NUMBER carries its precision in a second stringref from
+    // QORE_AOT_NUMBER_PRECISION_VERSION; skipping only the digits would desynchronise the stream
+    if (ek == AOTExprKind::CONST_NUMBER) {
+        rdr.readStringRef(p);
+        if (rdr.getHeader().version >= QORE_AOT_NUMBER_PRECISION_VERSION) {
+            rdr.readStringRef(p);
+        }
+        return;
+    }
     // One-stringref kinds
     if (ek == AOTExprKind::RUNTIME_CONST_REF
-            || ek == AOTExprKind::CONST_NUMBER || ek == AOTExprKind::CONST_BINARY
+            || ek == AOTExprKind::CONST_BINARY
             || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
             || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF) {
         rdr.readStringRef(p);
@@ -4437,10 +4453,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                     ref2 = reader.readStringRef(ptr);
                 }
                 break;
+            case AOTExprKind::CONST_NUMBER:
+                // digits, then the precision they were computed at (v18+); see #5461
+                ref1 = reader.readStringRef(ptr);
+                if (reader.getHeader().version >= QORE_AOT_NUMBER_PRECISION_VERSION) {
+                    ref2 = reader.readStringRef(ptr);
+                }
+                break;
             case AOTExprKind::RUNTIME_CONST_REF:
             case AOTExprKind::LOCAL_VARREF:
             case AOTExprKind::GLOBAL_VARREF:
-            case AOTExprKind::CONST_NUMBER:
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:

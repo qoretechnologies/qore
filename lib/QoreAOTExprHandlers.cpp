@@ -1245,13 +1245,33 @@ static QoreValue read_expr_global_varref(AOTExprReadCtx& ctx) {
 // CONST_NUMBER (9)
 // ============================================================================
 
+//! A number is its digits AND the precision it was computed at; neither alone reconstructs it.
+/** `QoreNumberNode(const char*)` derives a precision from the string LENGTH -- `strlen(str) * 5` in
+    `qore_number_private` -- which has nothing to do with the precision the value actually carries.  Writing
+    the digits alone therefore rebuilt the constant at a precision decided by how wide it happened to print:
+    `2n / 3n` prints 81 characters, so it came back at 405 bits where the runtime computes it at 256, and the
+    folded constant compared unequal to the same value computed at run time.  The two operands display
+    identically and their difference prints as `-0`, which is what made this read like a formatting quirk.
+    See issue #5461.
+
+    `toStringRoundTrip()` is the right digit form rather than `toString()`: it is the shortest significand
+    that reconstructs the source binary value when parsed at `getPrec()` bits, and it preserves signed zero.
+    It can fail, so the old form is kept as a fallback -- carrying the precision is what fixes the defect, and
+    that happens either way.
+*/
 static bool write_expr_const_number(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* num = dynamic_cast<const QoreNumberNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NUMBER));
         QoreString str;
-        num->toString(str);
+        ExceptionSink xsink;
+        if (num->toStringRoundTrip(str, false, &xsink) || xsink) {
+            xsink.clear();
+            str.clear();
+            num->toString(str);
+        }
         ctx.writer.writeStringRef(str.c_str());
+        ctx.writer.writeU32(static_cast<uint32_t>(num->getPrec()));
         return true;
     }
     return false;
@@ -1259,11 +1279,18 @@ static bool write_expr_const_number(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_number(AOTExprReadCtx& ctx) {
     const char* num_str = ctx.reader.readStringRef(ctx.ptr);
+    // the precision is only present from v18; a file written before it is read exactly as it was
+    if (ctx.reader.getHeader().version < QORE_AOT_NUMBER_PRECISION_VERSION) {
+        if (!num_str || !*num_str) {
+            return QoreValue();
+        }
+        return QoreValue(new QoreNumberNode(num_str));
+    }
+    unsigned prec = static_cast<unsigned>(QoreAOTBinaryReader::readU32(ctx.ptr));
     if (!num_str || !*num_str) {
         return QoreValue();
     }
-    QoreNumberNode* num = new QoreNumberNode(num_str);
-    return QoreValue(num);
+    return QoreValue(new QoreNumberNode(num_str, prec));
 }
 
 // ============================================================================
