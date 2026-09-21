@@ -53,6 +53,19 @@ static_assert(QORE_IR_MAX_OPCODE == 406,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
+//! Returns the runtime helper that builds the representation \a mode stores.
+/** Both helpers return a value owned by the caller, so the cleanup the call sites emit around them
+    is the same either way; only the representation differs, and only the mode can select it.  A
+    boolean cannot, which is why every store site that asked for "not Normal" used to compile '@='
+    as ':=' and drop the ownership that separates them.
+*/
+static const char* qore_assignment_mode_value_helper(AssignmentMode mode) {
+    assert(mode != AssignmentMode::Normal);
+    return mode == AssignmentMode::Opaque
+        ? "qore_rt_make_opaque_value"
+        : "qore_rt_make_weak_value";
+}
+
 // LLVM 21 removed IRBuilder::CreateGlobalStringPtr(); preserve its [0, 0] GEP semantics.
 static llvm::Constant* qore_ir_create_global_string_ptr(
         const std::unique_ptr<llvm::IRBuilder<>>& builder,
@@ -1305,6 +1318,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_box_big_int",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
     module.getOrInsertFunction("qore_rt_make_weak_value",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_make_opaque_value",
             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
 
     // Invoke helpers
@@ -13719,7 +13734,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     registerInvokeCleanupAlloca(cleanup);
                 }
                 if (linst->mode != AssignmentMode::Normal) {
-                    auto weak_fn = module.getOrInsertFunction("qore_rt_make_weak_value",
+                    auto weak_fn = module.getOrInsertFunction(
+                            qore_assignment_mode_value_helper(linst->mode),
                             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                     llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {boxed, xsink_arg});
                     track_owned_value_cleanup(weak_boxed, "weak_cleanup_outer");
@@ -14115,7 +14131,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             if (linst->mode != AssignmentMode::Normal) {
-                auto weak_fn = module.getOrInsertFunction("qore_rt_make_weak_value",
+                auto weak_fn = module.getOrInsertFunction(
+                        qore_assignment_mode_value_helper(linst->mode),
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                 llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {boxed, xsink_arg});
                 llvm::AllocaInst* weak_cleanup = track_owned_value_cleanup(weak_boxed, "weak_cleanup");
@@ -24691,7 +24708,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 registerInvokeCleanupAlloca(cleanup);
             };
             if (vinst->mode != AssignmentMode::Normal) {
-                auto weak_fn = module.getOrInsertFunction("qore_rt_make_weak_value",
+                auto weak_fn = module.getOrInsertFunction(
+                        qore_assignment_mode_value_helper(vinst->mode),
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                 llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
                 track_owned_value_cleanup(weak_boxed, "weak_var_cleanup");
@@ -24875,7 +24893,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             {
                 auto key = reinterpret_cast<const void*>(linst->local);
                 if (linst->mode != AssignmentMode::Normal) {
-                    auto weak_fn = module.getOrInsertFunction("qore_rt_make_weak_value",
+                    auto weak_fn = module.getOrInsertFunction(
+                            qore_assignment_mode_value_helper(linst->mode),
                             llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
                     llvm::Value* weak_boxed = builder->CreateCall(weak_fn, {val_boxed, xsink_arg});
                     llvm::AllocaInst* weak_cleanup = track_owned_value_cleanup(
@@ -30518,10 +30537,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "qore_rt_self_member_assign", ft);
                         auto fn_throwing = module.getOrInsertFunction(
                             "qore_rt_self_member_assign_throwing", ft);
+                        // the mode itself, not a boolean: qore_rt_self_member_assign() reads
+                        // this as an AssignmentMode, and collapsing Opaque onto Weak here is what
+                        // made '@=' on a self member give up ownership in compiled code
                         result_val = emitMaybeInvoke(fn, fn_throwing,
                             {direct_member_ptr, rhs_boxed,
                              llvm::ConstantInt::get(i32_type,
-                                path_inst->mode != AssignmentMode::Normal ? 1 : 0), xsink_arg},
+                                static_cast<int32_t>(path_inst->mode)), xsink_arg},
                             module, llvm_func, inst);
                     } else if (aot_slots) {
                         auto ft = llvm::FunctionType::get(i64_type,

@@ -177,8 +177,12 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //!      reads them (see ConstantEntry::setAOTParseShellValue())
 //! v16: native function descriptors encode whether their contexts contain closures, allowing closure-free
 //!      ordinary function contexts to be reconstructed safely on first execution
+//! v17: serialized LValuePath instructions record the full assignment mode rather than a weak flag, so an
+//!      opaque assignment ('@=') is no longer written as a weak one.  The byte is the one the flag used and
+//!      Normal/Weak are still 0/1, so a v9-v16 file reads back unchanged; the version is what tells an
+//!      artifact produced before this fix -- which silently stores '@=' as ':=' -- from one produced after
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 16;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 17;
 //! First format version recording a compile-time value beside a pending constant's init-function flag.
 constexpr uint16_t QORE_AOT_CONST_PARSE_VALUE_VERSION = 15;
 //! First format version storing lazy debugger IR in a separate section.
@@ -2033,7 +2037,10 @@ struct AOTLVPathStepId {
 //! Identity for a LValuePath instruction slot
 struct AOTLVPathSlotId {
     uint16_t opcode;           //!< QoreIROpcode (LValuePathAssign etc.)
-    uint8_t weak;              //!< weak assignment flag
+    //! AssignmentMode for LValuePathAssign; the reader reads the whole byte, so Opaque (2)
+    //! survives the round trip.  Narrowing this to a boolean made the source-stripped AOT slot
+    //! identity write 1 for '@=' and reconstruct it as a weak assignment.
+    uint8_t mode;
     uint8_t compound_op;       //!< LVCompoundOp
     uint8_t unary_op;          //!< LVUnaryOp
     uint8_t binary_mut_op;     //!< LVBinaryMutOp

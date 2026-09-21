@@ -327,6 +327,11 @@ void qore_rt_sync_local(LocalVar* var, uint64_t value);
 //! or an extra reference to unsupported node values.
 uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionSink* xsink);
 
+//! Convert an object/hash/list value to the opaque representation for opaque assignment.
+//! Returns an owned value: an opaque reference (which owns its target) for supported types,
+//! or an extra reference to unsupported node values.
+uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink);
+
 //! Load a NaN-boxed QoreValue from a local variable on the Qore thread-local
 //! variable stack.
 uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
@@ -1342,7 +1347,7 @@ uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, ui
 
 //! LValuePath runtime helpers — navigate structured lvalue path and execute operation
 uint64_t qore_rt_self_member_assign(const char* member_name, uint64_t rhs_bits,
-    int32_t weak, ExceptionSink* xsink);
+    int32_t mode_raw, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_compound(const char* member_name, int32_t compound_op,
     uint64_t rhs_bits, ExceptionSink* xsink);
 uint64_t qore_rt_self_member_update(const char* member_name, int32_t unary_op,

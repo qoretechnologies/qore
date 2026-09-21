@@ -183,6 +183,7 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_assign_local_no_coerce_throwing",
         reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing) },
     { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
+    { "qore_rt_make_opaque_value", reinterpret_cast<void*>(&qore_rt_make_opaque_value) },
     { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
     { "qore_rt_load_self_getter_checked",
         reinterpret_cast<void*>(&qore_rt_load_self_getter_checked) },
@@ -1773,6 +1774,29 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionS
             return toBits(QoreValue(new WeakHashReferenceNode(val.get<QoreHashNode>())));
         case NT_LIST:
             return toBits(QoreValue(new WeakListReferenceNode(val.get<QoreListNode>())));
+        default:
+            return toBits(val.refSelf());
+    }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_opaque_value(uint64_t value, ExceptionSink* xsink) {
+    // The opaque counterpart of qore_rt_make_weak_value(), with the same contract: the value
+    // returned is owned by the caller and the input keeps its own reference.  An opaque reference
+    // needs no wrapper node -- the representation is a tag in the QoreValue -- but it does take a
+    // reference of its own, because unlike ':=' it owns its target.
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    QoreValue val = fromBits(value);
+    if (!val.hasNode()) {
+        return value;
+    }
+    switch (val.getType()) {
+        case NT_OBJECT:
+        case NT_HASH:
+        case NT_LIST:
+            qore_apply_assignment_mode(val, AssignmentMode::Opaque);
+            return toBits(val);
         default:
             return toBits(val.refSelf());
     }
@@ -12584,17 +12608,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
-        const char* member_name, uint64_t rhs_bits, int32_t weak,
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
         ExceptionSink* xsink) {
+    // mode_raw is an AssignmentMode, not a boolean: Normal/Weak are 0/1, so code emitted before
+    // the opaque reference operator existed passes values this still reads identically, while
+    // Opaque (2) reaches lvh.assign() as itself instead of collapsing onto Weak -- which would
+    // drop the ownership that distinguishes '@=' from ':='.
     if (*xsink) {
         return toBits(QoreValue());
     }
+    const AssignmentMode mode = static_cast<AssignmentMode>(mode_raw);
     QoreValue val = fromBits(rhs_bits);
     ValueHolder val_holder(val.refSelf(), xsink);
     QoreValue assign_val = val;
     ValueHolder eval_holder(xsink);
     qore_type_t val_type = val.getType();
-    if (!weak && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH
+    if (mode != AssignmentMode::Weak && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH
             || val_type == NT_WEAKREF_LIST)) {
         eval_holder = val.eval(xsink);
         if (*xsink) {
@@ -12605,8 +12634,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
 
     LValueHelper lvh(xsink);
     if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)
-            || lvh.assign(assign_val.refSelf(), "<self member assign>",
-                true, assignment_mode_from_weak(weak))) {
+            || lvh.assign(assign_val.refSelf(), "<self member assign>", true, mode)) {
         return toBits(QoreValue());
     }
     return toBits(lvh.getReferencedValue());
@@ -14041,10 +14069,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
 // --- Phase 2B Step 5: Lvalue ops category throwing wrappers ---
 
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assign_throwing(
-        const char* member_name, uint64_t rhs_bits, int32_t weak,
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_assign(
-        member_name, rhs_bits, weak, xsink);
+        member_name, rhs_bits, mode_raw, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

@@ -35404,7 +35404,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         const auto* pi = reinterpret_cast<const QoreIRLValuePathInstruction*>(ptr);
         AOTLVPathSlotId& lvid = out.lv_path_insts[slot];
         lvid.opcode = static_cast<uint16_t>(pi->opcode);
-        lvid.weak = pi->mode != AssignmentMode::Normal ? 1 : 0;
+        lvid.mode = static_cast<uint8_t>(pi->mode);
         lvid.compound_op = static_cast<uint8_t>(pi->compound_op);
         lvid.unary_op = static_cast<uint8_t>(pi->unary_op);
         lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);

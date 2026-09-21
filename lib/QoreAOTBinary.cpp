@@ -13664,7 +13664,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // LValuePath instruction entries (in slot-index order)
         for (auto& lvid : func.slot_ids.lv_path_insts) {
             writer.writeU16(lvid.opcode);
-            writer.writeU8(lvid.weak);
+            writer.writeU8(lvid.mode);
             writer.writeU8(lvid.compound_op);
             writer.writeU8(lvid.unary_op);
             writer.writeU8(lvid.binary_mut_op);

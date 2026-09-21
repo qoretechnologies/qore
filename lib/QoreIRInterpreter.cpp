@@ -10253,7 +10253,11 @@ load_local_done:
                         return false;
                     }
                     QoreValue stored = val.hasNode() ? val.refSelf() : val;
-                    helper.assign(stored, "<lvalue>", true, AssignmentMode::Weak);
+                    // the store's own mode, not Weak: this branch is taken for every
+                    // non-Normal mode, and assigning as Weak here made '@=' on a local give up
+                    // the ownership that separates it from ':=', destroying a target whose only
+                    // reference was the opaque one
+                    helper.assign(stored, "<lvalue>", true, local_inst->mode);
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
