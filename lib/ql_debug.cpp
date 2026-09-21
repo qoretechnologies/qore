@@ -2739,6 +2739,56 @@ static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
 // of the ALPN selection path lands in phase 5 when QoreHttpClientObject's
 // AUTO+SSL flow switches from the legacy bypass to NEGOTIATE.
 
+// QoreValue::resolveIndirect() is the accessor a binary module uses to obtain the target of a
+// value stored in a container with the weak reference operator ":=" or the opaque reference
+// operator "@=".  An opaque reference reports its target's type through getType() but is not a
+// plain pointer value, so a caller that matched the type and then read the node through get<T>()
+// received a null pointer and dereferenced it.  resolveIndirect() therefore has to hand back an
+// ordinary value rather than the opaque reference itself.
+
+static void ut_qorevalue_resolve_indirect_opaque(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // a list target: the case that crashed, because a module that matched NT_LIST and then called
+    // get<const QoreListNode>() received nullptr
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        l->push(QoreValue(1), &xsink);
+        QoreValue op = QoreValue::makeOpaqueList(*l);
+        UT_ASSERT(c, op.isOpaqueList(), "makeOpaqueList() produces an opaque list reference");
+
+        QoreValue r = op.resolveIndirect();
+        UT_ASSERT(c, !r.isOpaque(), "resolveIndirect() strips the opaque tag from a list reference");
+        UT_ASSERT_EQ(c, (int)NT_LIST, (int)r.getType(), "a resolved opaque list reference reports NT_LIST");
+        UT_ASSERT(c, r.get<const QoreListNode>() == *l,
+            "a resolved opaque list reference yields its target through get<T>()");
+    }
+
+    {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        QoreValue op = QoreValue::makeOpaqueHash(*h);
+        UT_ASSERT(c, op.isOpaqueHash(), "makeOpaqueHash() produces an opaque hash reference");
+
+        QoreValue r = op.resolveIndirect();
+        UT_ASSERT(c, !r.isOpaque(), "resolveIndirect() strips the opaque tag from a hash reference");
+        UT_ASSERT_EQ(c, (int)NT_HASH, (int)r.getType(), "a resolved opaque hash reference reports NT_HASH");
+        UT_ASSERT(c, r.get<const QoreHashNode>() == *h,
+            "a resolved opaque hash reference yields its target through get<T>()");
+    }
+
+    // a value that is not an indirect reference at all must come back untouched
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), &xsink);
+        QoreValue plain(*l);
+        QoreValue r = plain.resolveIndirect();
+        UT_ASSERT(c, r.get<const QoreListNode>() == *l, "a plain value is returned unchanged");
+    }
+
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 static void ut_manager_negotiate_plaintext_uses_h1(UnitTestCounters& c) {
     ExceptionSink xsink;
     HttpClientConnectionManagerBase::Options opts;
@@ -4179,6 +4229,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http2_connection_alpn_setup(c);
     ut_http1_adopt_socket_simple_request(c);
     ut_http2_adopt_socket_construct(c);
+    ut_qorevalue_resolve_indirect_opaque(c);
     ut_manager_negotiate_plaintext_uses_h1(c);
     ut_manager_negotiate_refused_port(c);
     ut_negotiate_close_cancels_after_closed_state(c);

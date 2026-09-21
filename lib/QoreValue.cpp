@@ -357,7 +357,21 @@ QoreListNode* QoreValue::getOpaqueList() const {
 }
 
 QoreValue QoreValue::resolveIndirect() const {
-    // an opaque reference already reports its target's type and node, so it needs no unwrapping
+    // An opaque reference reports its target's type through getType(), but it is not a plain
+    // pointer value.  A caller doing what this accessor is for -- dispatch on getType(), then read
+    // the node with get<T>() -- would get the type of a list and a null QoreListNode* back, and
+    // dereference it.  Hand back the target as an ordinary value instead, so that no caller has to
+    // know that opaque references exist at all.
+    if (isOpaqueObject()) {
+        return QoreValue(getOpaqueObject());
+    }
+    if (isOpaqueHash()) {
+        return QoreValue(getOpaqueHash());
+    }
+    if (isOpaqueList()) {
+        return QoreValue(getOpaqueList());
+    }
+
     switch (getType()) {
         case NT_WEAKREF: {
             QoreObject* o = get<const WeakReferenceNode>()->get();

@@ -815,8 +815,10 @@ public:
         the language unwraps it, but code that walks a hash or a list itself sees the stored node,
         and a \c switch on QoreValue::getType() that only handles \c NT_OBJECT, \c NT_HASH and
         \c NT_LIST silently misses it.  A value assigned with the
-        @ref opaque_assignment_operator "opaque assignment operator (\@=)" needs no unwrapping —
-        it already reports its target's type and node — so this is safe to call on any value.
+        @ref opaque_assignment_operator "opaque assignment operator (\@=)" reports its target's
+        type but is not a plain pointer value, so a \c switch that reads the node after matching
+        the type gets a null pointer for it; this call returns the target as an ordinary value.
+        Every other value is returned unchanged, so it is safe to call on anything.
 
         Binary modules that iterate containers should call this on each value before dispatching on
         its type:
