@@ -6492,8 +6492,8 @@ void UserVariantBase::recordFastCallExecution() const {
     // On-demand promotion: explicit --exec-mode=jit promotes on the first call
     // (threshold 1); tiered mode promotes once the function is hot.
     uint64_t threshold = (pgm && pgm->getExecMode() == QEM_JIT) ? 1 : QoreJIT::getJITThreshold();
-    if (ir->osr_jit_requested) {
-        ir->osr_jit_requested = false;
+    // claimed by one thread only: exchange() reports the request to just the thread that clears it
+    if (ir->osr_jit_requested.exchange(false, std::memory_order_relaxed)) {
         attemptJITCompilation();
     } else if (count >= threshold) {
         attemptJITCompilation();
@@ -6862,8 +6862,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // (threshold 1); tiered mode promotes once the function is hot.
         uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
             ? 1 : QoreJIT::getJITThreshold();
-        if (ir->osr_jit_requested && !jit_compile_failed.load(std::memory_order_acquire)) {
-            ir->osr_jit_requested = false;  // Reset flag
+        // claimed by one thread only: exchange() reports the request to just the thread that clears it
+        if (!jit_compile_failed.load(std::memory_order_acquire)
+                && ir->osr_jit_requested.exchange(false, std::memory_order_relaxed)) {
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                 ir->name.c_str());
             attemptJITCompilation();

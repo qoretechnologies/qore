@@ -7925,8 +7925,9 @@ next_instruction:
                 // OSR: count back-edges to loop headers
                 if (block->is_loop_header) {
                     ++loop_iterations;
-                    if (!func.osr_jit_requested && loop_iterations >= osr_threshold) {
-                        func.osr_jit_requested = true;
+                    if (!func.osr_jit_requested.load(std::memory_order_relaxed)
+                            && loop_iterations >= osr_threshold) {
+                        func.osr_jit_requested.store(true, std::memory_order_relaxed);
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
                     }
@@ -7966,8 +7967,9 @@ next_instruction:
                 // OSR: count back-edges to loop headers
                 if (block->is_loop_header) {
                     ++loop_iterations;
-                    if (!func.osr_jit_requested && loop_iterations >= osr_threshold) {
-                        func.osr_jit_requested = true;
+                    if (!func.osr_jit_requested.load(std::memory_order_relaxed)
+                            && loop_iterations >= osr_threshold) {
+                        func.osr_jit_requested.store(true, std::memory_order_relaxed);
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
                     }
@@ -9253,8 +9255,9 @@ load_local_done:
                 // OSR: count back-edges to loop headers
                 if (block->is_loop_header) {
                     ++loop_iterations;
-                    if (!func.osr_jit_requested && loop_iterations >= osr_threshold) {
-                        func.osr_jit_requested = true;
+                    if (!func.osr_jit_requested.load(std::memory_order_relaxed)
+                            && loop_iterations >= osr_threshold) {
+                        func.osr_jit_requested.store(true, std::memory_order_relaxed);
                         printd(2, "QoreIRInterpreter: OSR triggered for '%s' "
                             "(loop iterations=%u)\n", func.name.c_str(), loop_iterations);
                     }
