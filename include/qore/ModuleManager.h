@@ -305,53 +305,46 @@ public:
 //! the global ModuleManager object
 DLLEXPORT extern ModuleManager MM;
 
-//! RAII helper that acquires the outermost lock in the module-loading lock hierarchy.
-/** Cold runtime module loads (ModuleManager::runTimeLoadModule() and friends) acquire this lock
-    before taking a target QoreProgram's parse lock, and hold it while applying AOT module
-    commands and running module initializers.  It therefore sits above every other lock that
-    module loading can reach.
+//! RAII helper marking that the current thread is inside a module load.
+/** Module loading does not serialize on a process-global lock: each module is initialized by one
+    thread while other threads that need it wait for that thread, and a wait that would close a
+    cycle between threads raises \c CIRCULAR-MODULE-DEPENDENCY instead of deadlocking.  This
+    helper acquires no lock.  It records, per thread, how deeply the thread is nested in module
+    loads; libqore's own module-loading paths construct it, and a binary module may construct it
+    around code that loads modules.
 
-    Binary modules must acquire this lock <b>before</b> any module-private lock that is held
-    across a call back into libqore's module loading, whether directly (e.g.
-    ModuleManager::runTimeLoadModule()) or indirectly (e.g. a callback from a foreign runtime
-    such as a JVM classloader).  Failing to do so inverts the hierarchy and deadlocks against
-    a concurrent module load that is applying AOT module commands into the module.
+    Its purpose is the debug-build check paired with QoreModuleInnerLockHelper: a module-private
+    lock must never be held across the <i>start</i> of a module load, because the thread that
+    loads the module can need that same lock (for example to import Java classes through the
+    module) while the holder waits for the load.  A thread that holds a lock marked with
+    QoreModuleInnerLockHelper when it enters its outermost module load trips the assertion in
+    this helper's constructor.  Taking a marked lock during a module load, inside this helper's
+    scope, is legal.
 
-    The lock is recursive, so re-acquiring it on a nested module load in the same thread is
-    safe and cheap; taking it defensively on a path that already holds it costs nothing.
-
-    This lock is intended for <b>cold</b> paths only.  runTimeLoadModule() deliberately keeps a
-    lock-free fast path for already-committed features so that steady-state operation does not
-    serialize here; callers should preserve that property by not acquiring this lock on cache-hit
-    paths that cannot reach module loading.
-
-    Modules that take a private lock which is inner to this one should mark it with
-    QoreModuleInnerLockHelper, which enables a debug-build assertion that the hierarchy is
-    respected.
+    In non-debug builds this has no effect beyond the depth counter.
 
     @since %Qore 3.0
 */
 class QoreModuleLoadLockHelper {
 public:
-    //! Acquires the module-load lock; in debug builds, asserts that the lock order is respected
+    //! Marks the current thread as inside a module load; in debug builds, asserts that no module-inner lock is held when the outermost load starts
     DLLEXPORT QoreModuleLoadLockHelper();
 
-    //! Releases the module-load lock
+    //! Marks the end of the module load started by the constructor
     DLLEXPORT ~QoreModuleLoadLockHelper();
 
     QoreModuleLoadLockHelper(const QoreModuleLoadLockHelper&) = delete;
     QoreModuleLoadLockHelper& operator=(const QoreModuleLoadLockHelper&) = delete;
 };
 
-//! RAII helper marking that the current thread holds a lock that is inner to the module-load lock.
-/** Modules use this to declare their own lock's position in the module-loading lock hierarchy.
-    While such a lock is held, acquiring the module-load lock (whether directly via
-    QoreModuleLoadLockHelper or indirectly by triggering a module load anywhere in libqore) is a
-    lock-order inversion and deadlocks against a concurrent module load; in debug builds
-    QoreModuleLoadLockHelper asserts that this does not happen.
+//! RAII helper marking that the current thread holds a module-private lock that must not be held across a module load.
+/** Modules use this to mark a private lock that code running inside a module load can take.
+    Starting a module load while such a lock is held - whether directly or by triggering a module
+    load anywhere in libqore - can deadlock against the thread loading the module, and in debug
+    builds QoreModuleLoadLockHelper asserts that this does not happen.
 
-    A module may hold a marked lock and still load modules if it took the module-load lock
-    <i>first</i> — that is the correct order and is explicitly allowed.
+    A marked lock taken while the thread is already inside a module load (within a
+    QoreModuleLoadLockHelper scope) is allowed.
 
     In non-debug builds this is inert.
 

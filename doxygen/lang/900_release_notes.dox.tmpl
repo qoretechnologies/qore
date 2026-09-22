@@ -1065,10 +1065,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - new functions:
       - @ref Qore::call_async() "call_async()": spawns a background thread to execute a callable and returns a
         @ref Qore::Thread::Future "Future" for the result
-      - @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()": calls a callable while holding the
-        global module-load lock, so that %Qore code (for example a module performing lazy initialization that can
-        load further modules) can establish a consistent lock order with its own locks and avoid the ABBA deadlock
-        described in @ref qore_3_0_0_new_features "Module-Loading Lock Hierarchy"
+      - @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()": calls a callable and returns its
+        result; module loading takes no process-global lock, so this is a plain call, described in
+        @ref qore_3_0_0_new_features "Module-Loading Lock Hierarchy"
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
@@ -1485,29 +1484,25 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @par Module-Loading Lock Hierarchy
     @parblock
-    Cold runtime module loads serialize on a process-global lock while applying @ref exec_mode_aot "AOT"
-    module commands
-    and running module initializers.  Because applying a module's commands can call into that
-    module (for example to import Java classes), a binary module that holds a private lock while
-    triggering a module load could invert the lock order and deadlock against a concurrent load.
+    Module loading does not serialize on a process-global lock.  Each module is initialized by one
+    thread while other threads that need it wait for that thread, and a wait that would close a cycle
+    between threads raises a \c CIRCULAR-MODULE-DEPENDENCY exception instead of deadlocking.  A
+    module's own @ref Qore::Program "Program" can be the target of a module load while another thread
+    imports the module, and the import excludes that load for as long as it copies the module's
+    declarations.
 
-    Binary modules can now participate in that hierarchy explicitly:
-    - @ref QoreModuleLoadLockHelper "QoreModuleLoadLockHelper" acquires the module-load lock, which must be taken <i>before</i>
-      any module-private lock that is held across a call back into module loading &mdash; whether
-      directly via \c ModuleManager::runTimeLoadModule(), or indirectly through a callback from a
-      foreign runtime such as a JVM classloader
-    - @ref QoreModuleInnerLockHelper "QoreModuleInnerLockHelper" marks a module-private lock as inner to the module-load lock;
-      debug builds then assert that the order is respected rather than deadlocking in the field
+    Because loading a module can call into it (for example to import Java classes), a module must
+    never hold one of its private locks across the start of a module load: the thread loading the
+    module can need that lock while the holder waits for the load.  Binary modules can have debug
+    builds check this:
+    - @ref QoreModuleInnerLockHelper "QoreModuleInnerLockHelper" marks a module-private lock that code running inside a
+      module load can take
+    - @ref QoreModuleLoadLockHelper "QoreModuleLoadLockHelper" marks the current thread as inside a module load; it acquires
+      no lock, and in debug builds it asserts that no marked lock is held when a thread starts its outermost module load
 
-    The lock is recursive, so nested module loads are safe.  It is intended for cold paths only:
-    already-loaded modules keep a lock-free fast path, and module authors should avoid taking the
-    module-load lock on cache-hit paths that cannot reach module loading.
-
-    %Qore-language modules can participate in the same hierarchy with the new
-    @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()" function, which runs a callable while
-    holding the module-load lock; a module that performs lazy initialization under its own lock (and whose
-    initialization can load further modules) should acquire the module-load lock first via this function so the
-    global order remains "module-load lock &rarr; module-private lock".
+    @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()" calls a callable and returns its result.
+    It takes no lock; a module performing lazy initialization under its own lock should release that lock before
+    anything in the initialization can load a module.
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing
