@@ -12,6 +12,8 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
         string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         string qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        #! bounds each command so that a hang fails the test instead of stalling the run
+        string timeout_prefix = timeoutPrefix(90);
     }
     constructor() : Test("AOT constructor lexical class context", "1.0", \ARGV) {
         addTestCase("Private overloads and access denial agree in all source modes", \source());
@@ -33,6 +35,22 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
         }
         throw "TEST-SETUP-ERROR", "cannot locate Qore executable " + name;
     }
+    #! A command prefix that kills what follows after \a seconds, or an empty string when there is none
+    /** GNU coreutils \c timeout is not part of macOS; MacPorts and Homebrew install it as \c gtimeout.  Perl's
+        \c alarm is the last resort.  \c QORE_TIMEOUT_EXECUTABLE overrides the search.
+    */
+    private static string timeoutPrefix(int seconds) {
+        string cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? trim(backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (cmd) {
+            return sprintf("%s %d ", quote(cmd), seconds);
+        }
+        string perl = trim(backquote("command -v perl 2>/dev/null || true"));
+        if (perl) {
+            return sprintf("%s -e 'alarm shift; exec @ARGV' %d ", quote(perl), seconds);
+        }
+        return "";
+    }
     private static write(string path, string value) {
         File file();
         file.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
@@ -41,7 +59,7 @@ class AOTConstructorClassContextTest inherits QUnit::Test {
     }
     private string run(string dir, list<string> args) {
         string log = dir + "/run.log";
-        string command = "timeout 90s env LD_LIBRARY_PATH=" + quote(lib_dir)
+        string command = timeout_prefix + "env LD_LIBRARY_PATH=" + quote(lib_dir)
             + " QORE_LIBDIR=" + quote(lib_dir) + " " + (map quote($1), args).join(" ");
         int status = system(command + " > " + quote(log) + " 2>&1");
         string output = File::readTextFile(log);

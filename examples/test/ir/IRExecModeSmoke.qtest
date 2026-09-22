@@ -235,12 +235,15 @@ class IRExecModeSmokeTest inherits QUnit::Test {
             out_path = trim(cmd.substr(out_pos + 3, end_pos - (out_pos + 3)));
         }
 
-        if (path_exists("/usr/bin/timeout")) {
+        # GNU coreutils timeout; macOS has none of its own, and MacPorts and Homebrew install it as gtimeout
+        string timeout_bin = ENV.QORE_TIMEOUT_EXECUTABLE ?? trim(backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true"));
+        if (timeout_bin) {
             string wrapped = time_bin
-                ? sprintf("/usr/bin/timeout -k 5s %ds %s %s /bin/sh -c %y 2> %s",
-                    timeout_s, time_bin, time_flag, wrapped_cmd, time_log.path)
-                : sprintf("/usr/bin/timeout -k 5s %ds /bin/sh -c %y",
-                    timeout_s, wrapped_cmd);
+                ? sprintf("%s -k 5s %ds %s %s /bin/sh -c %y 2> %s",
+                    timeout_bin, timeout_s, time_bin, time_flag, wrapped_cmd, time_log.path)
+                : sprintf("%s -k 5s %ds /bin/sh -c %y",
+                    timeout_bin, timeout_s, wrapped_cmd);
             int rc = system(wrapped);
             if (rc == 124 || rc == 137) {
                 printf("IR exec-mode command timed out (%ds)\n", timeout_s);
