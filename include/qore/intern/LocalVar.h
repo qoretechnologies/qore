@@ -778,8 +778,15 @@ public:
         return name;
     }
 
+    //! Marks the variable as closure-bound
+    /** The parser marks every variable that needs it before the code runs, but an AOT-compiled reference to a local
+        variable repeats the call each time it is made (qore_rt_create_local_ref_aot()), while other threads running
+        the same code read the flag; so it is only written when it changes, which is never at run time.
+    */
     DLLLOCAL void setClosureUse() {
-        closure_use = true;
+        if (!closure_use) {
+            closure_use = true;
+        }
     }
 
     DLLLOCAL bool closureUse() const {
