@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks for weak references (":=") to lists and hashes whose last strong reference is gone; run by
+# weak-container-refs.qtest
+
+%allow-weak-references
+
+/** A weak reference keeps a list or hash allocated after its last strong reference is released, but not its
+    entries: the container then reads as empty.  Taking a new reference to it through the weak reference, and
+    releasing that again, must not free it a second time, which released a weak reference that the first free had
+    already released and deleted the node under its weak holders.
+
+    A hash that is emptied to be used again, as a pooled thread's data is, stays a hash that can be changed.
+
+    Each container is made from run-time values, so that it is not a constant the parse tree keeps, in a function of
+    its own, so that its last strong reference is released when the function returns in every execution mode.  Each
+    check prints "name=value", 1 if it passed and 0 if it did not.
+*/
+namespace WeakContainerChecks {
+our list<auto> wl;
+our hash<auto> wh;
+
+sub make_list(string s = sprintf("%d", getpid())) {
+    list<auto> l = (s + "x", s + "y", {"k": s}, (s,));
+    wl := l;
+}
+
+sub make_hash(string s = sprintf("%d", getpid())) {
+    hash<auto> h = {"a": s, "l": (s,), "h": {"k": s}};
+    wh := h;
+}
+
+int sub list_reads_empty() {
+    make_list();
+    return (wl.size() == 0 && !wl.val()) ? 1 : 0;
+}
+
+int sub list_iterates_nothing() {
+    make_list();
+    int n = 0;
+    foreach auto v in (wl) {
+        ++n;
+    }
+    return n == 0 ? 1 : 0;
+}
+
+int sub list_taken_and_released() {
+    make_list();
+    for (int i = 0; i < 5; ++i) {
+        list<auto> x = wl;
+        remove x;
+    }
+    return wl.size() == 0 ? 1 : 0;
+}
+
+#! a list that has gone out of scope cannot be changed through a new reference to it
+int sub list_changed_after_free() {
+    make_list();
+    list<auto> x = wl;
+    string err;
+    try {
+        x += "z";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    remove x;
+    return (err == "LIST-ERROR" && wl.size() == 0) ? 1 : 0;
+}
+
+#! the same for an element assigned by index
+int sub list_index_changed_after_free() {
+    make_list();
+    list<auto> x = wl;
+    string err;
+    try {
+        x[0] = "z";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    remove x;
+    return (err == "LIST-ERROR" && wl.size() == 0) ? 1 : 0;
+}
+
+#! the same for an element inserted at the start
+int sub list_unshift_after_free() {
+    make_list();
+    list<auto> x = wl;
+    string err;
+    try {
+        unshift x, "z";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    remove x;
+    return (err == "LIST-ERROR" && wl.size() == 0) ? 1 : 0;
+}
+
+int sub hash_reads_empty() {
+    make_hash();
+    return (wh.size() == 0 && !wh.val()) ? 1 : 0;
+}
+
+int sub hash_taken_and_released() {
+    make_hash();
+    for (int i = 0; i < 5; ++i) {
+        hash<auto> x = wh;
+        remove x;
+    }
+    return wh.size() == 0 ? 1 : 0;
+}
+
+#! a hash that has gone out of scope cannot be changed through a new reference to it
+int sub hash_changed_after_free() {
+    make_hash();
+    hash<auto> x = wh;
+    string err;
+    try {
+        x.z = "z";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    remove x;
+    return (err == "HASH-ERROR" && wh.size() == 0) ? 1 : 0;
+}
+
+#! the same for a key given at run time
+int sub hash_dynamic_key_changed_after_free() {
+    make_hash();
+    hash<auto> x = wh;
+    string key = "z";
+    string err;
+    try {
+        x{key} = "z";
+    } catch (hash<ExceptionInfo> ex) {
+        err = ex.err;
+    }
+    remove x;
+    return (err == "HASH-ERROR" && wh.size() == 0) ? 1 : 0;
+}
+
+#! a hash that is emptied and used again is not a freed hash: a pooled thread's data is cleared after each task
+int sub thread_data_reused_after_clear() {
+    ThreadPool tp(1, 1, 1);
+    on_exit tp.stop();
+    list<auto> seen = ();
+    for (int i = 0; i < 3; ++i) {
+        Counter done(1);
+        tp.submit(sub () {
+            on_exit done.dec();
+            try {
+                seen += get_thread_data("k");
+                save_thread_data("k", i);
+                seen += get_thread_data("k");
+            } catch (hash<ExceptionInfo> ex) {
+                seen += ex.err;
+            }
+        });
+        done.waitForZero();
+    }
+    return seen == (NOTHING, 0, NOTHING, 1, NOTHING, 2) ? 1 : 0;
+}
+
+hash<string, int> sub get_results() {
+    return {
+        "list-reads-empty": list_reads_empty(),
+        "list-iterates-nothing": list_iterates_nothing(),
+        "list-taken-and-released": list_taken_and_released(),
+        "list-changed-after-free": list_changed_after_free(),
+        "list-index-changed-after-free": list_index_changed_after_free(),
+        "list-unshift-after-free": list_unshift_after_free(),
+        "hash-reads-empty": hash_reads_empty(),
+        "hash-taken-and-released": hash_taken_and_released(),
+        "hash-changed-after-free": hash_changed_after_free(),
+        "hash-dynamic-key-changed-after-free": hash_dynamic_key_changed_after_free(),
+        "thread-data-reused-after-clear": thread_data_reused_after_clear(),
+    };
+}
+}
+
+foreach hash<auto> i in (WeakContainerChecks::get_results().pairIterator()) {
+    printf("%s=%d\n", i.key, i.value);
+}

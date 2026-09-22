@@ -2229,12 +2229,14 @@ if (x || y)
     @subsection weak_assignment_operator Weak Reference Assignment Operator (:=)
 
     @par Synopsis
-    Identical to the @ref assignment_operator "assignment operator" except when the rvalue is an object;
-    in such cases a weak reference to the object is assigned instead of a strong reference.  Weak references
-    do not extend the life of an object and also do not participate in object graph cycles (i.e. recursive
+    Identical to the @ref assignment_operator "assignment operator" except when the rvalue is an object, a hash or
+    a list; in such cases a weak reference to the value is assigned instead of a strong reference.  Weak references
+    do not extend the life of the value and also do not participate in object graph cycles (i.e. recursive
     references) and therefore can be used to break up large graphs of objects to improve garbage collector
-    performance with such graphs, however the programmer must ensure that the object has a valid
-    strong reference elsewhere or the object will go out of scope.\n<br>
+    performance with such graphs, however the programmer must ensure that the value has a valid
+    strong reference elsewhere or the value will go out of scope.  Once the last strong reference to a hash or a
+    list is released, a weak reference to it reads it as empty, and any attempt to change it through a new
+    reference raises \c HASH-ERROR or \c LIST-ERROR.\n<br>
     This operator should only be used in very special circumstances by
     expert users and is only allowed when the @ref allow-weak-references "%allow-weak-references" sandbox
     permission is set.
@@ -2250,7 +2252,7 @@ if (x || y)
 
     <b>Arguments Processed by :=</b>
     |!Argument|!Processing
-    |All|Assigns the value of \a expression to \a lvalue and returns the value assigned; if <em>@ref expressions "rvalue_expression"</em> is an object, a weak reference is assigned instead of a strong reference
+    |All|Assigns the value of \a expression to \a lvalue and returns the value assigned; if <em>@ref expressions "rvalue_expression"</em> is an object, a hash or a list, a weak reference is assigned instead of a strong reference
 
     <hr>
     @subsection opaque_assignment_operator Opaque Reference Assignment Operator (\@=)

@@ -662,9 +662,9 @@ struct qore_list_private {
 
     //! Finishes freeing a list after its entries have been freed
     DLLLOCAL static void finishFree(QoreListNode& l) {
-#ifdef DEBUG
+        // a weak reference (":=") keeps the node allocated after its entries were freed, and must read it as an empty
+        // list, not as the entries that no longer exist
         l.priv->length = 0;
-#endif
         l.priv->valid = false;
         l.weakDeref();
     }

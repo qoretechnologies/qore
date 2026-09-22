@@ -3332,6 +3332,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       its programs with qore_destroy_program(), such as an executable that \c qcc links from \c .qo objects, could
       free library state, and the thread counter itself when the process exited, while a background thread was
       still using it
+    - Fixed a weak reference (<tt>:=</tt>) to a list whose last strong reference was released reading the list's
+      freed entries in release builds, and fixed taking and releasing a new reference to such a list or hash
+      through the weak reference freeing it a second time, which deleted it while the weak reference still pointed
+      to it.  Such a list or hash now reads as empty, and changing it raises \c LIST-ERROR or \c HASH-ERROR in
+      every execution mode, where the IR, JIT and AOT modes changed it.  Also fixed emptying a hash that stays in
+      use (the thread-local data of a pooled thread, for example) marking it as gone out of scope, and a value
+      appended to a list that has gone out of scope being leaked
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

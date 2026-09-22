@@ -1,0 +1,102 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class WeakContainerRefsTest
+
+#! Tests weak references (":=") to lists and hashes whose last strong reference is gone
+/** The container then reads as empty in every execution mode, and taking and releasing a new reference to it
+    through the weak reference does not free it again.  The checks are in weak-container-refs-worker.qr, which is run
+    in each execution mode and as a program compiled with qcc.
+*/
+class WeakContainerRefsTest inherits QUnit::Test {
+    public {
+        #! every check the worker makes; each passes with 1
+        const Checks = (
+            "list-reads-empty",
+            "list-iterates-nothing",
+            "list-taken-and-released",
+            "list-changed-after-free",
+            "list-index-changed-after-free",
+            "list-unshift-after-free",
+            "hash-reads-empty",
+            "hash-taken-and-released",
+            "hash-changed-after-free",
+            "hash-dynamic-key-changed-after-free",
+            "thread-data-reused-after-clear",
+        );
+
+        #! the execution modes that the worker is run in; "" is the default (tiered) mode
+        const ExecModes = ("ast", "ir", "jit", "");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("WeakContainerRefsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string opts = mode ? "--exec-mode=" + mode : "";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s %s 2>&1", libqore_dir, qore_bin, opts,
+                getWorker()));
+            checkWorkerOutput(mode ?: "default", out);
+        }
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-weak-container-refs-");
+        string exe = tmp.path + DirSep + "weak-container-refs";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "weak-container-refs-worker.qr";
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks that every check passed
+    private checkWorkerOutput(string label, string out) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        assertEq(sort(Checks), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (results.pairIterator()) {
+            assertEq(1, i.value, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

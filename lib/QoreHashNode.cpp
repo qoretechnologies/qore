@@ -620,6 +620,14 @@ void QoreHashNode::removeKey(const QoreString* key, ExceptionSink* xsink) {
 
 int QoreHashNode::setKeyValue(const char* key, QoreValue value, ExceptionSink* xsink) {
     assert(reference_count() == 1);
+    // see QoreListNode::setEntry(): a hash whose last reference was released cannot be changed
+    if (!priv->valid) {
+        if (xsink) {
+            priv->checkValid(xsink);
+        }
+        value.discard(xsink);
+        return -1;
+    }
     hash_assignment_priv ha(*priv, key);
     // report the outcome of THIS assignment; deriving it from the sink state would report a spurious failure
     // whenever the caller's sink already held an unrelated exception
@@ -719,6 +727,11 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
 }
 
 bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
+    // a hash that was already freed was referenced again through a weak reference; see QoreListNode::derefImpl()
+    if (!priv->valid) {
+        priv->derefImpl(xsink);
+        return false;
+    }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
         priv->derefImpl(xsink);
