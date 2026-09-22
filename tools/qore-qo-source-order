@@ -3715,6 +3715,27 @@ class SourceOrderEngine {
         return external;
     }
 
+    #! Every build input from outside the group that any member's depfile records.
+    /** The union of externalDepfileInputs() over the group, sorted.  This is what
+        the build tool has to watch for the group as a whole: a member records a
+        module or an include only in its own depfile, and a standalone compile that
+        adds one after the group's last shared parse is the only record of it.
+    */
+    list<string> groupExternalInputs(hash<SourceOrderContext> context_info) {
+        *hash<string, bool> covered;
+        hash<string, bool> inputs = {};
+        foreach string output in (context_info.outputs) {
+            if (!is_file(output + ".d")) {
+                continue;
+            }
+            foreach string dependency in (externalDepfileInputs(output, context_info,
+                    \covered)) {
+                inputs{dependency} = True;
+            }
+        }
+        return sort(keys inputs);
+    }
+
     #! The group context's modification time, or NOTHING when it does not exist.
     /** The context is a configure-time artifact rewritten only when its content
         changes, so its modification time is the group's build-input generation.
@@ -4145,6 +4166,23 @@ sub atomicWriteIfChanged(string path, string content) {
     rename(temporary, path);
 }
 
+#! \a path escaped as a make depfile target or prerequisite.
+string sub makeDepfilePath(string path) {
+    return replace(replace(replace(path, "$", "$$"), "#", "\\#"), " ", "\\ ");
+}
+
+#! One make depfile rule: \a target depends on every path in \a inputs.
+/** Spaces and \c # are backslash-escaped and \c $ is doubled, which is what
+    both make and CMake's depfile reader expect of a prerequisite.
+*/
+string sub makeDepfile(string target, list<string> inputs) {
+    string text = makeDepfilePath(target) + ":";
+    foreach string input in (inputs) {
+        text += " \\\n    " + makeDepfilePath(input);
+    }
+    return text + "\n";
+}
+
 string sub cmakeQuote(string value) {
     string result;
     for (int offset = 0; offset < value.size(); ++offset) {
@@ -4187,6 +4225,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "           CONTEXT SCC\n"
         "       %s --scc-graph-generation CONTEXT\n"
         "       %s --scc-freeze-graph SNAPSHOT [--batch-stamp STAMP] CONTEXT\n"
+        "       %s --scc-external-inputs STAMP CONTEXT\n"
         "\n"
         "SCC selects a strongly connected component of the required-edge graph by\n"
         "its index or by its key. Only a key is stable across a build: component\n"
@@ -4234,9 +4273,14 @@ sub usage(*string error = NOTHING, bool success = False) {
         "a snapshot naming an older publication is discarded for a live scan: the\n"
         "file outlives the build that wrote it, and a recipe the build tool\n"
         "scheduled ahead of the next freeze must not apply the previous build's\n"
-        "edge set.\n",
+        "edge set.\n"
+        "\n"
+        "--scc-external-inputs writes STAMP.d, a make depfile whose one rule names\n"
+        "STAMP and every build input from outside the group that any member's\n"
+        "depfile records -- the toolchain, loaded modules, stubs and includes.  The\n"
+        "file is rewritten only when that set changes.\n",
         name, name, name, name, name, name, name, name, name, name, name, name, name,
-        name, name);
+        name, name, name);
     if (success) {
         printf("%s", text);
     } else {
@@ -4407,6 +4451,7 @@ int sub main() {
     *string component_map_prefix;
     *string component_generation_map;
     *string graph_snapshot_output;
+    *string external_inputs_stamp;
     *string expected_generation;
     *string expected_graph_generation;
     *string direct_map_prefix;
@@ -4464,7 +4509,8 @@ int sub main() {
                 || arg == "--batch-artifact-current"
                 || arg == "--scc-map-cmake"
                 || arg == "--scc-generation-map"
-                || arg == "--scc-freeze-graph") {
+                || arg == "--scc-freeze-graph"
+                || arg == "--scc-external-inputs") {
             if (++index >= ARGV.size()) {
                 usage(sprintf("argument expected after %s", arg));
             }
@@ -4480,6 +4526,8 @@ int sub main() {
                 component_generation_map = ARGV[index];
             } else if (arg == "--scc-freeze-graph") {
                 graph_snapshot_output = ARGV[index];
+            } else if (arg == "--scc-external-inputs") {
+                external_inputs_stamp = ARGV[index];
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
@@ -4513,6 +4561,8 @@ int sub main() {
             component_generation_map = arg.substr(21);
         } else if (arg.startsWith("--scc-freeze-graph=")) {
             graph_snapshot_output = arg.substr(19);
+        } else if (arg.startsWith("--scc-external-inputs=")) {
+            external_inputs_stamp = arg.substr(22);
         } else if (arg.startsWith("--batch-artifact-current=")) {
             batch_bootstrap_stamp = arg.substr(25);
         } else if (arg.startsWith("-")) {
@@ -4574,6 +4624,14 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
+    if (exists external_inputs_stamp) {
+        if (positional.size() != 1) {
+            usage("--scc-external-inputs accepts only a context argument");
+        }
+        atomicWriteIfChanged(external_inputs_stamp + ".d",
+            makeDepfile(external_inputs_stamp, engine.groupExternalInputs(context_info)));
+        return 0;
+    }
     if (exists graph_snapshot_output) {
         if (positional.size() != 1) {
             usage("--scc-freeze-graph accepts only a context argument");

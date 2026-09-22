@@ -483,6 +483,22 @@ against a stale member's previous object only to go stale again in the next pass
 parse from compiling consistently; whether it should be the default is a performance
 decision for the escalation floor below, and wants measuring on the trees it would serve.
 
+**Measured on Qorus (2026-09-22), it does not pay for the edit it was meant for.** A comment
+appended to three core sources (`QorusQonsoleCore.qc`, `QorusRestApiHandlerV9.qc`,
+`QonsoleDesignArtifactStore.qc`) leaves three singleton components stale:
+
+|!path|!passes|!sources per parse|!coordinator time
+|standalone compiles (default)|1|1, three times|3m07
+|`QORE_QCC_SUBSET_PARSE=1`|3|1 (convexity left 2, then 1, out)|3m47
+
+`--scc-convex-set` kept only one of the three in each parse -- each of the others would have
+preloaded an object compiled against a source the parse recompiled -- so the partial parse
+became three passes of one source, each paying the parse and planning overhead the one
+standalone pass pays once. On a group this dense the convexity rule turns most multi-source
+stale sets into one source per pass, and a parse of one source is a standalone compile with
+more overhead. Making it the default would need a stale set whose members do not reach each
+other through preloads, which the edits measured here did not produce.
+
 ## What actually causes the mode-transition cascade
 
 The cascade — the first incremental build after any full build walking the whole closure of
@@ -718,6 +734,11 @@ link step validates that hash, and a body contract is not part of a declaration 
 The stamp is written with `write_generated_file_if_changed()`, so an unchanged declaration
 keeps its mtime and the edge does not fire. That is the whole mechanism: the file the build
 tool stats moves only when a declaration moves.
+
+(In a group with a coordinator the build tool no longer reads member depfiles at all -- see "The
+build tool reads one depfile per group, not one per object" below. The scheduler still reads
+them for the graph and the preload closure, and a single-source group still hands its one
+recipe the depfile qcc writes, so the narrowing matters to both.)
 
 Two invariants make this work, and both were violated by the obvious implementation:
 
@@ -1008,6 +1029,58 @@ single `rename(2)`. The temporary is named after its target, so concurrent batch
 threads cannot collide, and it does not end in `.d`, so a scan for depfiles cannot
 pick one up mid-write.
 
+## The build tool reads one depfile per group, not one per object
+
+Every object recipe used to carry `DEPFILE <object>.qo.d`. In a group with a coordinator those
+depfiles decided nothing: a recipe behind the coordinator asks the currency question with
+`--source-deps-only`, so one that ran because a module or stub moved found its component current
+and did nothing. What actually carried an external change was the bootstrap's own depfile --
+written by the group parse -- whose recipe runs `--scc-stale` and hands the stale components to
+the coordinator.
+
+They were also expensive. The Makefile generators before CMake 4.0 consolidate a custom
+command's depfile into the target's `compiler_depend.internal`/`compiler_depend.make` by
+**appending** a rewritten depfile's paths to the entry already there, never replacing it
+(`cmDependsCompiler::CheckDependencies()`; CMake 4.0 assigns instead). A member depfile is
+rewritten on every compile, and CMake copies an object recipe into every target that consumes
+its stamp, each with its own consolidated file. On Qorus (CMake 3.31.12):
+
+|!measurement|!value
+|`qore_qcc_QORUS_CORE_MAIN_generation` consolidated dependencies|840 MB + 923 MB, 14.7M lines
+|lines for `QorusQonsoleCore.qc`'s stamp|29,496, for 326 distinct paths (each repeated up to 112 times)
+|every target's `compiler_depend*` in the build tree|9.6 GB, 7 GB of it temporaries of interrupted rewrites
+|CMake dependency scan after a three-object incremental compile|50 s
+
+And they left a gap. An input a member started reading after the group's last shared parse --
+a module it began to `%requires` -- is recorded only by that member's standalone compile, not by
+the bootstrap's depfile, so an edit to it rebuilt nothing. On Qorus 40 modules and module
+sources were in that state, among them `QorusTokenEntitlement.qmod`, which the same project
+builds.
+
+So a group with a coordinator now has one **external-input stamp**, `.qcc-external-inputs.stamp`
+beside the generation records, whose custom command only touches it and whose depfile names
+every build input from outside the group that any member's depfile records
+(`qore-qo-source-order --scc-external-inputs`, the union of `externalDepfileInputs()`). The
+bootstrap depends on the stamp, so a move in any of those inputs reaches the bootstrap's
+currency check, which compares it against every member's stamp and hands exactly the members
+that read it to the coordinator. The coordinator rewrites the depfile at the end of every
+successful plan -- its compiles are what change the set -- and only when the set changed, so
+CMake consolidates it rarely; on Qorus it names 176 paths. Object recipes carry no `DEPFILE`;
+a single-source group, which has no coordinator, still gives its one recipe qcc's depfile.
+
+Configuring also resets the consolidated dependencies of the group's own targets (source
+content, source symbols, bootstrap, coordinator, objects, generation) and removes the
+temporaries an interrupted rewrite left: CMake keeps a target's consolidated dependencies when
+the depfiles that produced them go away, so a tree configured by an earlier `QoreMacros.cmake`
+would otherwise keep reading gigabytes of dependencies that no longer exist. The next build
+reads the remaining depfiles again, which takes a fraction of a second. Targets a project
+defines itself that consume the object stamps keep what they had consolidated -- they stop
+growing, but the file stays until it is deleted.
+
+Two depfiles still accumulate under CMake before 4.0 and are left alone: the bootstrap's, which
+the group parse rewrites (about 8 KB per parse), and the external-input stamp's, which changes
+only when the set of external inputs does. Both are reset whenever the project is configured.
+
 ## A covered input has to be recognised however its path is spelled
 
 The generation token accounts for every in-context source, digest sidecar and sibling artifact
@@ -1159,6 +1232,13 @@ which two builders can still race to restore.
     group's own parse, which preloads nothing.
 19. A consumer's dependency on a provider's body contract covers the rows it baked, and
     nothing else the provider publishes.
+20. A publication under a frozen graph records the prerequisites its own compile wrote. The
+    record is computed from the frozen graph with the component's own depfile edges as the
+    compile left them, so a prerequisite the compile gained is in it, and the next freeze does
+    not find the component stale for a dependency it was built with.
+21. The build tool watches a group with a coordinator through one depfile: every input from
+    outside the group that any member recorded, rewritten only when that set changes. No
+    object recipe hands the build tool a depfile of its own.
 
 ## Tests
 
@@ -1184,7 +1264,8 @@ which two builders can still race to restore.
   coordinator's pass loop: a cascade walked to convergence, a pass that changes
   nothing escalating instead of lapping, a compile that gains an edge to a current
   provider converging in one pass (and one that closes a cycle keeping the frozen
-  graph's record for the parse to replace), the escalation floor following
+  graph's record for the parse to replace), the external-input depfile the coordinator
+  writes (one rule, escaped, rewritten only on change), the escalation floor following
   whether a partial parse is configured, a partial parse leaving a non-convex member for
   the next pass, and a preload failure on the default path falling back to the group's
   parse
@@ -1195,4 +1276,8 @@ which two builders can still race to restore.
   that a SIGKILLed holder's lock is free with nothing to reclaim, that the lock file
   survives, and that arguments are not re-split by a shell
 - `examples/test/ir/AOTDepfileAtomicWrite.qtest` — depfile publication atomicity
-- `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end
+- `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end, including
+  that no member depfile reaches a target consuming the object stamps, that a module a member
+  started requiring after the group parse is watched and an edit to it rebuilds that member
+  alone, and that configuring resets the consolidated dependencies an earlier configuration
+  left

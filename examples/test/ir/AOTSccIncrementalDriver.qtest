@@ -90,6 +90,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testACompileThatDiscoversAnEdgeConverges());
         addTestCase("a compile that closes a cycle is still published and then rebuilt",
             \testACompileThatClosesACycleIsRebuiltTogether());
+        addTestCase("the coordinator records what the group reads from outside it",
+            \testCoordinatorRecordsExternalInputs());
         addTestCase("the escalation floor follows what serves the band below it",
             \testEscalationFloorFollowsThePartialParse());
         addTestCase("concurrent recipes publish one coherent generation",
@@ -1326,6 +1328,82 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
             "the merged component is built by the group's parse: " + result.output);
         assertEq((), stalePlan(fx).stale, "and the group is current");
+    }
+
+    #! The build tool watches the group's external inputs through one depfile the coordinator writes.
+    /** The rule names the stamp the depfile belongs to and every input from outside the group that a
+        member's depfile records -- once, however many members record it -- and nothing the group
+        accounts for by content: its sources, digests and sibling artifacts.  A path is escaped the way
+        make and CMake read a prerequisite, and the file is rewritten only when the set changes,
+        because every rewrite is one more consolidation for the build tool.
+    */
+    testCoordinatorRecordsExternalInputs() {
+        TmpDir tmp("qore-aot-driver-external-inputs-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        string external_dir = tmp.path + "/outside the group";
+        mkdir(external_dir);
+        string module = external_dir + "/Shared$Module.qm";
+        string stub = tmp.path + "/stubs.qc";
+        write(module, "module\n");
+        write(stub, "stub\n");
+        writeCompiler(fx);
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        # a and c read the module, d reads the stub; c also names a sibling and its own source
+        list<list<auto>> depfile_lines = (
+            ("a", (module,)),
+            ("c", (module, fx.qo_dir + "/a.qo.compile-contract.stamp")),
+            ("d", (stub,)),
+        );
+        foreach list<auto> entry in (depfile_lines) {
+            list<string> deps = (fx.src_dir + "/" + entry[0] + ".qc",) + entry[1];
+            write(fx.qo_dir + "/" + entry[0] + ".qo.d",
+                fx.qo_dir + "/" + entry[0] + ".qo.stamp:"
+                + join("", (map " \\\n    " + replace($1, " ", "\\ "), deps)) + "\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+
+        string stamp = fx.qo_dir + "/.qcc-scc/.qcc-external-inputs.stamp";
+        string env = sprintf("QORE_QCC_EXTERNAL_INPUTS_STAMP=%y", stamp);
+        hash<auto> result = plan(fx, env);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertEq((), compiles(fx), "with nothing to compile");
+        string depfile = read(stamp + ".d");
+        string escaped_module = replace(replace(module, "$", "$$"), " ", "\\ ");
+        assertEq(stamp + ": \\\n    " + escaped_module + " \\\n    " + stub + "\n", depfile,
+            "one rule naming each external input once, escaped, and nothing the group covers");
+
+        # our own reader agrees on what the escaped paths name
+        hash<auto> unescaped = runTool(("--scc-external-inputs", tmp.path + "/again",
+            fx.context));
+        assertEq(0, unescaped.rc, "the helper runs on its own: " + unescaped.output);
+        assertEq(replace(depfile, stamp, tmp.path + "/again"), read(tmp.path + "/again.d"),
+            "and writes the same rule for another stamp");
+
+        # an unchanged set leaves the file alone
+        date written = hstat(stamp + ".d").mtime;
+        hash<auto> again = plan(fx, env);
+        assertEq(0, again.rc, "the next plan succeeds: " + again.output);
+        assertEq(written, hstat(stamp + ".d").mtime,
+            "and does not rewrite an unchanged external-input set");
+
+        # a member that stops reading the module removes it from the set
+        foreach string name in (("a", "c")) {
+            writeDepfile(fx.qo_dir, name, ());
+        }
+        hash<auto> dropped = plan(fx, env);
+        assertEq(0, dropped.rc, "the plan after the change succeeds: " + dropped.output);
+        assertEq(stamp + ": \\\n    " + stub + "\n", read(stamp + ".d"),
+            "an input no member reads any more leaves the set");
+
+        # a group configured without the stamp is left as it was
+        remove_file(stamp + ".d");
+        hash<auto> unconfigured = plan(fx);
+        assertEq(0, unconfigured.rc, "a plan without the stamp succeeds: " + unconfigured.output);
+        assertFalse(is_file(stamp + ".d"), "and writes no depfile");
     }
 
     #! The closure is compared against whatever serves the band below it.

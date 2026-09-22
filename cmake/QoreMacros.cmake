@@ -383,6 +383,38 @@ function(QORE_QCC_HELPER_PATH _out_var _name)
     set(${_out_var} "${_qore_qcc_helper}" PARENT_SCOPE)
 endfunction()
 
+# Resets the dependencies the Makefile generators consolidated from depfiles for
+# the named targets, so that the next build reads them again from the depfiles
+# that exist now.
+#
+# CMake keeps a target's consolidated dependencies when the depfiles that
+# produced them no longer exist, and before CMake 4.0 it appends a rewritten
+# depfile to them instead of replacing its previous entry.  An object group
+# configured by an earlier QoreMacros.cmake gave every object recipe a depfile,
+# and on an 895-source group the result was 1.7 GB of dependencies per target
+# that every build had to read and write again, plus the temporary copies of
+# interrupted rewrites.  Configuring rebuilds them from scratch; reading the
+# group's remaining depfiles again costs a fraction of a second.
+function(_QORE_QCC_RESET_COMPILER_DEPENDS)
+    foreach(_qore_qcc_target ${ARGN})
+        set(_qore_qcc_target_dir
+            "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/${_qore_qcc_target}.dir")
+        if (NOT EXISTS "${_qore_qcc_target_dir}/compiler_depend.internal")
+            continue()
+        endif ()
+        file(GLOB _qore_qcc_leftovers
+            "${_qore_qcc_target_dir}/compiler_depend.make.tmp*"
+            "${_qore_qcc_target_dir}/compiler_depend.internal.tmp*")
+        file(REMOVE "${_qore_qcc_target_dir}/compiler_depend.internal"
+            ${_qore_qcc_leftovers})
+        # What CMake itself writes for a target whose dependencies were never
+        # built; the target's build.make includes this file unconditionally.
+        file(WRITE "${_qore_qcc_target_dir}/compiler_depend.make"
+            "# Empty compiler generated dependencies file for ${_qore_qcc_target}.\n"
+            "# This may be replaced when dependencies are built.\n")
+    endforeach()
+endfunction()
+
 function(_QORE_QCC_REGISTER_MANAGED_DIRS)
     foreach(_qore_qcc_managed_dir ${ARGN})
         get_filename_component(_qore_qcc_managed_dir_abs
@@ -882,6 +914,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     endif ()
     set(_qore_qcc_bootstrap_stamp)
     set(_qore_qcc_bootstrap_target)
+    set(_qore_qcc_external_inputs_stamp)
     set(_qore_qcc_subset_script)
     # CMake 3.28+ can tell Unix Makefiles that these recipes are jobserver
     # clients. This is essential with older GNU make (including Apple's 3.81),
@@ -908,6 +941,31 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         set(_qore_qcc_bootstrap_stamp
             "${${_qore_qcc_scc_prefix}_GENERATION_DIR}/.qcc-batch-bootstrap.stamp")
         set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
+        # Every build input from outside the group that any member recorded: the
+        # toolchain, loaded modules, stubs and includes.  The coordinator rewrites
+        # the depfile when that set changes, and a move in any of them reaches the
+        # bootstrap below, whose currency check compares them against every
+        # member's stamp and hands the stale components to the coordinator.
+        #
+        # This replaces a DEPFILE on every object recipe.  Behind the coordinator
+        # those depfiles decided nothing -- a recipe checks only group sources, so
+        # one that ran because a module moved found its component current -- and
+        # with the Makefile generators before CMake 4.0 they cost a great deal:
+        # each rewritten depfile is APPENDED to the target's consolidated
+        # dependencies rather than replacing its previous entry, and every target
+        # that consumes the object stamps carries its own copy.  On an 895-source
+        # group that reached 1.7 GB per target and 50 seconds of CMake dependency
+        # scanning in every incremental build.  One depfile that changes only when
+        # the set of external inputs changes has neither cost.
+        set(_qore_qcc_external_inputs_stamp
+            "${${_qore_qcc_scc_prefix}_GENERATION_DIR}/.qcc-external-inputs.stamp")
+        add_custom_command(OUTPUT ${_qore_qcc_external_inputs_stamp}
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${${_qore_qcc_scc_prefix}_GENERATION_DIR}
+            COMMAND ${CMAKE_COMMAND} -E touch ${_qore_qcc_external_inputs_stamp}
+            DEPFILE ${_qore_qcc_external_inputs_stamp}.d
+            COMMENT "Checking ${_QORE_QCO_GROUP} build inputs from outside the group"
+            VERBATIM)
         set(_qore_qcc_batch_script "${_QORE_QCO_SCRIPT_DIR}/qcc-batch.sh")
         set(_qore_qcc_batch_cmd "#!/bin/sh\nset -e\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
         foreach(_qore_qcc_arg
@@ -982,6 +1040,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_batch_script}
                 ${_qore_qcc_context_path}
                 ${_qore_qcc_source_symbols}
+                ${_qore_qcc_external_inputs_stamp}
                 ${_QORE_QCO_STUBS}
                 ${_QORE_QCO_DEPENDS}
                 ${_qore_qcc_load_module_target_deps}
@@ -1025,6 +1084,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
                 "QORE_QCC_GRAPH_SNAPSHOT=${_qore_qcc_graph_snapshot}"
                 "QORE_QCC_SUBSET_SCRIPT=${_qore_qcc_subset_script}"
+                "QORE_QCC_EXTERNAL_INPUTS_STAMP=${_qore_qcc_external_inputs_stamp}"
                 ${_qore_qcc_incremental_plan_helper}
                     ${_qore_qcc_context_path}
                     ${_qore_qcc_incremental_plan_stamp}
@@ -1099,12 +1159,20 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_incremental_plan_target})
         endif ()
 
+        # A group with a coordinator tracks what its members read from outside the
+        # group through one depfile (see the external-input stamp above); only a
+        # single-source group, which has no coordinator, gives its one recipe the
+        # depfile qcc writes.
+        set(_qore_qcc_object_depfile_args)
         foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
             list(GET _qore_qcc_abs_sources ${_qore_qcc_idx} _qore_qcc_source)
             list(GET _qore_qcc_source_content_digests ${_qore_qcc_idx}
                 _qore_qcc_source_content_digest)
             list(GET _qore_qcc_outputs ${_qore_qcc_idx} _qore_qcc_output)
             set(_qore_qcc_stamp "${_qore_qcc_output}.stamp")
+            if (NOT _qore_qcc_external_inputs_stamp)
+                set(_qore_qcc_object_depfile_args DEPFILE ${_qore_qcc_output}.d)
+            endif ()
             set(_qore_qcc_direct_deps_var "${_qore_qcc_direct_deps_prefix}_${_qore_qcc_idx}")
             set(_qore_qcc_direct_deps ${${_qore_qcc_direct_deps_var}})
             set(_qore_qcc_direct_dep_compile_contract_stamps)
@@ -1163,7 +1231,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                     ${_qore_qcc_incremental_helper}
                     ${_qore_qcc_source_order_helper}
                     ${_QORE_QCO_MANIFEST_INPUTS}
-                DEPFILE ${_qore_qcc_output}.d
+                ${_qore_qcc_object_depfile_args}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                 COMMENT "qcc -c: compiling ${_QORE_QCO_GROUP} ${_qore_qcc_source} (.qo)"
                 ${_qore_qcc_job_server_args}
@@ -1216,6 +1284,15 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         VERBATIM)
     add_custom_target(${_qore_qcc_generation_target}
         DEPENDS ${_qore_qcc_generation_stamp})
+    if (CMAKE_GENERATOR MATCHES "Makefiles")
+        _QORE_QCC_RESET_COMPILER_DEPENDS(
+            ${_qore_qcc_source_content_target}
+            ${_qore_qcc_source_symbols_target}
+            ${_qore_qcc_bootstrap_target}
+            ${_qore_qcc_incremental_plan_target}
+            ${_qore_qcc_group_order_target}
+            ${_qore_qcc_generation_target})
+    endif ()
     # Multi-source groups are already brought to one coherent generation by
     # the planner.  Depending on every per-object convenience target here makes
     # large consumers traverse hundreds of recursive Make targets even when
@@ -1265,7 +1342,9 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             "${_qore_qcc_bootstrap_stamp}.d"
             # Dates the group's last shared parse for the frozen dependency
             # graph; see the batch bootstrap helper.
-            "${_qore_qcc_bootstrap_stamp}.publication")
+            "${_qore_qcc_bootstrap_stamp}.publication"
+            "${_qore_qcc_external_inputs_stamp}"
+            "${_qore_qcc_external_inputs_stamp}.d")
     endif ()
     if (_qore_qcc_incremental_plan_stamp)
         list(APPEND _qore_qcc_managed_files

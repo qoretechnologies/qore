@@ -325,6 +325,22 @@ report_stale_components() {
         }' "$stale_file" >&2
 }
 
+#! Records what the group now reads from outside itself, for the next build.
+#  The build tool watches those inputs through one depfile on the group's
+#  external-input stamp, which the bootstrap depends on: a move in any of them
+#  reaches the bootstrap's currency check, and it hands the components that read
+#  it to this coordinator.  Written at the end of a plan because the plan's
+#  compiles are what add to the set -- a standalone compile is the only record of
+#  a module a member started requiring after the group's last shared parse.  A
+#  group configured by an older QoreMacros.cmake names no stamp.
+record_external_inputs() {
+    if [ -z "${QORE_QCC_EXTERNAL_INPUTS_STAMP:-}" ]; then
+        return 0
+    fi
+    run_source_order --scc-external-inputs "$QORE_QCC_EXTERNAL_INPUTS_STAMP" \
+        "$context"
+}
+
 #! The group's own parse, then the verification every plan ends with.
 #  The batch rewrote every depfile in the group, so the frozen generation no
 #  longer describes it.  Re-freeze before verifying, and leave the object
@@ -343,6 +359,7 @@ escalate_to_group_batch() {
         report_stale_components || :
         exit 1
     fi
+    record_external_inputs || exit 1
     touch "$plan_stamp"
     exit 0
 }
@@ -384,6 +401,7 @@ while :; do
     freeze_graph || exit 1
     write_stale_plan
     if [ "$stale_count" -eq 0 ]; then
+        record_external_inputs || exit 1
         touch "$plan_stamp"
         exit 0
     fi

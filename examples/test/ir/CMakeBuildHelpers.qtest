@@ -63,6 +63,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testCyclicComponentBuilds());
         addTestCase("an incremental compile preloads the owner of a sibling's aliased constant",
             \testIncrementalConstantOwnerPreload());
+        addTestCase("a group watches what its members read from outside it through one depfile",
+            \testGroupExternalInputsDepfile());
 
         set_return_value(main());
     }
@@ -2191,6 +2193,144 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
         assertEq(0, occurrences(converged, "qcc: script-context .qo"),
             "the build after the incremental compile converges: " + converged);
+    }
+
+    #! A group's object recipes carry no depfile; one depfile watches what the group reads from outside.
+    /** Every object recipe used to have its own DEPFILE.  Behind the coordinator those decided
+        nothing -- a recipe checks only group sources, so one that ran because a module moved found
+        its component current -- and with the Makefile generators before CMake 4.0 every rewritten
+        depfile was appended to the consolidated dependencies of every target consuming the object
+        stamps, never replacing its previous entry: 1.7 GB per target on an 895-source group, and 50
+        seconds of CMake dependency scanning per incremental build.
+
+        What a member reads from outside the group is watched through one depfile instead, and that
+        closes a gap the per-object depfiles had: a module that a member started requiring after the
+        group's last shared parse is recorded only by that member's standalone compile, not by the
+        shared parse's depfile, so an edit to it rebuilt nothing.
+    */
+    testGroupExternalInputsDepfile() {
+        TmpDir tmp("qore-cmake-qcc-external-inputs-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        string module_dir = tmp.path + "/modules";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+        mkdir(module_dir);
+
+        string module_path = module_dir + "/ExtInput.qm";
+        string module_source = "%new-style
+module ExtInput {
+    version = \"1.0\";
+    desc = \"an input from outside the object group\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+public namespace ExtInput {
+    public string sub extInputName() {
+        return \"NAME\";
+    }
+}
+";
+        write(module_path, replace(module_source, "NAME", "one"));
+        write(snippets_dir + "/alpha.qc", "%new-style\nstring sub alphaName() {\n    return \"alpha\";\n}\n");
+        write(snippets_dir + "/beta.qc", "%new-style\nstring sub betaName() {\n    return \"beta\";\n}\n");
+        write(snippets_dir + "/gamma.qc", "%new-style\nstring sub gammaName() {\n    return \"gamma\";\n}\n");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.20)
+project(QoreQoExternalInputs NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP extinputs
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    MODULE_DIR \"" + module_dir + "\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/alpha.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/beta.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/gamma.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS
+    GENERATION_TARGET_VAR QO_GENERATION_TARGET)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+file(WRITE \"${CMAKE_BINARY_DIR}/extinputs-vars.txt\"
+    \"generation_target=${QO_GENERATION_TARGET}\\n\")
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
+            "configured the external-input group: " + configure);
+        string generation_target = trim(read(build_dir + "/extinputs-vars.txt")
+            .regexExtract("generation_target=(.*)")[0]);
+        string generation_dir = build_dir + "/CMakeFiles/" + generation_target + ".dir";
+
+        # No object recipe hands the build tool its own depfile any more.
+        string depend_info = read(generation_dir + "/DependInfo.cmake");
+        assertTrue(depend_info.size() > 0, "the generation target has dependency info");
+        assertEq(-1, depend_info.find(".qo.d"),
+            "no member depfile is consolidated into a target consuming the object stamps: "
+                + depend_info);
+
+        string clean = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(3, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles every member: " + clean);
+        string external_depfile = build_dir + "/qo/.qcc-scc/.qcc-external-inputs.stamp.d";
+        assertTrue(is_file(external_depfile), "the coordinator records the group's external inputs");
+        assertEq(-1, read(external_depfile).find(module_path),
+            "no member reads the module yet: " + read(external_depfile));
+
+        # beta starts requiring the module; only its standalone compile records it.
+        write(snippets_dir + "/beta.qc", "%new-style\n%requires ExtInput\n"
+            "string sub betaName() {\n    return extInputName();\n}\n");
+        string edited = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(1, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited member is recompiled: " + edited);
+        assertEq(1, occurrences(edited, "one at a time"),
+            "on the standalone path, so the shared parse's depfile never names the module: " + edited);
+        assertEq(-1, read(build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp.d").find(module_path),
+            "the shared parse's depfile really does not name the module");
+        assertTrue(read(external_depfile).find(module_path) >= 0,
+            "the group's external inputs now name the module: " + read(external_depfile));
+        date recorded = mtime(external_depfile);
+
+        string settled = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(settled, "qcc: script-context .qo"),
+            "the next build compiles nothing: " + settled);
+        assertEq(recorded, mtime(external_depfile),
+            "and leaves an unchanged external-input set unwritten");
+
+        # An edit to the module rebuilds the member that reads it, and nothing else.
+        write(module_path, replace(module_source, "NAME", "two"));
+        string module_edit = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(1, occurrences(module_edit, "qcc: script-context .qo"),
+            "a module edit rebuilds the one member that reads it: " + module_edit);
+        assertTrue(module_edit.find("beta") >= 0,
+            "and that member is beta: " + module_edit);
+        string after_module = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(after_module, "qcc: script-context .qo"),
+            "the build after the module edit converges: " + after_module);
+
+        # Dependencies an earlier configuration consolidated are rebuilt from scratch, together
+        # with what an interrupted rewrite left behind.
+        write(generation_dir + "/compiler_depend.internal", "stale\n");
+        write(generation_dir + "/compiler_depend.make.tmp12345", "left behind\n");
+        string reconfigure = run(sprintf("cmake %s", build_dir));
+        assertFalse(is_file(generation_dir + "/compiler_depend.internal"),
+            "configuring discards the consolidated dependencies: " + reconfigure);
+        assertFalse(is_file(generation_dir + "/compiler_depend.make.tmp12345"),
+            "and an interrupted rewrite's temporary file");
+        assertEq(0, read(generation_dir + "/compiler_depend.make").find("# Empty compiler generated"),
+            "and leaves the file the target's makefile includes in CMake's initial form");
+        string after_reset = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(after_reset, "qcc: script-context .qo"),
+            "a build after the reset compiles nothing: " + after_reset);
     }
 
     testCyclicComponentBuilds() {

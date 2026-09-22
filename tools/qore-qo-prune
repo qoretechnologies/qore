@@ -44,6 +44,10 @@ const SCRIPT_FILES = (
     # ordering token, which recipes that publish nothing touch.
     ".qcc-batch-bootstrap.stamp.publication": True,
     ".qcc-incremental-plan.stamp": True,
+    # Watches every build input from outside the group that a member recorded;
+    # the coordinator writes the depfile beside it.
+    ".qcc-external-inputs.stamp": True,
+    ".qcc-external-inputs.stamp.d": True,
     ".qcc-bootstrap.stamp": True,
     ".qcc-generation.map": True,
     ".qcc-generation.stamp": True,
