@@ -3322,6 +3322,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       a variable, and the kind of weak reference it holds, without its lock
     - Fixed AOT-compiled code marking a local variable as closure-bound again each time it took a reference to it,
       writing a flag that other threads running the same code were reading at the same time
+    - Fixed IR analysis and JIT compilation in background threads reading the type of the value of a global
+      variable, which other threads change when they assign the variable, to tell whether the variable refers to a
+      variable in another Program; that is now recorded when the variable is created
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of
