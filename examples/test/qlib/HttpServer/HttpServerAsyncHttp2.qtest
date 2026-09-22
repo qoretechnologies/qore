@@ -114,6 +114,21 @@ class EmptyBodyHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that reports what Socket::sendHTTPResponseHeader() does on the socket of the request
+class SendResponseHeaderHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string rv;
+        try {
+            s.sendHTTPResponseHeader(200, "OK", "1.1", {"Content-Type": "text/plain"});
+            rv = "sent";
+        } catch (hash<ExceptionInfo> ex) {
+            rv = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        return makeResponse(200, rv, {"Content-Type": "text/plain"});
+    }
+}
+
 #! Handler that returns a mixed-case header
 class HeaderCaseHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -357,6 +372,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     constructor() : Test("HttpServerAsyncHttp2Test", "1.0") {
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
         addTestCase("HTTP/2 empty body returns 204", \testHttp2EmptyBodyBecomes204());
+        addTestCase("HTTP/2 rejects Socket::sendHTTPResponseHeader()", \testHttp2SendResponseHeaderRejected());
         addTestCase("HTTP/2 sendWithRecvCallback no body",
             \testHttp2SendWithRecvCallbackNoBody());
         addTestCase("HTTP/2 sendWithRecvCallback error response",
@@ -405,6 +421,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         # Set up handlers
         mServer.setHandler("simple", "/simple", NOTHING, new SimpleHandler());
         mServer.setHandler("empty-body", "/empty-body", NOTHING, new EmptyBodyHandler());
+        mServer.setHandler("send-response-header", "/send-response-header", NOTHING,
+            new SendResponseHeaderHandler());
         mServer.setHandler("header-case", "/header-case", NOTHING, new HeaderCaseHandler());
         mServer.setHandler("request-header-case", "/request-header-case", NOTHING,
             new RequestHeaderLowercaseHandler());
@@ -481,6 +499,27 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         if (m_options.verbose > 1) {
             printf("Basic HTTP/2 response: OK (http_version: %y)\n", resp.http_version);
         }
+    }
+
+    #! a response header without a message body is an HTTP/1 message, so it cannot be sent on an HTTP/2 connection
+    testHttp2SendResponseHeaderRejected() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/send-response-header");
+        assertEq("2", resp.http_version, "the request is served on HTTP/2");
+        assertEq(200, resp.status_code);
+        assertEq("HTTP2-ERROR: HTTP/1 message attempted on HTTP/2 connection (Socket::sendHTTPResponseHeader)",
+            resp.body);
+
+        # nothing was written into the HTTP/2 connection: the next request on it is served normally
+        resp = hc.send(NOTHING, "GET", "/simple");
+        assertEq(200, resp.status_code, "the HTTP/2 connection is intact");
+        assertEq("OK", resp.body);
     }
 
     testHttp2EmptyBodyBecomes204() {

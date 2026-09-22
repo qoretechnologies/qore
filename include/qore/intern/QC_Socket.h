@@ -556,6 +556,12 @@ public:
     DLLLOCAL int getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
             const char* desc, const char* http_version, const QoreHashNode* headers, int source) const;
 
+    //! Builds HTTP/1 response headers exactly as given and emits the legacy HTTP send-message event
+    /** No \c Content-Length or \c Transfer-Encoding header is added; the caller frames the message body
+    */
+    DLLLOCAL void getSendHttpResponseHeaderBlock(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
+            const char* http_version, const QoreHashNode* headers, int source) const;
+
 private:
     DLLLOCAL int checkAsyncSequenceAllowedIntern(ExceptionSink* xsink, unsigned direction, int tid) const {
         int index = getAsyncSequenceIndex(direction);

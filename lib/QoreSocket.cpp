@@ -6157,6 +6157,13 @@ int my_socket_priv::getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, Qore
     return 0;
 }
 
+void my_socket_priv::getSendHttpResponseHeaderBlock(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
+        const char* http_version, const QoreHashNode* headers, int source) const {
+    getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+    // size 0 without addsize: a Content-Length header given by the caller is sent as-is, and none is added
+    socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, 0, source, false, false);
+}
+
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
     // must be called with the lock held
     assert(m.trylock());

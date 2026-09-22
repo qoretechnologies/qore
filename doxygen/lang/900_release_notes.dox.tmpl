@@ -1020,6 +1020,10 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         sends an HTTP response with an @ref Qore::InputStream "InputStream" body in non-blocking mode for HTTP/1.x
       - @ref Qore::Socket::startPollSendHttpResponseWithStreamAndReadHeader() "Socket::startPollSendHttpResponseWithStreamAndReadHeader()":
         sends an HTTP response with an @ref Qore::InputStream "InputStream" body and waits for the next request (keep-alive) in HTTP/1.x
+      - @ref Qore::Socket::sendHTTPResponseHeader() "Socket::sendHTTPResponseHeader()": sends the status line and
+        header of an HTTP response exactly as given, without adding \c Content-Length or \c Transfer-Encoding, so
+        that the caller frames the message body, for example delimiting it by closing the connection in a response
+        to an HTTP/1.0 request
       - @ref Qore::Socket::startPollSendHttp2StreamingResponse() "Socket::startPollSendHttp2StreamingResponse()":
         sends an HTTP/2 response with an @ref Qore::InputStream "InputStream" body via the I/O thread
       - @ref Qore::Socket::submitHttp2StreamingResponseWithStream() "Socket::submitHttp2StreamingResponseWithStream()":

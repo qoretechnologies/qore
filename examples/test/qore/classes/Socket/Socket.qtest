@@ -167,6 +167,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("HTTP response poll test", \httpResponsePollTest());
         addTestCase("HTTP header string test", \httpHeaderStringTest());
         addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
+        addTestCase("HTTP response header test", \httpResponseHeaderTest());
         addTestCase("SSE read test", \serverSentEventReadTest());
         addTestCase("SSE parse line terminator test", \sseParseLineTerminatorTest());
         addTestCase("concurrent sync send/recv test", \concurrentSyncSendRecvTest());
@@ -460,6 +461,99 @@ class SocketTest inherits QUnit::Test {
         release_client.push(True);
         cnt.waitForZero(5s);
         assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\n", header);
+    }
+
+    httpResponseHeaderTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> server_info = server.getSocketInfo(False);
+
+        # the header block is sent exactly as given: no Content-Length or Transfer-Encoding is added
+        foreach hash<auto> i in (
+                {
+                    "hdr": {"Content-Type": "text/plain", "Connection": "close", "X-Multi": ("a", "b")},
+                    "raw": "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\nX-Multi: a\r\n"
+                        "X-Multi: b\r\n\r\nhello",
+                },
+                {
+                    "hdr": {"Content-Length": 5},
+                    "raw": "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello",
+                },
+            ) {
+            Socket client();
+            client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
+            Socket conn = server.accept(5s);
+            hash<auto> info;
+            conn.sendHTTPResponseHeader(200, "OK", "1.1", i.hdr, \info, 5s);
+            conn.send2("hello", 5s);
+            conn.close();
+            assertEq("HTTP/1.1 200 OK", info."response-uri");
+            binary raw;
+            while (client.isOpen()) {
+                try {
+                    raw += client.recvBinary(-1, 5s);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "SOCKET-CLOSED") {
+                        break;
+                    }
+                    rethrow;
+                }
+            }
+            assertEq(i.raw, raw.toString());
+        }
+
+        # invalid status codes are rejected
+        {
+            Socket client();
+            client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
+            Socket conn = server.accept(5s);
+            assertThrows("SOCKET-SENDHTTPRESPONSE-STATUS-ERROR", \conn.sendHTTPResponseHeader(), (99, "X", "1.1",
+                {}));
+        }
+
+        # a negative content length is rejected instead of being sent as a Content-Length header
+        {
+            Socket client();
+            client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
+            Socket conn = server.accept(5s);
+            assertThrows("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR", "must not be negative",
+                \conn.startPollSendHttpResponseWithStream(), (200, "OK", "1.1", {},
+                new BinaryInputStream(binary("x")), -1));
+            assertThrows("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR", "must not be negative",
+                \conn.startPollSendHttpResponseWithStreamAndReadHeader(), (200, "OK", "1.1", {},
+                new BinaryInputStream(binary("x")), -1, 1s));
+        }
+
+        # a stream that another thread owns is rejected before the operation takes any reference, and the socket stays
+        # usable
+        {
+            Socket client();
+            client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
+            Socket conn = server.accept(5s);
+            Queue owned();
+            Queue release();
+            background sub () {
+                BinaryInputStream is(binary("x"));
+                # the stream is assigned to this thread until it is unassigned
+                is.peek();
+                owned.push(is);
+                release.get();
+            }();
+            on_exit release.push(True);
+            BinaryInputStream is = owned.get(5s);
+            assertThrows("STREAM-THREAD-ERROR", \conn.startPollSendHttpResponseWithStream(),
+                (200, "OK", "1.1", {}, is, 1));
+            assertThrows("STREAM-THREAD-ERROR", \conn.startPollSendHttpChunkedResponseWithStream(),
+                (200, "OK", "1.1", {}, is));
+            assertThrows("STREAM-THREAD-ERROR", \conn.startPollSendHttpResponseWithStreamAndReadHeader(),
+                (200, "OK", "1.1", {}, is, 1, 1s));
+            assertThrows("STREAM-THREAD-ERROR", \conn.startPollSendHttpChunkedResponseAndReadHeader(),
+                (200, "OK", "1.1", {}, is, 1s));
+            conn.sendHTTPResponseHeader(204, "No Content", "1.1", {"Connection": "close"}, NOTHING, 5s);
+            conn.close();
+            assertEq(204, client.readHTTPHeader(5s).status_code);
+        }
     }
 
     httpChunkedBodyTrailerTest() {
