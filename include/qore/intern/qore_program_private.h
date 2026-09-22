@@ -1304,8 +1304,9 @@ public:
 
     //! Claims parse ownership, which serializes namespace writers for this Program
     /** Parse ownership excludes other writers but not runtime readers in other threads.  Readers
-        are fenced separately, by RuntimeNamespaceMergeLocker around each committed-namespace merge,
-        rather than for this whole window: arbitrary module initialization code runs under parse
+        are fenced separately, by RuntimeNamespaceMergeLocker around each committed-namespace merge
+        and system API import and by RuntimeNamespaceWriteLocker around a binary module's namespace
+        initialization, rather than for this whole window: arbitrary module initialization code runs under parse
         ownership, and holding the namespace write lock across it deadlocks against any thread that
         must resolve a name here while this thread waits for it.
     */
@@ -1437,6 +1438,8 @@ public:
 
     DLLLOCAL QoreListNode* getFeatureList() const {
         QoreListNode* l = new QoreListNode(stringTypeInfo);
+        // a module being loaded into this Program in another thread adds to both lists
+        QoreSafeRWReadLocker rl(featureLock);
         for (auto& i : featureList) {
             l->push(new QoreStringNode(i), nullptr);
         }
@@ -2742,6 +2745,15 @@ public:
         strset_t::iterator i = userFeatureList.find(f);
         assert(i != userFeatureList.end());
         userFeatureList.erase(i);
+    }
+
+    //! Returns a copy of the builtin feature list, taken under the feature lock
+    /** The copy lets a caller add the features to another Program without holding two Programs' feature
+        locks at once; the feature lock is the innermost lock and has no order between Programs.
+    */
+    DLLLOCAL strset_t copyFeatureList() const {
+        QoreSafeRWReadLocker rl(featureLock);
+        return featureList;
     }
 
     DLLLOCAL bool hasFeature(const char* f) const {

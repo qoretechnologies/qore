@@ -3391,14 +3391,41 @@ public:
     }
 };
 
+//! Excludes runtime namespace readers while the current thread writes a committed namespace
+/** Every runtime write to a Program's committed namespace holds this lock, so that a reader - a
+    runtime lookup in the same Program, or a thread copying from it into another Program under
+    RuntimeNamespaceMergeLocker - never sees a container that is being modified.  Parse ownership,
+    which writers also hold, excludes other writers but not readers.
+
+    Scope it to the write alone.  Holding it across code that waits for another thread that must
+    resolve a name in the same Program deadlocks the two threads.
+*/
+class RuntimeNamespaceWriteLocker {
+public:
+    DLLLOCAL RuntimeNamespaceWriteLocker(RootQoreNamespace& rns) : rns(rns) {
+        qore_root_ns_private::runtimeNamespaceWriteLock(rns);
+    }
+
+    DLLLOCAL ~RuntimeNamespaceWriteLocker() {
+        qore_root_ns_private::runtimeNamespaceWriteUnlock(rns);
+    }
+
+private:
+    RootQoreNamespace& rns;
+
+    RuntimeNamespaceWriteLocker(const RuntimeNamespaceWriteLocker&) = delete;
+    RuntimeNamespaceWriteLocker& operator=(const RuntimeNamespaceWriteLocker&) = delete;
+};
+
 //! Fences both namespaces of a committed-namespace merge: the target against readers, the source against writers
 /** Concurrent writers to the \a target are already excluded by the target Program's parse lock,
     which every merge runs under; the write lock taken here adds the only thing the parse lock does
     not provide, which is exclusion against runtime readers in other threads, so that no thread can
     resolve a name against a half-merged namespace.
 
-    The \a source needs the opposite fence.  A merge reads the source's namespace containers
-    directly, and a module's shared Program is itself the target of runtime merges: code in an AOT
+    The \a source needs the opposite fence.  A merge - a module import, or an import of the system
+    API - reads the source's namespace containers directly, and a module's shared Program is itself
+    the target of runtime merges: code in an AOT
     module runs in the module's Program, so a \c load_module() call there merges another module
     into the very namespace that every import of the module copies from.  Nothing held by the
     importing thread excludes that writer -- its parse lock is the importing Program's, not the

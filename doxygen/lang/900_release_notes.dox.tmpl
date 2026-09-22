@@ -3200,6 +3200,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Program::importSystemApi() "Program::importSystemApi()" and the related
+      \c Program::importSystem*() methods racing with a module being loaded into the calling
+      @ref Qore::Program "Program" by another thread: the import copied the calling Program's system API
+      without excluding that load and without the target Program's parse lock, so it could crash or fail with a
+      spurious \c IMPORT-SYSTEM-API-ERROR conflict with itself.  A binary module being loaded into a Program
+      now also excludes threads looking up names in that Program until its declarations are in place
     - Fixed Base64 conversion of an empty binary leaving an unterminated string buffer, which could expose
       uninitialized bytes during JSON serialization
     - Fixed @ref Qore::Serializable "Serializable" deserialization losing a reference to a container that is

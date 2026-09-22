@@ -437,7 +437,8 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
     rns->edmap.update(enumdecl->getName(), priv, enumdecl);
 }
 
-// public, only called in single-threaded initialization
+// public; called during library initialization and, at runtime, from a binary module's namespace initialization,
+// which QoreBuiltinModule::addToProgramImpl() runs under the target root's runtime namespace write lock
 void QoreNamespace::addSystemClass(QoreClass* oc) {
     QORE_TRACE("QoreNamespace::addSystemClass()");
 

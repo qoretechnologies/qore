@@ -653,7 +653,17 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     RootQoreNamespace* rns = tpgm->getRootNS();
     QoreNamespace* qns = tpgm->getQoreNS();
 
-    module_ns_init(rns, qns, xsink);
+    if (is_aot_user) {
+        // an AOT module merges its namespace under its own fence and must not hold the write lock
+        // across the deferred initialization that follows the merge; see qore_aot_module_ns_init_impl()
+        module_ns_init(rns, qns, xsink);
+    } else {
+        // a binary module's namespace initialization writes directly into the target's committed
+        // namespace (addSystemClass(), addConstant() and so on), which runtime lookups in the target
+        // and threads importing from it read concurrently
+        RuntimeNamespaceWriteLocker rnwl(*rns);
+        module_ns_init(rns, qns, xsink);
+    }
 
     if (xsink || qmc.hasError()) {
         // module_ns_init() may have registered classes, enums, constants into existing
@@ -661,13 +671,19 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
         // NOT tracked by QoreModuleContext and cannot be safely rolled back.
         // Commit partial changes to keep the namespace tree consistent, and keep the
         // feature flag to prevent a retry that would double-register the same items.
-        qmc.commit();
+        {
+            RuntimeNamespaceWriteLocker rnwl(*rns);
+            qmc.commit();
+        }
         qore_program_private::get(*tpgm)->commitFeature(name.c_str());
         return;
     }
 
     // commit all module changes
-    qmc.commit();
+    {
+        RuntimeNamespaceWriteLocker rnwl(*rns);
+        qmc.commit();
+    }
 
     // mark the feature as fully committed so the lock-free fast path in runTimeLoadModule() can see it
     qore_program_private::get(*tpgm)->commitFeature(name.c_str());
