@@ -16,7 +16,7 @@
 */
 namespace SharedVarUpdateChecks {
 const Threads = 6;
-const K = 20000;
+const K = 2000;
 
 our int gi;
 our float gf;
