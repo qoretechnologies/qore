@@ -50,6 +50,12 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testGenerationFollowsDeclarationContract());
         addTestCase("a baked body contract is watched by the consumer that baked it",
             \testBakedBodyContractIsWatched());
+        addTestCase("a consumer watches only the body-contract rows it baked",
+            \testBakedBodyContractRowsAreWatched());
+        addTestCase("a partial parse compiles only what no preloaded object stands between",
+            \testConvexSubset());
+        addTestCase("a declaration of another kind does not hide a class from its subclass",
+            \testKindSpecificProviders());
         addTestCase("a regex literal does not hide the namespace of what follows it",
             \testRegexLiteralNamespaceTracking());
 
@@ -516,6 +522,162 @@ class AOTSccGenerationTest inherits QUnit::Test {
         assertEq(before, token(context_path, consumer),
             "dropping the baked body contract restores the generation it had "
             "before, so the manifest carries nothing when nothing is baked");
+    }
+
+    #! One body-contract row in the length-prefixed form qcc writes.
+    private static string bodyRow(string symbol, string hash) {
+        return sprintf("body\t%d:%s%d:%s\n", symbol.size(), symbol, hash.size(), hash);
+    }
+
+    #! A consumer links against the rows it baked, not the provider's whole body contract.
+    /** A provider publishes a body-contract hash for every symbol it has one for, and those
+        hashes move whenever the provider is recompiled in the other compile mode: a group
+        parse proves more about its bodies than a standalone one.  Watching the whole stamp
+        therefore rebuilt every consumer of the provider on a mode switch, however little it
+        took.  qcc records the rows each object baked in `<object>.body-contract-imports`, and
+        the generation digests only those.
+    */
+    testBakedBodyContractRowsAreWatched() {
+        TmpDir tmp("qore-aot-scc-body-rows-");
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", ()),
+            "c": callRefSource("c", "a"),
+            "e": callRefSource("e", "a"),
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        string consumer = componentFor(decomposition, "c.qo").scc;
+        string whole_consumer = componentFor(decomposition, "e.qo").scc;
+        string body_stamp = tmp.path + "/qo/a.qo" + ".body-contract.stamp";
+        write(body_stamp, "format=1\n" + bodyRow("f()", "fnv1a64:1") + bodyRow("g()", "fnv1a64:1"));
+
+        # both consumers name the provider's body contract; only c records the row it baked
+        foreach string name in (("c", "e")) {
+            write(tmp.path + "/qo/" + name + ".qo.d",
+                tmp.path + "/qo/" + name + ".qo.stamp: \\\n    "
+                + tmp.path + "/src/" + name + ".qc \\\n    " + body_stamp + "\n");
+        }
+        write(tmp.path + "/qo/c.qo.body-contract-imports", sprintf("format=1\nimport\t%d:%s%d:%s\n",
+            body_stamp.size(), body_stamp, 3, "f()"));
+        string baked = token(context_path, consumer);
+        string whole = token(context_path, whole_consumer);
+        hash<auto> manifest = parse_json(order(context_path, ("--scc-generation", consumer)));
+        assertEq(1, manifest."body-contracts".size(), "the consumer watches one provider's body contract");
+        assertTrue(manifest."body-contracts"[0].body_contract_digest =~ /^rows:/,
+            "and only the rows it baked: " + manifest."body-contracts"[0].body_contract_digest);
+
+        # THE POINT: a row the consumer did not bake moves, as it does when the provider is
+        # recompiled in the other compile mode.
+        write(body_stamp, "format=1\n" + bodyRow("f()", "fnv1a64:1") + bodyRow("g()", "fnv1a64:2"));
+        assertEq(baked, token(context_path, consumer),
+            "a body-contract row the consumer did not bake does not invalidate it");
+        assertNeq(whole, token(context_path, whole_consumer),
+            "a consumer with no record of its rows still watches the whole body contract");
+
+        write(body_stamp, "format=1\n" + bodyRow("f()", "fnv1a64:2") + bodyRow("g()", "fnv1a64:2"));
+        assertNeq(baked, token(context_path, consumer),
+            "the row it baked moving invalidates it, as --link-qo would reject it");
+
+        # a symbol the provider stops publishing a body contract for is a move too: the link can no
+        # longer match the import at all
+        write(body_stamp, "format=1\n" + bodyRow("g()", "fnv1a64:2"));
+        string dropped = token(context_path, consumer);
+        assertNeq(baked, dropped, "a baked row the provider no longer publishes invalidates it");
+
+        write(body_stamp, "format=1\n" + bodyRow("f()", "fnv1a64:1") + bodyRow("g()", "fnv1a64:7")
+            + sprintf("native-body\t%d:%s%d:%s%d:%s\n", "g()".size(), "g()", "g_fast".size(), "g_fast",
+                "fnv1a64:7".size(), "fnv1a64:7"));
+        assertEq(baked, token(context_path, consumer),
+            "restoring the baked row restores the generation, whatever the other rows hold");
+
+        # a record that cannot be read is the same as none: the whole contract is watched
+        write(tmp.path + "/qo/c.qo.body-contract-imports", "not a contract\n");
+        manifest = parse_json(order(context_path, ("--scc-generation", consumer)));
+        assertEq(-1, manifest."body-contracts"[0].body_contract_digest.find("rows:"),
+            "an unreadable record falls back to the whole body contract");
+    }
+
+    #! The keys --scc-convex-set keeps from \a names, in the order it prints them.
+    private list<string> convexSet(string root, string context_path, hash<auto> decomposition,
+            list<string> names) {
+        string keys_file = root + "/convex.keys";
+        write(keys_file, join("\n", (map componentFor(decomposition, $1 + ".qo").scc, names)) + "\n");
+        return (map trim($1), order(context_path, ("--scc-convex-set", keys_file)).split("\n"), trim($1));
+    }
+
+    #! A parse of part of a group must not preload anything compiled against a member it compiles.
+    /** A preloaded `.qo` is what its source compiled to against the PREVIOUS generation of
+        everything it depended on.  With `c` preloading `b`, which was compiled against `a`,
+        a parse of `a` and `c` together brings the previous `a` back through `b` and shadows
+        the one it is making.  Compiling `b` too would make the set convex, but that closure
+        was measured to take most of a real group into every parse; leaving `c` for the next
+        pass costs nothing the build would not do anyway.
+    */
+    testConvexSubset() {
+        TmpDir tmp("qore-aot-scc-convex-");
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", ()),
+            "b": callRefSource("b", "a"),
+            "c": callRefSource("c", "b"),
+            "d": callRefSource("d", ()),
+            "e": callRefSource("e", "c"),
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        string key_a = componentFor(decomposition, "a.qo").scc;
+        string key_b = componentFor(decomposition, "b.qo").scc;
+        string key_d = componentFor(decomposition, "d.qo").scc;
+
+        assertEq((key_a,), convexSet(tmp.path, context_path, decomposition, ("a", "c")),
+            "a member that preloads an object compiled against another member waits for the next pass");
+        assertEq(sort((key_a, key_b)), sort(convexSet(tmp.path, context_path, decomposition, ("a", "b"))),
+            "a member compiled against another member in the same parse is not preloading it");
+        assertEq(sort((key_a, key_d)), sort(convexSet(tmp.path, context_path, decomposition, ("a", "c", "d"))),
+            "an unrelated member is compiled with the rest");
+        assertEq(1, convexSet(tmp.path, context_path, decomposition, ("c",)).size(),
+            "one component alone is a standalone compile, and is always compiled");
+
+        # A content dependency is not an ordering edge, so it can close a cycle between components:
+        # a now depends on e, which was compiled against c, while c still preloads b, compiled
+        # against a.  Each reaches the other through something preloaded; leaving out every member
+        # that does would leave nothing to compile, so the one earlier in dependency order is kept.
+        write(tmp.path + "/qo/a.qo.d", tmp.path + "/qo/a.qo.stamp: \\\n    " + tmp.path + "/src/a.qc \\\n    "
+            + tmp.path + "/qo/e.qo.aggregate-contract.stamp\n");
+        decomposition = componentMap(context_path);
+        assertEq(5, decomposition.components.size(), "a content dependency does not merge components");
+        assertEq((componentFor(decomposition, "a.qo").scc,),
+            convexSet(tmp.path, context_path, decomposition, ("a", "c")),
+            "a cycle through preloaded objects keeps the member earlier in dependency order");
+    }
+
+    #! An inheritance mention can only name a class, so only classes can make it ambiguous.
+    /** Resolving it among every declaration of the same name let a class CONSTANT elsewhere in
+        the group -- `QorusDataTypeCatalogue::Map` -- hide the class `OMQ::Map` from
+        `class OmqMap inherits Map`.  There was then no edge between them at all: inheritance
+        records nothing in a depfile, so the summary is the only thing that knows.  Every
+        preload set that reached OmqMap left its base out, and a standalone compile failed with
+        "cannot resolve base class '::OMQ::Map' for class 'OmqMap'".
+    */
+    testKindSpecificProviders() {
+        TmpDir tmp("qore-aot-scc-kinds-");
+        string context_path = writeContext(tmp.path, (
+            "map": "%new-style\nnamespace OMQ {\npublic class Map {\n    int v() { return 1; }\n}\n}\n",
+            "omqmap": "%new-style\nclass OmqMap inherits Map {\n}\n",
+            "catalogue": "%new-style\nclass Catalogue {\n    public {\n        const Map = 1;\n    }\n}\n",
+            # two classes of one name ARE ambiguous: nothing says which one this names
+            "dup1": "%new-style\nnamespace D1 {\npublic class Dup {\n}\n}\n",
+            "dup2": "%new-style\nnamespace D2 {\npublic class Dup {\n}\n}\n",
+            "dupuser": "%new-style\nclass DupUser inherits Dup {\n}\n",
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        hash<auto> omqmap = componentFor(decomposition, "omqmap.qo");
+        string map_key = componentFor(decomposition, "map.qo").scc;
+        assertEq((map_key,), omqmap.predecessors,
+            "the subclass depends on the one source declaring a class of that name");
+        list<string> preload = (map trim($1),
+            order(context_path, ("--scc-preload", omqmap.scc)).split("\n"), trim($1));
+        assertTrue((select preload, basename($1) == "map.qo").size() == 1,
+            "and preloads it: " + join(", ", preload));
+        assertEq((), componentFor(decomposition, "dupuser.qo").predecessors,
+            "two classes of the same name leave the mention unresolved");
     }
 
     testGenerationIdentity() {

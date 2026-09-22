@@ -283,7 +283,22 @@ class T {
         if (!HAVE_THREAD_NAME) {
             testSkip("no thread names available");
         }
-        assertEq("qore/" + gettid(), get_thread_name());
+        if (PlatformOS == "Linux" && gettid() == 1) {
+            # on Linux the initial thread's name is the process name that ps, top and pidof use, so the
+            # library leaves it alone rather than showing every program that initializes it as "qore/1"
+            assertEq(trim(ReadOnlyFile::readTextFile("/proc/self/comm")), get_thread_name());
+            assertNeq("qore/1", get_thread_name());
+        } else {
+            assertEq("qore/" + gettid(), get_thread_name());
+        }
+        # a thread Qore starts is named after its thread ID on every platform
+        Queue q();
+        background sub () {
+            q.push({"tid": gettid(), "name": get_thread_name()});
+        }();
+        hash<auto> started = q.get();
+        assertEq("qore/" + started.tid, started.name);
+
         set_thread_name(ThreadName);
         assertEq(ThreadName, get_thread_name());
     }

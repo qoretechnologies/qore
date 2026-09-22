@@ -6084,7 +6084,9 @@ static bool qore_aot_fast_entry_is_context_independent(const AbstractQoreFunctio
                 case QoreIROpcode::ConstBoolBoxed:
                 case QoreIROpcode::ConstNothing:
                 case QoreIROpcode::ConstNull:
-                case QoreIROpcode::ConstEnum:
+                // not ConstEnum: AOT lowers it to a load from the function's own expression-slot table, because
+                // the member is resolved by name when the object is loaded, and a context-independent entry
+                // runs on its CALLER's context -- so it read whatever the caller kept in that slot
                 case QoreIROpcode::ConstChar:
                 case QoreIROpcode::AddInt:
                 case QoreIROpcode::AddFloat:
@@ -27394,6 +27396,14 @@ struct AOTParseSourceGuard {
     resolves against, and the labels and fast-entry records are consumed after the
     parse commits.
 */
+//! Set when a compile on this thread fails loading or resolving its preloaded objects; see
+//! QoreAOT::lastCompileFailedInPreload()
+static thread_local bool aot_compile_failed_in_preload = false;
+
+bool QoreAOT::lastCompileFailedInPreload() {
+    return aot_compile_failed_in_preload;
+}
+
 struct QoreAOTSiblingPreload {
     //! The blob bytes the preloaded shells were built from.
     /** They must outlive the deserializer: the symbol index, the debug metadata
@@ -27411,6 +27421,29 @@ struct QoreAOTSiblingPreload {
     std::unordered_set<std::string> source_labels;
     std::unordered_map<std::string, QoreAOTSymbolIndexRecord> fast_entries;
     std::unordered_set<std::string> ambiguous_fast_entries;
+    //! Module dependencies of the preloaded shells that could not be loaded, by module name
+    std::map<std::string, std::string> dependency_load_errors;
+
+    //! Appends the module dependencies that failed to load to a preload resolution error
+    /** A shell that inherits a module's class cannot be resolved without the module, so the load failure is
+        the cause and the unresolved class only its symptom.
+    */
+    void addDependencyLoadErrors(std::string& error) const {
+        if (dependency_load_errors.empty()) {
+            return;
+        }
+        error += "; module dependencies of the preloaded objects failed to load:";
+        size_t count = 0;
+        for (const auto& i : dependency_load_errors) {
+            if (count++ && !(count % 100) && qore_check_cancel(nullptr, "AOT sibling dependency error report")) {
+                return;
+            }
+            error += "\n  ";
+            error += i.first;
+            error += ": ";
+            error += i.second;
+        }
+    }
 
     //! Scans @p library_paths and preloads every sibling the parse will not redeclare.
     /** @param declared_files_canon canonical source files the parse itself
@@ -27585,36 +27618,31 @@ struct QoreAOTSiblingPreload {
         // depend on target declarations can resolve cleanly during the later
         // cross-blob pass.
         if (!extracted_frags.empty()) {
-            // Defensive: pre-load each sibling fragment's module dependencies
-            // through the normal parse-time loader before the blob preload
-            // below injects their module-contributed namespaces.  AOT blob
-            // deserialization adds namespaces such as "Json" (from the json
+            // Load each sibling fragment's module dependencies before the blob
+            // preload below injects their module-contributed namespaces.  AOT
+            // blob deserialization adds namespaces such as "Json" (from the json
             // module) directly; if the contributing module is not also
             // registered with the program's feature tracker, a later load of
             // the same module -- the target source's own `%requires`, or a
             // defensive load_module() -- takes the slow path and tries to
             // re-inject the namespace, raising
-            // "Namespace 'X' already exists in '::Qore'".  parseLoadModule()
-            // is idempotent (an already-loaded module is a no-op), so loading
-            // the deps here keeps the feature tracker consistent and prevents
-            // that collision even if a later phase aborts and the bootstrap is
-            // retried.  Mirrors the runtime batch path
-            // (QoreAOTRuntime.cpp qore_aot_script_end_batch).  Best-effort:
-            // deps that cannot be resolved here are left to the normal target
-            // parse to load and report.
-            for (auto& frag : extracted_frags) {
-                std::vector<std::string> deps;
-                std::string dep_error;
-                if (!readDependencies(frag.bytes.data(),
-                        static_cast<uint32_t>(frag.bytes.size()), deps, dep_error)) {
-                    continue;
-                }
-                for (const std::string& dep : deps) {
-                    SimpleRefHolder<QoreStringNode> derr(
-                        MM.parseLoadModule(dep.c_str(), pgm));
-                }
-            }
-
+            // "Namespace 'X' already exists in '::Qore'".  And a shell whose
+            // class inherits a class a module declares cannot be resolved at all
+            // unless that module is loaded: nothing else loads it when no target
+            // of this compile `%requires` it.  Mirrors the runtime batch path
+            // (QoreAOTRuntime.cpp qore_aot_script_end_batch).
+            //
+            // The loads run under the program's parse lock, as a `%requires` in
+            // the parse does.  The program is already mid-parse here -- a probe
+            // or stub parse set parsing_in_progress -- so an AOT module, whose
+            // namespace init enters the importing program, was refused outside
+            // it ("the Program accessed is currently undergoing parsing"), the
+            // module was left unmerged, and the preload later failed to resolve
+            // a base class the module declares.
+            //
+            // Best-effort: a shell records every module its compile had loaded,
+            // not only the ones it uses, so a module that cannot be loaded here
+            // is remembered and reported only if resolution then fails.
             ExceptionSink pch_xsink;
             ProgramRuntimeParseContextHelper pch(&pch_xsink, pgm);
             if (pch_xsink.isException()) {
@@ -27622,6 +27650,33 @@ struct QoreAOTSiblingPreload {
                 error = "failed to set parse context for sibling preload";
                 return false;
             }
+            // every object records the same group-wide module set, so each module is asked for once
+            std::unordered_set<std::string> requested_deps;
+            size_t frag_i = 0;
+            for (auto& frag : extracted_frags) {
+                if (frag_i++ && !(frag_i % 100)
+                        && qore_check_cancel(nullptr, "AOT sibling module dependency loading")) {
+                    error = "operation cancelled during AOT sibling module dependency loading";
+                    return false;
+                }
+                std::vector<std::string> deps;
+                std::string dep_error;
+                if (!readDependencies(frag.bytes.data(),
+                        static_cast<uint32_t>(frag.bytes.size()), deps, dep_error)) {
+                    continue;
+                }
+                for (const std::string& dep : deps) {
+                    if (!requested_deps.insert(dep).second) {
+                        continue;
+                    }
+                    SimpleRefHolder<QoreStringNode> derr(
+                        MM.parseLoadModule(dep.c_str(), pgm));
+                    if (derr) {
+                        dependency_load_errors.emplace(dep, derr->c_str());
+                    }
+                }
+            }
+
             auto mdes = std::make_unique<QoreAOTBinaryMultiDeserializer>(pgm);
             // These shells resolve declarations for a compile, so keep the compile-time value each pending
             // constant recorded: without it this parse cannot evaluate an initializer that folds a sibling's
@@ -27675,6 +27730,7 @@ bool QoreAOT::compileScriptFilesBatch(
         std::vector<QoreAOTSourceFingerprint>* source_fingerprints,
         const std::vector<std::string>& library_paths,
         const QoreAOTSourceSymbolManifest* source_symbols) {
+    aot_compile_failed_in_preload = false;
     const bool trace_timing = getenv("QORE_AOT_BATCH_TIMING") != nullptr;
     const auto batch_start = std::chrono::steady_clock::now();
     auto input_done = batch_start;
@@ -27910,6 +27966,7 @@ bool QoreAOT::compileScriptFilesBatch(
         }
         if (!sibling_preload.load(*qpgm, library_paths, batch_target_set,
                 skip_objects, error)) {
+            aot_compile_failed_in_preload = true;
             return false;
         }
     }
@@ -27970,6 +28027,8 @@ bool QoreAOT::compileScriptFilesBatch(
         std::string resolve_error;
         if (!sibling_preload.mdes->resolveForSourceParse(resolve_error)) {
             error = "sibling .qo cross-resolution failed: " + resolve_error;
+            sibling_preload.addDependencyLoadErrors(error);
+            aot_compile_failed_in_preload = true;
             return false;
         }
     }
@@ -28002,6 +28061,7 @@ bool QoreAOT::compileScriptFilesBatch(
         std::string resolve_error;
         if (!sibling_preload.mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
+            aot_compile_failed_in_preload = true;
             return false;
         }
     }
@@ -28972,6 +29032,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                                 std::vector<std::string>* parsed_files,
                                 const QoreAOTSourceSymbolManifest* source_symbols,
                                 std::vector<QoreAOTSourceFingerprint>* source_fingerprints) {
+    aot_compile_failed_in_preload = false;
     if (!target_file || !*target_file) {
         error = "compileScriptFile: target_file is required";
         return false;
@@ -29135,6 +29196,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
         if (!sibling_preload.load(*qpgm, library_paths, parsed_decl_files_canon,
                 skip_objects, error)) {
+            aot_compile_failed_in_preload = true;
             return false;
         }
     }
@@ -29184,6 +29246,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         std::string resolve_error;
         if (!sibling_mdes->resolveForSourceParse(resolve_error)) {
             error = "sibling .qo cross-resolution failed: " + resolve_error;
+            sibling_preload.addDependencyLoadErrors(error);
+            aot_compile_failed_in_preload = true;
             return false;
         }
     }
@@ -29217,6 +29281,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         std::string resolve_error;
         if (!sibling_mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
+            aot_compile_failed_in_preload = true;
             return false;
         }
     }

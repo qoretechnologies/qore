@@ -70,6 +70,13 @@ Required for some \fB\-c\fP workflows.
 .BI \-L " dir"
 Add a script-mode sibling \fB.qo\fP search path.
 May be repeated.
+Each \fB.qo\fP found is preloaded as a declaration shell, so the sources
+being compiled resolve references to other sources' declarations at parse time;
+the modules each preloaded object was compiled with are loaded first, as a
+\fB%requires\fP in the parse would load them.
+If the preloaded objects cannot be loaded or resolved, the compile exits with
+status 78 and names the module or declaration that could not be resolved; see
+\fBEXIT STATUS\fP.
 .TP
 .B \-\-output\-dir =\fIdir\fP
 Write compile-only output to \fIdir\fP.
@@ -256,6 +263,25 @@ The \fB\-\-jobs\fP option sets this and takes precedence.
 Minimum optimized-IR instruction count for a module to be split for parallel
 codegen.
 Defaults to \fB50000\fP; smaller modules use the single-object path.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+The compile failed: a parse error in a source, a code generation error, or an
+invalid command line.
+.TP
+.B 75
+The inputs of a build writing a manifest (\fB\-\-write\-manifest\fP) changed
+while it was compiling; nothing is published, and the build can be repeated.
+.TP
+.B 78
+A \fB\-c\fP compile could not load or resolve the objects preloaded with
+\fB\-L\fP.
+This concerns the preload set rather than the sources compiled, so a build
+system can answer it by compiling the sources together with the objects that
+would otherwise have been preloaded.
 .SH EXAMPLES
 Compile a script to a native executable:
 .RS

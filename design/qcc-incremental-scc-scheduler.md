@@ -388,9 +388,50 @@ parse recorded nothing from an aliasing source to the source it aliased, so the 
 invisible both to the preload closure and to currency. The lookups now carry the consumer
 location, and a batch records what the standalone compile of the same source records.
 
-*Convexity (open — [#5458](https://github.com/qoretechnologies/qore/issues/5458)).* Completing the preload set is necessary but not sufficient. The
-compiled set must also be **convex**: no preloaded source may depend on a source the parse
-compiles. On Qorus, `Classes/AbstractCompilableMetadata.qc` is preloaded while its own base
+*A preloaded object needs its modules, and the summary is all inheritance has (fixed —
+[#5463](https://github.com/qoretechnologies/qore/issues/5463)).* Two more gaps made the
+**default** path fail terminally on Qorus, with a message that named neither:
+
+```
+error: sibling .qo cross-resolution failed: cannot resolve base class
+  '::OMQ::AbstractQorusTokenAdmissionStore' for class 'QorusTokenAdmissionStore'
+qore-qo-incremental-plan: cannot build stale component scc-5872098917c07d7a
+```
+
+- **Module dependencies were loaded outside the parse lock, and their failures discarded.**
+  A preloaded class can inherit a class a *module* declares, and when no source the compile
+  parses `%requires` that module, only the preload loads it: each `.qo` records the modules its
+  compile had loaded. But a `--stub` parse (which every Qorus compile has) had already left the
+  program mid-parse, and the preload loaded the modules *before* taking the parse lock, so an AOT
+  module's namespace init — which enters the importing program — was refused ("the Program
+  accessed is currently undergoing parsing"). The refusal was dropped, the module stayed
+  unmerged, and resolution failed later on a class nothing had changed. On the Qorus tree 14
+  modules failed this way in one compile. The loads now run under the parse lock, exactly as a
+  `%requires` in the parse does, and a module that still cannot be loaded is named in the error
+  if resolution then fails. Which components went stale only decided whose preload closure
+  reached such an object, which is why an unrelated edit that repartitioned the graph surfaced it.
+- **A declaration of another kind hid a class from its subclass.** Inheritance records nothing
+  in a depfile (it is resolved by name at load), so the source-symbol summary is the only thing
+  that connects a subclass to its base — and it resolved `inherits Map` among *every* declaration
+  named `Map`. A class constant `QorusDataTypeCatalogue::Map` made the name ambiguous, so
+  `class OmqMap inherits Map` had no edge to `Classes/Map.qc`, and every preload closure that
+  reached OmqMap left its base out ("cannot resolve base class '::OMQ::Map' for class 'OmqMap'").
+  A mention that can only name one kind of declaration now resolves among the sources declaring
+  that kind: `inherits`, `new` and static calls among classes, `hash<X>` among hashdecls,
+  `enum<X>` among enums, call references among functions, a declared type among classes and
+  hashdecls. Two sources declaring the same kind and name remain unresolved. On Qorus this adds
+  exactly the one missing edge and leaves the decomposition unchanged (862 components).
+
+A compile that fails loading or resolving its preloaded objects now exits with **78**, distinct
+from a failure in the sources it compiles. The coordinator answers 78 on the default path the way
+it answers a failed partial parse: with the group's own parse, which preloads nothing and so
+cannot fail that way. A typo in a compiled source still fails fast, without paying for a group
+parse first.
+
+*Convexity (fixed — [#5458](https://github.com/qoretechnologies/qore/issues/5458)).*
+Completing the preload set is necessary but not sufficient. The compiled set must also be
+**convex**: no preloaded source may depend on a source the parse compiles. On Qorus,
+`Classes/AbstractCompilableMetadata.qc` is preloaded while its own base
 `Classes/AbstractMetadata.qc` is compiled — so the shell brings back the *previous*
 `AbstractMetadata` and the parse's copy is shadowed:
 
@@ -399,10 +440,10 @@ INVALID-MEMBER: 'type' is not a registered member of class 'ReleaseScriptMetadat
    AbstractMetadata::constructor() (Classes/AbstractMetadata.qc:106)
 ```
 
-Enforcing convexity means promoting any such shell into the compiled set and iterating.
-**That closure was measured on Qorus, and it decides the question.** Taking the provider
-relation as required edges plus content dependencies — content is the right relation here,
-because a shell carries the declarations it was compiled against — the convex closure is:
+Enforcing convexity by *growing* the compiled set — promoting any such shell into it and
+iterating — was measured on Qorus and rejected. Taking the provider relation as required
+edges plus content dependencies (content is the right relation here, because a shell
+carries the declarations it was compiled against), the convex closure is:
 
 |!edited source|!must be compiled|!plus preloaded|!of 820
 |`Classes/QorusRestApiHandler.qc`|386|290|82% involved
@@ -412,17 +453,35 @@ because a shell carries the declarations it was compiled against — the convex 
 |`Classes/QorusRestClass.qc`|386|290|82%
 
 The closure is **the same for every seed**: Qorus's combined provider graph is dense enough
-that convexity collapses to one fixed point regardless of what was edited. A partial parse
-would compile 386 components and load 290 shells where the group's own parse compiles all
-820 in about four minutes with full build-tool parallelism — and it would still pay the
-mode-transition cascade. (The figure is an upper bound: it assumes a shell carries
-declarations for everything its compile recorded as a content dependency.)
+that growing to convexity collapses to one fixed point regardless of what was edited.
 
-**So the partial parse should not be finished for this codebase.** It can only pay where a
-group's dependency graph is sparse enough for convex subsets to stay small; Qorus's is not.
-`QORE_QCC_SUBSET_PARSE` stays off, and the effort belongs in the two levers that do not
-depend on partitioning a parse: parallelising the standalone walk, and removing the
-mode-transition cascade by making the two compile modes publish the same contract.
+**The fix goes the other way: it shrinks the set.** A stale component whose preload closure
+leaves the parse and comes back — Y preloads X, and X was compiled against Z, which the
+parse recompiles — is *left out* of this parse. It stays stale, and the next pass compiles
+it, after X has been recompiled against the new Z if Z's declarations moved. That costs
+nothing the build would not do anyway: the coordinator already walks the consumer closure
+one pass at a time. `qore-qo-source-order --scc-convex-set` decides it
+(`convexComponentSubset()`, over the relation `componentPreloadOutputs()` closes over), and
+`qore-qo-batch-bootstrap` compiles only what it keeps, names what it left out, and tells the
+coordinator so the escalation bound counts only what was compiled.
+
+Two details decide whether the answer is ever empty, and it is not:
+
+- Members are taken in dependency order, providers first, and each is kept only if it
+  neither reaches nor is reached from an already-kept member through something preloaded.
+  Content dependencies are not ordering edges, so the relation can have cycles between
+  components — on Qorus, `AbstractMetadata` and the 35-member component holding
+  `ReleaseScriptMetadata` each reach the other through preloaded objects. Leaving out
+  every offending member at once left nothing to compile; the first member is always kept.
+- A path from a member back to *itself* through what it preloads is not a reason to leave
+  it out. That is a standalone compile of it, which is what the default path does.
+
+A member whose providers reach one left out is left out as well, so nothing is compiled
+against a stale member's previous object only to go stale again in the next pass.
+
+`QORE_QCC_SUBSET_PARSE` remains opt-in. Convexity was the last defect keeping a partial
+parse from compiling consistently; whether it should be the default is a performance
+decision for the escalation floor below, and wants measuring on the trees it would serve.
 
 ## What actually causes the mode-transition cascade
 
@@ -589,11 +648,14 @@ contract was emitted twice**, so an object's contract depended on the parity of 
 length rather than on its declarations. 697 of 875 Qorus contracts carried duplicated rows.
 The symbol path now trims to the length the header records.
 
-**The cascade is not yet gone** ([#5459](https://github.com/qoretechnologies/qore/issues/5459)). A comment-only edit to `Classes/QorusRestApiHandler.qc` from
-a group-parse state still rebuilds 13 objects in 4m49, because contracts are compared whole
-and 12 symbols still differ in `body_contract_hash`. But the ordering above is now
-discharged: body-contract granularity is what remains, and it is now both sufficient and
-worth its machinery.
+**The cascade of declarations is gone; what remained was body-contract granularity**
+([#5459](https://github.com/qoretechnologies/qore/issues/5459)). With declarations
+mode-independent, a comment-only edit to `Classes/QorusRestApiHandler.qc` from a group-parse
+state still rebuilt 13 objects in 4m49, because contracts were compared whole and 12 symbols
+still differed in `body_contract_hash`. The two channels below — each watching the
+provider's *declaration* contract — took that to one compile; the body contracts that
+`--link-qo` validates are watched separately, per row. See "Two channels decide staleness"
+and "The bound this narrowing must not cross".
 
 **It also loses bodies.** A whole-group parse lowers cross-member calls
 it can see in its own parse, so an object it emits is not byte-identical to one
@@ -783,6 +845,27 @@ Three properties keep it cheap and correct:
 - a member that **stops** baking one is not stale for it. That is its own compile talking, the
   same asymmetry that applies to prerequisites across a graph transition — except that a
   body-contract edge is not a graph edge, so it has to be forgiven on an unchanged graph too.
+
+**A consumer watches the rows it baked, not the provider's whole stamp.** The stamp covers every
+symbol the provider publishes a body contract for — on Qorus a consumed provider publishes 154
+rows on average and up to 1664 — while a consumer bakes a handful: 1222 import records across
+292 consumers and 26 providers. Watching the whole stamp made a consumer stale whenever *any*
+row moved, and rows move for exactly the reason body contracts differ between modes: a group
+parse proves more about some bodies than a standalone one. So a provider recompiled in the other
+mode rebuilt every consumer of its body contract, however little each took.
+
+qcc now records the rows beside the object, in `<object>.body-contract-imports`: one `import`
+row per (provider stamp, symbol), spelled with the stamp path the depfile uses and the symbol
+path `--link-qo` matches (all 1222 records on Qorus match a provider row by exact path). The
+generation token digests only the provider's current rows for those symbols (`rows:` digests
+in the manifest's `body-contracts`); a symbol the provider no longer publishes counts as moved,
+because the link can no longer match it. A member with no readable record — an object compiled
+by an older qcc — keeps the whole-stamp digest, so upgrading does not rebuild every consumer of
+a body contract at once.
+
+The depfile edge still names the whole stamp. That is harmless: the stamp is covered by content,
+never compared by mtime (invariant 15), so a recipe the build tool reaches for it only verifies
+the component against the token.
 
 ## A pass walks one level of the closure, not the whole closure
 
@@ -1029,12 +1112,27 @@ which two builders can still race to restore.
     input that is compared by mtime must be strictly older than what it feeds, which a
     build that writes a source and its artifacts in the same filesystem tick can never
     satisfy.
+16. A parse never preloads an object compiled against a source it compiles. A member whose
+    preloads reach another member of the parse through something preloaded waits for the
+    next pass; the set shrinks to satisfy this, it does not grow.
+17. A source-summary mention resolves among the declarations of the kind it can name. A
+    declaration of another kind with the same name does not make it ambiguous; two of the
+    same kind do.
+18. A preloaded object is loaded as a parse would load it -- its modules under the parse
+    lock -- and a failure to load or resolve preloaded objects is reported as that (qcc
+    exit 78), never as a failure of the sources compiled. The scheduler answers it with the
+    group's own parse, which preloads nothing.
+19. A consumer's dependency on a provider's body contract covers the rows it baked, and
+    nothing else the provider publishes.
 
 ## Tests
 
 - `examples/test/ir/AOTSccGeneration.qtest` — decomposition and generation identity,
   including that a generation follows a predecessor's declaration contract and not its
-  compile contract
+  compile contract, that a consumer watches only the body-contract rows it baked, that
+  `--scc-convex-set` leaves out what a preloaded object stands between (and keeps the
+  provider-first member of a cycle through preloads), and that a declaration of another kind
+  does not hide a class from its subclass
 - `examples/test/ir/AOTSccGraphTransition.qtest` — key vs index durability, graph
   generation naming, freeze semantics, the 75/76 split, that a declaration-contract
   dependency reaches the preload closure without becoming an ordering edge, and that a
@@ -1043,12 +1141,16 @@ which two builders can still race to restore.
   surviving prerequisite whose contract moved, and an edited member source)
 - `examples/test/ir/AOTIncrementalDeps.qtest` — what a compile records as a dependency,
   including that a folded constant narrows to the provider's declaration contract, that a
-  comment-only provider edit leaves it byte-identical, and that a changed value does not
+  comment-only provider edit leaves it byte-identical, and that a changed value does not;
+  folded enum members in both compile modes; the body-contract rows a consumer records; and
+  that a preloaded object's module loads in a program a `--stub` parse left mid-parse
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a cascade walked to convergence, a pass that changes
-  nothing escalating instead of lapping, and the escalation floor following
-  whether a partial parse is configured
+  nothing escalating instead of lapping, the escalation floor following
+  whether a partial parse is configured, a partial parse leaving a non-convex member for
+  the next pass, and a preload failure on the default path falling back to the group's
+  parse
 - `examples/test/ir/AOTSymbolIndex.qtest` — the symbol index and the source-symbol
   manifest, including a subset parse resolving a provider it compiles itself
 - `examples/test/ir/AOTQoLock.qtest` — the lock helper: status passthrough (including the

@@ -69,8 +69,13 @@ publication_marker="${bootstrap_stamp}.publication"
 subset_plan=${QORE_QCC_SUBSET_PLAN:-}
 subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
 subset_keys=
+subset_convex_keys=
+subset_convex_plan=
 subset_preloads=
 subset_preload_dir=
+# When set, names a file this script fills with the keys of the stale components it left for the
+# caller's next pass; see run_subset_parse().
+subset_deferred_file=${QORE_QCC_SUBSET_DEFERRED:-}
 current_stamps=
 currency_file=
 member_stamps=
@@ -196,6 +201,12 @@ cleanup() {
     fi
     if [ -n "$subset_keys" ]; then
         rm -f "$subset_keys"
+    fi
+    if [ -n "${subset_convex_keys:-}" ]; then
+        rm -f "$subset_convex_keys"
+    fi
+    if [ -n "${subset_convex_plan:-}" ]; then
+        rm -f "$subset_convex_plan"
     fi
     if [ -n "${currency_file:-}" ]; then
         rm -f "$currency_file"
@@ -377,6 +388,40 @@ run_subset_parse() {
             return 0
         fi
     fi
+
+    # Only the part of the stale set that one parse can compile consistently.  A
+    # preloaded `.qo` is what its source compiled to against the previous generation
+    # of everything it depends on, so a stale component that preloads an object
+    # compiled against ANOTHER stale component in the same parse gets that
+    # component's previous declarations back, shadowing the ones the parse makes
+    # ("INVALID-MEMBER: 'type' is not a registered member of class ...").  Such a
+    # component is left stale and compiled by the next pass, once what it preloads
+    # has been rebuilt against the new declarations.
+    subset_convex_keys=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-convex.XXXXXX")
+    if run_source_order --scc-convex-set "$context" "$subset_keys" > "$subset_convex_keys"; then
+        :
+    else
+        return $?
+    fi
+    if [ ! -s "$subset_convex_keys" ]; then
+        echo "$0: no part of the subset plan can be compiled in one parse: $subset_plan" >&2
+        return 1
+    fi
+    if [ -n "$subset_deferred_file" ]; then
+        # sorted like the keys file, which is what comm needs
+        sort -u "$subset_convex_keys" | comm -23 "$subset_keys" - > "$subset_deferred_file"
+    fi
+    subset_deferred_count=$(sort -u "$subset_convex_keys" | comm -23 "$subset_keys" - | wc -l | tr -d ' ')
+    if [ "$subset_deferred_count" -gt 0 ]; then
+        echo "$0: leaving $subset_deferred_count stale component(s) for the next pass: each would preload" \
+            "an object compiled against another component this parse recompiles"
+        subset_convex_plan=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-plan.XXXXXX")
+        awk -F '\t' 'NR == FNR { keep[$1] = 1; next } keep[$1]' \
+            "$subset_convex_keys" "$subset_plan" > "$subset_convex_plan"
+        subset_plan=$subset_convex_plan
+        sort -u "$subset_convex_keys" > "$subset_keys"
+    fi
+
     subset_count=$(awk -F '\t' 'NF && $2 != ""' "$subset_plan" | wc -l | tr -d ' ')
     group_count=$(awk 'NF' "$outputs_file" | wc -l | tr -d ' ')
     echo "$0: compiling $subset_count of $group_count sources in one shared parse"

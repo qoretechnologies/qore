@@ -18,6 +18,7 @@ const QO_SUFFIXES = (
     ".compile-contract.stamp",
     ".aggregate-contract.stamp",
     ".body-contract.stamp",
+    ".body-contract-imports",
     ".stamp",
     ".source.manifest.json",
     ".source-parse-defines",

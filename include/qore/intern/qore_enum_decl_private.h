@@ -200,6 +200,11 @@ public:
         return loc;
     }
 
+    //! Sets the declaration location of an enum not created by the parser (a deserialized \c .qo shell)
+    DLLLOCAL void setParseLocation(const QoreProgramLocation* l) {
+        loc = l;
+    }
+
     DLLLOCAL static qore_enum_decl_private* get(QoreEnumDecl& enumdecl) {
         return enumdecl.priv;
     }

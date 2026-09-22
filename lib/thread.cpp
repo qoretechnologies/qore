@@ -35,6 +35,11 @@
 #include <qore/QoreSandboxManager.h>
 #include <openssl/err.h>
 
+#ifdef __linux__
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #include "qore/intern/ThreadResourceList.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreSignal.h"
@@ -3472,6 +3477,21 @@ static void set_tid_thread_name(int tid) {
 #endif
 }
 
+//! True if naming the calling thread would rename the process
+/** On Linux a thread's name is its \c comm, and the main thread's \c comm is the process name that \c ps,
+    \c top, \c pidof, \c pkill and \c killall match against.  Naming it \c qore/1 made every program that
+    initializes the library on its main thread -- \c qcc, \c qore itself, a Python interpreter importing
+    \c qoreloader -- show up and be matched as \c qore/1.  Elsewhere a thread's name is only a label for
+    debuggers, and the process name is unaffected.
+*/
+static bool q_thread_name_is_process_name() {
+#ifdef __linux__
+    return static_cast<pid_t>(syscall(SYS_gettid)) == getpid();
+#else
+    return false;
+#endif
+}
+
 // put functions in an unnamed namespace to make them 'static extern "C"'
 namespace {
     extern "C" void* q_run_thread(void* arg) {
@@ -3943,8 +3963,10 @@ void init_qore_threads() {
     pthread_mutexattr_init(&ma_recursive);
     pthread_mutexattr_settype(&ma_recursive, PTHREAD_MUTEX_RECURSIVE);
 
-    // set default thread name for initial thread
-    set_tid_thread_name(q_gettid());
+    // set the default thread name for the initial thread, unless that would rename the process
+    if (!q_thread_name_is_process_name()) {
+        set_tid_thread_name(q_gettid());
+    }
 
     // mark threading as active
     threads_initialized = true;

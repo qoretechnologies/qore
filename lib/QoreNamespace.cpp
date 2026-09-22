@@ -425,14 +425,7 @@ void QoreNamespace::addSystemEnum(QoreEnumDecl* enumdecl) {
         enum_ns_priv->setPublic();
     }
 
-    const std::vector<QoreEnumMember*>& members = enum_priv->getMembers();
-    for (auto* member : members) {
-        if (enum_ns_priv->constant.inList(member->getName())) {
-            continue;
-        }
-        QoreValue val = QoreValue::makeEnum(member);
-        enum_ns_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
-    }
+    enum_ns_priv->addEnumMemberConstants(*enum_priv);
 
     qore_root_ns_private* rns = priv->getRoot();
     if (rns && new_ns) {
@@ -3736,6 +3729,21 @@ int qore_ns_private::parseAddPendingHashDecl(const QoreProgramLocation* loc, con
    return sns->priv->parseAddPendingHashDecl(loc, thd.release());
 }
 
+void qore_ns_private::addEnumMemberConstants(const qore_enum_decl_private& enum_priv) {
+    const QoreProgramLocation* loc = enum_priv.getParseLocation();
+    size_t count = 0;
+    for (auto* member : enum_priv.getMembers()) {
+        if (count && !(count % 100) && qore_check_cancel(nullptr, "enum member registration")) {
+            return;
+        }
+        ++count;
+        if (constant.inList(member->getName())) {
+            continue;
+        }
+        constant.add(member->getName(), QoreValue::makeEnum(member), enum_priv.getTypeInfo(), Public, loc);
+    }
+}
+
 // public, only called either in single-threaded initialization or
 // while the program-level parse lock is held
 int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnumDecl* enumdecl) {
@@ -3777,11 +3785,7 @@ int qore_ns_private::parseAddPendingEnum(const QoreProgramLocation* loc, QoreEnu
     }
 
     // Add enum members as TAG_ENUM constants in the namespace with enum type info
-    const std::vector<QoreEnumMember*>& members = priv->getMembers();
-    for (auto* member : members) {
-        QoreValue val = QoreValue::makeEnum(member);
-        ens_priv->constant.add(member->getName(), val, priv->getTypeInfo());
-    }
+    ens_priv->addEnumMemberConstants(*priv);
 
     // Add the enum namespace to this namespace
     qore_ns_private* new_ns = parseAddNamespace(enum_ns);
@@ -4105,15 +4109,7 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
                 ens_priv = qore_ns_private::get(*enum_ns);
             }
             // Add enum members as TAG_ENUM constants in the namespace
-            qore_enum_decl_private* enum_priv = qore_enum_decl_private::get(*local_ed);
-            const std::vector<QoreEnumMember*>& members = enum_priv->getMembers();
-            for (auto* member : members) {
-                if (ens_priv->constant.inList(member->getName())) {
-                    continue;
-                }
-                QoreValue val = QoreValue::makeEnum(member);
-                ens_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
-            }
+            ens_priv->addEnumMemberConstants(*qore_enum_decl_private::get(*local_ed));
             qore_root_ns_private* rns = getRoot();
             if (rns) {
                 rns->rebuildIndexes(ens_priv);

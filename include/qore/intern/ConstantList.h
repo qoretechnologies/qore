@@ -486,9 +486,13 @@ public:
 
     DLLLOCAL ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p);
 
-    // do not delete the object returned by this function
+    //! Adds an already-initialized builtin constant; do not delete the object returned by this function
+    /** @param loc where the constant is declared; nullptr for a constant with no source (\c loc_builtin).  A
+        constant synthesized from a user declaration -- an enum's members -- passes that declaration's location,
+        because a compile that folds the constant records its provider from it
+    */
     DLLLOCAL cnemap_t::iterator add(const char* name, QoreValue val, const QoreTypeInfo* typeInfo = nullptr,
-            ClassAccess access = Public);
+            ClassAccess access = Public, const QoreProgramLocation* loc = nullptr);
 
     DLLLOCAL cnemap_t::iterator parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue val,
             const QoreTypeInfo* typeInfo = nullptr, bool pub = false, ClassAccess access = Public,

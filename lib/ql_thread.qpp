@@ -922,6 +922,9 @@ set_thread_name(name);
 
     @param name the new descriptive name for the thread
 
+    @note on Linux the name of a process's initial thread is the process name that \c ps, \c top and \c pidof
+    use, so naming that thread renames the process
+
     @since %Qore 0.9.0
 */
 nothing set_thread_name(string name) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
@@ -946,7 +949,9 @@ nothing set_thread_name(string name) [flags=NAMED_ARGS;dom=THREAD_CONTROL] {
     @return the current thread's descriptive name if set or @ref nothing if not
 
     @note
-    - if supported, the default thread name will be <tt>qore/</tt><i>tid</i> where \a tid is the current thread ID
+    - if supported, the default thread name will be <tt>qore/</tt><i>tid</i> where \a tid is the current thread ID;
+      the exception is the process's initial thread on Linux, whose name is the process name that \c ps,
+      \c top and \c pidof use, and which therefore keeps that name (for example \c qore)
     - in case the current platform does not support thread names, @ref nothing is always returned
 
     @since %Qore 0.9.0

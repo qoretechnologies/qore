@@ -293,6 +293,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source generic hashdecl", \testStripSourceGenericHashDecl());
         addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
         addTestCase("AOT strip source enum", \testStripSourceEnum());
+        addTestCase("AOT enum member returned through a context-independent fast entry",
+            \testEnumMemberFastEntryContext());
         addTestCase("AOT strip source hashdecl enum member type",
             \testStripSourceHashdeclEnumMemberType());
         addTestCase("AOT strip source nested object complex member type",
@@ -8767,6 +8769,35 @@ exit(0);
 
         assertEq("id: id123, name: test, value: 99\n", out,
             "hashdecl inheritance from strip-source module works correctly");
+    }
+
+    # A callee whose body is simple enough is compiled as a CONTEXT-INDEPENDENT fast entry, which its caller runs
+    # on the caller's own AOT context.  An enum member is not an immediate in AOT code: it is resolved by name when
+    # the object is loaded and read from the function's expression-slot table.  Treating it as context-independent
+    # made the callee read whatever the CALLER kept in that slot -- another member (red() returned Green) or an
+    # unrelated expression, failing with "expects type 'enum<Color>', but got type 'static method call'".
+    testEnumMemberFastEntryContext() {
+        string code = "%modern
+namespace EP { enum Color { Red = 1, Green = 2, Blue = 3 } }
+class UseEnum {
+    public { const C = EP::Color::Green; }
+    static EP::Color red() { return EP::Color::Red; }
+    static EP::Color blue() { return EP::Color::Blue; }
+}
+EP::Color sub pick(bool b) { return b ? EP::Color::Red : EP::Color::Blue; }
+printf(\"%y %y %y %y %y\\n\", UseEnum::C, UseEnum::red(), UseEnum::blue(), pick(True), pick(False));
+";
+        string aot_out = compileAndRun(code);
+        assertEq("2 1 3 1 3\n", aot_out, "each callee returns its own enum member");
+        assertEq(runInterpreted(code), aot_out, "AOT enum returns match the interpreter");
+
+        # the caller's first expression slot is the static call itself, which is what the callee used to read
+        code = "%modern
+namespace EP { enum Color { Red = 1, Green = 2 } }
+class UseEnum { static EP::Color red() { return EP::Color::Red; } }
+printf(\"%y\\n\", UseEnum::red());
+";
+        assertEq("1\n", compileAndRun(code), "a lone enum-returning callee does not read its caller's slot");
     }
 
     testStripSourceEnum() {

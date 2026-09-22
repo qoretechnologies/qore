@@ -68,13 +68,19 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             \testSourceParsePreloadedBody());
         addTestCase("repeated AOT compilation is byte reproducible",
             \testByteReproducibleObject());
-        # NOTE: enum members route through the SAME constant hook — they are
-        # registered as ConstantList entries, so a folded `SiblingEnum::Member`
-        # is captured identically to a constant.  An end-to-end enum case is not
-        # included here because resolving a preloaded sibling enum member under
-        # `-L` currently fails upstream ("cannot resolve bareword '<member>'"),
-        # a separate pre-existing `-L` enum-resolution gap independent of this
-        # dependency tracking.
+        # enum members route through the SAME constant hook as a folded constant: they are registered as
+        # ConstantList entries carrying the enum's declaration location, whether the enum is parsed or preloaded
+        addTestCase("a folded enum member is a build dependency", \testEnumMemberDep());
+        addTestCase("a folded enum member depends on the provider's declaration contract",
+            \testEnumMemberDeclarationContractDep());
+        addTestCase("same-named enums in different namespaces are told apart",
+            \testEnumSameNameDifferentNamespaces());
+        addTestCase("an enum's consumers publish the same declarations in either compile mode",
+            \testEnumDeclarationsModeIndependent());
+        addTestCase("a preloaded object's module dependency loads in a program already parsing",
+            \testPreloadModuleDependencyUnderParse());
+        addTestCase("a consumer records the body-contract rows it baked",
+            \testBodyContractImportRows());
 
         set_return_value(main());
     }
@@ -868,6 +874,270 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "consumer links with the provider: " + link);
         assertEq("42", trim(run(sprintf("%s %s/parse-app", env, tmp_dir))),
             "consumer preserves the value produced during source parse");
+    }
+
+    # A folded `Enum::Member` leaves no trace in the emitted object, exactly like a folded constant, so the compile
+    # must record the source that declares the enum.  It did not in either mode: a parsed enum registered its
+    # members with a builtin location, which the dependency hook skips, and a preloaded shell registered no
+    # members at all -- the reference was deferred to run time as `auto`, so the consumer depended on nothing and
+    # published a different declaration than the same source compiled in a group parse.
+    testEnumMemberDep() {
+        TmpDir tmp = initDirs();
+        string prov = tmp_dir + "/enum_prov.qc";
+        string cons = tmp_dir + "/enum_cons.qc";
+        write(prov, "%new-style\npublic namespace EP { public enum Color { Red = 1, Green = 2 } }\n");
+        write(cons, "%new-style\nclass UseEnum {\n"
+            + "    public { const C = EP::Color::Green; }\n"
+            + "    static EP::Color f() { return EP::Color::Red; }\n"
+            + "}\n"
+            + "int sub main() { printf(\"%y %y\\n\", UseEnum::C, UseEnum::f()); return 0; }\n");
+
+        # standalone: the enum is preloaded from its .qo shell
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/enum_prov.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, prov));
+        assertTrue(is_file(lib_dir + "/enum_prov.qo"), "compiled the enum provider: " + out);
+        string dep = lib_dir + "/enum_cons.qo.d";
+        out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s -o %s/enum_cons.qo %s",
+            env, qcc_bin, lib_dir, dep, lib_dir, cons));
+        assertTrue(is_file(lib_dir + "/enum_cons.qo"), "compiled the folding consumer: " + out);
+        string standalone = File::readTextFile(dep);
+        assertTrue(standalone.find("enum_prov.qc") != -1,
+            "a standalone compile records the source declaring a folded enum: " + standalone);
+
+        # the member is folded with its declared type, and the linked program sees the right members
+        string link = run(sprintf("%s %s -o %s/enum-app %s/enum_prov.qo %s/enum_cons.qo",
+            env, qcc_bin, tmp_dir, lib_dir, lib_dir));
+        assertTrue(is_file(tmp_dir + "/enum-app"), "linked the enum consumer: " + link);
+        assertEq("2 1", trim(run(sprintf("%s %s/enum-app", env, tmp_dir))),
+            "the preloaded enum's members fold to their own values");
+
+        # batch: the enum is declared by another source in the same parse
+        string batch_dir = tmp_dir + "/batch";
+        mkdir(batch_dir);
+        out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars --output-dir=%s "
+            "--depfile-dir=%s %s %s", env, qcc_bin, batch_dir, batch_dir, prov, cons));
+        string cons_dep = run(sprintf("cat %s/*enum_cons_qc.qo.d", batch_dir));
+        string prov_dep = run(sprintf("cat %s/*enum_prov_qc.qo.d", batch_dir));
+        assertTrue(cons_dep.find("enum_prov.qc") != -1,
+            "a batch attributes a folded enum member to its consumer: " + cons_dep + out);
+        assertEq(-1, prov_dep.find("enum_cons.qc"),
+            "the enum's source does not depend on the source that folds it: " + prov_dep);
+    }
+
+    # The narrowed edge is only sound if the enum's declaration contract moves when a member value does and
+    # stays put when nothing a consumer can fold changes.
+    testEnumMemberDeclarationContractDep() {
+        TmpDir tmp = initDirs();
+        string prov_src = tmp_dir + "/dce.qc";
+        string cons_src = tmp_dir + "/use_dce.qc";
+        write(prov_src, "%new-style\npublic namespace DE { public enum Mode { On = 1, Off = 2 } }\n");
+        write(cons_src, "%new-style\nclass UseDe { static DE::Mode f() { return DE::Mode::Off; } }\n");
+
+        string prov_obj = lib_dir + "/dce.qo";
+        string decl_stamp = prov_obj + ".aggregate-contract.stamp";
+        code compileProvider = sub () {
+            string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+                + " --compile-contract-stamp=%s.compile-contract.stamp --aggregate-contract-stamp=%s -o %s %s",
+                env, qcc_bin, lib_dir, prov_obj, decl_stamp, prov_obj, prov_src));
+            assertTrue(is_file(decl_stamp), "emitted the enum's declaration contract: " + out);
+        };
+        compileProvider();
+
+        string map_file = tmp_dir + "/source-content.map";
+        string map_body;
+        foreach string src in ((prov_src, cons_src)) {
+            write(src + ".sha256", sprintf("sha256=%s\n", digest("sha256", ReadOnlyFile::readBinaryFile(src)).toHex()));
+            map_body += sprintf("%s\t%s.sha256\n", src, src);
+        }
+        write(map_file, map_body);
+
+        string dep_file = lib_dir + "/use_dce.qo.d";
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            + " --depfile-compile-contract-stamps --depfile-declaration-contract-stamps"
+            + " --depfile-source-content-map=%s -o %s/use_dce.qo %s",
+            env, qcc_bin, lib_dir, dep_file, map_file, lib_dir, cons_src));
+        string dep = File::readTextFile(dep_file);
+        assertTrue(dep.find("dce.qo.aggregate-contract.stamp") != -1,
+            "the folded enum member narrows to the provider's declaration contract: " + dep + out);
+        assertEq(-1, dep.find("/dce.qc.sha256"),
+            "the provider's source-byte edge is replaced, not merely accompanied: " + dep);
+
+        string declared = File::readTextFile(decl_stamp);
+        write(prov_src, "%new-style\npublic namespace DE { public enum Mode { On = 1, Off = 2 } }\n# comment\n");
+        compileProvider();
+        assertEq(declared, File::readTextFile(decl_stamp),
+            "a comment-only edit to the enum's source leaves its declaration contract byte-identical");
+
+        write(prov_src, "%new-style\npublic namespace DE { public enum Mode { On = 1, Off = 3 } }\n");
+        compileProvider();
+        assertNeq(declared, File::readTextFile(decl_stamp),
+            "changing a member value moves the declaration contract, so the consumer rebuilds");
+    }
+
+    # With a builtin location the only thing that rebuilt a consumer was the source-symbol summary edge, and that
+    # needs the enum's name to resolve to ONE provider.  Two sources declaring same-named enums defeat it, so the
+    # recorded dependency must name the source that declares the enum actually folded -- and only that one.
+    testEnumSameNameDifferentNamespaces() {
+        TmpDir tmp = initDirs();
+        string pa = tmp_dir + "/enum_a.qc";
+        string pb = tmp_dir + "/enum_b.qc";
+        string cons = tmp_dir + "/enum_ab.qc";
+        write(pa, "%new-style\npublic namespace A { public enum E { X = 1 } }\n");
+        write(pb, "%new-style\npublic namespace B { public enum E { X = 2 } }\n");
+        write(cons, "%new-style\nclass UseA { public { const V = A::E::X; } }\n");
+
+        foreach string src in ((pa, pb)) {
+            string name = basename(src);
+            name =~ s/\.qc$//;
+            string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/%s.qo %s",
+                env, qcc_bin, lib_dir, lib_dir, name, src));
+            assertTrue(is_file(sprintf("%s/%s.qo", lib_dir, name)), "compiled " + name + ": " + out);
+        }
+        string dep = lib_dir + "/enum_ab.qo.d";
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s -o %s/enum_ab.qo %s",
+            env, qcc_bin, lib_dir, dep, lib_dir, cons));
+        string standalone = File::readTextFile(dep);
+        assertTrue(standalone.find("enum_a.qc") != -1,
+            "the consumer depends on the source declaring the enum it folded: " + standalone + out);
+        assertEq(-1, standalone.find("enum_b.qc"),
+            "and not on the source declaring a same-named enum elsewhere: " + standalone);
+
+        string batch_dir = tmp_dir + "/batch";
+        mkdir(batch_dir);
+        run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars --output-dir=%s --depfile-dir=%s "
+            "%s %s %s", env, qcc_bin, batch_dir, batch_dir, pa, pb, cons));
+        string batch = run(sprintf("cat %s/*enum_ab_qc.qo.d", batch_dir));
+        assertTrue(batch.find("enum_a.qc") != -1, "a batch names the folded enum's source: " + batch);
+        assertEq(-1, batch.find("enum_b.qc"), "a batch does not name the same-named enum's source: " + batch);
+    }
+
+    # A preloaded shell built the enum's type from the unrooted path the writer records, and the parser builds it
+    # rooted, so a declaration mentioning the enum -- a return type, a constant folded from it -- published a
+    # different contract depending on whether the enum's source was in the same parse.  Switching a component
+    # between the two modes then rebuilt every consumer of it for no change at all.
+    testEnumDeclarationsModeIndependent() {
+        TmpDir tmp = initDirs();
+        string prov = tmp_dir + "/mode_enum.qc";
+        string cons = tmp_dir + "/mode_cons.qc";
+        write(prov, "%new-style\npublic namespace ME { public enum Level { Low = 1, High = 2 } }\n");
+        write(cons, "%new-style\nclass UseLevel {\n"
+            + "    public { const L = ME::Level::High; }\n"
+            + "    static ME::Level f(*ME::Level l) { return l ?? ME::Level::Low; }\n"
+            + "}\n");
+
+        run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/mode_enum.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, prov));
+        string shell_stamp = lib_dir + "/mode_cons.decl";
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --aggregate-contract-stamp=%s"
+            + " -o %s/mode_cons.qo %s", env, qcc_bin, lib_dir, shell_stamp, lib_dir, cons));
+        assertTrue(is_file(shell_stamp), "compiled the consumer against the enum's shell: " + out);
+
+        string batch_dir = tmp_dir + "/batch";
+        mkdir(batch_dir);
+        out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars --output-dir=%s"
+            + " --depfile-dir=%s %s %s", env, qcc_bin, batch_dir, batch_dir, prov, cons));
+        string group = run(sprintf("cat %s/*mode_cons_qc.qo.aggregate-contract.stamp", batch_dir));
+        assertEq(File::readTextFile(shell_stamp), group,
+            "the consumer publishes the same declaration contract in a group parse and against a shell: " + out);
+    }
+
+    # A preloaded object whose class inherits a class declared in an AOT module needs that module loaded, and
+    # when no source this compile parses `%requires` it, only the preload loads it.  A `--stub` parse has already
+    # put the program mid-parse by then, and the preload loaded its objects' modules outside the parse lock, so an
+    # AOT module's namespace init -- which enters the importing program -- was refused ("the Program accessed is
+    # currently undergoing parsing"), the refusal was discarded, and the compile failed later with an unresolved
+    # base class naming nothing that had changed.
+    testPreloadModuleDependencyUnderParse() {
+        TmpDir tmp = initDirs();
+        string mod_dir = tmp_dir + "/mods";
+        mkdir(mod_dir);
+        write(mod_dir + "/PreBaseMod.qm", "%modern\n"
+            + "module PreBaseMod { version = \"1.0\"; desc = \"base\"; author = \"Qore\"; license = \"MIT\"; }\n"
+            + "public namespace PB { public class Base { int v() { return 1; } } }\n");
+        string mod_env = env + " QORE_MODULE_DIR=" + mod_dir;
+        string out = run(sprintf("%s %s -m -o %s/PreBaseMod.qmod %s/PreBaseMod.qm", mod_env, qcc_bin, mod_dir,
+            mod_dir));
+        assertTrue(is_file(mod_dir + "/PreBaseMod.qmod"), "compiled the AOT module: " + out);
+
+        string derived = tmp_dir + "/pre_derived.qc";
+        write(derived, "%modern\n%requires PreBaseMod\n"
+            + "public namespace PB { public class Derived inherits Base { int w() { return 2; } } }\n");
+        out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/pre_derived.qo %s", mod_env, qcc_bin,
+            lib_dir, lib_dir, derived));
+        assertTrue(is_file(lib_dir + "/pre_derived.qo"), "compiled the module-derived class: " + out);
+
+        # neither the stub nor the target requires the module: only the preloaded object names it
+        string stub = tmp_dir + "/pre_stub.qc";
+        write(stub, "%modern\npublic class PreStub {}\n");
+        string other = tmp_dir + "/pre_other.qc";
+        write(other, "%modern\npublic class PreOther { int x() { return 3; } }\n");
+        out = run(sprintf("%s %s -c -L %s --stub=%s --parse-option=PO_MODERN -o %s/pre_other.qo %s", mod_env,
+            qcc_bin, lib_dir, stub, lib_dir, other));
+        assertEq(-1, out.find("cross-resolution failed"), "the preloaded class resolves its module base: " + out);
+        assertTrue(is_file(lib_dir + "/pre_other.qo"), "the compile succeeds: " + out);
+
+        # a module that really cannot be loaded is still best-effort, but it is named when resolution then fails,
+        # instead of leaving only the class it would have declared
+        unlink(mod_dir + "/PreBaseMod.qmod");
+        unlink(mod_dir + "/PreBaseMod.qm");
+        unlink(lib_dir + "/pre_other.qo");
+        out = run(sprintf("%s %s -c -L %s --stub=%s --parse-option=PO_MODERN -o %s/pre_other.qo %s", mod_env,
+            qcc_bin, lib_dir, stub, lib_dir, other));
+        assertFalse(is_file(lib_dir + "/pre_other.qo"), "the compile fails without the module: " + out);
+        assertTrue(out.find("cannot resolve base class '::PB::Base'") != -1, "the unresolved base is reported: "
+            + out);
+        assertTrue(out.find("PreBaseMod: failed to load module 'PreBaseMod'") != -1,
+            "and so is the module load that caused it: " + out);
+    }
+
+    # The depfile edge names a provider's whole body contract, but `--link-qo` validates only the rows the
+    # consumer baked -- so the rows are recorded beside the object, and that record is what the scheduler digests.
+    testBodyContractImportRows() {
+        TmpDir tmp = initDirs();
+        string prov = tmp_dir + "/rowprov.qc";
+        string cons = tmp_dir + "/rowcons.qc";
+        write(prov, "%modern\nnamespace RowX {\nint sub scale(int x) { return x * 3; }\n"
+            + "int sub other(int x) { return x - 1; }\n}\n");
+        write(cons, "%modern\nnamespace RowX {\nint sub useScale(int x) { return scale(x) + 1; }\n}\n");
+        string map_file = tmp_dir + "/source-content.map";
+        code writeMap = sub () {
+            string map_body;
+            foreach string src in ((prov, cons)) {
+                write(src + ".sha256", sprintf("sha256=%s\n",
+                    digest("sha256", ReadOnlyFile::readBinaryFile(src)).toHex()));
+                map_body += sprintf("%s\t%s.sha256\n", src, src);
+            }
+            write(map_file, map_body);
+        };
+        code compile = string sub (string name) {
+            string out = lib_dir + "/" + name + ".qo";
+            return run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s.d --depfile-target=%s.stamp"
+                + " --depfile-compile-contract-stamps --depfile-declaration-contract-stamps"
+                + " --depfile-source-content-map=%s --compile-contract-stamp=%s.compile-contract.stamp"
+                + " --aggregate-contract-stamp=%s.aggregate-contract.stamp --body-contract-stamp=%s.body-contract.stamp"
+                + " -o %s %s/%s.qc", env, qcc_bin, lib_dir, out, out, map_file, out, out, out, out, tmp_dir, name));
+        };
+        writeMap();
+        string out = compile("rowprov");
+        string body_stamp = lib_dir + "/rowprov.qo.body-contract.stamp";
+        string stamp = File::readTextFile(body_stamp);
+        assertTrue(stamp.find("RowX::scale(int)") != -1 && stamp.find("RowX::other(int)") != -1,
+            "the provider publishes a body contract for both functions: " + stamp + out);
+        out = compile("rowcons");
+        string imports_path = lib_dir + "/rowcons.qo.body-contract-imports";
+        assertTrue(is_file(imports_path), "the consumer records the rows it baked: " + out);
+        string expected = sprintf("format=1\nimport\t%d:%s%d:%s\n", body_stamp.size(), body_stamp,
+            "RowX::scale(int)".size(), "RowX::scale(int)");
+        assertEq(expected, File::readTextFile(imports_path),
+            "exactly the row it baked, naming the stamp as its depfile does");
+        assertTrue(File::readTextFile(lib_dir + "/rowcons.qo.d").find(body_stamp) != -1,
+            "the depfile names the provider's body contract");
+
+        # a consumer that bakes nothing any more leaves no record behind
+        write(cons, "%modern\nnamespace RowX {\nint sub useScale(int x) { return x + 1; }\n}\n");
+        writeMap();
+        out = compile("rowcons");
+        assertFalse(is_file(imports_path), "the record is removed when nothing is baked: " + out);
     }
 
     testByteReproducibleObject() {

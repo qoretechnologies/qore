@@ -70,6 +70,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeStartsTheSharedParseItCannotReplace());
         addTestCase("a scheduled recipe parses only its own component",
             \testScheduledRecipeParsesOnlyItsOwnComponent());
+        addTestCase("a partial parse leaves for the next pass what a preloaded object stands between",
+            \testSubsetParseIsConvex());
+        addTestCase("a preload failure on the default path falls back to the group's parse",
+            \testPreloadFailureFallsBackToGroupParse());
         addTestCase("a group configured without a shared parse still builds",
             \testScheduledRecipeBuildsAGroupWithoutASharedParse());
         addTestCase("the bootstrap hands the stale set to the coordinator",
@@ -994,6 +998,88 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "and the group's shared parse is not started: " + compiled.join(", "));
         assertTrue(exists record(fx, component.key),
             "the component is published from the parse of its members");
+    }
+
+    #! A partial parse never preloads an object compiled against a member it recompiles.
+    /** `e` preloads `c`, and `c` was compiled against `a`.  A parse of `a` and `e` together
+        would bring `a`'s previous declarations back through `c`'s object and shadow the ones
+        the parse is making.  The coordinator's parse compiles `a` alone, says so, and the
+        next pass compiles what is still stale -- `e`, and `c` if `a`'s contract moved.
+    */
+    testSubsetParseIsConvex() {
+        TmpDir tmp("qore-aot-driver-convex-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, ("e",));
+        writeDepfile(fx.qo_dir, "e", "c");
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        string subset = writeSubsetCompiler(fx);
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc, "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/a.qc", isolatedSource("a") + "# edited\n");
+        write(fx.src_dir + "/e.qc", isolatedSource("e") + "# edited\n");
+        assertEq(2, stalePlan(fx).stale.size(), "a and e are stale together");
+
+        hash<auto> result = plan(fx, sprintf("QORE_QCC_SUBSET_PARSE=1 QORE_QCC_SUBSET_SCRIPT=%y "
+            "QORE_QCC_INCREMENTAL_BATCH_THRESHOLD=2", subset));
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertTrue(result.output.find("leaving 1 stale component(s) for the next pass") >= 0,
+            "and says why it did not parse both: " + result.output);
+        list<string> compiled = compiles(fx);
+        assertEq("subset a.qo", compiled[0], "the first parse compiles a: " + compiled.join(", "));
+        assertTrue(compiled.size() > 1 && (select compiled[1..], $1 =~ /\be\.qo$/).size() == 1,
+            "and e is compiled by a later pass: " + compiled.join(", "));
+        assertEq(-1, result.output.find("falling back"),
+            "without falling back to the group's parse: " + result.output);
+        assertEq((), stalePlan(fx).stale, "the group ends current");
+    }
+
+    #! A compile that cannot resolve its preloaded objects is not a broken source.
+    /** qcc exits 78 when loading or resolving the objects preloaded for a compile fails.
+        That concerns the preload set the scheduler chose, and the group's own parse
+        preloads nothing, so the default path answers it with that parse -- as a failed
+        partial parse already was -- instead of leaving an unrelated edit unbuildable.
+        Any other failure is the compiled source's own and still fails the build at once,
+        without paying for a group parse first.
+    */
+    testPreloadFailureFallsBackToGroupParse() {
+        foreach hash<auto> scenario in ((
+                {"rc": 78, "falls_back": True},
+                {"rc": 1, "falls_back": False},
+                )) {
+            TmpDir tmp("qore-aot-driver-preload-fallback-");
+            hash<auto> fx = fixture(tmp.path, NOTHING, False);
+            # the first standalone compile fails before it writes anything
+            writeCompiler(fx, sprintf("echo 'error: sibling .qo cross-resolution failed: test' >&2; exit %d",
+                scenario.rc));
+            writeBatchCompiler(fx);
+            write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+            foreach string name in (fx.names) {
+                write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+            }
+            assertEq(0, runTool(("--scc-publish-all", fx.context)).rc, "the fixture starts fully published");
+            write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+            assertEq(1, stalePlan(fx).stale.size(), "one component is stale");
+
+            hash<auto> result = plan(fx);
+            list<string> batch = select compiles(fx), $1 =~ /^batch /;
+            if (scenario.falls_back) {
+                assertEq(0, result.rc, "a preload failure is answered by the group's parse: " + result.output);
+                assertTrue(result.output.find("falling back to the group's own parse") >= 0,
+                    "and says so: " + result.output);
+                assertTrue(batch.size() > 0, "the group's parse ran: " + compiles(fx).join(", "));
+                assertEq((), stalePlan(fx).stale, "the group ends current");
+            } else {
+                assertNeq(0, result.rc, "a failure of the compiled source fails the build: " + result.output);
+                assertTrue(result.output.find("cannot build stale component") >= 0,
+                    "and names the component: " + result.output);
+                assertEq((), batch, "without starting the group's parse: " + compiles(fx).join(", "));
+            }
+        }
     }
 
     #! Not every group has a coordinator to have been planned by.

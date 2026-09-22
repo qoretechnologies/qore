@@ -405,14 +405,26 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     for compile-time use only - a runtime module load ignores it, and a constant's initializer
     function remains the only source of its value there.
 
+    Each preloaded fragment brings the modules it was compiled with: they are loaded before the
+    fragments are resolved, as a @ref requires "%requires" directive in the parse would load them.  When the preloaded
+    fragments cannot be loaded or resolved, \c qcc exits with status \c 78 and names the module or
+    declaration responsible; the build scheduler answers that by compiling the group in one shared
+    parse, which preloads nothing, while any other compile failure still stops the build.
+
     What a rebuild covers is decided by contracts rather than by source bytes.  A consumer that folds
-    a provider's compile-time constant leaves no trace of it in the emitted object, so the build
-    records a dependency on that provider's <b>declaration contract</b>, which is identical whether the
-    provider was compiled in a whole-group parse or standalone.  A consumer that bakes a provider's
-    <b>body contract</b> - which a declaration contract deliberately does not describe - records that
-    contract separately, so narrowing what the build watches cannot let a provider's optimised bodies
-    move underneath an object that linked against them.  A component is not stale merely because its
-    own compile changed which providers it records.
+    a provider's compile-time constant or enum member leaves no trace of it in the emitted object, so
+    the build records a dependency on that provider's <b>declaration contract</b>, which is identical
+    whether the provider was compiled in a whole-group parse or standalone.  A consumer that bakes a
+    provider's <b>body contract</b> - which a declaration contract deliberately does not describe -
+    records the entries it baked separately, so narrowing what the build watches cannot let a
+    provider's optimised bodies move underneath an object that linked against them, while a change
+    to an entry the consumer did not bake leaves it current.  A component is not stale merely
+    because its own compile changed which providers it records.
+
+    A parse of part of a group (\c QORE_QCC_SUBSET_PARSE=1) compiles only the part of the stale set
+    in which no preloaded fragment stands between two compiled sources, because such a fragment was
+    compiled against the previous declarations of a source the parse is recompiling; the rest stays
+    stale and is compiled by the next pass.
 
     Group parses and component compiles serialize with an exclusive advisory lock held by the
     \c qore-qo-lock helper rather than by a lock file.  The kernel releases the lock when its holder

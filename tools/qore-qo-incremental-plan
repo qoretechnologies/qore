@@ -44,6 +44,9 @@ cleanup() {
     if [ -n "$subset_plan_file" ]; then
         rm -f "$subset_plan_file"
     fi
+    if [ -n "$subset_deferred_file" ]; then
+        rm -f "$subset_deferred_file"
+    fi
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -133,6 +136,9 @@ case "$group_batch_percent" in
 esac
 subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
 subset_plan_file=
+subset_deferred_file=
+# stale components the last shared parse of the stale set left for the next pass
+subset_deferred=0
 
 mkdir -p "$(dirname "$plan_stamp")"
 stale_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-incremental-plan.XXXXXX")
@@ -257,6 +263,9 @@ have_subset_parse() {
 
 run_subset_batch() {
     subset_plan_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-plan.XXXXXX")
+    # The parse compiles only the part of the stale set it can compile consistently and
+    # names the rest here; they stay stale and the next pass compiles them.
+    subset_deferred_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-deferred.XXXXXX")
     awk -F '\t' '$1 != "rebuild-closure" && NF >= 5 { print $2 "\t" $4 "\t" $5 }' \
         "$stale_file" > "$subset_plan_file"
     echo "$0: $stale_count stale component(s) of $group_components; compiling them" \
@@ -267,12 +276,15 @@ run_subset_batch() {
     QORE_QCC_GRAPH_SNAPSHOT= \
     QORE_QCC_SUBSET_PLAN="$subset_plan_file" \
     QORE_QCC_SUBSET_SCRIPT="$subset_script" \
+    QORE_QCC_SUBSET_DEFERRED="$subset_deferred_file" \
         QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
         "$batch_bootstrap_tool" "$context" "$bootstrap_stamp" \
             "$batch_script" "$source_order_tool"
     subset_rc=$?
-    rm -f "$subset_plan_file"
+    subset_deferred=$(awk 'NF' "$subset_deferred_file" | wc -l | tr -d ' ')
+    rm -f "$subset_plan_file" "$subset_deferred_file"
     subset_plan_file=
+    subset_deferred_file=
     return $subset_rc
 }
 
@@ -451,6 +463,8 @@ while :; do
                 # works today working.
                 echo "$0: the shared parse of the stale set failed; falling back" \
                     "to the group's own parse" >&2
+                # the group's parse compiles everything, including what the failed parse left out
+                subset_deferred=0
                 if ! run_group_batch; then
                     echo "$0: shared parse of the group failed" >&2
                     exit 1
@@ -464,8 +478,10 @@ while :; do
         fi
         # The parse rewrote the depfiles of everything it compiled, so the frozen
         # generation no longer describes the graph; the loop's next pass freezes
-        # again and picks up whatever the compiles made stale.
-        compiled_total=$((compiled_total + stale_count))
+        # again and picks up whatever the compiles made stale -- and what a shared
+        # parse of the stale set left for it, which it did not compile.
+        compiled_total=$((compiled_total + stale_count - subset_deferred))
+        subset_deferred=0
         phase=$((phase + 1))
         continue
     fi
@@ -505,7 +521,9 @@ while :; do
         fi
         [ -n "$component_key" ] || continue
         component_lock=$(dirname "$output")/.qcc-scc/$component_key.lock
-        if ! QORE_QCC_PLANNED_STALE=1 \
+        # `$?` after a NEGATED condition is the negation's status, not the builder's,
+        # so the status is captured in the else branch.
+        if QORE_QCC_PLANNED_STALE=1 \
                 QORE_QCC_COMPONENT_INDEX="$component_index" \
                 QORE_QCC_COMPONENT_KEY="$component_key" \
                 QORE_QCC_COMPONENT_SIZE="$component_size" \
@@ -518,6 +536,23 @@ while :; do
                 QORE_QCC_LOCK_HELPER="${QORE_QCC_LOCK_HELPER:-}" \
                 QORE_QCC_GRAPH_SNAPSHOT="$graph_snapshot" \
                 "$incremental_tool" "$output" "$source" "$single_script"; then
+            :
+        else
+            component_rc=$?
+            # 78: qcc could not load or resolve the objects preloaded for this compile.
+            # That is a property of the preload set this scheduler chose, not of the
+            # source, and the group's own parse preloads nothing -- so it is answered
+            # the way a failed partial parse is, with that parse, instead of leaving an
+            # edit unbuildable because of which components it happened to make stale.
+            # Any other failure is the source's own and fails the build now, without
+            # paying for a group parse first.
+            if [ "$component_rc" -eq 78 ]; then
+                echo "$0: the objects preloaded to compile stale component" \
+                    "$component_key could not be resolved; falling back to the" \
+                    "group's own parse, which preloads nothing" >&2
+                rm -f "$stale_file.components"
+                escalate_to_group_batch
+            fi
             echo "$0: cannot build stale component $component_key" >&2
             exit 1
         fi
