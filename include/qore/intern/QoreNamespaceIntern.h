@@ -43,6 +43,8 @@
 #include "qore/vector_map"
 #include "qore/QoreRWLock.h"
 
+#include <functional>
+
 #include <atomic>
 #include <map>
 #include <unordered_map>
@@ -3359,6 +3361,18 @@ public:
         rns.rpriv->runtimeNamespaceWriteUnlock();
     }
 
+    //! Acquires the namespace read lock unless the current thread owns the write lock
+    /** @return true if the lock was acquired and must be released with runtimeNamespaceReadUnlock()
+    */
+    DLLLOCAL static bool runtimeNamespaceReadLock(const RootQoreNamespace& rns) {
+        return rns.rpriv->runtimeNamespaceReadLock();
+    }
+
+    //! Releases a read lock acquired with runtimeNamespaceReadLock()
+    DLLLOCAL static void runtimeNamespaceReadUnlock(const RootQoreNamespace& rns, bool locked) {
+        rns.rpriv->runtimeNamespaceReadUnlock(locked);
+    }
+
     DLLLOCAL static qore_ns_private* getQore(RootQoreNamespace& rns) {
         return rns.rpriv->qoreNS->priv;
     }
@@ -3377,11 +3391,24 @@ public:
     }
 };
 
-//! Excludes runtime namespace readers for the duration of a committed-namespace merge
-/** Concurrent \a writers are already excluded by the target Program's parse lock, which every
-    merge below runs under; this locker adds the only thing the parse lock does not provide, which
-    is exclusion against runtime readers in other threads, so that no thread can resolve a name
-    against a half-merged namespace.
+//! Fences both namespaces of a committed-namespace merge: the target against readers, the source against writers
+/** Concurrent writers to the \a target are already excluded by the target Program's parse lock,
+    which every merge runs under; the write lock taken here adds the only thing the parse lock does
+    not provide, which is exclusion against runtime readers in other threads, so that no thread can
+    resolve a name against a half-merged namespace.
+
+    The \a source needs the opposite fence.  A merge reads the source's namespace containers
+    directly, and a module's shared Program is itself the target of runtime merges: code in an AOT
+    module runs in the module's Program, so a \c load_module() call there merges another module
+    into the very namespace that every import of the module copies from.  Nothing held by the
+    importing thread excludes that writer -- its parse lock is the importing Program's, not the
+    module's -- and a merge that iterated a constant list while the writer appended to it read a
+    reallocated vector and crashed in ConstantList::mergeUserPublic().  The read lock on the source
+    root excludes the writer for the length of the merge; a thread that already owns the source's
+    write lock does not take it again.
+
+    The two locks are taken in address order, so two merges running in opposite directions between
+    the same two roots cannot each hold one lock while waiting for the other.
 
     Scope it to the merge transaction alone - scan, copy and index rebuild - and never hold it
     across the deferred AOT initialization that follows.  That initialization waits for the
@@ -3392,16 +3419,28 @@ public:
 */
 class RuntimeNamespaceMergeLocker {
 public:
-    DLLLOCAL RuntimeNamespaceMergeLocker(RootQoreNamespace& rns) : rns(rns) {
-        qore_root_ns_private::runtimeNamespaceWriteLock(rns);
+    DLLLOCAL RuntimeNamespaceMergeLocker(RootQoreNamespace& target, const RootQoreNamespace& source)
+            : target(target), source(source) {
+        assert(qore_root_ns_private::get(target) != qore_root_ns_private::get(source));
+        if (std::less<const qore_root_ns_private*>()(qore_root_ns_private::get(source),
+                qore_root_ns_private::get(target))) {
+            source_locked = qore_root_ns_private::runtimeNamespaceReadLock(source);
+            qore_root_ns_private::runtimeNamespaceWriteLock(target);
+        } else {
+            qore_root_ns_private::runtimeNamespaceWriteLock(target);
+            source_locked = qore_root_ns_private::runtimeNamespaceReadLock(source);
+        }
     }
 
     DLLLOCAL ~RuntimeNamespaceMergeLocker() {
-        qore_root_ns_private::runtimeNamespaceWriteUnlock(rns);
+        qore_root_ns_private::runtimeNamespaceReadUnlock(source, source_locked);
+        qore_root_ns_private::runtimeNamespaceWriteUnlock(target);
     }
 
 private:
-    RootQoreNamespace& rns;
+    RootQoreNamespace& target;
+    const RootQoreNamespace& source;
+    bool source_locked = false;
 
     RuntimeNamespaceMergeLocker(const RuntimeNamespaceMergeLocker&) = delete;
     RuntimeNamespaceMergeLocker& operator=(const RuntimeNamespaceMergeLocker&) = delete;

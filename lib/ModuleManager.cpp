@@ -775,9 +775,10 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
     RootQoreNamespace* target_root_ns = tpgm->getRootNS();
     RootQoreNamespace* source_root_ns = pgm->getRootNS();
     {
-        // exclude runtime readers of the target namespace while it is merged; parse ownership,
-        // held by the caller, excludes other writers but not readers in other threads
-        RuntimeNamespaceMergeLocker rnml(*target_root_ns);
+        // exclude runtime readers of the target namespace and runtime writers of the source while
+        // they are merged; parse ownership, held by the caller, excludes only other writers of the
+        // target
+        RuntimeNamespaceMergeLocker rnml(*target_root_ns, *source_root_ns);
 
         qore_root_ns_private::scanMergeCommittedNamespace(*target_root_ns, *source_root_ns, qmc);
 
@@ -2372,9 +2373,10 @@ int QoreModuleManager::importModuleNSUnlocked(const char* name, QoreProgram* pgm
     if (source_root_ns) {
         // For user modules, merge the namespace from the module's program
         QoreModuleContext qmc(name, qore_root_ns_private::get(*target_root_ns), xsink);
-        // exclude runtime readers of the target namespace while it is merged; parse ownership,
-        // held by the caller, excludes other writers but not readers in other threads
-        RuntimeNamespaceMergeLocker rnml(*target_root_ns);
+        // exclude runtime readers of the target namespace and runtime writers of the source while
+        // they are merged; parse ownership, held by the caller, excludes only other writers of the
+        // target
+        RuntimeNamespaceMergeLocker rnml(*target_root_ns, *source_root_ns);
 
         qore_root_ns_private::scanMergeCommittedNamespace(*target_root_ns, *source_root_ns, qmc);
 

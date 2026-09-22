@@ -1,0 +1,169 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires ProviderIndexUtil
+
+%exec-class ConcurrentModuleProgramMergeTest
+
+#! Importing a module while its own Program is the target of a runtime module load
+/** Code in an AOT module runs in the module's own Program, so a \c load_module() call in it merges
+    another module into the namespace that every import of the module copies from.  The import read
+    that namespace with no lock while the loading thread held the module Program's namespace write
+    lock and appended to it, and the importer crashed in \c ConstantList::mergeUserPublic() on a
+    reallocated constant list:
+
+    @verbatim
+ConstantList::mergeUserPublic(ConstantList const&)
+qore_ns_private::copyMergeCommittedNamespace(qore_ns_private const&)
+qore_ns_private::copyMergeCommittedNamespace(qore_ns_private const&)
+qore_aot_module_ns_init_impl(QoreNamespace*, QoreNamespace*, ExceptionSink*)
+QoreBuiltinModule::addToProgramImpl(QoreProgram*, ExceptionSink&) const
+...
+Program_loadModule_VsVi(...)
+    @endverbatim
+
+    That is how a Qorus server crashed at startup: services importing ProviderIndexUtil into their
+    new Programs while ProviderIndexUtil loaded application modules into its own.
+
+    The race is reproduced in a child process, so a crash fails an assertion rather than the test
+    run.  Without the fix one round of it crashed in two of three runs on the machine the fix was
+    made on; three rounds are run.
+*/
+class ConcurrentModuleProgramMergeTest inherits QUnit::Test {
+    public {
+        #! the number of modules the module's own code loads into its Program in one round
+        const LoadCount = 120;
+
+        #! the number of threads importing the module into new Programs while it loads them
+        const ImportThreads = 8;
+
+        #! the number of rounds of the race
+        const Rounds = 3;
+
+        #! printed by the child when a round completes
+        const Done = "ROUND-DONE";
+    }
+
+    private {
+        string qore_bin;
+        string qlib_dir;
+    }
+
+    constructor() : QUnit::Test("ConcurrentModuleProgramMergeTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qlib_dir = normalize_dir(get_script_dir() + "/../../../../../qlib");
+        addTestCase("module code loads modules into the module's own Program", \moduleProgramIsTheTarget());
+        addTestCase("importing a module while its Program is merged into", \importDuringRuntimeLoad());
+        set_return_value(main());
+    }
+
+    #! The premise of the race: a module loaded by module code lands in the module's Program
+    moduleProgramIsTheTarget() {
+        if (!isAotModule()) {
+            testSkip("ProviderIndexUtil was loaded from source; its code runs in the importing Program");
+        }
+        assertFalse(inlist("Mime", get_feature_list()), "the test Program has not loaded Mime itself");
+        assertTrue(ProviderIndexUtil::tryLoadModule("Mime"), "ProviderIndexUtil loads Mime");
+        assertFalse(inlist("Mime", get_feature_list()),
+            "and Mime is merged into ProviderIndexUtil's own Program, not into the test Program");
+    }
+
+    importDuringRuntimeLoad() {
+        if (!isAotModule()) {
+            testSkip("ProviderIndexUtil was loaded from source; no module Program is merged into at runtime");
+        }
+        list<string> modules = loadableModules();
+        assertEq(LoadCount, modules.size(), "enough modules to load: " + modules.join(", "));
+
+        TmpDir tmp("qore-concurrent-module-merge-");
+        string list_file = tmp.path + "/modules.txt";
+        File f();
+        f.open2(list_file, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(modules.join("\n") + "\n");
+        f.close();
+        string script = tmp.path + "/race.q";
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(sprintf("%%modern
+%%prepend-module-path %s
+%%requires ProviderIndexUtil
+
+list<string> mods = (map trim($1), ReadOnlyFile::readTextFile(ARGV[0]).split(\"\\n\"), trim($1));
+Counter start(1);
+Counter running();
+bool loader_done = False;
+int imports = 0;
+for (int t = 0; t < %d; ++t) {
+    running.inc();
+    background sub () {
+        on_exit running.dec();
+        start.waitForZero();
+        while (!loader_done) {
+            Program p(PO_NEW_STYLE);
+            p.loadModule(\"ProviderIndexUtil\");
+            ++imports;
+        }
+    }();
+}
+start.dec();
+int loaded = 0;
+foreach string m in (mods) {
+    if (ProviderIndexUtil::tryLoadModule(m)) {
+        ++loaded;
+    }
+}
+loader_done = True;
+running.waitForZero();
+printf(\"%s loaded=%%d imports=%%d\\n\", loaded, imports);
+", qlib_dir, ImportThreads, Done));
+        f.close();
+
+        for (int round = 1; round <= Rounds; ++round) {
+            string output = backquote(sprintf("%s %s %s 2>/dev/null; echo \"rc=$?\"", qore_bin, script,
+                list_file));
+            *list<*string> result = (output =~ x/rc=([0-9]+)\s*$/);
+            assertEq("0", result[0], sprintf("round %d: the child exits normally: %s", round, output));
+            *list<*string> counts = (output =~ x/ROUND-DONE loaded=([0-9]+) imports=([0-9]+)/);
+            assertTrue(exists counts, sprintf("round %d: the child completes the round: %s", round, output));
+            assertTrue(counts[0].toInt() > 0, sprintf("round %d: module code loaded modules: %s", round,
+                output));
+            assertTrue(counts[1].toInt() > 0, sprintf("round %d: other threads imported the module meanwhile: %s",
+                round, output));
+        }
+    }
+
+    #! True when ProviderIndexUtil was loaded from its AOT-compiled module
+    private bool isAotModule() {
+        *hash<auto> info = get_module_hash().ProviderIndexUtil;
+        return info.filename =~ /\.qmod$/;
+    }
+
+    #! AOT-compiled modules in qlib other than ProviderIndexUtil, in name order
+    private list<string> loadableModules() {
+        list<string> names = ();
+        foreach string path in ((glob(qlib_dir + "/*.qmod") ?? ()) + (glob(qlib_dir + "/*/*.qmod") ?? ())) {
+            string name = basename(path);
+            name = name.substr(0, name.size() - 5);
+            if (name == "ProviderIndexUtil" || inlist(name, names)) {
+                continue;
+            }
+            push names, name;
+        }
+        list<string> rv = ();
+        foreach string name in (sort(names)) {
+            if (rv.size() == LoadCount) {
+                break;
+            }
+            push rv, name;
+        }
+        return rv;
+    }
+}
