@@ -31,12 +31,25 @@ class ClosureBoundLocalsTest inherits QUnit::Test {
             "write-after-closure-released": 0,
         };
 
+        #! the number of objects that the scans of each operation entered (debug builds only)
+        /** A write to a variable that its frame still holds scans nothing; the scan is made once when the frame
+            releases the variable, and enters the variable and the 100 nodes of the chain its value reaches.
+        */
+        const ExpectedScanObjectCounts = {
+            "objects-write-through-reference": 0,
+            "objects-write-captured": 0,
+            "objects-deferred-scan-at-frame-exit": 101,
+        };
+
         #! the number of nodes collected by each cycle check
         const ExpectedCycleResults = {
             "cycle-hash-first": 10,
             "cycle-ref-first": 10,
             "cycle-list-store": 10,
             "cycle-closure": 10,
+            "cycle-self-closure": 10,
+            "cycle-closure-through-reference": 10,
+            "cycle-after-frame": 10,
         };
 
         #! checks that pass with 1
@@ -69,7 +82,7 @@ class ClosureBoundLocalsTest inherits QUnit::Test {
 
     testInProgram() {
         checkResults("in-program", ClosureBoundLocalChecks::get_scan_counts()
-            + ClosureBoundLocalChecks::get_cycle_results() + ClosureBoundLocalChecks::get_thread_results()
+            + ClosureBoundLocalChecks::get_scan_object_counts() + ClosureBoundLocalChecks::get_cycle_results() + ClosureBoundLocalChecks::get_thread_results()
             + ClosureBoundLocalChecks::get_removal_results());
     }
 
@@ -117,7 +130,7 @@ class ClosureBoundLocalsTest inherits QUnit::Test {
     private checkResults(string label, hash<string, int> results) {
         hash<string, int> expected = ExpectedCycleResults + map {$1: 1}, PassChecks;
         if (ClosureBoundLocalChecks::have_scan_count()) {
-            expected += ExpectedScanCounts;
+            expected += ExpectedScanCounts + ExpectedScanObjectCounts;
         }
         assertEq(sort(keys expected), sort(keys results), label + ": checks run");
         foreach hash<auto> i in (expected.pairIterator()) {

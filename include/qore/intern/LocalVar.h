@@ -365,7 +365,15 @@ public:
 
     DLLLOCAL void ref() const;
 
-    DLLLOCAL void deref(ExceptionSink* xsink);
+    //! Releases a reference to the variable
+    /** @param xsink for Qore-language exceptions
+        @param real true if the reference released is the real reference that the frame that created the variable
+        holds; see ThreadClosureVariableStack::instantiate() and design/closure-bound-locals.md
+
+        The dereference that releases the frame's real reference makes the recursive-reference scan deferred while
+        the frame held the variable, if other references remain.
+    */
+    DLLLOCAL void deref(ExceptionSink* xsink, bool real = false);
 
     //! Returns true if only the frame that created the variable can use it
     /** Code other than that frame reaches a closure-bound variable only through something that holds a reference
@@ -379,16 +387,20 @@ public:
         The count is read first, with acquire ordering: references are released with release ordering, so when the
         count reads one, everything the holders of the released references did with the variable happened before
         this, including the frame clearing \c frame_owned before it releases its own reference.  A variable in a
-        recursive set, or with a deferred scan, is excluded: the collector can take a temporary reference to a
-        member of a set that it finds through the set rather than through a reference, and scan it.
+        recursive set is excluded: the collector can take a temporary reference to a member of a set that it finds
+        through the set rather than through a reference, and scan it.
+
+        A deferred scan does not exclude the variable.  The frame's reference is a real reference (rrefs is one
+        while \c frame_owned is set), and a scan deferred while a real reference is held is handed only to the
+        dereference that releases the last real one (RObject::deref()); no other dereference reads the value for
+        it.  The scan is made when the frame releases the variable, if anything else holds it by then.
 
         See design/closure-bound-locals.md.
     */
     DLLLOCAL bool frameExclusive() const {
         return references.load(std::memory_order_acquire) == 1
             && frame_owned.load(std::memory_order_relaxed)
-            && !rset.load(std::memory_order_acquire)
-            && !deferred_scan.load(std::memory_order_acquire);
+            && !rset.load(std::memory_order_acquire);
     }
 
     //! Evaluates the variable, returning the target of a weak reference without a reference of its own

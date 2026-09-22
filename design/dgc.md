@@ -76,6 +76,11 @@ Any reference stored as a `QoreValue` in either place is visible. Raw C++ pointe
 If `rrefs > 0`, `RObject::checkDeferScan()` defers starting a scan at that object. Scans are retried after the
 last `realDeref()` drops `rrefs` to 0. If a `realRef()` is leaked, the external reference keeps the object alive.
 
+The frame that creates a closure-bound local variable holds a real reference to it until the variable goes out of
+scope (`ThreadClosureVariableStack::instantiate()` / `releaseEntry()`), since a frame is never part of a cycle. A
+write to the variable through a `\var` argument, or while a closure holds it, therefore defers its scan to the
+frame's release; see `closure-bound-locals.md`.
+
 A scan initiated at another object still traverses a reachable object's members under its r-section lock,
 including when that object has real references. Skipping those edges can omit a live owner of a shared
 container from a recursive set: the container's one physical reference to an object behind it can then look

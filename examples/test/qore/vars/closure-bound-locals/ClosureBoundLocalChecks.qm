@@ -41,8 +41,8 @@ module ClosureBoundLocalChecks {
     The checks are in a module so that the same code can be run from source in each execution mode and as a
     compiled (AOT) module.  Each check returns an integer that the test compares with the expected value.
 
-    Scan counts come from dbg_get_lvalue_scan_count(), which only exists in debug builds; get_scan_counts()
-    returns an empty hash in other builds.
+    Scan counts come from dbg_get_lvalue_scan_count() and dbg_get_scan_object_count(), which only exist in debug
+    builds; get_scan_counts() and get_scan_object_counts() return an empty hash in other builds.
 */
 public namespace ClosureBoundLocalChecks {
 #! A node of a cycle; counts its destructions
@@ -68,6 +68,11 @@ int sub scan_count() {
     return call_function("dbg_get_lvalue_scan_count");
 }
 
+#! Returns the number of objects that scans in the current thread have entered
+int sub scan_object_count() {
+    return call_function("dbg_get_scan_object_count");
+}
+
 #! Takes a reference and does nothing with it
 sub touch(reference<auto> r) {
 }
@@ -80,6 +85,29 @@ sub set_obj(reference<hash<auto>> h, Node n) {
 #! Removes a scalar through a reference
 sub remove_scalar(reference<hash<auto>> h) {
     remove h.s;
+}
+
+#! Returns the head of an acyclic chain of the given number of nodes: a scan that reaches it enters every node
+Node sub chain(int len) {
+    Node head();
+    Node n = head;
+    for (int i = 1; i < len; ++i) {
+        n.peer = new Node();
+        n = n.peer;
+    }
+    return head;
+}
+
+#! Writes a chain to a variable held by a closure, through the variable and through a reference; returns the closure
+/** The frame holds the variable until it returns, so neither write scans: the scan that each would have started at
+    the variable is made once, when the frame releases the variable and the closure still holds it.
+*/
+code sub keep_after_writes(Node head) {
+    hash<auto> info = {};
+    code c = auto sub () { return info; };
+    info.a = {"n": head};
+    set_obj(\info, head);
+    return c;
 }
 
 #! Returns a node in a cycle: a scan that reaches it has a recursive set to describe
@@ -136,6 +164,43 @@ public hash<string, int> sub get_scan_counts() {
     return rv;
 }
 
+#! Returns the object scan checks: the number of objects that the scans of each operation entered
+/** A write to a closure-bound variable that the frame still holds scans nothing, even while a reference or a closure
+    holds the variable too: the frame's reference cannot be part of a cycle, so no cycle through the variable can be
+    collected before the frame releases it, and the scan is made then, once, if anything else still holds the
+    variable.  A write that makes the edge into the variable from an object or container scans from there, as before.
+*/
+public hash<string, int> sub get_scan_object_counts() {
+    hash<string, int> rv = {};
+    if (!have_scan_count()) {
+        return rv;
+    }
+
+    # the chain has 100 nodes, and the variable is an object for the scan too
+    Node head = chain(100);
+    int start;
+
+    hash<auto> info = {"head": head, "s": 1};
+    touch(\info);
+
+    start = scan_object_count();
+    set_obj(\info, head);
+    rv."objects-write-through-reference" = scan_object_count() - start;
+
+    code c = auto sub () { return info; };
+    start = scan_object_count();
+    info.z = {"n": head};
+    rv."objects-write-captured" = scan_object_count() - start;
+    remove c;
+
+    start = scan_object_count();
+    code k = keep_after_writes(head);
+    rv."objects-deferred-scan-at-frame-exit" = scan_object_count() - start;
+    remove k;
+
+    return rv;
+}
+
 #! A cycle made with a reference stored in an object after the variable was assigned
 int sub cycle_hash_first() {
     Node o();
@@ -169,6 +234,40 @@ int sub cycle_closure() {
     return 1;
 }
 
+#! A cycle made with a closure stored in the value of the variable it captured, while the frame holds the variable
+int sub cycle_self_closure() {
+    hash<auto> h = {"o": new Node(), "s": 1};
+    h.f = auto sub () { return h; };
+    return 1;
+}
+
+#! Stores a closure over a reference argument in the referenced value
+sub store_closure(reference<hash<auto>> r) {
+    r.f = auto sub () { return r; };
+}
+
+#! A cycle made through a reference argument, with a closure over the reference stored in the referenced value
+int sub cycle_closure_through_reference() {
+    hash<auto> h = {"o": new Node(), "s": 1};
+    store_closure(\h);
+    return 1;
+}
+
+#! Returns a closure that makes a cycle through a variable whose frame has returned
+code sub make_late_cycle() {
+    hash<auto> h = {"o": new Node(), "s": 1};
+    return sub () {
+        h.f = auto sub () { return h; };
+    };
+}
+
+#! A cycle made through a variable after its frame has returned
+int sub cycle_after_frame() {
+    code make = make_late_cycle();
+    make();
+    return 1;
+}
+
 #! Returns the number of nodes destroyed by 10 calls of the given function
 int sub destroyed_by(code f) {
     int before = Node::destroyed;
@@ -185,6 +284,9 @@ public hash<string, int> sub get_cycle_results() {
         "cycle-ref-first": destroyed_by(\cycle_ref_first()),
         "cycle-list-store": destroyed_by(\cycle_list_store()),
         "cycle-closure": destroyed_by(\cycle_closure()),
+        "cycle-self-closure": destroyed_by(\cycle_self_closure()),
+        "cycle-closure-through-reference": destroyed_by(\cycle_closure_through_reference()),
+        "cycle-after-frame": destroyed_by(\cycle_after_frame()),
     };
 }
 

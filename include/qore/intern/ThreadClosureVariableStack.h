@@ -82,7 +82,8 @@ private:
             // must be visible before the reference is released: frameExclusive() reads the count first
             entry.cvv->frame_owned.store(false, std::memory_order_relaxed);
         }
-        entry.cvv->deref(xsink);
+        // the creating frame's reference is a real reference; releasing it makes any scan deferred while it was held
+        entry.cvv->deref(xsink, entry.owner);
     }
 
 public:
@@ -134,6 +135,10 @@ public:
         ClosureVarValue* cvar = new ClosureVarValue(id, typeInfo, nval, assign, read_only);
         // no other thread can see the variable yet
         cvar->frame_owned.store(true, std::memory_order_relaxed);
+        // The frame's reference is never part of a cycle, so it is a real reference: while the frame holds it, no
+        // cycle through the variable can be collected, and a scan started at the variable is deferred to the
+        // frame's release (RObject::checkDeferScan()).  See design/closure-bound-locals.md.
+        cvar->rrefs.store(1, std::memory_order_relaxed);
         instantiateIntern(cvar, order, true);
         return cvar;
     }
