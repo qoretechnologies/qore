@@ -1399,6 +1399,26 @@ protected:
         bool locked;
     };
 
+    //! Exception-safe runtime namespace write lock, for one write to this root's committed namespace
+    /** Recursive for the current thread.  Hold it for the write alone: see RuntimeNamespaceWriteLocker.
+    */
+    class RuntimeNamespaceWriteGuard {
+    public:
+        DLLLOCAL RuntimeNamespaceWriteGuard(qore_root_ns_private& root) : root(root) {
+            root.runtimeNamespaceWriteLock();
+        }
+
+        DLLLOCAL ~RuntimeNamespaceWriteGuard() {
+            root.runtimeNamespaceWriteUnlock();
+        }
+
+    private:
+        qore_root_ns_private& root;
+
+        RuntimeNamespaceWriteGuard(const RuntimeNamespaceWriteGuard&) = delete;
+        RuntimeNamespaceWriteGuard& operator=(const RuntimeNamespaceWriteGuard&) = delete;
+    };
+
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
 
@@ -1661,13 +1681,18 @@ protected:
     DLLLOCAL AbstractCallReferenceNode* parseResolveCallReferenceIntern(UnresolvedProgramCallReferenceNode* fr);
 
     DLLLOCAL void parseCommit() {
-        // commit pending function lookup entries
-        for (fmap_t::iterator i = pend_fmap.begin(), e = pend_fmap.end(); i != e; ++i) {
-            fmap.update(i);
-        }
-        pend_fmap.clear();
+        {
+            // other threads can be resolving names in this Program while it is parsed into; runtime
+            // initialization below runs user code, so it must stay outside the lock
+            RuntimeNamespaceWriteGuard wg(*this);
+            // commit pending function lookup entries
+            for (fmap_t::iterator i = pend_fmap.begin(), e = pend_fmap.end(); i != e; ++i) {
+                fmap.update(i);
+            }
+            pend_fmap.clear();
 
-        qore_ns_private::parseCommit();
+            qore_ns_private::parseCommit();
+        }
         // exceptions can be thrown when performing runtime initialization
         qore_ns_private::parseCommitRuntimeInit(getProgram()->getParseExceptionSink());
     }
@@ -2423,6 +2448,8 @@ public:
     }
 
     DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false) {
+        // other threads can be resolving names in this Program while a parse into it is rolled back
+        RuntimeNamespaceWriteGuard wg(*this);
         // roll back pending function lookup entries
         pend_fmap.clear();
 
@@ -2594,12 +2621,16 @@ public:
     }
 
     DLLLOCAL static int addPendingVariant(qore_ns_private& nsp, const char* name, AbstractQoreFunctionVariant* v) {
-        return getRootNS()->rpriv->addPendingVariantIntern(nsp, name, v);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->addPendingVariantIntern(nsp, name, v);
     }
 
     DLLLOCAL static int addPendingVariant(qore_ns_private& nsp, const NamedScope& name,
             AbstractQoreFunctionVariant* v) {
-        return getRootNS()->rpriv->addPendingVariantIntern(nsp, name, v);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->addPendingVariantIntern(nsp, name, v);
     }
 
     DLLLOCAL static int runtimeImportFunction(RootQoreNamespace& rns, ExceptionSink* xsink, QoreNamespace& ns,
@@ -2708,7 +2739,9 @@ public:
     }
 
     DLLLOCAL static bool parseResolveGlobalVarsAndClassHierarchies() {
-        return getRootNS()->rpriv->parseResolveGlobalVarsAndClassHierarchiesIntern();
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseResolveGlobalVarsAndClassHierarchiesIntern();
     }
 
     DLLLOCAL static void parseCommit(RootQoreNamespace& rns) {
@@ -2795,34 +2828,48 @@ public:
     DLLLOCAL static void parseAddConstant(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
             QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr,
             QoreParseTypeInfo* parseTypeInfo = nullptr) {
-        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo, parseTypeInfo);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo, parseTypeInfo);
     }
 
     // returns 0 for success, non-zero for error
     DLLLOCAL static int parseAddMethodToClass(const QoreProgramLocation* loc, const NamedScope& name,
             MethodVariantBase* qcmethod, bool static_flag) {
-        return getRootNS()->rpriv->parseAddMethodToClassIntern(loc, name, qcmethod, static_flag);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseAddMethodToClassIntern(loc, name, qcmethod, static_flag);
     }
 
     DLLLOCAL static void parseAddClass(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc) {
-        getRootNS()->rpriv->parseAddClassIntern(loc, name, oc);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddClassIntern(loc, name, oc);
     }
 
     DLLLOCAL static void parseAddHashDecl(const QoreProgramLocation* loc, const NamedScope& name, TypedHashDecl* hd) {
-        getRootNS()->rpriv->parseAddHashDeclIntern(loc, name, hd);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddHashDeclIntern(loc, name, hd);
     }
 
     DLLLOCAL static void parseAddEnum(const QoreProgramLocation* loc, const NamedScope& name, QoreEnumDecl* ed) {
-        getRootNS()->rpriv->parseAddEnumIntern(loc, name, ed);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddEnumIntern(loc, name, ed);
     }
 
     DLLLOCAL static void parseAddTypedef(const QoreProgramLocation* loc, const NamedScope& name,
             const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub) {
-        getRootNS()->rpriv->parseAddTypedefIntern(loc, name, typeInfo, parseTypeInfo, pub);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddTypedefIntern(loc, name, typeInfo, parseTypeInfo, pub);
     }
 
     DLLLOCAL static void parseAddNamespace(QoreNamespace* nns) {
-        getRootNS()->rpriv->parseAddNamespaceIntern(nns);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddNamespaceIntern(nns);
     }
 
     DLLLOCAL static const QoreFunction* parseResolveFunction(const NamedScope& nscope) {
@@ -2843,17 +2890,23 @@ public:
 
     DLLLOCAL static Var* parseAddResolvedGlobalVarDef(const QoreProgramLocation* loc, const NamedScope& vname,
             const QoreTypeInfo* typeInfo, qore_var_t type = VT_GLOBAL) {
-        return getRootNS()->rpriv->parseAddResolvedGlobalVarDefIntern(loc, vname, typeInfo, type);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseAddResolvedGlobalVarDefIntern(loc, vname, typeInfo, type);
     }
 
     DLLLOCAL static Var* parseAddGlobalVarDef(const QoreProgramLocation* loc, const NamedScope& vname,
             QoreParseTypeInfo* typeInfo, qore_var_t type = VT_GLOBAL) {
-        return getRootNS()->rpriv->parseAddGlobalVarDefIntern(loc, vname, typeInfo, type);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseAddGlobalVarDefIntern(loc, vname, typeInfo, type);
     }
 
     DLLLOCAL static Var* parseCheckImplicitGlobalVar(const QoreProgramLocation* loc, const NamedScope& name,
             const QoreTypeInfo* typeInfo) {
-        return getRootNS()->rpriv->parseCheckImplicitGlobalVarIntern(loc, name, typeInfo);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseCheckImplicitGlobalVarIntern(loc, name, typeInfo);
     }
 
     DLLLOCAL static Var* parseFindGlobalVar(const char* vname) {

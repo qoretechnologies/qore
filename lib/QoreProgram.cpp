@@ -1938,6 +1938,8 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
     ProgramRuntimeParseContextHelper pch(xsink, pgm);
     if (*xsink)
         return;
+    // parse ownership excludes other writers; this excludes threads resolving names in this Program
+    RuntimeNamespaceWriteLocker rnwl(*RootNS);
 
     // find/create target namespace based on source namespace
     QoreNamespace* tns;
@@ -1990,6 +1992,8 @@ void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_pri
     ProgramRuntimeParseContextHelper pch(xsink, pgm);
     if (*xsink)
         return;
+    // parse ownership excludes other writers; this excludes threads resolving names in this Program
+    RuntimeNamespaceWriteLocker rnwl(*RootNS);
 
     // find/create target namespace based on source namespace
     QoreNamespace* tns;
@@ -2024,6 +2028,8 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     RootQoreNamespace* parent_RootNS = parent.priv->RootNS;
     RootQoreNamespace* child_RootNS = child.priv->RootNS;
     qore_root_ns_private* parent_root = qore_root_ns_private::get(*parent_RootNS);
+    // the parent's root indexes are iterated below while a module can be loaded into the parent in another thread
+    RuntimeNamespaceMergeLocker rnml(*child_RootNS, *parent_RootNS);
 
     // Hashdecls: walk parent's root index, copy entries marked re-export into
     // child. Each entry was tagged via Program::importHashDecl(... reexport=True)
@@ -2093,6 +2099,8 @@ void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u,
     ProgramRuntimeParseContextHelper pch(xsink, pgm);
     if (*xsink)
         return;
+    // parse ownership excludes other writers; this excludes threads resolving names in this Program
+    RuntimeNamespaceWriteLocker rnwl(*RootNS);
 
     if (new_name && strstr(new_name, "::")) {
         NamedScope nscope(new_name);
@@ -2137,6 +2145,8 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
     if (*xsink) {
         return;
     }
+    // parse ownership excludes other writers; this excludes threads resolving names in the target Program
+    RuntimeNamespaceWriteLocker rnwl(*tpgm.RootNS);
 
     // find/create target namespace based on source namespace
     QoreString tmp;
