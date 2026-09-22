@@ -455,14 +455,17 @@ static void ut_qorefile_timed_read_contract(UnitTestCounters& c) {
 
 class TestRSectionPriv : public qore_rsection_priv {
 public:
+    // a writer holds the claim as long as it holds the lock (see qore_var_rwlock_priv), so the fake one does too
     DLLLOCAL void setFakeWriter(int tid) {
         AutoLocker al(l);
+        write_claim = true;
         write_tid = tid;
     }
 
     DLLLOCAL void clearFakeWriterAndNotify() {
         AutoLocker al(l);
         write_tid = -1;
+        write_claim = false;
         notifyIntern();
         unlock_signal();
     }

@@ -1,0 +1,197 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ConcurrentVarAccessTest
+
+#! the variable shared by the global variable checks; set by the test (%exec-class allows no top-level code)
+our int shared_counter;
+#! the hash shared by the whole-value replacement check; set by the test
+our hash<string, int> shared_pair;
+
+#! An object whose members are read and written by many threads
+class SharedHolder {
+    public {
+        int n = 0;
+        *SharedNode node;
+    }
+
+    int get() {
+        return n;
+    }
+}
+
+#! A node of the cycles built and collected around a shared holder
+class SharedNode {
+    public {
+        *SharedNode peer;
+        static Counter destroyed();
+    }
+
+    destructor() {
+        SharedNode::destroyed.inc();
+    }
+}
+
+#! Reads and writes global variables and object members from many threads at once
+/** Every read of a variable or member takes the read lock of the variable or object; readers take it with no lock
+    and only fall back to the lock's mutex while a writer holds it, and writers wait for the readers to leave.  A
+    broken handshake shows up here as a lost update, as a value that goes backwards, or as a half-written value.
+*/
+public class ConcurrentVarAccessTest inherits QUnit::Test {
+    public {
+        #! the number of threads writing in each check
+        const Writers = 4;
+        #! the number of threads reading in each check
+        const Readers = 4;
+        #! the number of writes each writer makes
+        const Writes = 5000;
+    }
+
+    constructor() : QUnit::Test("concurrent variable access", "1.0") {
+        addTestCase("Writers to a global variable lose no update while it is read", \globalVariable());
+        addTestCase("Writers to an object member lose no update while it is read", \objectMember());
+        addTestCase("A hash replaced as a whole is never read half-written", \wholeValueReplacement());
+        addTestCase("Members are read while cycles are built and collected around the object", \readsDuringScans());
+        set_return_value(main());
+    }
+
+    globalVariable() {
+        shared_counter = 0;
+        list<string> errors = runReadersAndWriters(
+            sub () {
+                for (int i = 0; i < Writes; ++i) {
+                    ++shared_counter;
+                }
+            },
+            *string sub (Counter writers_running) {
+                int last = 0;
+                while (writers_running.getCount()) {
+                    int now = shared_counter;
+                    if (now < last) {
+                        return sprintf("the global variable went from %d back to %d", last, now);
+                    }
+                    last = now;
+                }
+            }
+        );
+        assertEq((), errors, "no reader saw the value go backwards");
+        assertEq(Writers * Writes, shared_counter, "no increment was lost");
+    }
+
+    objectMember() {
+        SharedHolder holder();
+        list<string> errors = runReadersAndWriters(
+            sub () {
+                for (int i = 0; i < Writes; ++i) {
+                    ++holder.n;
+                }
+            },
+            *string sub (Counter writers_running) {
+                int last = 0;
+                while (writers_running.getCount()) {
+                    int now = holder.get();
+                    if (now < last) {
+                        return sprintf("the member went from %d back to %d", last, now);
+                    }
+                    last = now;
+                }
+            }
+        );
+        assertEq((), errors, "no reader saw the member go backwards");
+        assertEq(Writers * Writes, holder.n, "no increment of the member was lost");
+    }
+
+    wholeValueReplacement() {
+        shared_pair = {"a": 0, "b": 0};
+        list<string> errors = runReadersAndWriters(
+            sub () {
+                for (int i = 0; i < Writes; ++i) {
+                    shared_pair = {"a": i, "b": i};
+                }
+            },
+            *string sub (Counter writers_running) {
+                while (writers_running.getCount()) {
+                    hash<string, int> pair = shared_pair;
+                    if (pair.a != pair.b) {
+                        return sprintf("read a half-written hash: %y", pair);
+                    }
+                }
+            }
+        );
+        assertEq((), errors, "every read saw a whole value");
+    }
+
+    #! Cycle scans take the r-section of the objects they walk, which is layered on the same lock as the reads
+    readsDuringScans() {
+        int before = SharedNode::destroyed.getCount();
+        SharedHolder holder();
+        list<string> errors = runReadersAndWriters(
+            sub () {
+                for (int i = 0; i < Writes / 10; ++i) {
+                    SharedNode a();
+                    a.peer = new SharedNode();
+                    a.peer.peer = a;
+                    # the holder references the cycle, so assignments scan it; replacing the reference releases it
+                    holder.node = a;
+                    ++holder.n;
+                }
+                holder.node = NOTHING;
+            },
+            *string sub (Counter writers_running) {
+                int last = 0;
+                while (writers_running.getCount()) {
+                    int now = holder.n;
+                    *SharedNode node = holder.node;
+                    if (now < last) {
+                        return sprintf("the member went from %d back to %d", last, now);
+                    }
+                    last = now;
+                    remove node;
+                }
+            }
+        );
+        assertEq((), errors, "no reader saw the member go backwards");
+        assertEq(Writers * (Writes / 10), holder.n, "no increment was lost");
+        remove holder;
+        assertEq(Writers * (Writes / 10) * 2, SharedNode::destroyed.getCount() - before, "every cycle is collected");
+    }
+
+    #! Runs the writers and the readers, which read until every writer has finished; returns the readers' errors
+    private list<string> runReadersAndWriters(code writer, code reader) {
+        Counter writers_running(Writers);
+        Counter readers_started(Readers);
+        Counter readers_done(Readers);
+        list<string> errors = ();
+        Mutex lck();
+        for (int i = 0; i < Readers; ++i) {
+            background sub () {
+                on_exit readers_done.dec();
+                readers_started.dec();
+                *string err = reader(writers_running);
+                if (err) {
+                    AutoLock al(lck);
+                    errors += err;
+                }
+            }();
+        }
+        # the writers only start once every reader is reading
+        readers_started.waitForZero();
+        Counter writers_done(Writers);
+        for (int i = 0; i < Writers; ++i) {
+            background sub () {
+                on_exit {
+                    writers_running.dec();
+                    writers_done.dec();
+                }
+                writer();
+            }();
+        }
+        writers_done.waitForZero();
+        readers_done.waitForZero();
+        return errors;
+    }
+}
