@@ -3354,7 +3354,7 @@ void LocalVarValue::remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInf
 }
 
 const void* ClosureVarValue::getLValueId() const {
-    QoreSafeVarRWWriteLocker sl(rml);
+    QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         return lvalue_ref::get(ref)->lvalue_id;
@@ -3369,11 +3369,13 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return -1;
     }
 
-    if (QoreTypeInfo::needsScan(typeInfo)) {
+    // a variable that only its frame can use is changed like a plain local variable: without the lock, and with
+    // no recursive-reference scan, since nothing refers to it that a cycle could run through
+    bool exclusive = frameExclusive();
+    QoreSafeVarRWWriteLocker sl(rml, !exclusive);
+    if (!exclusive && QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
-
-    QoreSafeVarRWWriteLocker sl(rml);
     if (val.getType() == NT_REFERENCE) {
         // issue #5413: prevent a crash due to stack exhaustion
         if (check_stack(lvh.vl.xsink)) {
@@ -3382,7 +3384,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvh.vl.xsink);
         const QoreTypeInfo* effectiveRefTypeInfo = val.assigned && is_no_narrow_container_type(refTypeInfo)
             ? refTypeInfo : nullptr;
-        sl.unlock();
+        sl.release();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
         if (!helper || lvh.doLValue(*ref, for_remove)) {
             return -1;
@@ -3394,8 +3396,10 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return 0;
     }
 
-    lvh.set(rml);
-    sl.stay_locked();
+    if (!exclusive) {
+        lvh.set(rml);
+        sl.stay_locked();
+    }
     lvh.setValue((QoreLValueGeneric&)val, val.assigned && refTypeInfo ? refTypeInfo : typeInfo);
     return 0;
 }
@@ -3407,10 +3411,10 @@ void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
         return;
     }
 
-    QoreSafeVarRWWriteLocker sl(rml);
+    QoreSafeVarRWWriteLocker sl(rml, !frameExclusive());
     if (val.getType() == NT_REFERENCE) {
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvrh.getExceptionSink());
-        sl.unlock();
+        sl.release();
         lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
         return;
     }
@@ -3517,7 +3521,7 @@ bool ClosureVarValue::scanMembers(RSetHelper& rsh) {
 AbstractQoreNode* ClosureVarValue::getReference(const QoreProgramLocation* loc, const char* name, const void*& lvalue_id) {
     //printd(5, "ClosureVarValue::getReference() this: %p '%s' type: '%s' assigned: %d ti: '%s' rti: '%s'\n", this, name, val.getTypeName(), val.assigned, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
     {
-        QoreSafeVarRWWriteLocker sl(rml);
+        QoreSafeVarRWWriteLocker sl(rml, !frameExclusive());
         if (val.getType() == NT_REFERENCE) {
             ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
             lvalue_id = lvalue_ref::get(ref)->lvalue_id;

@@ -1,0 +1,267 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ClosureBoundLocalChecks.qm checks for local variables that are passed by reference or captured by a closure
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module ClosureBoundLocalChecks {
+    version = "1.0";
+    desc = "checks for local variables that are passed by reference or captured by a closure";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** A local variable that is passed by reference (\c "\\var") or captured by a closure is closure-bound: its value
+    lives in a heap-allocated variable that other code can reach through the reference or the closure.  While the
+    frame that created the variable holds the only reference to it, nothing else can reach it, so it is read and
+    written without its lock and its changes make no recursive-reference scan; as soon as anything else holds it,
+    both are needed again.
+
+    The checks are in a module so that the same code can be run from source in each execution mode and as a
+    compiled (AOT) module.  Each check returns an integer that the test compares with the expected value.
+
+    Scan counts come from dbg_get_lvalue_scan_count(), which only exists in debug builds; get_scan_counts()
+    returns an empty hash in other builds.
+*/
+public namespace ClosureBoundLocalChecks {
+#! A node of a cycle; counts its destructions
+public class Node {
+    public {
+        auto peer;
+        auto r;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Node::destroyed;
+    }
+}
+
+#! Returns True if the scan count is available
+public bool sub have_scan_count() {
+    return Option::HAVE_LIBRARY_DEBUGGING;
+}
+
+#! Returns the number of scans started by lvalue operations in the current thread
+int sub scan_count() {
+    return call_function("dbg_get_lvalue_scan_count");
+}
+
+#! Takes a reference and does nothing with it
+sub touch(reference<auto> r) {
+}
+
+#! Assigns a hash holding an object through a reference
+sub set_obj(reference<hash<auto>> h, Node n) {
+    h.y = {"n": n};
+}
+
+#! Removes a scalar through a reference
+sub remove_scalar(reference<hash<auto>> h) {
+    remove h.s;
+}
+
+#! Returns a node in a cycle: a scan that reaches it has a recursive set to describe
+Node sub cycle_node() {
+    Node n();
+    n.peer = n;
+    return n;
+}
+
+#! Returns the scan count checks: the number of scans each operation made
+/** A variable that only its frame can use has nothing on the heap that refers to it, so its changes cannot close a
+    cycle through it and do not scan, however much of the object graph its value reaches; once a reference or a
+    closure holds it, they scan as before.
+*/
+public hash<string, int> sub get_scan_counts() {
+    hash<string, int> rv = {};
+    if (!have_scan_count()) {
+        return rv;
+    }
+
+    Node n = cycle_node();
+    int start;
+
+    start = scan_count();
+    hash<auto> info = {"obj": n, "s": 1};
+    rv."init-unshared" = scan_count() - start;
+
+    # makes "info" closure-bound; the reference is released when the call returns
+    touch(\info);
+
+    start = scan_count();
+    info.x = {"n": n};
+    rv."write-unshared" = scan_count() - start;
+
+    start = scan_count();
+    set_obj(\info, n);
+    rv."write-through-reference" = scan_count() - start;
+
+    start = scan_count();
+    remove_scalar(\info);
+    rv."remove-scalar-through-reference" = scan_count() - start;
+
+    code c = auto sub () { return info; };
+    start = scan_count();
+    info.z = {"n": n};
+    rv."write-captured" = scan_count() - start;
+
+    remove c;
+    start = scan_count();
+    info.w = {"n": n};
+    rv."write-after-closure-released" = scan_count() - start;
+
+    remove n.peer;
+    return rv;
+}
+
+#! A cycle made with a reference stored in an object after the variable was assigned
+int sub cycle_hash_first() {
+    Node o();
+    hash<auto> h = {"o": o};
+    o.r = \h;
+    return 1;
+}
+
+#! A cycle made by assigning the variable after a reference to it was stored in an object
+int sub cycle_ref_first() {
+    Node o();
+    hash<auto> h;
+    o.r = \h;
+    h = {"o": o};
+    return 1;
+}
+
+#! A cycle made with a reference stored in a list held by an object
+int sub cycle_list_store() {
+    Node o();
+    hash<auto> h = {"o": o};
+    o.r = (\h,);
+    return 1;
+}
+
+#! A cycle made with a closure stored in an object
+int sub cycle_closure() {
+    Node o();
+    hash<auto> h = {"o": o};
+    o.r = auto sub () { return h; };
+    return 1;
+}
+
+#! Returns the number of nodes destroyed by 10 calls of the given function
+int sub destroyed_by(code f) {
+    int before = Node::destroyed;
+    for (int i = 0; i < 10; ++i) {
+        f();
+    }
+    return Node::destroyed - before;
+}
+
+#! Returns the cycle checks: the number of nodes collected
+public hash<string, int> sub get_cycle_results() {
+    return {
+        "cycle-hash-first": destroyed_by(\cycle_hash_first()),
+        "cycle-ref-first": destroyed_by(\cycle_ref_first()),
+        "cycle-list-store": destroyed_by(\cycle_list_store()),
+        "cycle-closure": destroyed_by(\cycle_closure()),
+    };
+}
+
+#! Returns a closure over a variable whose frame has returned
+code sub make_counter() {
+    int n = 0;
+    return int sub (int k) {
+        for (int i = 0; i < k; ++i) {
+            ++n;
+        }
+        return n;
+    };
+}
+
+#! Returns the thread checks: 1 for each check that passed
+/** A closure whose frame has returned holds its variable's only reference, but is not its frame: each thread
+    calling it must take the lock, or increments are lost.  A frame that reads its variable after another thread
+    released its reference sees what that thread wrote.
+*/
+public hash<string, int> sub get_thread_results() {
+    hash<string, int> rv = {};
+    int threads = 8;
+    int k = 50000;
+
+    # a closure whose frame has returned holds the variable's only reference, but many threads call the closure
+    {
+        code c = make_counter();
+        Counter done(threads);
+        for (int t = 0; t < threads; ++t) {
+            background sub () {
+                on_exit done.dec();
+                c(k);
+            }();
+        }
+        done.waitForZero();
+        rv."closure-after-frame" = c(0) == threads * k ? 1 : 0;
+    }
+
+    # the frame sees what another thread wrote through a reference once the thread has released it
+    {
+        int n = 0;
+        Counter done(1);
+        background sub (reference<int> r) {
+            on_exit done.dec();
+            r = 42;
+        }(\n);
+        done.waitForZero();
+        rv."frame-sees-thread-write" = n == 42 ? 1 : 0;
+    }
+    return rv;
+}
+
+#! Removes the value of the lvalue that a captured reference argument refers to
+sub remove_captured_ref(reference<hash<auto>> r) {
+    code c = auto sub () { return r; };
+    remove r;
+}
+
+#! Deletes the value of the lvalue that a captured reference argument refers to
+sub delete_captured_ref(reference<hash<auto>> r) {
+    code c = auto sub () { return r; };
+    delete r;
+}
+
+#! Returns the removal checks: 1 for each check that passed
+public hash<string, int> sub get_removal_results() {
+    hash<string, int> rv = {};
+    {
+        *hash<auto> h = {"a": 1};
+        remove_captured_ref(\h);
+        rv."remove-captured-reference" = !exists h ? 1 : 0;
+    }
+    {
+        *hash<auto> h = {"a": 1};
+        delete_captured_ref(\h);
+        rv."delete-captured-reference" = !exists h ? 1 : 0;
+    }
+    return rv;
+}
+}

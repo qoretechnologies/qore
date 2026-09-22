@@ -320,6 +320,13 @@ public:
         locked = true;
     }
 
+    //! creates the object and grabs the read lock only if \a do_lock is true
+    DLLLOCAL QoreSafeVarRWReadLocker(QoreVarRWLock& n_l, bool do_lock) : l(&n_l), locked(do_lock) {
+        if (do_lock) {
+            l->rdlock();
+        }
+    }
+
     //! destroys the object and releases the lock
     DLLLOCAL ~QoreSafeVarRWReadLocker() {
         if (locked)
@@ -338,6 +345,14 @@ public:
         assert(locked);
         locked = false;
         l->unlock();
+    }
+
+    //! unlocks the object if the lock is held
+    DLLLOCAL void release() {
+        if (locked) {
+            locked = false;
+            l->unlock();
+        }
     }
 
     //! will not unlock the lock when the destructor is run; do not use any other functions of this class after calling this function
@@ -390,6 +405,13 @@ public:
       locked = true;
    }
 
+   //! creates the object and grabs the write lock only if \a do_lock is true
+   DLLLOCAL QoreSafeVarRWWriteLocker(QoreVarRWLock& n_l, bool do_lock) : l(&n_l), locked(do_lock) {
+      if (do_lock) {
+         l->wrlock();
+      }
+   }
+
    //! destroys the object and releases the lock
    DLLLOCAL ~QoreSafeVarRWWriteLocker() {
       if (locked)
@@ -408,6 +430,14 @@ public:
       assert(locked);
       locked = false;
       l->unlock();
+   }
+
+   //! unlocks the object if the lock is held
+   DLLLOCAL void release() {
+      if (locked) {
+         locked = false;
+         l->unlock();
+      }
    }
 
    //! will not unlock the lock when the destructor is run; do not use any other functions of this class after calling this function

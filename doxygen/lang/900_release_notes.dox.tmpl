@@ -3302,6 +3302,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - Fixed reading a local variable passed by reference or captured by a closure that holds a weak reference
       (<tt>:=</tt>) to a hash or a list with get_local_vars(), or leaving its block in the IR interpreter,
       releasing a reference to the hash or list that it did not own, which could free it while it was still in use
+    - Fixed a local variable that is passed by reference (<tt>\\var</tt>) or captured by a closure taking its lock
+      for every access, and starting a recursive reference scan of the whole object graph its value reaches
+      whenever a value holding an object was written to it, even while nothing but its own frame could use it.
+      Such a variable is now read and written like any other local variable while its frame holds the only
+      reference to it, and only takes its lock and scans once a reference or a closure holding it exists.
+      Initializing a local that is then passed by reference with a hash holding a shared object no longer scans
+      at all; that code became 1.2 times faster on one thread and 4 times faster from sixteen threads
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

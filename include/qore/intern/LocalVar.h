@@ -336,6 +336,8 @@ public:
     const QoreTypeInfo* refTypeInfo;
     // reference count; access serialized with rlck from RObject
     mutable std::atomic_int references;
+    //! set while the frame that created the variable holds its reference; see frameExclusive()
+    std::atomic_bool frame_owned{false};
     bool read_only = false;
 
     DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue& nval, bool assign,
@@ -364,6 +366,30 @@ public:
     DLLLOCAL void ref() const;
 
     DLLLOCAL void deref(ExceptionSink* xsink);
+
+    //! Returns true if only the frame that created the variable can use it
+    /** Code other than that frame reaches a closure-bound variable only through something that holds a reference
+        to it: a reference to the variable (\c "\\var"), a closure that captured it, or the closure-variable stack of
+        a thread that runs such a closure.  The frame that created the variable holds a reference too, until the
+        variable goes out of scope.  So while that frame holds the only reference, no other thread can reach the
+        variable and nothing on the heap refers to it: its value is read and written like that of a plain local
+        variable, without the lock, and a change to its value cannot close a cycle through it, so no
+        recursive-reference scan is needed either.
+
+        The count is read first, with acquire ordering: references are released with release ordering, so when the
+        count reads one, everything the holders of the released references did with the variable happened before
+        this, including the frame clearing \c frame_owned before it releases its own reference.  A variable in a
+        recursive set, or with a deferred scan, is excluded: the collector can take a temporary reference to a
+        member of a set that it finds through the set rather than through a reference, and scan it.
+
+        See design/closure-bound-locals.md.
+    */
+    DLLLOCAL bool frameExclusive() const {
+        return references.load(std::memory_order_acquire) == 1
+            && frame_owned.load(std::memory_order_relaxed)
+            && !rset.load(std::memory_order_acquire)
+            && !deferred_scan.load(std::memory_order_acquire);
+    }
 
     DLLLOCAL const void* getLValueId() const;
 
@@ -402,17 +428,17 @@ public:
     DLLLOCAL void clearValue(ExceptionSink* xsink) {
         QoreValue v;
         {
-            QoreSafeVarRWWriteLocker sl(rml);
+            QoreSafeVarRWWriteLocker sl(rml, !frameExclusive());
             v = val.removeValue(true);
         }
         v.discard(xsink);
     }
 
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
-        QoreSafeVarRWReadLocker sl(rml);
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
-            sl.unlock();
+            sl.release();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
             if (!helper) {
                 return QoreValue();
@@ -454,10 +480,10 @@ public:
     }
 
     DLLLOCAL QoreValue eval(ExceptionSink* xsink) const {
-        QoreSafeVarRWReadLocker sl(rml);
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
-            sl.unlock();
+            sl.release();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
             if (!helper) {
                 return QoreValue();
