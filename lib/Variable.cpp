@@ -609,7 +609,8 @@ LValueHelper::LValueHelper(ExceptionSink* xsink) : vl(xsink) {
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), rdt(o.rdt), robj(o.robj),
+        ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), typeInfo(o.typeInfo) {
     o.buffer_lvalue = nullptr;
@@ -723,11 +724,28 @@ LValueHelper::~LValueHelper() {
 #ifdef DEBUG
             ++lvalue_scan_count;
 #endif
-            RSetHelper rsh(*robj, vl.xsink);
+            bool deferred;
+            {
+                RSetHelper rsh(*robj, vl.xsink);
+                deferred = rsh.deferred();
+            }
+            // the scan of the root would have repaired the sets of the objects that values were removed from; a
+            // deferred scan is made too late for them, so they are scanned now; see objectRemoved()
+            if (deferred) {
+                for (RObject* o : removal_objects) {
+#ifdef DEBUG
+                    ++lvalue_scan_count;
+#endif
+                    RSetHelper rsh(*o, vl.xsink);
+                }
+            }
         }
         if (obj_ref) {
             robj->tDeref();
         }
+    }
+    for (RObject* o : removal_objects) {
+        o->tDeref();
     }
 }
 
