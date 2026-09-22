@@ -342,6 +342,8 @@ public:
         std::vector<const QoreTypeInfo*>&& paramTypes);
 
     DLLLOCAL virtual ~UserSignature() {
+        // type-parameter types are cached by signature address, which the next signature allocated can reuse
+        qore_purge_derived_types(this, nullptr, nullptr);
         for (ptype_vec_t::iterator i = parseTypeList.begin(), e = parseTypeList.end(); i != e; ++i)
             delete* i;
         delete parseReturnTypeInfo;

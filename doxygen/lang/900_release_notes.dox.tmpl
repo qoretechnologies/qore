@@ -3200,6 +3200,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X>, \c reference<X>, union
+      types, and typed callable types being taken from a destroyed type: they were cached by the address of the
+      type they were built from, and a hashdecl, class, or enum allocated at the same address after the
+      @ref Qore::Program "Program" declaring the first one was destroyed was given the first type's derived
+      types - a different type, whose element type no longer existed.  Type checks and error messages then
+      depended on the memory allocator
     - Fixed @ref Qore::Program::importClass() "Program::importClass()",
       @ref Qore::Program::importFunction() "Program::importFunction()",
       @ref Qore::Program::importGlobalVariable() "Program::importGlobalVariable()", and

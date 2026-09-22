@@ -156,6 +156,8 @@ qore_enum_decl_private::qore_enum_decl_private(const qore_enum_decl_private& old
 
 qore_enum_decl_private::~qore_enum_decl_private() {
     assert(!refs.reference_count());
+    // the next enum allocated can reuse these addresses
+    qore_purge_derived_types(nullptr, typeInfo, orNothingTypeInfo);
     delete typeInfo;
     delete orNothingTypeInfo;
     for (auto* member : members) {

@@ -995,6 +995,10 @@ qore_class_private::~qore_class_private() {
     delete scl;
     delete system_constructor;
 
+    // the next class allocated can reuse these addresses and this class's
+    qore_purge_derived_types(cls, owns_typeinfo ? typeInfo : nullptr,
+        owns_ornothingtypeinfo ? orNothingTypeInfo : nullptr);
+
     if (owns_typeinfo)
         delete typeInfo;
 
