@@ -3247,6 +3247,20 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                 bool err = false;
                 ok = acceptInputComplexList(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
                     err);
+            } else if (n.getType() == NT_WEAKREF_LIST) {
+                // a weak reference to a list is accepted like the list it refers to, as for a weak reference to a
+                // hash above
+                if (is_auto_vti(u.ti)) {
+                    ok = true;
+                    break;
+                }
+                QoreListNode* l = n.get<WeakListReferenceNode>()->get();
+                bool err = false;
+                ok = acceptInputComplexList(xsink, typeInfo, arg_type, obj, param_num, param_name, n, lvhelper, l,
+                    err);
+                if (err) {
+                    return true;
+                }
             } else if (typespec == QTS_COMPLEXLIST) {
                 bool err = false;
                 ok = qore_type_materialize_iterator_to_list(xsink, n, lvhelper, u.ti, err);
