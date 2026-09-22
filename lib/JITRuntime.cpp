@@ -13467,6 +13467,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 && (path_copy[0].kind == LVPathStepKind::LocalVar
                     || path_copy[0].kind == LVPathStepKind::ClosureVar)) {
             const LocalVar* lv = static_cast<const LocalVar*>(path_copy[0].ref_ptr);
+            ReferenceHolder<ReferenceNode> held_ref(xsink);
             ReferenceNode* ref = nullptr;
             if (lv) {
                 if (!lv->closureUse()) {
@@ -13488,8 +13489,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                             cvv = thread_try_get_runtime_closure_var(lv);
                         }
                     }
-                    if (cvv && cvv->val.getType() == NT_REFERENCE) {
-                        ref = reinterpret_cast<ReferenceNode*>(cvv->val.v.n);
+                    if (cvv) {
+                        // read under the variable's lock and kept alive by a reference of its own: a closure or a
+                        // reference to the variable can change it in another thread
+                        held_ref = cvv->getHeldReference();
+                        ref = *held_ref;
                     }
                 }
             }

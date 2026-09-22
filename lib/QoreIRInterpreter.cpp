@@ -488,32 +488,6 @@ static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     return index == 0 ? value.refSelf() : QoreValue();
 }
 
-// Helper to check if a weak reference's target object is still valid
-// Returns the value if valid, or NOTHING if the weak reference target was deleted
-static QoreValue validateWeakRef(const QoreValue& val) {
-    switch (val.getType()) {
-        case NT_WEAKREF: {
-            QoreObject* o = val.get<const WeakReferenceNode>()->get();
-            if (!o->isValid()) {
-                return QoreValue();
-            }
-            return val;
-        }
-        case NT_WEAKREF_HASH: {
-            QoreHashNode* h = val.get<const WeakHashReferenceNode>()->get();
-            // Hashes and lists don't have an "invalid" state, so return as-is
-            return val;
-        }
-        case NT_WEAKREF_LIST: {
-            QoreListNode* l = val.get<const WeakListReferenceNode>()->get();
-            // Hashes and lists don't have an "invalid" state, so return as-is
-            return val;
-        }
-        default:
-            return val;
-    }
-}
-
 static inline bool isWeakReferenceType(qore_type_t type) {
     return type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST;
 }
@@ -971,9 +945,10 @@ struct IRCallFrame {
 
     // Per-call containers pooled here to avoid per-call heap allocation.
     // After warm-up, clear() retains bucket arrays / capacity.
-    std::unordered_map<const void*, QoreValue> globals;
+    // Values of thread-local variables read or written in this call; only this thread can change them, and
+    // calls invalidate the cache.  Global and closure-bound variables are not cached: other threads can change
+    // them at any time (see design/closure-bound-locals.md)
     std::unordered_map<const void*, QoreValue> threadlocals;
-    std::unordered_map<const void*, QoreValue> closures;
     std::unordered_set<FunctionalOperatorInterface*> active_iterators;
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
     // Tracks which value slot IDs are associated with local variables (via StoreLocal).
@@ -998,18 +973,10 @@ struct IRCallFrame {
             val.discard(xsink);
             val = QoreValue();
         }
-        for (auto& entry : globals) {
-            entry.second.discard(xsink);
-        }
-        globals.clear();
         for (auto& entry : threadlocals) {
             entry.second.discard(xsink);
         }
         threadlocals.clear();
-        for (auto& entry : closures) {
-            entry.second.discard(xsink);
-        }
-        closures.clear();
     }
 
     void reset(size_t reserve_size, size_t local_slot_count) {
@@ -1059,18 +1026,10 @@ struct IRCallFrame {
         instantiated_locals_ordered.clear();
         locally_uninstantiated.clear();
         ephemeral_weak_ref_slots.clear();
-        for (auto& entry : globals) {
-            entry.second.discard(nullptr);
-        }
-        globals.clear();
         for (auto& entry : threadlocals) {
             entry.second.discard(nullptr);
         }
         threadlocals.clear();
-        for (auto& entry : closures) {
-            entry.second.discard(nullptr);
-        }
-        closures.clear();
         active_iterators.clear();
         on_block_exit_handlers.clear();
         local_owned_slots.clear();
@@ -1575,7 +1534,12 @@ static ClosureVarValue* findClosureVarValueForIR(LocalVar* var) {
 
 static bool incrementClosureVarIntFast(LocalVar* var, int64_t delta, int64_t& result, ExceptionSink* xsink) {
     ClosureVarValue* cv = findClosureVarValueForIR(var);
-    if (!cv || cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
+    if (!cv) {
+        return false;
+    }
+    // a closure or a reference to the variable can change it in another thread
+    QoreSafeVarRWWriteLocker sl(cv->rml, !cv->frameExclusive());
+    if (cv->isReadOnly() || cv->finalized || cv->val.getType() != NT_INT) {
         return false;
     }
     result = cv->val.getAsBigInt() + delta;
@@ -5814,9 +5778,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     }
 
     // Use pooled containers from the frame (already cleared in reset())
-    auto& globals = frame.globals;
     auto& threadlocals = frame.threadlocals;
-    auto& closures = frame.closures;
     auto& active_iterators = frame.active_iterators;
     auto& on_block_exit_handlers = frame.on_block_exit_handlers;
     // Catch exception stack for rethrow support
@@ -5900,9 +5862,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 on_block_exit_handlers.resize(scope_start);
                 // Invalidate caches after handler execution (both AST and compiled handlers
                 // can modify any variable type on the thread-local variable stack)
-                cleanupStoredValues(globals, xsink);
                 cleanupStoredValues(threadlocals, xsink);
-                cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
                     if (preserveParentSlotForWriteback(i)) {
                         continue;
@@ -5947,9 +5907,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             locals_slot_cache[i] = QoreValue();
         }
         std::fill(locals_lvar_cache.begin(), locals_lvar_cache.end(), nullptr);
-        cleanupStoredValues(globals, xsink);
         cleanupStoredValues(threadlocals, xsink);
-        cleanupStoredValues(closures, xsink);
     };
 
     // Lightweight cache invalidation for after external calls (function/method calls).
@@ -5961,12 +5919,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // exist only in the slot cache and cannot be reached by callees.
     auto invalidateExternalCaches = [&]() {
         // Fast path: if no external values were cached, nothing to invalidate
-        if (globals.empty() && threadlocals.empty() && closures.empty() && !has_non_ir_only_locals) {
+        if (threadlocals.empty() && !has_non_ir_only_locals) {
             return;
         }
-        cleanupStoredValues(globals, xsink);
         cleanupStoredValues(threadlocals, xsink);
-        cleanupStoredValues(closures, xsink);
         // Invalidate non-IR-only local slots: callees can modify these through TLS
         if (has_non_ir_only_locals) {
             for (size_t i = 0; i < locals_ir_only.size(); ++i) {
@@ -6121,54 +6077,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     }
     const std::unordered_set<const void*>* function_own_locals = &function_own_locals_storage;
 
-    // Helper: invalidate the closure variable cache for a given VarRefNode.
-    // LoadClosure caches values in the closures map; lvalue operations modify the
-    // cvstack directly, so the cache becomes stale.  Must be called before AND after
-    // any lvalue operation that could modify a closure-use variable.
-    auto invalidateClosureCache = [&](const VarRefNode* vrn) {
-        if (vrn && vrn->ref.id) {
-            qore_var_t vtype = vrn->getType();
-            if (vtype == VT_CLOSURE || (vtype == VT_LOCAL && vrn->ref.id->closureUse())) {
-                auto cit = closures.find(vrn->ref.id);
-                if (cit != closures.end()) {
-                    cit->second.discard(xsink);
-                    closures.erase(cit);
-                }
-            }
-        }
-    };
-    // Same as invalidateClosureCache, but keyed on a LocalVar* directly.  Used by
-    // opcodes that carry an explicit LocalVar* (HashKeyStore/HashKeyStoreDynamic/
-    // ListIndexStore) — they may have been AOT-deserialized with container=nullptr
-    // and only container_lv populated, so the VarRefNode-based helper cannot run.
-    auto invalidateClosureCacheLv = [&](const LocalVar* lv) {
-        if (lv && lv->closureUse()) {
-            auto cit = closures.find(lv);
-            if (cit != closures.end()) {
-                cit->second.discard(xsink);
-                closures.erase(cit);
-            }
-        }
-    };
-    auto updateClosureCacheInt = [&](const LocalVar* lv, int64_t value) {
-        if (lv && lv->closureUse()) {
-            auto cit = closures.find(lv);
-            if (cit != closures.end()) {
-                cit->second.discard(xsink);
-                cit->second = QoreValue(value);
-            }
-        }
-    };
-    auto invalidateLValuePathClosureCache = [&](const QoreIRLValuePathInstruction* path_inst) {
-        if (!path_inst || path_inst->path.empty()) {
-            return;
-        }
-        const LVPathStep& root = path_inst->path[0];
-        if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
-                && root.ref_ptr) {
-            invalidateClosureCacheLv(static_cast<const LocalVar*>(root.ref_ptr));
-        }
-    };
     auto markParentLValueDirty = [&](const QoreIRLValueInstruction* lval_inst,
             const VarRefNode* lval_vrn) {
         if (parent_slot_dirty.empty() || !lval_inst) {
@@ -6265,7 +6173,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     instantiated_locals_ordered, pre_instantiated,
                     function_own_locals, &locally_uninstantiated);
             }
-            invalidateClosureCache(lval_vrn);
         }
         if (lval_inst->hasLocalTarget()) {
             if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
@@ -6313,10 +6220,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // LoadLocal re-reads from TLS.  This distinction is critical: for h.value += 3,
     // res is the member's new value (8), not the container (h) — repopulating h's slot
     // with 8 would corrupt the cache.
-    // Also invalidates the closures cache for closure-use variables.
     auto finalizeLValueSlotCache = [&](const QoreIRLValueInstruction* lval_inst,
             const VarRefNode* lval_vrn, const QoreValue& res, bool repopulate) {
-        invalidateClosureCache(lval_vrn);
         // Handle local variable slot cache
         uint32_t sid = lval_inst->lvalue_slot_id;
         if (!lval_inst->hasLocalTarget() && lval_vrn
@@ -8274,13 +8179,9 @@ load_local_done:
                     out = val.hasNode() ? val.refSelf() : val;
                     result_slot_owned = out.hasNode();
                 } else {
-                    auto it = closures.find(local_inst->local);
-                    if (it != closures.end() && it->second.getType() != NT_REFERENCE) {
-                        // Cache hit: val is shared with cache, needs refSelf for value slot
-                        QoreValue val = it->second;
-                        out = val.hasNode() ? val.refSelf() : val;
-                        result_slot_owned = out.hasNode();
-                    } else if (local_inst->local) {
+                    // the value is read from the variable every time: other threads can change it through a
+                    // reference or a closure, so a value kept from an earlier read can be stale
+                    if (local_inst->local) {
                         // Ensure the variable is instantiated before lookup.
                         // When a function with closureUse() vars executes in its own
                         // body (not as a closure), evalTiered skips instantiating these
@@ -8298,10 +8199,10 @@ load_local_done:
                         }
                         ClosureVarValue* cv = resolve_closure_var_value(local_inst->local);
                         if (cv) {
-                            is_weak_ref_local = isWeakReferenceType(cv->val.getType());
+                            // the type is read with the value, under the variable's lock: a closure or a
+                            // reference to the variable can change it in another thread
+                            QoreValue val = cv->evalWeakBorrowed(is_weak_ref_local, xsink);
                             if (is_weak_ref_local) {
-                                bool needs_deref = false;
-                                QoreValue val = cv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
                                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                                     cleanupLocalCaches();
@@ -8309,16 +8210,13 @@ load_local_done:
                                 }
                                 out = val;
                             } else {
-                                QoreValue val = cv->eval(xsink);
                                 if (xsink && *xsink) {
+                                    val.discard(xsink);
                                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                                     cleanupLocalCaches();
                                     return false;
                                 }
-                                // cv->eval() returns a referenced value (+1); store a separate
-                                // reference in the cache and use eval's reference for the value
-                                // slot.  No additional refSelf for out — eval's +1 transfers to it.
-                                storeValue(closures, local_inst->local, val, nullptr);
+                                // cv->eval() returns a referenced value (+1), which the value slot takes
                                 out = val;
                                 result_slot_owned = out.hasNode();
                             }
@@ -8542,10 +8440,6 @@ load_local_done:
                             } else {
                                 assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                             }
-                            // After COW, LoadClosure's `closures` cache still holds a ref
-                            // to the pre-COW hash (old contents).  Invalidate so the next
-                            // load re-reads through the CVV and sees the new hash.
-                            invalidateClosureCacheLv(lv);
                             if (xsink && *xsink) {
                                 // new_h's ref was consumed by assign*Transfer (either stored
                                 // in TLS or discarded on failure). Do not deref here.
@@ -8608,9 +8502,6 @@ load_local_done:
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
-                        // Auto-vivify replaces NOTHING with a new hash; any prior LoadClosure
-                        // of this var cached a stale NOTHING (or empty hash) — invalidate.
-                        invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
                             return true;
                         }
@@ -8696,8 +8587,6 @@ load_local_done:
                             } else {
                                 assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                             }
-                            // After COW, invalidate stale LoadClosure cache entry
-                            invalidateClosureCacheLv(lv);
                             if (xsink && *xsink) {
                                 return;
                             }
@@ -8745,8 +8634,6 @@ load_local_done:
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
-                        // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
-                        invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
                             return;
                         }
@@ -8857,8 +8744,6 @@ load_local_done:
                             } else {
                                 assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                             }
-                            // After COW, invalidate stale LoadClosure cache entry
-                            invalidateClosureCacheLv(lv);
                             if (xsink && *xsink) {
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                                 cleanupLocalCaches();
@@ -8979,8 +8864,6 @@ load_local_done:
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                         }
-                        // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
-                        invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
                             break;
                         }
@@ -9082,7 +8965,6 @@ load_local_done:
                             cleanupLocalCaches();
                             return false;
                         }
-                        updateClosureCacheInt(fused_inst->target, result_val);
                     } else if (fused_inst->target_slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->target_slot_id];
@@ -9110,25 +8992,36 @@ load_local_done:
             case QoreIROpcode::IncrementLocalInt: {
                 auto* fused_inst = static_cast<QoreIRIncrementLocalIntInstruction*>(inst);
                 if (fused_inst->local && fused_inst->local->closureUse()) {
+                    // a closure-bound variable can be changed by other threads, so it is read and written in one
+                    // operation under its lock, never through the frame's slot cache
                     int64_t result_val = 0;
-                    if (incrementClosureVarIntFast(fused_inst->local, fused_inst->delta, result_val, xsink)) {
-                        if (fused_inst->slot_id < locals_slot_cache.size()) {
-                            locals_slot_cache[fused_inst->slot_id].discard(xsink);
-                            locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
+                    if (!incrementClosureVarIntFast(fused_inst->local, fused_inst->delta, result_val, xsink)) {
+                        if (!(xsink && *xsink)) {
+                            // the variable does not hold an integer yet: the lvalue helper converts it
+                            ensureLocalInstantiated(fused_inst->local, instantiated_locals,
+                                instantiated_locals_ordered, pre_instantiated, function_own_locals,
+                                &locally_uninstantiated);
+                            if (fused_inst->slot_id < locals_instantiated.size()) {
+                                locals_instantiated[fused_inst->slot_id] = true;
+                            }
+                            result_val = qore_rt_increment_closure_int(fused_inst->local, fused_inst->delta, xsink);
                         }
-                        updateClosureCacheInt(fused_inst->local, result_val);
-                        markParentSlotDirty(fused_inst->slot_id);
-                        if (fused_inst->result.isValid()) {
-                            setOwnedValueSlot(values, cleanup, fused_inst->result.id, QoreValue(result_val), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
                         }
-                        ++ip;
-                        break;
                     }
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                    if (fused_inst->slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[fused_inst->slot_id].discard(xsink);
+                        locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
                     }
+                    markParentSlotDirty(fused_inst->slot_id);
+                    if (fused_inst->result.isValid()) {
+                        setOwnedValueSlot(values, cleanup, fused_inst->result.id, QoreValue(result_val), xsink);
+                    }
+                    ++ip;
+                    break;
                 }
                 // Read local from slot cache (fast path) or eval (cold path)
                 int64_t local_val = 0;
@@ -9163,18 +9056,11 @@ load_local_done:
                     locals_slot_cache[fused_inst->slot_id].discard(xsink);
                     locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
                 }
-                // Write through to thread-local variable only if not IR-only
+                // Write through to thread-local variable only if not IR-only; a closure-bound variable was
+                // changed above
+                assert(!fused_inst->local->closureUse());
                 if (!fused_inst->ir_only) {
-                    if (fused_inst->local->closureUse()) {
-                        // Closure-use variable: write through cvstack, not lvstack
-                        assignClosureVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
-                        if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
-                        updateClosureCacheInt(fused_inst->local, result_val);
-                    } else if (fused_inst->slot_id < locals_lvar_cache.size()) {
+                    if (fused_inst->slot_id < locals_lvar_cache.size()) {
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->slot_id];
                         if (!lvv) {
@@ -10678,14 +10564,6 @@ load_local_done:
                             }
                             // Clear init/load slots for closure vars
                             cleanupLocalSlots(local_inst->slot_id);
-                            // Release closures cache entry (StoreClosure adds refSelf'd copy)
-                            {
-                                auto cit = closures.find(local_inst->local);
-                                if (cit != closures.end()) {
-                                    cit->second.discard(xsink);
-                                    closures.erase(cit);
-                                }
-                            }
                             // Scan values[] for refs to CVV's contained value and release
                             // them BEFORE clearValue so clearValue is the final deref
                             {
@@ -10834,18 +10712,12 @@ load_local_done:
                         // For closure-use vars: release all extra refs BEFORE
                         // clearValue so clearValue is the final deref that triggers
                         // the Qore destructor through the proper CVV lifecycle.
-                        // Order: closures cache → values[] scan → clearValue
+                        // Order: values[] scan → clearValue
                         if (local_inst->is_closure) {
-                            // 1. Release closures cache entry
-                            auto cit = closures.find(local_inst->local);
-                            if (cit != closures.end()) {
-                                cit->second.discard(xsink);
-                                closures.erase(cit);
-                            }
                             ClosureVarValue* cvv = thread_try_find_closure_var(
                                 local_inst->local->getName());
                             if (cvv) {
-                                // 2. Scan values[] for refs to the CVV's contained value
+                                // 1. Scan values[] for refs to the CVV's contained value
                                 // and discard them BEFORE clearValue.
                                 {
                                     QoreValue cvval = cvv->eval(xsink);
@@ -10877,7 +10749,7 @@ load_local_done:
                                     }
                                     cvval.discard(xsink);
                                 }
-                                // 3. clearValue triggers destructor when the CVV is about
+                                // 2. clearValue triggers destructor when the CVV is about
                                 // to be deleted. Only clear when refs==1 so outliving
                                 // closures (e.g. captured on a background thread) still
                                 // see the captured value; DGC handles cycle collection.
@@ -10952,9 +10824,7 @@ load_local_done:
                         locals_instantiated[local_inst->slot_id] = true;
                     }
                 }
-                storeValue(closures, local_inst->local, val, xsink);
-                // Write-through: update the actual closure variable so changes
-                // are visible outside the IR interpreter's local cache.
+                // the value is only stored in the variable: other threads can change it, so the frame keeps no copy
                 assignClosureVarValue(local_inst->local, val, xsink, local_inst->initial_assignment);
                 if (local_inst->result.isValid()) {
                     QoreValue res = val.hasNode() ? val.refSelf() : val;
@@ -10985,15 +10855,8 @@ load_local_done:
             }
             case QoreIROpcode::LoadGlobal: {
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
-                QoreValue out;
-                auto it = globals.find(var_inst->var);
-                if (it != globals.end() && it->second.getType() != NT_REFERENCE) {
-                    QoreValue val = validateWeakRef(it->second);
-                    out = val.hasNode() ? val.refSelf() : val;
-                } else {
-                    // Read from the actual global variable when not in the local cache
-                    out = var_inst->var->eval();
-                }
+                // the value is read from the variable every time: other threads can change it
+                QoreValue out = var_inst->var->eval();
                 setValueSlot(values, var_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(var_inst->result.id);
@@ -11026,9 +10889,7 @@ load_local_done:
                     }
                 }
 
-                storeValue(globals, var_inst->var, val, xsink);
-                // Write-through: update the actual global variable so changes
-                // are visible outside the IR interpreter's local cache.
+                // the value is only stored in the variable: other threads can change it, so the frame keeps no copy
                 assignGlobalVarValue(var_inst->var, val, xsink);
                 if (var_inst->result.isValid()) {
                     QoreValue res = val.hasNode() ? val.refSelf() : val;
@@ -12523,7 +12384,6 @@ load_local_done:
                         ensureLocalInstantiated(base_var->ref.id, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                                 function_own_locals, &locally_uninstantiated);
                     }
-                    invalidateClosureCache(base_var);
                 }
                 QoreValue val = getIRValue(values, lval_inst->operands[0]);
                 // Hold an explicit reference to the RHS value through
@@ -12618,7 +12478,6 @@ load_local_done:
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
-                invalidateLValuePathClosureCache(path_inst);
 
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
                 ValueHolder val_holder(val.refSelf(), xsink);
@@ -12664,7 +12523,6 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                invalidateLValuePathClosureCache(path_inst);
 
                 // Cache invalidation: broad for reference roots (write-through can modify
                 // any variable), targeted for non-reference roots.
@@ -12683,8 +12541,6 @@ load_local_done:
                             locals_slot_cache[j].discard(xsink);
                             locals_slot_cache[j] = QoreValue();
                         }
-                        cleanupStoredValues(closures, xsink);
-                        cleanupStoredValues(globals, xsink);
                     } else {
                         if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                             locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -12715,7 +12571,6 @@ load_local_done:
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
-                invalidateLValuePathClosureCache(path_inst);
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
                 QoreValue res;
@@ -12805,7 +12660,6 @@ load_local_done:
                     }
                 }
                 // lvh is now destructed — object lock released
-                invalidateLValuePathClosureCache(path_inst);
                 if (navigation_failed || (xsink && *xsink)) {
                     res.discard(xsink);
                     res = QoreValue();
@@ -12836,9 +12690,6 @@ load_local_done:
                             locals_slot_cache[j].discard(xsink);
                             locals_slot_cache[j] = QoreValue();
                         }
-                        // Also clear closures and globals caches for reference write-through
-                        cleanupStoredValues(closures, xsink);
-                        cleanupStoredValues(globals, xsink);
                     } else {
                         if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                             locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -12875,7 +12726,6 @@ load_local_done:
                 // QoreStringValueHelper::setup on the first (dangling) key_val.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
-                invalidateLValuePathClosureCache(path_inst);
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
@@ -13043,6 +12893,7 @@ load_local_done:
                             // closure_use flag (NOT the LVPath step kind) to pick the right stack,
                             // since for VT_LOCAL_TS the path kind is LocalVar but the CVV lives on
                             // cvstack; thread_find_lvar would walk past the lvstack root and crash.
+                            ReferenceHolder<ReferenceNode> held_ref(xsink);
                             ReferenceNode* ref = nullptr;
                             if (lv) {
                                 if (!lv->closureUse()) {
@@ -13050,11 +12901,11 @@ load_local_done:
                                     if (lvv && lvv->val.getType() == NT_REFERENCE) {
                                         ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                     }
-                                } else {
-                                    ClosureVarValue* cvv = resolve_closure_var_value(lv);
-                                    if (cvv && cvv->val.getType() == NT_REFERENCE) {
-                                        ref = reinterpret_cast<ReferenceNode*>(cvv->val.v.n);
-                                    }
+                                } else if (ClosureVarValue* cvv = resolve_closure_var_value(lv)) {
+                                    // read under the variable's lock and kept alive by a reference of its own:
+                                    // a closure or a reference to the variable can change it in another thread
+                                    held_ref = cvv->getHeldReference();
+                                    ref = *held_ref;
                                 }
                             }
                             if (ref) {
@@ -13344,7 +13195,6 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                invalidateLValuePathClosureCache(path_inst);
                 if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                     locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
                     locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
@@ -13385,7 +13235,6 @@ load_local_done:
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
-                invalidateLValuePathClosureCache(path_inst);
                 // Get RHS value (operands[0] for push/unshift)
                 QoreValue rhs;
                 if (!path_inst->operands.empty()) {
@@ -13500,7 +13349,6 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                invalidateLValuePathClosureCache(path_inst);
                 markParentLValuePathDirty(path_inst);
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
@@ -13526,7 +13374,6 @@ load_local_done:
                 // mutating path_inst->path directly is a data race.
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
-                invalidateLValuePathClosureCache(path_inst);
                 // Get the ternary operands: offset, length, replacement
                 QoreValue offset_val = (path_inst->operands.size() > 0)
                     ? getIRValue(values, path_inst->operands[0]) : QoreValue();
@@ -13702,7 +13549,6 @@ load_local_done:
                     res.discard(xsink);
                     res = QoreValue();
                 }
-                invalidateLValuePathClosureCache(path_inst);
                 if (path_inst->hasLocalTarget()) {
                     markParentLValuePathDirty(path_inst);
                     bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
@@ -13718,8 +13564,6 @@ load_local_done:
                             locals_slot_cache[j].discard(xsink);
                             locals_slot_cache[j] = QoreValue();
                         }
-                        cleanupStoredValues(closures, xsink);
-                        cleanupStoredValues(globals, xsink);
                     } else if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
                         locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
@@ -13741,9 +13585,7 @@ load_local_done:
             case QoreIROpcode::PostIncLValue:
             case QoreIROpcode::PostDecLValue: {
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
-                // Invalidate closure cache for closure-use variables
                 const VarRefNode* inc_vrn = extractLValueBaseVarRef(lval_inst->lvalue);
-                invalidateClosureCache(inc_vrn);
                 // Targeted cache invalidation before the lvalue operation
                 if (lval_inst->hasLocalTarget()) {
                     if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {

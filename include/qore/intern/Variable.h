@@ -124,6 +124,12 @@ class Var : protected QoreReferenceCounter {
 private:
     const QoreProgramLocation* loc;      // location of the initial definition
     QoreLValue<qore_gvar_ref_u> val;
+    //! true if the variable refers to a variable in another Program (\a val holds \c QV_Ref)
+    /** Set by the constructor and never changed, so, unlike the type of \a val, which every assignment of a value
+        of another kind changes, it can be read without the variable's lock: by other threads, and by IR analysis
+        and JIT compilation running in background threads
+    */
+    const bool is_ref = false;
     std::string name;
     std::string from_module;              // module that defined this variable
     mutable QoreVarRWLock rwl;
@@ -170,7 +176,7 @@ protected:
             bool is_new;
             get_thread_local_lvalue((void*)this, lvar, is_new, finalized);
             if (is_new) {
-                if (val.type == QV_Ref) {
+                if (is_ref) {
                     lvar->set(QV_Ref);
                     lvar->v.setPtr(val.v.getPtr(), val.v.isReadOnly());
                 } else if (typeInfo) {
@@ -228,7 +234,7 @@ public:
 
     DLLLOCAL void clearLocal(ExceptionSink* xsink) {
         QoreLValue<qore_gvar_ref_u>& val = getVal();
-        if (val.type != QV_Ref) {
+        if (!is_ref) {
             ValueHolder h(xsink);
             QoreAutoVarRWWriteLocker al(rwl);
             if (!finalized)
@@ -313,7 +319,7 @@ public:
     DLLLOCAL int parseInit() {
         QoreLValue<qore_gvar_ref_u>& val = getVal();
 
-        if (val.type == QV_Ref) {
+        if (is_ref) {
             return 0;
         }
 

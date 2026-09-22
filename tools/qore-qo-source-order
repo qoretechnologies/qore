@@ -1438,6 +1438,8 @@ class SourceOrderEngine {
             state which graph it was planned against.
         */
         *list<list<int>> depfile_contract_edges;
+        #! True when those edges were read from a frozen snapshot, not the depfiles.
+        bool depfile_edges_frozen = False;
         #! The name of that edge set, computed on first use.
         /** Most commands -- currency probes above all, which a large group runs
             once per object -- never need it, and naming the set costs a digest
@@ -2256,8 +2258,12 @@ class SourceOrderEngine {
         depfile names its providers.  These edges are the part of the graph the
         build writes, which is why they are collected separately from the
         content-derived summary edges rather than folded straight into it.
+
+        \a consumers limits the scan to the depfiles of those nodes, keyed by node
+        index; every member depfile is read when it is not given.
     */
-    private list<list<int>> collectDepfileContractEdges(list<string> outputs) {
+    private list<list<int>> collectDepfileContractEdges(list<string> outputs,
+            *hash<string, bool> consumers) {
         const string Suffix = ".compile-contract.stamp";
         hash<string, int> output_indexes = {};
         for (int index = 0; index < outputs.size(); ++index) {
@@ -2267,6 +2273,9 @@ class SourceOrderEngine {
         *hash<string, int> canonical_output_indexes;
         list<list<int>> edges = ();
         for (int consumer = 0; consumer < outputs.size(); ++consumer) {
+            if (exists consumers && !exists consumers{string(consumer)}) {
+                continue;
+            }
             string depfile = outputs[consumer] + ".d";
             if (!is_file(depfile)) {
                 continue;
@@ -2470,13 +2479,9 @@ class SourceOrderEngine {
         }
     }
 
-    private hash<SourceOrderGraph> loadOrBuildGraph(string context_path,
+    #! The content-derived half of the graph, before any depfile edge is applied.
+    private hash<SourceOrderGraph> loadSummaryGraph(string context_path,
             hash<SourceOrderContext> context_info) {
-        string graph_context = absoluteNormalized(context_path);
-        if (exists loaded_graph_context && exists loaded_graph
-                && loaded_graph_context == graph_context) {
-            return loaded_graph;
-        }
         string cache_file = context_path + ".source-order-v2.json";
         *hash<SourceOrderGraph> cached = loadGraphCache(cache_file, context_path,
             context_info.inputs, context_info.outputs, context_info.parse_defines);
@@ -2490,6 +2495,17 @@ class SourceOrderEngine {
             saveGraphCache(cache_file, context_info.inputs, context_info.outputs,
                 context_info.parse_defines, graph);
         }
+        return graph;
+    }
+
+    private hash<SourceOrderGraph> loadOrBuildGraph(string context_path,
+            hash<SourceOrderContext> context_info) {
+        string graph_context = absoluteNormalized(context_path);
+        if (exists loaded_graph_context && exists loaded_graph
+                && loaded_graph_context == graph_context) {
+            return loaded_graph;
+        }
+        hash<SourceOrderGraph> graph = loadSummaryGraph(context_path, context_info);
         int depfile_started = clock_getmicros_monotonic();
         # One JSON read replaces reading and scanning every member depfile in the
         # group.  That is not only what makes the graph immutable for the
@@ -2500,6 +2516,7 @@ class SourceOrderEngine {
         depfile_contract_edges = exists frozen
             ? frozen
             : collectDepfileContractEdges(context_info.outputs);
+        depfile_edges_frozen = exists frozen;
         depfile_edge_generation = NOTHING;
         applyContractEdges(depfile_contract_edges, \graph);
         if (ENV.QORE_QO_SOURCE_ORDER_TIMING) {
@@ -3749,6 +3766,11 @@ class SourceOrderEngine {
         prerequisite is only forgiven that way when the graph actually moved, because
         on an unchanged graph a prerequisite set that shrank did not come from this
         component's compile.
+
+        A prerequisite the compile GAINED is never forgiven here, and does not need
+        to be: publication computes the record from the component's own depfile
+        edges as the compile left them (see publishedGraphView()), so the record
+        already names it.
     */
     private bool recordCoversCurrentGeneration(hash<auto> record,
             hash<auto> generation, string context_path,
@@ -3935,6 +3957,79 @@ class SourceOrderEngine {
         return stale;
     }
 
+    #! The graph a compile of \a component leaves behind, when it is not the frozen one.
+    /** A frozen snapshot is what makes a pass plannable: every helper in it resolves
+        the same decomposition, preloads and publication targets, and a compile's
+        depfile rewrite is crossed at the next freeze rather than mid-pass.  But a
+        record computed from that graph describes the component's prerequisites as
+        they were BEFORE its compile, and the compile has just written what it really
+        depended on.
+
+        That differs whenever the component switches compile mode.  A whole-group
+        parse resolves some cross-member references inside its own parse; the same
+        source compiled standalone resolves them against preloaded objects and
+        records a contract edge to each one it used.  The first standalone compile
+        after a group parse can therefore add a prerequisite the frozen graph lacks.
+        Its record then omits it, the next freeze reads the edge from the depfile,
+        and recordCoversCurrentGeneration() -- which forgives a prerequisite the
+        compile dropped but never one it gained -- finds the component stale right
+        after building it.  The coordinator sees a pass leave stale exactly what it
+        compiled and reparses the whole group: on Qorus, every incremental build.
+
+        So the record is computed from the frozen graph with this component's own
+        depfile edges replaced by the live ones.  Only its own: the edges INTO its
+        members are the ones its compile wrote and the ones its prerequisites come
+        from, while every other depfile is exactly what the next freeze will read
+        unless another compile rewrites it, which is that compile's publication to
+        account for.  Reading only this component's depfiles also keeps a
+        publication from paying for a whole-group depfile scan.
+
+        When the compile's edges change the decomposition itself -- it closed a cycle
+        through a consumer, so the component the pass planned no longer exists -- no
+        such record is meaningful.  The frozen graph's record is kept, and the next
+        pass finds the merged component unpublished and builds it with the parse a
+        multi-member component needs.
+
+        \return NOTHING when the frozen graph already describes the compile, or when
+        the live edges change the component's membership; otherwise \c components,
+        \c component (its index there) and \c graph_generation.
+    */
+    private *hash<auto> publishedGraphView(string context_path,
+            hash<SourceOrderContext> context_info, hash<SourceOrderComponents> components,
+            int component) {
+        loadOrBuildGraph(context_path, context_info);
+        if (!depfile_edges_frozen) {
+            return NOTHING;
+        }
+        hash<string, bool> members = map {string($1): True},
+            components.members[component];
+        list<list<int>> edges = ();
+        foreach list<int> edge in (depfile_contract_edges) {
+            if (!exists members{string(edge[1])}) {
+                push edges, edge;
+            }
+        }
+        edges += collectDepfileContractEdges(context_info.outputs, members);
+        string generation = contractEdgeGeneration(edges, context_info.outputs);
+        if (generation == graphGeneration(context_path, context_info)) {
+            return NOTHING;
+        }
+        hash<SourceOrderGraph> graph = loadSummaryGraph(context_path, context_info);
+        applyContractEdges(edges, \graph);
+        hash<SourceOrderComponents> live = buildComponents(graph, context_info.outputs);
+        string key = components.component_keys[component];
+        for (int index = 0; index < live.component_keys.size(); ++index) {
+            if (live.component_keys[index] == key) {
+                return (
+                    "components": live,
+                    "component": index,
+                    "graph_generation": generation,
+                );
+            }
+        }
+        return NOTHING;
+    }
+
     #! Publishes the generation record for \a component; the build's commit point.
     /** \a expected is the SOURCE token the caller computed before it compiled
         (see componentSourceToken()). When it no longer matches, an agent outside
@@ -3952,7 +4047,9 @@ class SourceOrderEngine {
         because the two have entirely different causes and remedies.
 
         The record itself stores the full generation token, recomputed here, so it
-        names the graph the artifacts were actually published against.
+        names the graph the artifacts were actually published against -- including
+        the edges the compile just wrote to its own members' depfiles, which a frozen
+        graph does not have yet: see publishedGraphView().
 
         \return \c "published", \c "moved" when \a expected no longer holds,
         \c "graph-transition" when \a expected_graph no longer holds, or
@@ -3971,7 +4068,17 @@ class SourceOrderEngine {
                 && expected_graph != graphGeneration(context_path, context_info)) {
             return "graph-transition";
         }
-        hash<auto> generation = componentGeneration(components, context_info, component);
+        string graph_generation = graphGeneration(context_path, context_info);
+        hash<auto> generation;
+        *hash<auto> view = publishedGraphView(context_path, context_info, components,
+            component);
+        if (exists view) {
+            generation = componentGeneration(view.components, context_info,
+                view.component);
+            graph_generation = view.graph_generation;
+        } else {
+            generation = componentGeneration(components, context_info, component);
+        }
         list<string> outputs = ();
         foreach int member in (components.members[component]) {
             foreach string path in (memberArtifacts(context_info.outputs[member])) {
@@ -3995,7 +4102,7 @@ class SourceOrderEngine {
                 # that changed elsewhere in the group is not a reason to
                 # recompile this component. It is recorded so a completed build
                 # can be checked for having published one coherent graph.
-                "graph_generation": graphGeneration(context_path, context_info),
+                "graph_generation": graph_generation,
                 "members": sort(outputs),
                 "manifest": parse_json(generation.manifest),
             )) + "\n");

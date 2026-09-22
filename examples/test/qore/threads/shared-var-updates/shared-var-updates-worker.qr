@@ -1,0 +1,242 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# checks for changes that several threads make to the same variable at once; run by shared-var-updates.qtest
+
+%modern
+
+/** An operation that changes a variable, such as \c "++v" or \c "v += x", is made atomically on the variable in every
+    execution mode, as the AST interpreter makes it with the variable's lock held for the whole operation: when
+    several threads change the same global variable, or the same local variable through references or closures, no
+    change is lost.  A thread also sees the changes that other threads make to such a variable, without having to
+    call anything in between.
+
+    The test runs this script in each execution mode and as a program compiled with qcc (AOT), and it prints each
+    check's result as "name=value", 1 if the check passed and 0 if it did not.
+*/
+namespace SharedVarUpdateChecks {
+const Threads = 6;
+const K = 20000;
+
+our int gi;
+our float gf;
+our string gs;
+our list<int> gl;
+our hash<auto> gh;
+our int flag;
+
+#! Runs the given function with K as its argument in Threads threads at once and waits for all of them
+/** The loops are in named functions, which are compiled like any other function, rather than in closures
+*/
+sub run_threads(code f) {
+    Counter start(1);
+    Counter done(Threads);
+    for (int t = 0; t < Threads; ++t) {
+        background sub () {
+            on_exit done.dec();
+            start.waitForZero();
+            f(K);
+        }();
+    }
+    start.dec();
+    done.waitForZero();
+}
+
+sub pre_increment_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        ++gi;
+    }
+}
+
+sub post_increment_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gi++;
+    }
+}
+
+sub pre_decrement_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        --gi;
+    }
+}
+
+sub post_decrement_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gi--;
+    }
+}
+
+sub plus_equals_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gi += 2;
+    }
+}
+
+sub minus_equals_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gi -= 2;
+    }
+}
+
+sub float_plus_equals_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gf += 1.0;
+    }
+}
+
+sub string_plus_equals_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gs += "x";
+    }
+}
+
+sub list_plus_equals_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        gl += i;
+    }
+}
+
+sub hash_member_global(int k) {
+    for (int i = 0; i < k; ++i) {
+        ++gh.n;
+        gh.m += 1;
+    }
+}
+
+sub global_updates(reference<hash<string, int>> rv) {
+    gi = 0;
+    run_threads(\pre_increment_global());
+    rv."global-pre-increment" = gi == Threads * K ? 1 : 0;
+
+    gi = 0;
+    run_threads(\post_increment_global());
+    rv."global-post-increment" = gi == Threads * K ? 1 : 0;
+
+    gi = Threads * K;
+    run_threads(\pre_decrement_global());
+    rv."global-pre-decrement" = gi == 0 ? 1 : 0;
+
+    gi = Threads * K;
+    run_threads(\post_decrement_global());
+    rv."global-post-decrement" = gi == 0 ? 1 : 0;
+
+    gi = 0;
+    run_threads(\plus_equals_global());
+    rv."global-plus-equals" = gi == 2 * Threads * K ? 1 : 0;
+
+    gi = 2 * Threads * K;
+    run_threads(\minus_equals_global());
+    rv."global-minus-equals" = gi == 0 ? 1 : 0;
+
+    gf = 0.0;
+    run_threads(\float_plus_equals_global());
+    rv."global-float-plus-equals" = gf == float(Threads * K) ? 1 : 0;
+
+    gs = "";
+    run_threads(\string_plus_equals_global());
+    rv."global-string-plus-equals" = gs.size() == Threads * K ? 1 : 0;
+
+    gl = ();
+    run_threads(\list_plus_equals_global());
+    rv."global-list-plus-equals" = gl.size() == Threads * K ? 1 : 0;
+
+    gh = {"n": 0, "m": 0};
+    run_threads(\hash_member_global());
+    rv."global-hash-member" = (gh.n == Threads * K && gh.m == Threads * K) ? 1 : 0;
+}
+
+#! Increments a variable through a reference
+sub increment(reference<int> r, int k) {
+    for (int i = 0; i < k; ++i) {
+        ++r;
+    }
+}
+
+#! Starts Threads threads that increment the variable through a reference; returns the counter to wait on
+Counter sub start_increments(reference<int> r, int k) {
+    Counter done(Threads);
+    for (int t = 0; t < Threads; ++t) {
+        background sub (reference<int> r2) {
+            on_exit done.dec();
+            increment(\r2, k);
+        }(\r);
+    }
+    return done;
+}
+
+sub local_updates(reference<hash<string, int>> rv) {
+    # the frame and threads holding references change the same local variable
+    {
+        int n = 0;
+        Counter done = start_increments(\n, K);
+        for (int i = 0; i < K; ++i) {
+            n += 1;
+        }
+        done.waitForZero();
+        rv."referenced-local-plus-equals" = n == (Threads + 1) * K ? 1 : 0;
+    }
+    {
+        int n = 0;
+        Counter done = start_increments(\n, K);
+        for (int i = 0; i < K; ++i) {
+            ++n;
+        }
+        done.waitForZero();
+        rv."referenced-local-pre-increment" = n == (Threads + 1) * K ? 1 : 0;
+    }
+    # the frame and closures running in other threads change the same local variable
+    {
+        int n = 0;
+        code c = sub () {
+            for (int i = 0; i < K; ++i) {
+                n += 1;
+            }
+        };
+        Counter done(Threads);
+        for (int t = 0; t < Threads; ++t) {
+            background sub () { on_exit done.dec(); c(); }();
+        }
+        for (int i = 0; i < K; ++i) {
+            n += 1;
+        }
+        done.waitForZero();
+        rv."captured-local-plus-equals" = n == (Threads + 1) * K ? 1 : 0;
+    }
+}
+
+#! Sets the global flag from another thread
+sub set_flag_later() {
+    background sub () { flag = 1; }();
+}
+
+sub visibility(reference<hash<string, int>> rv) {
+    # a loop that calls nothing sees a change made by another thread
+    flag = 0;
+    set_flag_later();
+    int i = 0;
+    while (!flag && ++i < 200000000) {
+    }
+    rv."global-seen-by-loop" = flag ? 1 : 0;
+
+    int n = 0;
+    code c = sub () { n = 1; };
+    background c();
+    i = 0;
+    while (!n && ++i < 200000000) {
+    }
+    rv."captured-local-seen-by-loop" = n ? 1 : 0;
+}
+
+#! Returns the result of every check
+hash<string, int> sub get_results() {
+    hash<string, int> rv = {};
+    global_updates(\rv);
+    local_updates(\rv);
+    visibility(\rv);
+    return rv;
+}
+}
+
+foreach hash<auto> i in (SharedVarUpdateChecks::get_results().pairIterator()) {
+    printf("%s=%d\n", i.key, i.value);
+}

@@ -585,6 +585,26 @@ static bool isLocalOrClosureVar(const VarRefNode* var) {
     return var && (var->getType() == VT_LOCAL || var->getType() == VT_CLOSURE) && var->ref.id;
 }
 
+// Check if other threads can change a variable while this code uses it: a global, or a local variable that is passed
+// by reference or captured by a closure.  An operation that reads and writes such a variable (++, +=, ...) must be
+// made on the variable in one step, as the AST operators make it with the variable's lock held for the whole
+// operation, and not as a load and a store that another thread's change can come between and be lost.
+static bool isSharedVar(const VarRefNode* var) {
+    if (!var) {
+        return false;
+    }
+    switch (var->getType()) {
+        case VT_GLOBAL:
+        case VT_CLOSURE:
+        case VT_LOCAL_TS:
+            return true;
+        case VT_LOCAL:
+            return var->ref.id && var->ref.id->closureUse();
+        default:
+            return false;
+    }
+}
+
 static bool qoreIrCallHasNoArgs(const FunctionCallBase* call) {
     if (!call) {
         return true;
@@ -4992,6 +5012,11 @@ static bool isConstIndexListSubscript(const QoreValue& expr,
     // Verify it's a local, local_ts, or closure variable
     qore_var_t vtype = vr->getType();
     if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
+    // as in isConstKeyHashSubscript(): a variable that other threads can change is changed through the lvalue path,
+    // which holds its lock for the whole operation, not by loading the list and storing it back
+    if (isSharedVar(vr)) {
+        return false;
+    }
     // Variables that can hold a reference must use the lvalue path to write through the
     // reference binding to the original variable; the ListIndexStore optimization bypasses
     // references.  An untyped ("auto") local can hold one just as a declared reference<> can.
@@ -7381,6 +7406,10 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         // Prefer true lvalue semantics for member/subscript compound assignments.
         // The hash/list load-compute-store fast paths cannot preserve hashdecl
@@ -7583,6 +7612,10 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
@@ -7745,6 +7778,10 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
@@ -7868,6 +7905,10 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         // Prefer true lvalue semantics for member/subscript compound assignments.
         {
@@ -7979,6 +8020,10 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         // Path-based compound assignment for complex lvalues
         {
@@ -8063,6 +8108,10 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
+        left_var = nullptr;
+    }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8151,6 +8200,10 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         // Path-based compound assignment for complex lvalues
         {
@@ -8235,6 +8288,10 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
+        left_var = nullptr;
+    }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {
@@ -8340,21 +8397,25 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
                 }
                 return inst->result;
             }
-            // Fallback: LoadLocal + AddAssignInt + StoreLocal for closures/globals
-            QoreIRValue loaded = loadVarRef(var, error, "pre-increment-int", lvexp);
-            if (!loaded.isValid()) {
-                return QoreIRValue();
+            // Fallback: LoadLocal + AddAssignInt + StoreLocal, for a variable that no other thread can change;
+            // a global or a local passed by reference takes the lvalue path below, which changes it in one
+            // operation (see isSharedVar())
+            if (!isSharedVar(var)) {
+                QoreIRValue loaded = loadVarRef(var, error, "pre-increment-int", lvexp);
+                if (!loaded.isValid()) {
+                    return QoreIRValue();
+                }
+                QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+                QoreIRValue result = lowerBinaryOpOrInvoke(
+                    QoreIROpcode::AddAssignInt, expr, loaded, one, op->loc, error);
+                if (!result.isValid()) {
+                    return QoreIRValue();
+                }
+                if (!storeVarRef(var, result, error, "pre-increment-int")) {
+                    return QoreIRValue();
+                }
+                return result;
             }
-            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-            QoreIRValue result = lowerBinaryOpOrInvoke(
-                QoreIROpcode::AddAssignInt, expr, loaded, one, op->loc, error);
-            if (!result.isValid()) {
-                return QoreIRValue();
-            }
-            if (!storeVarRef(var, result, error, "pre-increment-int")) {
-                return QoreIRValue();
-            }
-            return result;
         }
     }
     // Range lvalue (e.g., ++list[0..2]) - delegate entire expression to AST
@@ -8431,8 +8492,9 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     // Typed int post-increment on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        // a variable that other threads can change takes the lvalue path below; see isSharedVar()
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !isSharedVar(var)) {
             QoreIRValue old_value = loadVarRef(var, error, "post-increment-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -8519,21 +8581,25 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
                 }
                 return inst->result;
             }
-            // Fallback: LoadLocal + SubAssignInt + StoreLocal for closures/globals
-            QoreIRValue loaded = loadVarRef(var, error, "pre-decrement-int", lvexp);
-            if (!loaded.isValid()) {
-                return QoreIRValue();
+            // Fallback: LoadLocal + SubAssignInt + StoreLocal, for a variable that no other thread can change;
+            // a global or a local passed by reference takes the lvalue path below, which changes it in one
+            // operation (see isSharedVar())
+            if (!isSharedVar(var)) {
+                QoreIRValue loaded = loadVarRef(var, error, "pre-decrement-int", lvexp);
+                if (!loaded.isValid()) {
+                    return QoreIRValue();
+                }
+                QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+                QoreIRValue result = lowerBinaryOpOrInvoke(
+                    QoreIROpcode::SubAssignInt, expr, loaded, one, op->loc, error);
+                if (!result.isValid()) {
+                    return QoreIRValue();
+                }
+                if (!storeVarRef(var, result, error, "pre-decrement-int")) {
+                    return QoreIRValue();
+                }
+                return result;
             }
-            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
-            QoreIRValue result = lowerBinaryOpOrInvoke(
-                QoreIROpcode::SubAssignInt, expr, loaded, one, op->loc, error);
-            if (!result.isValid()) {
-                return QoreIRValue();
-            }
-            if (!storeVarRef(var, result, error, "pre-decrement-int")) {
-                return QoreIRValue();
-            }
-            return result;
         }
     }
     // Range lvalue (e.g., --list[0..2]) - delegate entire expression to AST
@@ -8610,8 +8676,9 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     // Typed int post-decrement on simple VarRef (exclude references — need lvalue write-through)
     if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
         auto* var = dynamic_cast<const VarRefNode*>(lvexp.getInternalNode());
+        // a variable that other threads can change takes the lvalue path below; see isSharedVar()
         if (var && var->getType() != VT_IMMEDIATE && !isRangeLValue(lvexp)
-                && !QoreTypeInfo::isReference(var->getTypeInfo())) {
+                && !QoreTypeInfo::isReference(var->getTypeInfo()) && !isSharedVar(var)) {
             QoreIRValue old_value = loadVarRef(var, error, "post-decrement-int", lvexp);
             if (!old_value.isValid()) {
                 return QoreIRValue();
@@ -9334,6 +9401,10 @@ QoreIRValue QoreIRLowering::lowerShiftLeftEquals(const QoreValue& expr, std::str
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
         left_var = nullptr;
     }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
+        left_var = nullptr;
+    }
     if (!left_var) {
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for shift-left-assign IR lowering";
@@ -9403,6 +9474,10 @@ QoreIRValue QoreIRLowering::lowerShiftRightEquals(const QoreValue& expr, std::st
         return QoreIRValue();
     }
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
+        left_var = nullptr;
+    }
+    // a variable that other threads can change is changed in one operation; see isSharedVar()
+    if (isSharedVar(left_var)) {
         left_var = nullptr;
     }
     if (!left_var) {

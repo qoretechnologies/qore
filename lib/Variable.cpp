@@ -277,6 +277,7 @@ int qore_gvar_ref_u::write(ExceptionSink* xsink) const {
 }
 
 Var::Var(Var* ref, bool ro, bool is_thread_local, const char* import_as) : loc(ref->loc), val(QV_Ref),
+        is_ref(true),
         name(import_as ? import_as : ref->name),
         typeInfo(ref->typeInfo), pub(false), finalized(false), is_thread_local(false) {
     ref->ROreference();
@@ -286,7 +287,7 @@ Var::Var(Var* ref, bool ro, bool is_thread_local, const char* import_as) : loc(r
 
 const Var* Var::parseGetVar() const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
-    return (val.type == QV_Ref) ? val.v.getPtr()->parseGetVar() : this;
+    return is_ref ? val.v.getPtr()->parseGetVar() : this;
 }
 
 void Var::preserveAOTInitExpr(const QoreValue& expr, bool self_storing) {
@@ -299,12 +300,12 @@ void Var::preserveAOTInitExpr(const QoreValue& expr, bool self_storing) {
 
 bool Var::isAOTInitDone() const {
     QoreLValue<qore_gvar_ref_u>& value = getVal();
-    return value.type == QV_Ref ? value.v.getPtr()->isAOTInitDone() : aot_init_done;
+    return is_ref ? value.v.getPtr()->isAOTInitDone() : aot_init_done;
 }
 
 void Var::setAOTInitDone() {
     QoreLValue<qore_gvar_ref_u>& value = getVal();
-    if (value.type == QV_Ref) {
+    if (is_ref) {
         value.v.getPtr()->setAOTInitDone();
     } else {
         aot_init_done = true;
@@ -316,7 +317,7 @@ void Var::checkAssignType(const QoreProgramLocation* loc, const QoreTypeInfo *n_
     if (!QoreTypeInfo::hasType(n_typeInfo))
         return;
 
-    if (val.type == QV_Ref) {
+    if (is_ref) {
         val.v.getPtr()->checkAssignType(loc, n_typeInfo);
         return;
     }
@@ -341,7 +342,7 @@ const QoreTypeInfo* Var::parseGetTypeInfoForInitialAssignment() {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     // imported variables have already been initialized
-    if (val.type == QV_Ref) {
+    if (is_ref) {
         return val.v.getPtr()->getTypeInfo();
     }
 
@@ -353,7 +354,7 @@ const QoreTypeInfo* Var::parseGetTypeInfo() {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
     // imported variables have already been initialized
-    if (val.type == QV_Ref)
+    if (is_ref)
         return val.v.getPtr()->getTypeInfo();
 
     parseInit();
@@ -376,35 +377,35 @@ const QoreTypeInfo* Var::parseGetTypeInfo() {
     return refTypeInfo ? refTypeInfo : typeInfo;
 }
 
+// the type queries below read no value: background threads (IR analysis, JIT compilation) call them while other
+// threads assign the variable, and a variable that refers to another one is never thread-local, so its reference is
+// in val itself
 const QoreTypeInfo* Var::getTypeInfo() const {
-    QoreLValue<qore_gvar_ref_u>& val = getVal();
-
     assert(!parseTypeInfo);
-    if (val.type == QV_Ref)
+    if (is_ref) {
         return val.v.getPtr()->getTypeInfo();
+    }
 
     return typeInfo;
 }
 
 bool Var::hasTypeInfo() const {
-    QoreLValue<qore_gvar_ref_u>& val = getVal();
-
-    if (val.type == QV_Ref)
+    if (is_ref) {
         return val.v.getPtr()->hasTypeInfo();
+    }
 
     return parseTypeInfo || typeInfo;
 }
 
 bool Var::isRef() const {
-    QoreLValue<qore_gvar_ref_u>& val = getVal();
-    return val.type == QV_Ref;
+    return is_ref;
 }
 
 // only called with a new object declaration expression (ie our <class> $x())
 const char* Var::getClassName() const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
-    if (val.type == QV_Ref)
+    if (is_ref)
         return val.v.getPtr()->getClassName();
 
     if (typeInfo) {
@@ -419,7 +420,7 @@ const char* Var::getClassName() const {
 int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
-    if (val.type == QV_Ref) {
+    if (is_ref) {
         if (val.v.write(lvh.vl.xsink))
             return -1;
         return val.v.getPtr()->getLValue(lvh, for_remove);
@@ -439,7 +440,7 @@ int Var::getLValue(LValueHelper& lvh, bool for_remove) const {
 void Var::remove(LValueRemoveHelper& lvrh) {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
-    if (val.type == QV_Ref) {
+    if (is_ref) {
         if (val.v.write(lvrh.getExceptionSink()))
             return;
         val.v.getPtr()->remove(lvrh);
@@ -457,7 +458,7 @@ void Var::remove(LValueRemoveHelper& lvrh) {
 void Var::del(ExceptionSink* xsink) {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
 
-    if (val.type == QV_Ref) {
+    if (is_ref) {
         printd(4, "Var::~Var() refptr: %p\n", val.v.getPtr());
         val.v.getPtr()->deref(xsink);
         // clear type so no further deleting will be done
@@ -467,8 +468,7 @@ void Var::del(ExceptionSink* xsink) {
 }
 
 bool Var::isImported() const {
-    QoreLValue<qore_gvar_ref_u>& val = getVal();
-    return val.type == QV_Ref;
+    return is_ref;
 }
 
 const char* Var::getName() const {
@@ -477,7 +477,7 @@ const char* Var::getName() const {
 
 QoreValue Var::eval() const {
     QoreLValue<qore_gvar_ref_u>& val = getVal();
-    if (val.type == QV_Ref)
+    if (is_ref)
         return val.v.getPtr()->eval();
     if (is_thread_local) {
         switch (val.getType()) {
@@ -520,7 +520,7 @@ int Var::evalInt(int64& result) const {
     }
     QoreAutoVarRWReadLocker al(rwl);
     QoreLValue<qore_gvar_ref_u>& val = getVal();
-    if (val.type == QV_Ref) {
+    if (is_ref) {
         return -1;
     }
     if (!val.assigned) {
@@ -3354,7 +3354,7 @@ void LocalVarValue::remove(LValueRemoveHelper& lvrh, const QoreTypeInfo* typeInf
 }
 
 const void* ClosureVarValue::getLValueId() const {
-    QoreSafeVarRWWriteLocker sl(rml);
+    QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
     if (val.getType() == NT_REFERENCE) {
         ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
         return lvalue_ref::get(ref)->lvalue_id;
@@ -3369,11 +3369,13 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return -1;
     }
 
-    if (QoreTypeInfo::needsScan(typeInfo)) {
+    // a variable that only its frame can use is changed like a plain local variable: without the lock, and with
+    // no recursive-reference scan, since nothing refers to it that a cycle could run through
+    bool exclusive = frameExclusive();
+    QoreSafeVarRWWriteLocker sl(rml, !exclusive);
+    if (!exclusive && QoreTypeInfo::needsScan(typeInfo)) {
         lvh.setClosure(const_cast<ClosureVarValue*>(this));
     }
-
-    QoreSafeVarRWWriteLocker sl(rml);
     if (val.getType() == NT_REFERENCE) {
         // issue #5413: prevent a crash due to stack exhaustion
         if (check_stack(lvh.vl.xsink)) {
@@ -3382,7 +3384,7 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvh.vl.xsink);
         const QoreTypeInfo* effectiveRefTypeInfo = val.assigned && is_no_narrow_container_type(refTypeInfo)
             ? refTypeInfo : nullptr;
-        sl.unlock();
+        sl.release();
         LocalRefHelper<ClosureVarValue> helper(this, **ref, lvh.vl.xsink);
         if (!helper || lvh.doLValue(*ref, for_remove)) {
             return -1;
@@ -3394,8 +3396,10 @@ int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_
         return 0;
     }
 
-    lvh.set(rml);
-    sl.stay_locked();
+    if (!exclusive) {
+        lvh.set(rml);
+        sl.stay_locked();
+    }
     lvh.setValue((QoreLValueGeneric&)val, val.assigned && refTypeInfo ? refTypeInfo : typeInfo);
     return 0;
 }
@@ -3407,10 +3411,10 @@ void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
         return;
     }
 
-    QoreSafeVarRWWriteLocker sl(rml);
+    QoreSafeVarRWWriteLocker sl(rml, !frameExclusive());
     if (val.getType() == NT_REFERENCE) {
         ReferenceHolder<ReferenceNode> ref(reinterpret_cast<ReferenceNode*>(val.v.n->refSelf()), lvrh.getExceptionSink());
-        sl.unlock();
+        sl.release();
         lvrh.doRemove(lvalue_ref::get(*ref)->vexp);
         return;
     }
@@ -3517,7 +3521,7 @@ bool ClosureVarValue::scanMembers(RSetHelper& rsh) {
 AbstractQoreNode* ClosureVarValue::getReference(const QoreProgramLocation* loc, const char* name, const void*& lvalue_id) {
     //printd(5, "ClosureVarValue::getReference() this: %p '%s' type: '%s' assigned: %d ti: '%s' rti: '%s'\n", this, name, val.getTypeName(), val.assigned, QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(refTypeInfo));
     {
-        QoreSafeVarRWWriteLocker sl(rml);
+        QoreSafeVarRWWriteLocker sl(rml, !frameExclusive());
         if (val.getType() == NT_REFERENCE) {
             ReferenceNode* ref = reinterpret_cast<ReferenceNode*>(val.v.n);
             lvalue_id = lvalue_ref::get(ref)->lvalue_id;

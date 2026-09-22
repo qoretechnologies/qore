@@ -804,6 +804,41 @@ What is comparable across a graph transition is what does not come from the grap
 The check only ever accepts records it previously rejected, so it invalidates nothing already
 published: the settling build after applying it recompiled zero objects.
 
+### A compile that gains a prerequisite publishes it
+
+The mode switch moves edges in both directions. A standalone compile resolves against preloaded
+objects and records a contract edge to each one it used, so it can also *add* an edge to a
+current provider that the group's depfile never named. On Qorus, `QorusQonsoleCore.qc` compiled
+standalone after a group parse gains `QonsoleCoreDesignSession.qc`, which was not rebuilt.
+
+The rule above rightly rejects a prerequisite the record does not name. But the record was
+computed from the pass's frozen graph, which predates the compile, so it could never name one
+the compile discovered. The next freeze reads the edge from the component's own depfile, the
+component is stale right after it was built, the pass leaves exactly what it compiled, and the
+coordinator escalates. Every incremental Qorus build after a group parse ended that way: three
+edited sources cost 950 objects and about 13 minutes.
+
+So a publication under a frozen graph computes its record from that graph **with the
+component's own depfile edges replaced by the live ones** (`publishedGraphView()`), and records
+that graph's name as its `graph_generation`:
+
+- only its own edges, because the edges into its members are the ones its compile wrote and
+  the ones its prerequisites come from. Every other depfile is what the next freeze reads unless
+  another compile rewrites it, and that compile's own publication accounts for it. Only a
+  component's own compile writes its members' depfiles, under the component lock, so what
+  publication reads is what the compile wrote. Reading only those depfiles also keeps a
+  publication from paying for a whole-group scan;
+- the planning check is unchanged: `--expect-graph` is still compared against the frozen graph,
+  so a compile planned from another graph is still refused (76);
+- when the live edges change the decomposition itself, because the compile closed a cycle
+  through a consumer, the component the pass planned no longer exists. The record keeps the
+  frozen graph's form, and the next pass finds the merged component unpublished and builds it
+  with the parse a multi-member component needs.
+
+Nothing is forgiven that was not true of the compile. The record names every prerequisite the
+compile depended on, with the contract digests current when it was published. A provider
+rebuilt after that still makes the consumer stale.
+
 ### The bound this narrowing must not cross, and the third contract that closes it
 
 A consumer that baked a provider's body-contract hash must still be rebuilt when that hash
@@ -1147,7 +1182,9 @@ which two builders can still race to restore.
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a cascade walked to convergence, a pass that changes
-  nothing escalating instead of lapping, the escalation floor following
+  nothing escalating instead of lapping, a compile that gains an edge to a current
+  provider converging in one pass (and one that closes a cycle keeping the frozen
+  graph's record for the parse to replace), the escalation floor following
   whether a partial parse is configured, a partial parse leaving a non-convex member for
   the next pass, and a preload failure on the default path falling back to the group's
   parse

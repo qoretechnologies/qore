@@ -43,11 +43,14 @@
 struct ClosureStackEntry {
     ClosureVarValue* cvv;
     uint64_t decl_order;
+    //! true for the entry of the frame that created the variable; see ClosureVarValue::frameExclusive()
+    bool owner;
 
-    DLLLOCAL ClosureStackEntry() : cvv(nullptr), decl_order(0) {
+    DLLLOCAL ClosureStackEntry() : cvv(nullptr), decl_order(0), owner(false) {
     }
 
-    DLLLOCAL ClosureStackEntry(ClosureVarValue* c, uint64_t order) : cvv(c), decl_order(order) {
+    DLLLOCAL ClosureStackEntry(ClosureVarValue* c, uint64_t order, bool n_owner) : cvv(c), decl_order(order),
+            owner(n_owner) {
     }
 
     //! Returns true if this entry is a frame boundary marker
@@ -58,7 +61,7 @@ struct ClosureStackEntry {
 
 class ThreadClosureVariableStack : public ThreadLocalData<ClosureStackEntry> {
 private:
-    DLLLOCAL void instantiateIntern(ClosureVarValue* cvar, uint64_t order) {
+    DLLLOCAL void instantiateIntern(ClosureVarValue* cvar, uint64_t order, bool owner = false) {
         //printd(5, "ThreadClosureVariableStack::instantiateIntern(%p = '%s') this: %p pgm: %p\n", cvar ? cvar->id : "null", cvar ? cvar->id : "null", this, getProgram());
 
         if (curr->pos == QORE_THREAD_STACK_BLOCK) {
@@ -70,7 +73,16 @@ private:
                 curr = curr->next;
             }
         }
-        curr->var[curr->pos++] = ClosureStackEntry(cvar, order);
+        curr->var[curr->pos++] = ClosureStackEntry(cvar, order, owner);
+    }
+
+    //! Releases the reference held by an entry that was just popped
+    DLLLOCAL static void releaseEntry(ClosureStackEntry& entry, ExceptionSink* xsink) {
+        if (entry.owner) {
+            // must be visible before the reference is released: frameExclusive() reads the count first
+            entry.cvv->frame_owned.store(false, std::memory_order_relaxed);
+        }
+        entry.cvv->deref(xsink);
     }
 
 public:
@@ -110,9 +122,9 @@ public:
     DLLLOCAL void del(ExceptionSink* xsink) {
         while (curr->prev || curr->pos) {
             uninstantiateIntern();
-            ClosureVarValue* cvv = curr->var[curr->pos].cvv;
-            if (cvv) {
-                cvv->deref(xsink);
+            ClosureStackEntry& entry = curr->var[curr->pos];
+            if (entry.cvv) {
+                releaseEntry(entry, xsink);
             }
         }
     }
@@ -120,7 +132,9 @@ public:
     DLLLOCAL ClosureVarValue* instantiate(const char* id, const QoreTypeInfo* typeInfo, QoreValue& nval,
             bool assign, uint64_t order, bool read_only = false) {
         ClosureVarValue* cvar = new ClosureVarValue(id, typeInfo, nval, assign, read_only);
-        instantiateIntern(cvar, order);
+        // no other thread can see the variable yet
+        cvar->frame_owned.store(true, std::memory_order_relaxed);
+        instantiateIntern(cvar, order, true);
         return cvar;
     }
 
@@ -154,7 +168,7 @@ public:
     DLLLOCAL void uninstantiate(ExceptionSink* xsink) {
         uninstantiateIntern();
         assert(curr->var[curr->pos].cvv);
-        curr->var[curr->pos].cvv->deref(xsink);
+        releaseEntry(curr->var[curr->pos], xsink);
     }
 
     //! Returns the ClosureVarValue for the given id on the cvstack, or nullptr if not found.
@@ -294,11 +308,11 @@ public:
         //printd(5, "ThreadClosureVariableStack::popFrameBoundary(): fc:%d\n", frame_count);
         while (curr->prev || curr->pos) {
             uninstantiateIntern();
-            ClosureVarValue* cvv = curr->var[curr->pos].cvv;
-            if (!cvv) {
+            ClosureStackEntry& entry = curr->var[curr->pos];
+            if (!entry.cvv) {
                 return;
             }
-            cvv->deref(nullptr);
+            releaseEntry(entry, nullptr);
         }
         assert(false);
     }

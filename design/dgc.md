@@ -176,6 +176,11 @@ removed.
 Cost is proportional to the size of the object graph reachable from the lvalue, so a scan on a hot path is
 expensive: `RSetHelper::scan()` walks every reachable hash, list, object, closure, and reference.
 
+A closure-bound local variable that only its frame can use (`ClosureVarValue::frameExclusive()`: the frame holds its
+only reference, and it is in no recursive set) is not made the scan root: nothing on the heap refers to it, so a
+change to its value cannot close a cycle through it, and the write that later stores a reference or a closure to it
+scans from the object or container written. See `closure-bound-locals.md`.
+
 `LValueHelper::suppressObjectScan()` skips that scan. It is only correct when the set of objects reachable from
 the lvalue is provably unchanged. The one caller of it is complex-reference argument binding in
 `QoreTypeSpec::acceptInput` (`lib/QoreTypeInfo.cpp`, `QTS_COMPLEXREF` / `QTS_COMPLEXHARDREF`): binding a

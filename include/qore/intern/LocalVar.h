@@ -336,6 +336,8 @@ public:
     const QoreTypeInfo* refTypeInfo;
     // reference count; access serialized with rlck from RObject
     mutable std::atomic_int references;
+    //! set while the frame that created the variable holds its reference; see frameExclusive()
+    std::atomic_bool frame_owned{false};
     bool read_only = false;
 
     DLLLOCAL ClosureVarValue(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue& nval, bool assign,
@@ -364,6 +366,66 @@ public:
     DLLLOCAL void ref() const;
 
     DLLLOCAL void deref(ExceptionSink* xsink);
+
+    //! Returns true if only the frame that created the variable can use it
+    /** Code other than that frame reaches a closure-bound variable only through something that holds a reference
+        to it: a reference to the variable (\c "\\var"), a closure that captured it, or the closure-variable stack of
+        a thread that runs such a closure.  The frame that created the variable holds a reference too, until the
+        variable goes out of scope.  So while that frame holds the only reference, no other thread can reach the
+        variable and nothing on the heap refers to it: its value is read and written like that of a plain local
+        variable, without the lock, and a change to its value cannot close a cycle through it, so no
+        recursive-reference scan is needed either.
+
+        The count is read first, with acquire ordering: references are released with release ordering, so when the
+        count reads one, everything the holders of the released references did with the variable happened before
+        this, including the frame clearing \c frame_owned before it releases its own reference.  A variable in a
+        recursive set, or with a deferred scan, is excluded: the collector can take a temporary reference to a
+        member of a set that it finds through the set rather than through a reference, and scan it.
+
+        See design/closure-bound-locals.md.
+    */
+    DLLLOCAL bool frameExclusive() const {
+        return references.load(std::memory_order_acquire) == 1
+            && frame_owned.load(std::memory_order_relaxed)
+            && !rset.load(std::memory_order_acquire)
+            && !deferred_scan.load(std::memory_order_acquire);
+    }
+
+    //! Evaluates the variable, returning the target of a weak reference without a reference of its own
+    /** @param weak set to true if the variable holds a weak reference, in which case the value returned is its
+        target, borrowed from the variable; otherwise the value returned is referenced for the caller
+
+        The type of the value is read under the lock, since other threads can change the variable.
+    */
+    DLLLOCAL QoreValue evalWeakBorrowed(bool& weak, ExceptionSink* xsink) const {
+        {
+            QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
+            switch (val.getType()) {
+                case NT_WEAKREF:
+                    weak = true;
+                    return val.get<WeakReferenceNode>()->get();
+                case NT_WEAKREF_HASH:
+                    weak = true;
+                    return val.get<WeakHashReferenceNode>()->get();
+                case NT_WEAKREF_LIST:
+                    weak = true;
+                    return val.get<WeakListReferenceNode>()->get();
+                default:
+                    break;
+            }
+        }
+        weak = false;
+        return eval(xsink);
+    }
+
+    //! Returns a new reference to the reference that the variable holds, or nullptr if it holds none
+    DLLLOCAL ReferenceNode* getHeldReference() const {
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
+        if (val.getType() != NT_REFERENCE) {
+            return nullptr;
+        }
+        return val.get<ReferenceNode>()->refRefSelf();
+    }
 
     DLLLOCAL const void* getLValueId() const;
 
@@ -402,17 +464,17 @@ public:
     DLLLOCAL void clearValue(ExceptionSink* xsink) {
         QoreValue v;
         {
-            QoreSafeVarRWWriteLocker sl(rml);
+            QoreSafeVarRWWriteLocker sl(rml, !frameExclusive());
             v = val.removeValue(true);
         }
         v.discard(xsink);
     }
 
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
-        QoreSafeVarRWReadLocker sl(rml);
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
-            sl.unlock();
+            sl.release();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
             if (!helper) {
                 return QoreValue();
@@ -454,10 +516,10 @@ public:
     }
 
     DLLLOCAL QoreValue eval(ExceptionSink* xsink) const {
-        QoreSafeVarRWReadLocker sl(rml);
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
         if (val.getType() == NT_REFERENCE) {
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
-            sl.unlock();
+            sl.release();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
             if (!helper) {
                 return QoreValue();
@@ -475,11 +537,11 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            return val.get<WeakHashReferenceNode>()->get();
+            return val.get<WeakHashReferenceNode>()->get()->refSelf();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            return val.get<WeakListReferenceNode>()->get();
+            return val.get<WeakListReferenceNode>()->get()->refSelf();
         }
 
         return val.getReferencedValue();
@@ -716,8 +778,15 @@ public:
         return name;
     }
 
+    //! Marks the variable as closure-bound
+    /** The parser marks every variable that needs it before the code runs, but an AOT-compiled reference to a local
+        variable repeats the call each time it is made (qore_rt_create_local_ref_aot()), while other threads running
+        the same code read the flag; so it is only written when it changes, which is never at run time.
+    */
     DLLLOCAL void setClosureUse() {
-        closure_use = true;
+        if (!closure_use) {
+            closure_use = true;
+        }
     }
 
     DLLLOCAL bool closureUse() const {

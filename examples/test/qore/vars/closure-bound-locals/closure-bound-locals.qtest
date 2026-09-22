@@ -1,0 +1,127 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires ClosureBoundLocalChecks
+
+%exec-class ClosureBoundLocalsTest
+
+#! Tests local variables that are passed by reference or captured by a closure
+/** Such a variable is used without its lock and makes no recursive-reference scan while the frame that created it
+    holds its only reference, and needs both again as soon as a reference or a closure holds it.  The checks are in
+    ClosureBoundLocalChecks.qm and run in this program, in each execution mode and from a compiled module, since
+    each engine reads and writes these variables with its own code.
+*/
+class ClosureBoundLocalsTest inherits QUnit::Test {
+    public {
+        #! the number of scans each operation makes (debug builds only)
+        const ExpectedScanCounts = {
+            "init-unshared": 0,
+            "write-unshared": 0,
+            "write-through-reference": 1,
+            "remove-scalar-through-reference": 0,
+            "write-captured": 1,
+            "write-after-closure-released": 0,
+        };
+
+        #! the number of nodes collected by each cycle check
+        const ExpectedCycleResults = {
+            "cycle-hash-first": 10,
+            "cycle-ref-first": 10,
+            "cycle-list-store": 10,
+            "cycle-closure": 10,
+        };
+
+        #! checks that pass with 1
+        const PassChecks = (
+            "closure-after-frame",
+            "frame-sees-thread-write",
+            "remove-captured-reference",
+            "delete-captured-reference",
+        );
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ClosureBoundLocalsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program", ClosureBoundLocalChecks::get_scan_counts()
+            + ClosureBoundLocalChecks::get_cycle_results() + ClosureBoundLocalChecks::get_thread_results()
+            + ClosureBoundLocalChecks::get_removal_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker(get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-closure-bound-locals-");
+        string qmod_path = tmp.path + DirSep + "ClosureBoundLocalChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "ClosureBoundLocalChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker(tmp.path));
+    }
+
+    #! runs the worker with the checks module loaded from the given directory and returns its output
+    private string runWorker(string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + "closure-bound-locals-worker.q";
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir,
+            module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks them
+    private checkWorkerOutput(string label, string out) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, int> results) {
+        hash<string, int> expected = ExpectedCycleResults + map {$1: 1}, PassChecks;
+        if (ClosureBoundLocalChecks::have_scan_count()) {
+            expected += ExpectedScanCounts;
+        }
+        assertEq(sort(keys expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

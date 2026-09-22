@@ -201,6 +201,33 @@ AOT artifacts require complete serialized metadata. Source text can be embedded
 for diagnostics or inspection, but it is not a runtime fallback for missing AOT
 metadata.
 
+## Variables Other Threads Can Change
+
+A global variable, and a local variable that is passed by reference or captured by a
+closure (see `closure-bound-locals.md`), can be changed by other threads at any time.
+The AST operators hold the variable's lock for the whole of an operation that reads and
+writes it (`++`, `+=`, `-=`, ...), so no change made by another thread is lost, and they
+read the variable again for every access. Every engine must give the same guarantees:
+
+- IR lowering never lowers such an operation on such a variable as a load followed by a
+  store (`isSharedVar()` in `lib/QoreIRLowering.cpp`). The compound assignment operators
+  take the lvalue path (`LValuePathCompound`, or the AST-evaluated lvalue operation),
+  typed integer pre- and post-increments and decrements take `IncrementLocalInt` (for a
+  captured local, which every engine applies under the variable's lock) or
+  `LValuePathUnary`, and the subscript fast paths (`isConstKeyHashSubscript()`,
+  `isDynamicKeyHashSubscript()`, `isConstIndexListSubscript()`), which load a container,
+  change it and store it back, only apply to plain locals.
+- The IR interpreter caches no value of such a variable: `LoadGlobal` and `LoadClosure`
+  read the variable every time, and `StoreGlobal` and `StoreClosure` only write it. Only
+  thread-local variables are cached (other threads cannot change them; calls invalidate
+  the cache). Before this, a thread's loop incrementing a global worked on its own cached
+  copy and overwrote the other threads' increments, and a loop polling a captured variable
+  never saw another thread's write.
+
+`examples/test/qore/threads/shared-var-updates` checks each of these operations from
+several threads at once, and a loop seeing another thread's write, in every execution
+mode and in a program compiled with `qcc`.
+
 ## IR Analysis And Optimization
 
 Lowered functions carry transient facts for each SSA value: known type,

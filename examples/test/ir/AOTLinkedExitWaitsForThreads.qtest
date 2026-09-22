@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTLinkedExitWaitsForThreadsTest
+
+#! Tests that an executable built by qcc exits cleanly while its background threads are still finishing
+/** A background thread leaves its Program before it finishes its own teardown, which ends with the thread counter
+    being decremented.  The host that qcc generates for \c .qo objects destroys its Program with
+    qore_destroy_program(), which only waits for the threads running in it, and then calls qore_cleanup(); the
+    cleanup, and the static destructors that run when the process exits, must wait for the threads to finish, or they
+    free what the threads still use.  The script here returns from \c main() as soon as its threads have done their
+    work, so their teardown overlaps the host's.
+*/
+class AOTLinkedExitWaitsForThreadsTest inherits QUnit::Test {
+    public {
+        #! the program: main() returns while its threads are still tearing down
+        const Script = "%modern
+sub main() {
+    Counter done(8);
+    for (int t = 0; t < 8; ++t) {
+        background sub () {
+            on_exit done.dec();
+            hash<auto> h = {\"t\": t};
+            for (int i = 0; i < 100; ++i) {
+                h.i = i;
+            }
+        }();
+    }
+    done.waitForZero();
+    print(\"done\\n\");
+}
+";
+
+        #! how many times each executable is run
+        const Runs = 20;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTLinkedExitWaitsForThreadsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s DYLD_LIBRARY_PATH=%s", libqore_dir, libqore_dir);
+
+        addTestCase("executable linked from .qo objects", \testQoLink());
+
+        set_return_value(main());
+    }
+
+    testQoLink() {
+        TmpDir tmp("qore-aot-linked-exit-");
+        string src = tmp.path + DirSep + "threads.qr";
+        File f();
+        f.open2(src, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(Script);
+        f.close();
+
+        string obj = tmp.path + DirSep + "threads.qo";
+        string out = backquote(sprintf("%s %s -c -o %s %s 2>&1", env, qcc_bin, obj, src));
+        assertTrue(is_file(obj), "compiled object: " + out);
+
+        string exe = tmp.path + DirSep + "threads";
+        out = backquote(sprintf("%s %s -o %s %s 2>&1", env, qcc_bin, exe, obj));
+        assertTrue(is_file(exe), "linked executable: " + out);
+
+        for (int i = 0; i < Runs; ++i) {
+            int rc;
+            out = backquote(sprintf("%s %s 2>&1", env, exe), \rc);
+            assertEq(0, rc, sprintf("run %d exit code; output: %y", i, out));
+            assertEq("done\n", out, sprintf("run %d output", i));
+        }
+    }
+}
