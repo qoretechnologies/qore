@@ -206,6 +206,13 @@ module McpServerHandler {
     @section McpServerHandler_relnotes McpServerHandler Release Notes
 
     @subsection McpServerHandler_1_0 McpServerHandler v1.0
+    - fixed a bug where a tool parameter of any type, or of a union of different base types, could not be
+      published: the wildcard case fell through into the object case, so an optional parameter was left out of
+      the tool's input schema and a mandatory one made the tool fail with \c TOOL-ARG-ERROR (for example a list
+      of \c string|int values).  Such a parameter is now published as the JSON schema that accepts any value.
+      A tool whose whole input is an optional value of any type keeps the no-input description and still
+      receives the arguments as sent; a mandatory one is published like any other non-object input, under
+      \c data
     - fixed a bug where a \c tools/call carrying the \c task augmentation failed for a client
       using a modern (stateless) protocol version: the call was routed to the session-scoped
       task store, which has no session to work with on that transport, so the request failed
