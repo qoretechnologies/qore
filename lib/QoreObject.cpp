@@ -1274,17 +1274,28 @@ void qore_object_private::addVirtualPrivateData(qore_classid_t key, AbstractPriv
     }
 }
 
+// An object stored in a local variable is marked with a real reference while it is there; every method call does
+// this for "self", so these run twice per call on the object being called, from every calling thread at once.
 void qore_object_private::setRealReference() {
-    AutoLocker al(rlck);
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::setRealReference() this: %p '%s': references %d rrefs %d->%d\n",
         this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs.load(), rrefs.load() + 1);
-    ++rrefs;
+    // no lock, as for realRef(): only the last real reference going away has to be ordered against rlck
+    rrefs.fetch_add(1, std::memory_order_relaxed);
 }
 
 void qore_object_private::unsetRealReference() {
-    AutoLocker al(rlck);
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::unsetRealReference() this: %p '%s': references %d rrefs " \
         "%d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(), rrefs.load(), rrefs.load() - 1);
+    // While other real references remain the count cannot reach zero, so it is decremented with no lock; the last
+    // one goes through rlck, where derefRealIntern() waits for rset invalidations in progress (as in
+    // RObject::tryFastDeref())
+    int r = rrefs.load(std::memory_order_relaxed);
+    while (r > 1) {
+        if (rrefs.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+            return;
+        }
+    }
+    AutoLocker al(rlck);
     derefRealIntern();
 }
 

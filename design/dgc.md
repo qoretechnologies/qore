@@ -462,7 +462,9 @@ dereference with no lock:
   with a compare-and-swap too, so a concurrent lock-free decrement cannot make it the one that reaches zero without
   having waited.
 - Taking a reference (`customRef()`, `realRef()`, `startCall()`, `ClosureVarValue::ref()`) is a plain atomic
-  increment. `qore_dgc_node_dereferenced()`, which takes a reference only if the member still has one, does it as a
+  increment. Marking an object held in a local variable as a real reference (`setRealReference()`, which every
+  method call does for `self`) is one too, and unmarking it (`unsetRealReference()`) follows the rule above: a
+  compare-and-swap while other real references remain, `rlck` and `derefRealIntern()` for the last one. `qore_dgc_node_dereferenced()`, which takes a reference only if the member still has one, does it as a
   compare-and-swap now that references can reach zero without `rlck`.
 - The weak-reference guard in `customDeref()` is only taken on the locking path, which is where scans can cascade
   back into the object.
