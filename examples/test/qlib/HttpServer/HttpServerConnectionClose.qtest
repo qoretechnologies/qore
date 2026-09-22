@@ -1,0 +1,398 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Verifies that HttpServer closes a connection after the response when the request requires it: an HTTP/1.0
+# request without the keep-alive connection option, or a request with the close option (RFC 9112 section 9.3), and
+# that a handler can close a connection but cannot keep open one that the request requires to close.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ServerSentEventHandler
+
+%exec-class HttpServerConnectionCloseTest
+
+#! one form of request with respect to connection persistence
+hashdecl RequestForm {
+    #! the label for assertion messages
+    string label;
+    #! the HTTP version in the request line
+    string version;
+    #! the Connection header value, if any
+    *string connection;
+    #! True if the request requires the server to close the connection after the response
+    bool close;
+}
+
+#! returns a hash without a "close" key
+class HashHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return {"code": 200, "body": body ? "hash:" + body : "hash"};
+    }
+}
+
+#! returns a hash<HttpResponseInfo>, where "close" is always present
+class TypedHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "typed");
+    }
+}
+
+#! explicitly returns "close": False, which must not keep open a connection that the request requires to close
+class CloseFalseHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return {"code": 200, "body": "close-false", "close": False};
+    }
+}
+
+#! returns "close": True, which closes the connection for every request
+class CloseTrueHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return {"code": 200, "body": "close-true", "close": True};
+    }
+}
+
+#! returns a string, which the server converts to a response hash
+class StringHandler inherits AbstractHttpRequestHandler {
+    string handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return "string";
+    }
+}
+
+#! the stream request for StreamHandler
+class StreamOkRequest inherits AbstractStreamRequest {
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{"code": 200, "body": "stream"};
+    }
+}
+
+#! a handler that uses the stream request interface
+class StreamHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new StreamOkRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! a handler that is served inline on the callback dispatcher
+class InlineHandler inherits AbstractHttpRequestHandler {
+    private {
+        bool close;
+    }
+
+    constructor(bool close = False) {
+        self.close = close;
+    }
+
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "inline", "close": close};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "the inline handler was not called inline");
+    }
+}
+
+#! rejects every request
+class RejectingAuthenticator inherits AbstractAuthenticator {
+    bool requiresAuthentication() {
+        return True;
+    }
+
+    authenticateByIP(reference<hash<auto>> cx, string ip, reference<bool> authenticated) {
+        throw "AUTHENTICATION-ERROR", "access denied";
+    }
+}
+
+#! a handler whose requests always fail authentication
+class AuthHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(new RejectingAuthenticator()) {
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "authenticated");
+    }
+}
+
+#! makes the connection persistent with the first request
+class PersistentHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives True when the persistent connection is closed
+        Queue closed();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /start$/) {
+            Queue q = closed;
+            notifyClosed(sub () {
+                q.push(True);
+            });
+            setPersistent(True);
+            return makeResponse(200, "started");
+        }
+        if (!isPersistent()) {
+            return makeResponse(500, "not persistent");
+        }
+        return makeResponse(200, "persistent");
+    }
+}
+
+#! records each SSE connection when it is registered
+class SseHandler inherits ServerSentEventHandler {
+    public {
+        Queue registered();
+    }
+
+    constructor() : ServerSentEventHandler(NOTHING, {}) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        registered.push(conn);
+    }
+}
+
+public class HttpServerConnectionCloseTest inherits QUnit::Test {
+    public {
+        #! the upper bound for every socket operation; a correct server answers at once
+        const Timeout = 10s;
+
+        #! request forms and whether each one requires the connection to close
+        const Forms = (
+            <RequestForm>{"label": "HTTP/1.0", "version": "1.0", "close": True},
+            <RequestForm>{"label": "HTTP/1.0 keep-alive", "version": "1.0", "connection": "keep-alive",
+                "close": False},
+            <RequestForm>{"label": "HTTP/1.0 Keep-Alive", "version": "1.0", "connection": "Keep-Alive",
+                "close": False},
+            <RequestForm>{"label": "HTTP/1.1 close", "version": "1.1", "connection": "close", "close": True},
+            <RequestForm>{"label": "HTTP/1.1 Close", "version": "1.1", "connection": "Close", "close": True},
+            <RequestForm>{"label": "HTTP/1.1", "version": "1.1", "close": False},
+        );
+
+        #! paths of handlers that leave the connection to the request
+        const RequestDrivenPaths = ("/hash", "/typed", "/close-false", "/string", "/stream");
+    }
+
+    private {
+        HttpServer server;
+        SseHandler sse_handler();
+        PersistentHandler persistent_handler();
+        int port;
+    }
+
+    constructor() : Test("HttpServerConnectionCloseTest", "1.0", \ARGV) {
+        addTestCase("handler results follow the request", \handlerResultsFollowTheRequest());
+        addTestCase("handler close option closes", \handlerCloseOptionCloses());
+        addTestCase("HTTP/1.0 request with a body", \http10RequestWithBody());
+        addTestCase("inline handler follows the request", \inlineHandlerFollowsTheRequest());
+        addTestCase("inline handler close option closes", \inlineHandlerCloseOptionCloses());
+        addTestCase("authentication failure closes", \authenticationFailureCloses());
+        addTestCase("persistent connection close option", \persistentConnectionCloseOption());
+        addTestCase("SSE on a connection that must close", \sseOnClosingConnection());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("connection-close-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setHandler("hash", "/hash", NOTHING, new HashHandler());
+        server.setHandler("typed", "/typed", NOTHING, new TypedHandler());
+        server.setHandler("close-false", "/close-false", NOTHING, new CloseFalseHandler());
+        server.setHandler("close-true", "/close-true", NOTHING, new CloseTrueHandler());
+        server.setHandler("string", "/string", NOTHING, new StringHandler());
+        server.setHandler("stream", "/stream", NOTHING, new StreamHandler());
+        server.setHandler("closing-inline", "/closing-inline", NOTHING, new InlineHandler(True));
+        server.setHandler("inline", "/inline", NOTHING, new InlineHandler());
+        server.setHandler("auth", "/auth", NOTHING, new AuthHandler());
+        server.setHandler("persistent", "/persistent", NOTHING, persistent_handler);
+        server.setHandler("sse", "/sse", NOTHING, sse_handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        assertTrue(server.waitForAsyncIo(Timeout), "async I/O ready");
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    handlerResultsFollowTheRequest() {
+        foreach string path in (RequestDrivenPaths) {
+            foreach hash<RequestForm> form in (Forms) {
+                checkResponse(path, form, form.close);
+            }
+        }
+    }
+
+    handlerCloseOptionCloses() {
+        foreach hash<RequestForm> form in (Forms) {
+            checkResponse("/close-true", form, True);
+        }
+    }
+
+    http10RequestWithBody() {
+        # the request form of Apache Axis 1.4: a POST without a keep-alive option
+        {
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "POST /hash HTTP/1.0\r\nHost: localhost\r\nContent-Type: text/plain\r\n"
+                "Content-Length: 2\r\n\r\nhi");
+            assertEq(200, resp.status_code);
+            assertEq("hash:hi", resp.body);
+            assertEq("close", (resp.connection ?? "").lwr(), "HTTP/1.0 POST: Connection header");
+            assertClosed(s, "HTTP/1.0 POST");
+        }
+        {
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "POST /hash HTTP/1.0\r\nHost: localhost\r\nConnection: keep-alive\r\n"
+                "Content-Type: text/plain\r\nContent-Length: 2\r\n\r\nhi");
+            assertEq(200, resp.status_code);
+            assertEq("hash:hi", resp.body);
+            assertEq("keep-alive", (resp.connection ?? "").lwr(), "HTTP/1.0 keep-alive POST: Connection header");
+            assertPersists(s, "/hash", "HTTP/1.0 keep-alive POST");
+        }
+    }
+
+    inlineHandlerFollowsTheRequest() {
+        foreach hash<RequestForm> form in (Forms) {
+            checkResponse("/inline", form, form.close, "inline");
+        }
+    }
+
+    inlineHandlerCloseOptionCloses() {
+        foreach hash<RequestForm> form in (Forms) {
+            checkResponse("/closing-inline", form, True, "inline");
+        }
+    }
+
+    authenticationFailureCloses() {
+        # the server closes the connection after an authentication failure, whatever the request allows
+        foreach hash<RequestForm> form in (Forms) {
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, getRequest("/auth", form));
+            string label = form.label + " /auth";
+            assertEq(401, resp.status_code, label);
+            assertEq("close", (resp.connection ?? "").lwr(), label + ": Connection header");
+            assertClosed(s, label);
+        }
+    }
+
+    persistentConnectionCloseOption() {
+        # a request with the close option ends a persistent connection after the response
+        Socket s = openConnection();
+        hash<auto> resp = exchange(s, "GET /persistent/start HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(200, resp.status_code);
+        assertEq("started", resp.body);
+        resp = exchange(s, "GET /persistent/next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq(200, resp.status_code);
+        assertEq("persistent", resp.body);
+        resp = exchange(s, "GET /persistent/last HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        assertEq(200, resp.status_code);
+        assertEq("persistent", resp.body);
+        assertEq("close", (resp.connection ?? "").lwr(), "persistent: Connection header");
+        assertClosed(s, "persistent connection with the close option");
+        assertTrue(persistent_handler.closed.get(Timeout), "persistent close notification");
+    }
+
+    sseOnClosingConnection() {
+        # an HTTP/1.x SSE stream is delimited by the connection close, so a close that the request requires does not
+        # prevent it
+        foreach hash<RequestForm> form in (Forms) {
+            if (!form.close) {
+                continue;
+            }
+            string label = form.label + " /sse";
+            Socket s = openConnection();
+            s.send(getRequest("/sse", form, {"Accept": "text/event-stream"}));
+            hash<auto> resp = s.readHTTPHeader(Timeout);
+            assertEq(200, resp.status_code, label);
+            assertTrue(resp."content-type".startsWith(MimeTypeSse), label + ": Content-Type");
+            assertEq("close", (resp.connection ?? "").lwr(), label + ": Connection header");
+            ServerSentEventConnection conn = sse_handler.registered.get(Timeout);
+            string event = "data: \"evt\"\n\n";
+            conn.send(<SseMessageInfo>{"data": "evt"});
+            assertEq(event, s.recv(event.size(), Timeout), label + ": event");
+            conn.stop();
+            assertClosed(s, label);
+        }
+    }
+
+    private checkResponse(string path, hash<RequestForm> form, bool close, *string body) {
+        string label = sprintf("%s %s", form.label, path);
+        Socket s = openConnection();
+        hash<auto> resp = exchange(s, getRequest(path, form));
+        assertEq(200, resp.status_code, label);
+        assertEq(body ?? path.substr(1), resp.body, label + ": body");
+        assertEq(close ? "close" : "keep-alive", (resp.connection ?? "").lwr(), label + ": Connection header");
+        if (close) {
+            assertClosed(s, label);
+        } else {
+            assertPersists(s, path, label);
+        }
+    }
+
+    private Socket openConnection() {
+        Socket s();
+        s.connect("127.0.0.1:" + port, Timeout);
+        return s;
+    }
+
+    private static string getRequest(string path, hash<RequestForm> form, *hash<auto> hdr) {
+        string req = sprintf("GET %s HTTP/%s\r\nHost: localhost\r\n", path, form.version);
+        if (form.connection) {
+            req += sprintf("Connection: %s\r\n", form.connection);
+        }
+        foreach hash<auto> i in (hdr.pairIterator()) {
+            req += sprintf("%s: %s\r\n", i.key, i.value);
+        }
+        return req + "\r\n";
+    }
+
+    #! sends the request and returns the response header hash with the message body in \c "body"
+    private hash<auto> exchange(Socket s, string req) {
+        s.send(req);
+        hash<auto> resp = s.readHTTPHeader(Timeout);
+        assertEq(NOTHING, resp."transfer-encoding", "response framing");
+        resp.body = resp."content-length" ? s.recv(resp."content-length".toInt(), Timeout) : "";
+        return resp;
+    }
+
+    #! the server closes the connection after the response: the next read returns end of stream at once
+    private assertClosed(Socket s, string label) {
+        string err;
+        try {
+            *string data = s.recv(1, Timeout);
+            err = sprintf("received %y", data);
+        } catch (hash<ExceptionInfo> ex) {
+            # a timeout means that the server kept the connection open
+            err = ex.err;
+        }
+        assertEq("SOCKET-CLOSED", err, label + ": the server must close the connection");
+    }
+
+    #! the server keeps the connection open: it answers another request on it
+    private assertPersists(Socket s, string path, string label) {
+        hash<auto> resp = exchange(s, sprintf("GET %s HTTP/1.1\r\nHost: localhost\r\n\r\n", path));
+        assertEq(200, resp.status_code, label + ": second request on the connection");
+    }
+}

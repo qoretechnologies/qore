@@ -680,6 +680,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode idle timeout", \asyncModeIdleTimeoutTest());
         addTestCase("async mode inline Connection: close", \asyncModeInlineConnectionCloseTest());
         addTestCase("async mode inline HTTP/1.0 close", \asyncModeInlineHttp10CloseTest());
+        addTestCase("async mode inline rejected methods", \asyncModeInlineRejectedMethodsTest());
         addTestCase("async mode HTTP/2 keep-alive", \asyncModeHttp2KeepAliveTest());
         addTestCase("async mode WebSocket streaming shutdown", \asyncModeWebSocketShutdownTest());
         addTestCase("async mode WebSocket throwing destructor shutdown",
@@ -1279,19 +1280,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "error message should mention cleartext/h2c not supported");
 
             # Verify connection is closed
-            bool closed = False;
+            # the server closes the connection after the response: the next read returns end of stream at once;
+            # a timeout means that the server kept the connection open
+            string err;
             try {
-                sock.readHTTPHeader(1s);
+                sock.readHTTPHeader(10s);
+                err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
-                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
-                        || ex.err == "SOCKET-HTTP-ERROR") {
-                    closed = True;
-                } else {
-                    rethrow;
-                }
+                err = ex.err;
             }
-            assertTrue(closed, "connection should be closed after PRI rejection");
+            assertEq("SOCKET-CLOSED", err, "connection should be closed after PRI rejection");
         }
 
         # Test 2: PRI method with non-HTTP/2 path should also be rejected
@@ -1310,19 +1308,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "error message should mention unknown/unsupported method");
 
             # Verify connection is closed
-            bool closed = False;
+            # the server closes the connection after the response: the next read returns end of stream at once;
+            # a timeout means that the server kept the connection open
+            string err;
             try {
-                sock.readHTTPHeader(1s);
+                sock.readHTTPHeader(10s);
+                err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
-                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
-                        || ex.err == "SOCKET-HTTP-ERROR") {
-                    closed = True;
-                } else {
-                    rethrow;
-                }
+                err = ex.err;
             }
-            assertTrue(closed, "connection should be closed after PRI rejection");
+            assertEq("SOCKET-CLOSED", err, "connection should be closed after PRI rejection");
         }
 
         # Test 3: Also test with async mode server
@@ -1341,19 +1336,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 "error message should mention h2c not supported (async mode)");
 
             # Verify connection is closed
-            bool closed = False;
+            # the server closes the connection after the response: the next read returns end of stream at once;
+            # a timeout means that the server kept the connection open
+            string err;
             try {
-                sock.readHTTPHeader(1s);
+                sock.readHTTPHeader(10s);
+                err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
-                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
-                        || ex.err == "SOCKET-HTTP-ERROR") {
-                    closed = True;
-                } else {
-                    rethrow;
-                }
+                err = ex.err;
             }
-            assertTrue(closed, "connection should be closed after PRI rejection (async mode)");
+            assertEq("SOCKET-CLOSED", err, "connection should be closed after PRI rejection (async mode)");
         }
 
         # Test 4: Verify normal requests still work after rejecting PRI
@@ -3203,19 +3195,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             assertEq("inline-ok", resp.body, "inline response should contain body");
 
             # The server should close the connection — verify by trying to read more
-            bool closed = False;
+            # the server closes the connection after the response: the next read returns end of stream at once;
+            # a timeout means that the server kept the connection open
+            string err;
             try {
-                sock.readHTTPHeader(1s);
+                sock.readHTTPHeader(10s);
+                err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
-                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
-                        || ex.err == "SOCKET-HTTP-ERROR") {
-                    closed = True;
-                } else {
-                    rethrow;
-                }
+                err = ex.err;
             }
-            assertTrue(closed, "Connection: close should cause server to close connection");
+            assertEq("SOCKET-CLOSED", err, "Connection: close should cause server to close connection");
         }
 
         # Control test: HTTP/1.1 without Connection: close — connection stays open (keep-alive)
@@ -3273,19 +3262,16 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             assertEq("inline-ok", resp.body, "HTTP/1.0 inline response should contain body");
 
             # Server should close the connection for HTTP/1.0
-            bool closed = False;
+            # the server closes the connection after the response: the next read returns end of stream at once;
+            # a timeout means that the server kept the connection open
+            string err;
             try {
-                sock.readHTTPHeader(1s);
+                sock.readHTTPHeader(10s);
+                err = "received another response";
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-CLOSED" || ex.err == "SOCKET-TIMEOUT"
-                        || ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-RECV-ERROR"
-                        || ex.err == "SOCKET-HTTP-ERROR") {
-                    closed = True;
-                } else {
-                    rethrow;
-                }
+                err = ex.err;
             }
-            assertTrue(closed, "HTTP/1.0 should cause server to close connection by default");
+            assertEq("SOCKET-CLOSED", err, "HTTP/1.0 should cause server to close connection by default");
         }
 
         # Verify server is still operational
@@ -3294,6 +3280,53 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         on_exit client.disconnect();
         hash<auto> resp = client.send(NOTHING, "GET", "/inline");
         assertEq(200, resp.status_code, "server still operational after HTTP/1.0");
+    }
+
+    #! Verifies that the inline path never serves a request that the server rejects before calling a handler: the
+    #! HTTP/2 connection preface and methods that the server does not support
+    asyncModeInlineRejectedMethodsTest() {
+        Logger logger("async-inline-methods-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_exit server.stop();
+
+        InlineTestHandler inline_handler();
+        server.setDefaultHandler("inline-handler", inline_handler);
+        int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
+
+        assertFalse(server.acceptsHttpMethod("PRI"));
+        assertFalse(server.acceptsHttpMethod("FOO"));
+        assertTrue(server.acceptsHttpMethod("GET"));
+
+        foreach string req in ("PRI * HTTP/2.0\r\nHost: localhost\r\n\r\n",
+                "FOO /inline HTTP/1.1\r\nHost: localhost\r\n\r\n") {
+            Socket sock();
+            sock.connect("127.0.0.1:" + test_port, 5s);
+            on_exit sock.close();
+            sock.send(req);
+            hash<auto> resp = readRawHttpResponse(sock);
+            string label = req.substr(0, 3);
+            assertEq(501, resp.status_code, label + ": rejected by the server");
+            assertEq(NOTHING, resp."x-inline-header", label + ": not served by the inline handler");
+        }
+
+        # once the server supports the method, the inline handler serves it
+        server.addHttpMethod("FOO");
+        assertTrue(server.acceptsHttpMethod("FOO"));
+        Socket sock();
+        sock.connect("127.0.0.1:" + test_port, 5s);
+        on_exit sock.close();
+        sock.send("FOO /inline HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readRawHttpResponse(sock);
+        assertEq(200, resp.status_code);
+        assertEq("inline-value", resp."x-inline-header");
+        assertEq("inline-ok", resp.body);
     }
 
     #! Verifies that stop() completes deterministically with an active WebSocket connection.

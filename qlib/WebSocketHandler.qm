@@ -135,6 +135,8 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @section websockethandler_relnotes WebSocketHandler Release History
 
     @subsection websockethandler_v2_8 Version 2.8
+    - an HTTP/1.0 opening handshake is rejected with a 400 response (RFC 6455 section 4.2.1); a server must ignore
+      the \c Upgrade header of an HTTP/1.0 request (RFC 9110 section 7.8)
     - added a per-connection outbound queue limit (the \c max_queue_size handler option and
       @ref WebSocketHandler::WebSocketHandler::setMaxQueueSize() "setMaxQueueSize()"): a slow or non-reading client
       is dropped instead of growing server memory without bound or stalling a broadcast; protects servers exposed
@@ -2236,6 +2238,16 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 "hdr": rhdr,
                 "streaming": True,
                 "stream_type": "websocket",
+            };
+        }
+
+        # the opening handshake is an HTTP/1.1 or higher request (RFC 6455 section 4.2.1), and a server must ignore
+        # the Upgrade header of an HTTP/1.0 request (RFC 9110 section 7.8)
+        if (hdr.http_version =~ /^(?:0\.[0-9]|1\.0)$/) {
+            return {
+                "code": 400,
+                "body": sprintf("cannot open WebSocket connection; the opening handshake requires HTTP/1.1 or "
+                    "higher, but the request is HTTP/%s", hdr.http_version),
             };
         }
 

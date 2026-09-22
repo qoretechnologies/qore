@@ -3,12 +3,13 @@
 
 %modern
 %enable-debug
-%requires ../../../../qlib/WebUtil.qm
-%requires ../../../../qlib/HttpServer.qm
-%requires ../../../../qlib/HttpServerAsyncIo/HttpServerAsyncIo.qm
-%requires ../../../../qlib/Logger.qm
-%requires ../../../../qlib/FsUtil.qm
-%requires ../../../../qlib/QUnit.qm
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires WebUtil
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires Logger
+%requires FsUtil
+%requires QUnit
 
 %exec-class FileHandlerCachingTest
 

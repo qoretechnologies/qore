@@ -197,6 +197,15 @@ log("started listener on %s", lh.desc);
       handler that never returns; the no-argument call is unchanged
     - new @ref HttpServer::HttpServer::getRunningListenerCount() "getRunningListenerCount()" method, so callers
       can report what is still in flight after a bounded wait times out
+    - fixed keeping the connection open after the response to an HTTP/1.0 request without the \c keep-alive
+      connection option, or to a request with the \c close option (RFC 9112 section 9.3): a handler can close a
+      connection, but a handler response can no longer keep open a connection that the request requires to close
+    - fixed sending chunked transfer encoding in responses to HTTP/1.0 requests (RFC 9112 section 6.1): a message
+      body of known length is sent with a \c Content-Length, and a streamed message body of unknown length is
+      delimited by closing the connection (RFC 9112 section 6.3);
+      @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" sends a streamed error message to an HTTP/1.0
+      client with a \c Content-Length, and sends no message body in a response to a \c HEAD request
+    - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
 
     @subsection http1_6 HttpServer 1.6
     - fixed a regression where @ref HttpServer::HttpServer::listenerStarted() "listenerStarted()" was no longer
@@ -923,6 +932,34 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             llist = listeners;
         }
         map $1.signalHandlersToStop(), llist.iterator();
+    }
+
+    #! Returns True if the server passes requests with the given HTTP method to a handler
+    /** The server answers the HTTP/2 connection preface (method \c PRI) and methods that it does not support (see
+        addHttpMethod()) with a 501 response without calling a handler.
+
+        @par Example:
+        @code{.py}
+# a WebDAV gateway needs PROPFIND; check whether the server passes it to handlers before registering them
+if (!server.acceptsHttpMethod("PROPFIND")) {
+    server.addHttpMethod("PROPFIND");
+}
+        @endcode
+
+        @param method the HTTP method of the request
+
+        @return True if the server passes requests with the given HTTP method to a handler
+
+        @since HttpServer 1.7
+    */
+    bool acceptsHttpMethod(string method) {
+        return method != "PRI" && http_methods{method};
+    }
+
+    # Returns True if a response to the HTTP/1.x request with the given headers can use chunked transfer encoding,
+    # which requires HTTP/1.1 or later (RFC 9112 section 6.1)
+    private:internal static bool requestAllowsChunked(hash<auto> hdr) {
+        return hdr.http_version !~ /^(?:0\.[0-9]|1\.0)$/;
     }
 
     #! Returns the handler for inline check from global handler lists (no side effects)
@@ -2233,16 +2270,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
         data response_msg;
+        # issue #3116: do not send a reply body if the response code does not allow it
+        /** http://tools.ietf.org/html/rfc2616#section-4.4
+            1.Any response message which "MUST NOT" include a message-body (such
+            as the 1xx, 204, and 304 responses and any response to a HEAD
+            request) is always terminated by the first empty line after the
+            header fields, regardless of the entity-header fields present in
+            the message.
+        */
+        bool body_allowed = !head && (status_code >= 200) && (status_code != 204) && (status_code != 304);
         if (msg || !chunked_msg) {
-            # issue #3116: do not send a reply body if the response code does not allow it
-            /** http://tools.ietf.org/html/rfc2616#section-4.4
-                1.Any response message which "MUST NOT" include a message-body (such
-                as the 1xx, 204, and 304 responses and any response to a HEAD
-                request) is always terminated by the first empty line after the
-                header fields, regardless of the entity-header fields present in
-                the message.
-            */
-            if (!head && (status_code >= 200) && (status_code != 204) && (status_code != 304)) {
+            if (body_allowed) {
                 if (msg.typeCode() == NT_STRING) {
                     response_msg = !extra_hdrs."Content-Type" && acceptsHtml(cx)
                         ? getHtmlErrorMessage(status_code, msg)
@@ -2251,6 +2289,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     response_msg = msg;
                 }
             }
+        } else if (!body_allowed) {
+            chunked_msg = NOTHING;
         } else {
             if (chunked_msg instanceof StringInputStream) {
                 # ignore any encoding passed in case of a string input stream response body, and use its encoding
@@ -2258,9 +2298,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
             if (is_multiplexed) {
                 # Keep the InputStream for HTTP/2 and HTTP/3 streaming - don't buffer
-            } else {
+            } else if (HttpServer::requestAllowsChunked(cx.hdr ?? {})) {
                 extra_hdrs."Transfer-Encoding" = "chunked";
+            } else {
+                # a response to an HTTP/1.0 request must not have Transfer-Encoding (RFC 9112 section 6.1); an error
+                # message is small, so it is sent with a Content-Length instead of closing the connection after it
+                response_msg = readAllStream(chunked_msg);
+                chunked_msg = NOTHING;
             }
+        }
+        if (!chunked_msg) {
+            # a message body in memory is sent with a Content-Length
+            remove extra_hdrs."Transfer-Encoding";
         }
 
         # restore encoding on exit
@@ -3842,10 +3891,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             bool head, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         listener.log("sendReply: code=%d async_response_out=%y http2=%y http3=%y",
             rv."code", exists async_response_out, cx."header-info".http2, cx."header-info".http3);
-        if (exists rv.close)
-            cx.close = boolean(rv.close);
+        # a handler can close a connection, but it cannot keep open one that the request requires to close: an
+        # HTTP/1.0 request without the keep-alive option, or any request with the close option (RFC 9112 section
+        # 9.3); every hash<HttpResponseInfo> has a "close" key, so a False value is not a request to keep it open
+        bool handler_close = boolean(rv.close);
+        if (handler_close) {
+            cx.close = True;
+        }
 
-        rv.close = cx.close;
+        rv.close = boolean(cx.close);
 
         # if there is a pending chunked body that has not yet been read on exit, then read it and discard before sending any response
         on_exit if (s.pendingHttpChunkedBody())
@@ -3871,7 +3925,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # the names of the fields managed by the server are canonical from here on
         rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
 
-        if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")))
+        if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")) || rv.send_callback)
             && (head
                 || (rv."code" < 200
                     || (rv."code" == 204
@@ -3880,6 +3934,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (chunked_body) {
                 remove rv.chunked_body;
             }
+            # a send_callback provides a message body too
+            remove rv.send_callback;
         }
 
         bool is_sse = False;
@@ -3891,9 +3947,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         bool is_h1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
+        # a response to an HTTP/1.0 request must not have Transfer-Encoding (RFC 9112 section 6.1); a message body of
+        # unknown length is delimited by closing the connection instead (RFC 9112 section 6.3)
+        bool chunked_allowed = !is_h1 || HttpServer::requestAllowsChunked(hdr);
+        if (!chunked_allowed) {
+            remove rv.hdr."Transfer-Encoding";
+            if (!is_sse && !rv.hdr."Content-Length" && (rv.send_callback || rv.hasKeyValue("chunked_body")
+                    || (rv.body instanceof InputStream))) {
+                cx.close = True;
+                rv.close = True;
+                # a stream request handler has already set the header
+                rv.hdr.Connection = "close";
+            }
+        }
         bool has_content_length = boolean(rv.hdr."Content-Length");
         bool has_transfer_encoding = boolean(rv.hdr."Transfer-Encoding");
-        if (is_h1 && rv.send_callback && !has_content_length && !has_transfer_encoding) {
+        if (is_h1 && chunked_allowed && rv.send_callback && !has_content_length && !has_transfer_encoding) {
             rv.hdr."Transfer-Encoding" = "chunked";
             has_transfer_encoding = True;
         }
@@ -3928,7 +3997,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
-            doResponse(listener, s, cx, rv, \async_response_out);
+            doResponse(listener, s, cx, rv, chunked_allowed, \async_response_out);
         } else if (rv."code" >= 400) {
             if (!head && !rv.body && !rv.hasKeyValue("chunked_body")) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
@@ -3938,7 +4007,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # through h2op (HTTP/2) or sendHTTPResponse (HTTP/1.x), rather than
                 # sending directly on the socket which would bypass the poll operation
                 # state machine and corrupt the connection lifecycle
-                doResponse(listener, s, cx, rv, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, \async_response_out);
             } else {
                 sendHttpError(listener, cx, s, rv."code", rv.body,
                     rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
@@ -3988,7 +4057,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # For HTTP/2 and HTTP/3 extended CONNECT streaming, don't send response here -
             # it's handled in the dedicated socket section
             if (!rv.streaming || !ext_connect) {
-                doResponse(listener, s, cx, rv, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, \async_response_out);
             }
         }
 
@@ -4008,7 +4077,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (rv.streaming && ext_connect) {
             string proto_label = is_http3 ? "HTTP/3" : "HTTP/2";
             string sock_id = sprintf("%y:%d", cx.id, cx."header-info".stream_id);
-            if (rv.close) {
+            if (handler_close) {
                 listener.logError("cid %d: %s extended CONNECT returned from handler %y, but the close "
                     "flag is set", cx.id, proto_label, cx.handler_name);
             } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
@@ -4091,7 +4160,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             #   submitQuicStreamData()
             bool sse_is_http2 = cx."header-info".http2 ?? False;
             bool sse_is_http3 = cx."header-info".http3 ?? False;
-            if (rv.close) {
+            # a close that the request requires does not prevent an SSE stream: an HTTP/1.x stream is delimited
+            # by the connection close anyway
+            if (handler_close) {
                 string err = sprintf("SSE response (Content-Type: %s) returned from handler %y with "
                     "connection close flag set — SSE requires a persistent connection",
                     MimeTypeSse, cx.handler_name);
@@ -4217,7 +4288,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
         } else if (rv."code" == 101) {
             # WebSocket upgrade — use async I/O controller
-            if (rv.close) {
+            if (handler_close) {
                 string err = sprintf("101 Switching Protocols returned from handler %y with connection "
                     "close flag set — protocol upgrade requires a persistent connection",
                     cx.handler_name);
@@ -4391,7 +4462,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return sout ? sout : (bout ? bout : "");
     }
 
-    private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv,
+    # chunked_allowed: False for a response to an HTTP/1.0 request, where a streamed message body is delimited by
+    # closing the connection instead of chunked transfer encoding
+    private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv, bool chunked_allowed,
             *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
@@ -4431,7 +4504,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             } else if ((body instanceof string) || (body instanceof binary)) {
                 body = new BinaryInputStream(body);
             }
-            rv.hdr."Transfer-Encoding" = "chunked";
+            if (chunked_allowed) {
+                rv.hdr."Transfer-Encoding" = "chunked";
+            } else {
+                # the stream is sent as-is, and sendReply() has set the close flag to delimit it
+                chunked = False;
+            }
         }
 
         # Capture response info for async sending
@@ -4814,7 +4892,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         DynamicHandlerHelper objects or modifying any state.
 
         @param hdr parsed HTTP headers
-        @return the handler if found, NOTHING otherwise
+        @return the handler if found, NOTHING otherwise, including for a request that the server rejects without
+        calling a handler (see @ref HttpServer::acceptsHttpMethod() "HttpServer::acceptsHttpMethod()")
 
         @note Only returns permanent (non-dynamic) handlers. Dynamic handlers
         require lifecycle tracking that is incompatible with the inline path.
@@ -4822,6 +4901,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @since HttpServer 1.6
     */
     *AbstractHttpRequestHandler findHandlerForInlineCheck(hash<auto> hdr) {
+        # the full path rejects the HTTP/2 connection preface and unsupported methods before calling a handler
+        if (!serv.acceptsHttpMethod(hdr.method)) {
+            return;
+        }
         int score = 0;
         string root_path;
         *HandlerInfo hi;
@@ -4858,18 +4941,49 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> hdr, AbstractHttpRequestHandler handler, hash<auto> header_info) {
         try {
             hash<HttpResponseInfo> resp = handler.handleInlineRequest(cx, hdr, NOTHING);
-            bool req_close = header_info.close.toBool();
+            if ((resp.body instanceof InputStream) || resp.chunked_body || resp.send_callback) {
+                throw "INLINE-HANDLER-ERROR", "the handler returned a streamed message body; an inline handler must "
+                    "return the message body as a string or binary value";
+            }
+            # the handler can close the connection, but it cannot keep open one that the request requires to close
+            # (RFC 9112 section 9.3); "close" is never NOTHING in a hash<HttpResponseInfo>
+            bool close = resp.close || header_info.close.toBool() || !sock.isOpen();
+            *hash<auto> resp_hdr = http_canonicalize_reply_header_names(resp.hdr);
+            # the message body is in memory, so it is sent with a Content-Length
+            remove resp_hdr."Transfer-Encoding";
+            # as with http_set_reply_headers(), tell the client whether the connection persists unless the handler
+            # did; an HTTP/1.0 client assumes that it does not without "Connection: Keep-Alive"
+            if (!resp_hdr.Connection) {
+                resp_hdr.Connection = close ? "close" : "Keep-Alive";
+            }
+            # a response to a HEAD request and a 1xx, 204, or 304 response have no message body (RFC 9110 section
+            # 6.4.1)
+            *data body = resp.body;
+            if (hdr.method == "HEAD" || resp.code < 200 || resp.code == 204 || resp.code == 304) {
+                body = NOTHING;
+            }
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "code": resp.code,
                 "status_message": HttpCodes{resp.code},
-                "hdr": resp.hdr,
-                "body": resp.body,
-                "close": resp.close ?? req_close ?? !sock.isOpen(),
-                "return_to_idle": !resp.close && !req_close && sock.isOpen(),
+                "hdr": resp_hdr,
+                "body": body,
+                "close": close,
+                "return_to_idle": !close,
                 "ttl": serv.getTtl(),
             };
         } catch (hash<ExceptionInfo> ex) {
-            return <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True};
+            string err = sprintf("inline handler %s: %s: %s", handler.className(), ex.err, ex.desc);
+            logError("%s", err);
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{
+                "code": 500,
+                "status_message": HttpCodes{500},
+                "hdr": {
+                    "Content-Type": MimeTypeText,
+                    "Connection": "close",
+                },
+                "body": hdr.method == "HEAD" ? NOTHING : err,
+                "close": True,
+            };
         }
     }
 
@@ -5965,16 +6079,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         stream_id, response.code, hdr, is);
                     serv.execAsyncPollOperation(s, op);
                 } else {
-                    # HTTP/1.x: send callback-based chunked response (e.g. DataStream protocol)
-                    s.sendHTTPResponseWithCallback(response.send_callback, response.code,
-                        HttpServer::HttpCodes{response.code}, "1.1",
-                        response.hdr ?? {}, response.send_timeout ?? -1);
+                    # HTTP/1.x: send the callback's data framed as the headers declare; with chunked transfer
+                    # encoding, each return value is one chunk (e.g. DataStream protocol)
+                    http_send_streamed_response(s, response.code, HttpServer::HttpCodes{response.code},
+                        response.hdr ?? {}, response.send_callback, response.send_timeout ?? -1);
                 }
             } else if (response.input_stream) {
-                # HTTP/1.x: send InputStream-based chunked response
-                response.input_stream.reassignThread();
-                s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
-                    response.hdr ?? {}, response.input_stream);
+                # HTTP/1.x: send the InputStream framed as the headers declare
+                InputStream is = response.input_stream;
+                is.reassignThread();
+                http_send_streamed_response(s, response.code, HttpServer::HttpCodes{response.code},
+                    response.hdr ?? {}, auto sub () { return is.read(65536); }, response.send_timeout ?? -1);
             } else {
                 # HTTP/1.x: send normal response
                 s.sendHTTPResponse(response.code, HttpServer::HttpCodes{response.code}, "1.1",
