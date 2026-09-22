@@ -59,6 +59,14 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("Concurrent access during program cleanup", \testConcurrentAccessDuringCleanup());
         addTestCase("QoreSandboxManagerHelper with specific Program", \testHelperWithProgram());
         addTestCase("Module-context network sandbox propagation", \testModuleContextNetworkSandbox());
+        addTestCase("Network policy controls binds", \testNetworkBindPolicy());
+        addTestCase("Network policy controls UNIX domain sockets", \testNetworkUnixSocketPolicy());
+        addTestCase("Network policy normalizes addresses and applies host patterns", \testNetworkConnectAddressForms());
+        addTestCase("Network policy controls datagram destinations", \testNetworkDatagramPolicy());
+        addTestCase("Network policy controls QUIC connections", \testNetworkQuicConnectPolicy());
+        addTestCase("Network policy governs connections run on async I/O threads",
+            \testNetworkPollPipelinePolicy());
+        addTestCase("Network policy controls proxy destinations", \testNetworkProxyDestinationPolicy());
         addTestCase("Module-context filesystem sandbox propagation", \testModuleContextFilesystemSandbox());
         addTestCase("Module initialization resource access", \testModuleInitializationResourceAccess());
         addTestCase("Separated module initialization resource access",
@@ -2436,5 +2444,327 @@ nothing sub probeSymlink(string target, string link_path) {
         assertThrows("SANDBOX-PATH-ERROR", sub () {
             p.callFunction("probeStat", blocked + "/sub/missing.txt");
         }, NOTHING, "an unsearchable ancestor is a resolution failure, not an access denial");
+    }
+    #! Returns a Program governed by the given sandbox with the given code
+    private Program sandboxedProgram(SandboxManager sm, string code, string label) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("%modern\n" + code, label);
+        return p;
+    }
+
+    #! Code run in sandboxed Programs by the network policy tests
+    const NetworkPolicyCode = "
+hash<auto> sub bind_inet(*string addr, softstring port, int family = AF_UNSPEC, int type = SOCK_STREAM) {
+    Socket s();
+    on_exit s.close();
+    s.bindINET(addr, port, True, family, type);
+    return s.getSocketInfo();
+}
+int sub bind_port(int port) {
+    Socket s();
+    on_exit s.close();
+    return s.bind(port, True);
+}
+sub connect(string target) {
+    Socket s();
+    s.connect(target, 5s);
+    s.close();
+}
+auto sub drive(AbstractPollOperation op) {
+    date deadline = now_us() + 20s;
+    while (!op.goalReached()) {
+        if (now_us() > deadline) {
+            throw \"TEST-TIMEOUT\", sprintf(\"poll operation %y did not finish\", op.getState());
+        }
+        *hash<SocketPollInfo> info = op.continuePoll();
+        if (info) {
+            Socket::poll((info,), 5s);
+        }
+    }
+    return op.getOutput();
+}
+sub send_datagram(string host, int port) {
+    Socket s();
+    on_exit s.close();
+    s.bindINET(NOTHING, 0, True, AF_INET, SOCK_DGRAM);
+    drive(s.startPollSendTo(host, port, binary(\"ping\")));
+}
+sub quic_connect(string host, int port) {
+    Socket s();
+    on_exit s.close();
+    s.bindINET(NOTHING, 0, False, AF_INET, SOCK_DGRAM);
+    drive(s.startPollQuicConnect(host, port));
+}
+*hash<ExceptionInfo> sub pipeline_connect(string target) {
+    Socket s();
+    PollPipeline pipeline(s);
+    pipeline.addConnect(target);
+    *Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+        \"sock\": s,
+        \"spop\": pipeline,
+        \"owner\": \"sandbox-pipeline-connect\",
+    });
+    hash<SocketPollResultInfo> result = q.get(30s);
+    s.close();
+    return result.ex;
+}
+sub proxied_get(string url, string proxy) {
+    HTTPClient client({\"url\": url, \"proxy\": proxy, \"connect_timeout\": 5s, \"timeout\": 5s});
+    client.get(\"/\");
+}
+";
+
+    #! Tests that binds are controlled by the network policy
+    /** Regression test: a bind was never checked, because the check ran on the async I/O thread, which has no
+        Program and therefore no sandbox, and only when an exception sink was given, which it never was.
+    */
+    testNetworkBindPolicy() {
+        # the default deny policy denies every bind
+        Program deny = sandboxedProgram(new SandboxManager(), NetworkPolicyCode, "bind-deny");
+        assertThrows("NETWORK-ACCESS-DENIED", "default deny", \deny.callFunction(), ("bind_inet", "127.0.0.1", 0));
+        assertThrows("NETWORK-ACCESS-DENIED", \deny.callFunction(), ("bind_inet", NOTHING, 0));
+        assertThrows("NETWORK-ACCESS-DENIED", \deny.callFunction(), ("bind_inet", NOTHING, 0, AF_UNSPEC,
+            SOCK_DGRAM), "UDP binds are controlled");
+        assertEq(-1, deny.callFunction("bind_port", 0), "Socket::bind() reports the denied bind");
+
+        # a denied range applies to the address bound, also as an IPv4-mapped IPv6 address
+        SandboxManager local();
+        local.setNetworkDefaultPolicy(True);
+        local.blockLocalhost();
+        Program lp = sandboxedProgram(local, NetworkPolicyCode, "bind-local");
+        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("bind_inet", "127.0.0.1", 0));
+        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("bind_inet", "::ffff:127.0.0.1", 0,
+            AF_INET6));
+        assertTrue(lp.callFunction("bind_inet", NOTHING, 0).port > 0,
+            "a bind on all interfaces is allowed when the default policy allows it");
+
+        # an allowed range must contain the address bound; the IPv4 wildcard is bound if only it is allowed
+        SandboxManager ranges();
+        ranges.addNetworkAllowedIPRange("127.0.0.0/8");
+        Program rp = sandboxedProgram(ranges, NetworkPolicyCode, "bind-ranges");
+        assertEq("127.0.0.1", rp.callFunction("bind_inet", "127.0.0.1", 0).address);
+        assertThrows("NETWORK-ACCESS-DENIED", "not in allowed list", \rp.callFunction(), ("bind_inet", NOTHING, 0));
+        SandboxManager v4any();
+        v4any.addNetworkAllowedIPRange("0.0.0.0/0");
+        Program v4p = sandboxedProgram(v4any, NetworkPolicyCode, "bind-v4any");
+        hash<auto> info = v4p.callFunction("bind_inet", NOTHING, 0);
+        assertEq(AF_INET, info.family, "only the allowed IPv4 wildcard address is bound");
+        assertEq("0.0.0.0", info.address);
+
+        # a specific port must be allowed; a system-assigned port is not restricted
+        SandboxManager ports();
+        ports.setNetworkDefaultPolicy(True);
+        ports.addNetworkAllowedPort(443, QSEC_NET_TCP);
+        Program pp = sandboxedProgram(ports, NetworkPolicyCode, "bind-ports");
+        assertThrows("NETWORK-ACCESS-DENIED", "port 8123", \pp.callFunction(), ("bind_inet", "127.0.0.1", 8123));
+        assertTrue(pp.callFunction("bind_inet", "127.0.0.1", 0).port > 0, "a system-assigned port is allowed");
+    }
+
+    #! Tests that a UNIX domain socket needs filesystem access to its socket file
+    /** Regression test: a sandbox that allowed network access but no filesystem access could reach any local
+        service, such as a container daemon, through its socket file.
+    */
+    testNetworkUnixSocketPolicy() {
+        if (PlatformOS == "Windows") {
+            testSkip("UNIX domain sockets are not available on Windows");
+        }
+        TmpDir tmp("qore-sandbox-unix-");
+        string path = tmp.path + "/service.sock";
+        Socket service();
+        service.bindUNIX(path);
+        service.listen();
+        on_exit service.close();
+
+        string code = NetworkPolicyCode + "
+sub connect_unix(string path) {
+    Socket s();
+    s.connectUNIX(path);
+    s.close();
+}
+sub bind_unix(string path) {
+    Socket s();
+    s.bindUNIX(path);
+    s.close();
+}
+";
+        # network access without filesystem access
+        SandboxManager net_only();
+        net_only.setNetworkDefaultPolicy(True);
+        Program np = sandboxedProgram(net_only, code, "unix-net-only");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \np.callFunction(), ("connect_unix", path));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \np.callFunction(), ("bind_unix", tmp.path + "/denied.sock"));
+        assertFalse(is_socket(tmp.path + "/denied.sock"), "a denied bind creates no socket file");
+
+        # filesystem access to the socket files allows them
+        SandboxManager both();
+        both.setNetworkDefaultPolicy(True);
+        both.addFilesystemAllowedPath(tmp.path, QSEC_ALL);
+        Program bp = sandboxedProgram(both, code, "unix-both");
+        bp.callFunction("connect_unix", path);
+        bp.callFunction("bind_unix", tmp.path + "/allowed.sock");
+
+        # the network policy still decides whether UNIX domain sockets may be used at all
+        SandboxManager fs_only();
+        fs_only.addFilesystemAllowedPath(tmp.path, QSEC_ALL);
+        Program fp = sandboxedProgram(fs_only, code, "unix-fs-only");
+        assertThrows("NETWORK-ACCESS-DENIED", "UNIX socket", \fp.callFunction(), ("connect_unix", path));
+    }
+
+    #! Tests the address forms and host patterns of the connection policy
+    testNetworkConnectAddressForms() {
+        Socket listener();
+        listener.bindINET(NOTHING, 0, True);
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+        bool ipv6 = listener.getSocketInfo().family == AF_INET6;
+
+        # the system connects an unspecified destination to the local host, and an IPv4-mapped IPv6 address to the
+        # IPv4 address it carries, so both are checked as those addresses
+        SandboxManager local();
+        local.setNetworkDefaultPolicy(True);
+        local.blockLocalhost();
+        Program lp = sandboxedProgram(local, NetworkPolicyCode, "connect-local");
+        assertThrows("NETWORK-ACCESS-DENIED", \lp.callFunction(), ("connect", "127.0.0.1:" + port));
+        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("connect", "0.0.0.0:" + port));
+        if (ipv6) {
+            assertThrows("NETWORK-ACCESS-DENIED", "::1", \lp.callFunction(), ("connect", "[::]:" + port));
+            assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(),
+                ("connect", "[::ffff:127.0.0.1]:" + port));
+        }
+
+        # an allowed host pattern allows the name, compared without regard to case, but not other names or
+        # address literals
+        SandboxManager hosts();
+        hosts.addNetworkAllowedHost("LOCALHOST");
+        Program hp = sandboxedProgram(hosts, NetworkPolicyCode, "connect-hosts");
+        hp.callFunction("connect", "localhost:" + port);
+        assertThrows("NETWORK-ACCESS-DENIED", "default deny", \hp.callFunction(), ("connect", "127.0.0.1:" + port));
+
+        # a denied range wins over an allowed host name, so a name resolving to a blocked network is denied
+        SandboxManager rebinding();
+        rebinding.addNetworkAllowedHost("localhost");
+        rebinding.blockLocalhost();
+        Program rp = sandboxedProgram(rebinding, NetworkPolicyCode, "connect-rebinding");
+        assertThrows("NETWORK-ACCESS-DENIED", \rp.callFunction(), ("connect", "localhost:" + port));
+    }
+
+    #! Tests that the destination of a datagram is controlled by the network policy
+    /** Regression test: datagrams were sent to any destination.
+    */
+    testNetworkDatagramPolicy() {
+        Socket receiver();
+        receiver.bindINET("127.0.0.1", 0, True, AF_INET, SOCK_DGRAM);
+        on_exit receiver.close();
+        int port = receiver.getSocketInfo().port;
+
+        SandboxManager local();
+        local.setNetworkDefaultPolicy(True);
+        local.blockLocalhost();
+        Program lp = sandboxedProgram(local, NetworkPolicyCode, "datagram-local");
+        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("send_datagram", "127.0.0.1", port));
+        assertThrows("NETWORK-ACCESS-DENIED", "127\\.0\\.0\\.1|::1", \lp.callFunction(), ("send_datagram", "localhost",
+            port));
+
+        SandboxManager allow();
+        allow.setNetworkDefaultPolicy(True);
+        Program ap = sandboxedProgram(allow, NetworkPolicyCode, "datagram-allow");
+        ap.callFunction("send_datagram", "127.0.0.1", port);
+        AbstractPollOperation recv = receiver.startPollRecvFrom();
+        date deadline = now_us() + 20s;
+        while (!recv.goalReached() && now_us() < deadline) {
+            *hash<SocketPollInfo> info = recv.continuePoll();
+            if (info) {
+                Socket::poll((info,), 5s);
+            }
+        }
+        assertEq(binary("ping"), recv.getOutput().data, "an allowed datagram is delivered");
+    }
+
+    #! Tests that the remote address of a QUIC connection is controlled by the network policy
+    /** Regression test: QUIC and HTTP/3 connections, including upgrades announced by a server, were made to any
+        address.
+    */
+    testNetworkQuicConnectPolicy() {
+        SandboxManager local();
+        local.setNetworkDefaultPolicy(True);
+        local.blockLocalhost();
+        Program lp = sandboxedProgram(local, NetworkPolicyCode, "quic-local");
+        assertThrows("NETWORK-ACCESS-DENIED", "127.0.0.1", \lp.callFunction(), ("quic_connect", "127.0.0.1", 443));
+
+        SandboxManager deny();
+        Program dp = sandboxedProgram(deny, NetworkPolicyCode + "
+sub quic_connect_bound(string host, int port, Socket s) {
+    drive(s.startPollQuicConnect(host, port));
+}
+", "quic-deny");
+        # a socket bound outside the sandbox is still checked when it connects
+        Socket udp();
+        udp.bindINET(NOTHING, 0, False, AF_INET, SOCK_DGRAM);
+        on_exit udp.close();
+        assertThrows("NETWORK-ACCESS-DENIED", "default deny", \dp.callFunction(), ("quic_connect_bound", "192.0.2.1",
+            443, udp));
+    }
+
+    #! Tests that a connection made on an async I/O thread is governed by the sandbox of the code that requested it
+    /** Regression test: the connect step of a PollPipeline submitted to an AsyncIoController was created on the
+        I/O thread, which has no Program and therefore no sandbox, so it was never checked.
+    */
+    testNetworkPollPipelinePolicy() {
+        Socket listener();
+        listener.bindINET("127.0.0.1", 0, True);
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+
+        SandboxManager local();
+        local.setNetworkDefaultPolicy(True);
+        local.blockLocalhost();
+        Program lp = sandboxedProgram(local, NetworkPolicyCode, "pipeline-local");
+        *hash<ExceptionInfo> ex = lp.callFunction("pipeline_connect", "127.0.0.1:" + port);
+        assertEq("NETWORK-ACCESS-DENIED", ex.err, "the pipeline connection is checked on the I/O thread");
+
+        SandboxManager allow();
+        allow.setNetworkDefaultPolicy(True);
+        Program ap = sandboxedProgram(allow, NetworkPolicyCode, "pipeline-allow");
+        ex = ap.callFunction("pipeline_connect", "127.0.0.1:" + port);
+        assertEq(NOTHING, ex, "an allowed pipeline connection is made");
+    }
+
+    #! Tests that a proxy's destination is controlled by the network policy
+    /** Regression test: only the proxy was checked, so a sandbox that allowed a proxy could reach any destination
+        through it.
+    */
+    testNetworkProxyDestinationPolicy() {
+        Socket proxy();
+        proxy.bindINET("127.0.0.1", 0, True);
+        proxy.listen();
+        on_exit proxy.close();
+        string proxy_url = "http://127.0.0.1:" + proxy.getSocketInfo().port;
+
+        SandboxManager sm();
+        sm.addNetworkAllowedIPRange("127.0.0.1/32");
+        Program p = sandboxedProgram(sm, NetworkPolicyCode, "proxy-destination");
+
+        # the destination is checked before the proxy is connected to
+        assertThrows("NETWORK-ACCESS-DENIED", "192.0.2.1", \p.callFunction(), ("proxied_get", "http://192.0.2.1:8080/",
+            proxy_url));
+
+        # an allowed destination reaches the proxy, which closes the connection here
+        Counter accepted(1);
+        background sub () {
+            on_exit accepted.dec();
+            *Socket s = proxy.accept(20s);
+            if (s) {
+                s.close();
+            }
+        }();
+        try {
+            p.callFunction("proxied_get", "http://127.0.0.1:9/", proxy_url);
+        } catch (hash<ExceptionInfo> ex) {
+            assertNeq("NETWORK-ACCESS-DENIED", ex.err, "an allowed destination is not denied: " + ex.desc);
+        }
+        assertEq(0, accepted.waitForZero(30s), "the request reached the proxy");
     }
 }

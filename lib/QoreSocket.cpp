@@ -145,10 +145,14 @@ static QoreObject* qore_socket_new_poll_result_queue_object(Queue* queue) {
 
 static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 
-static QoreSandboxManager* qore_socket_ref_current_sandbox_manager() {
-    // generic accessor: the returned manager is retained by the socket and also serves
-    // interrupt/force-terminate checks, so resolution must NOT honor a policy barrier
-    QoreSandboxManagerHelper smh;
+//! Returns a reference to the sandbox manager whose network policy applies to the calling thread, if any
+/** Socket operations run on the async I/O controller's threads, which have no Program and therefore no sandbox, so
+    every operation resolves the manager when it is created, on the thread that requests it, and keeps it for the
+    checks it makes later.  A policy check honors an active policy barrier, so trusted infrastructure called with
+    SandboxManager::callWithSystemPolicy() does not inherit a sandboxed caller's network policy.
+*/
+QoreSandboxManager* qore_socket_ref_policy_sandbox_manager() {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     if (!smh) {
         return nullptr;
     }
@@ -160,7 +164,7 @@ static QoreSandboxManager* qore_socket_ref_current_sandbox_manager() {
 
 static QoreSandboxManager* qore_socket_ref_sandbox_manager(QoreSandboxManager* sm) {
     if (!sm) {
-        return qore_socket_ref_current_sandbox_manager();
+        return qore_socket_ref_policy_sandbox_manager();
     }
 
     sm->ref();
@@ -514,12 +518,15 @@ private:
 };
 
 static bool qore_socket_parse_bind_name(const char* bind_name, std::string& host, std::string& service, int& family);
+static int qore_socket_sandbox_proto(int family, int socktype);
+static int qore_socket_check_unix_sandbox(QoreSandboxManager* sm, const char* path, bool bind,
+        ExceptionSink* xsink);
 static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
-        ExceptionSink* xsink);
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
-        ExceptionSink* xsink);
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr,
-        int size, int sock_type, int protocol, ExceptionSink* xsink);
+        int size, int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink);
 static int qore_socket_listen_direct(QoreSocket* s, int backlog);
 static int qore_socket_shutdown_direct(QoreSocket* s);
 static int qore_socket_set_no_delay_direct(QoreSocket* s, int nodelay);
@@ -1075,7 +1082,7 @@ public:
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, bool reuseaddr)
             : sock(sock), action(Action::BindUnix), name(name), has_name(true), reuseaddr(reuseaddr),
-            socktype(SOCK_STREAM) {
+            socktype(SOCK_STREAM), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
         if (qore_socket_parse_bind_name(name, this->name, service, family)) {
             action = Action::BindInet;
             has_service = true;
@@ -1083,14 +1090,16 @@ public:
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, int port, bool reuseaddr)
-            : sock(sock), action(Action::BindPort), reuseaddr(reuseaddr), port(port) {
+            : sock(sock), action(Action::BindPort), reuseaddr(reuseaddr), port(port),
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
         service = std::to_string(port);
         has_service = true;
         socktype = SOCK_STREAM;
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* iface, int port, bool reuseaddr)
-            : sock(sock), action(Action::BindInterfacePort), name(iface), reuseaddr(reuseaddr), port(port) {
+            : sock(sock), action(Action::BindInterfacePort), name(iface), reuseaddr(reuseaddr), port(port),
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
         has_name = true;
         service = std::to_string(port);
         has_service = true;
@@ -1098,27 +1107,30 @@ public:
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, int socktype, int protocol)
-            : sock(sock), action(Action::BindUnix), name(name), socktype(socktype), protocol(protocol) {
+            : sock(sock), action(Action::BindUnix), name(name), socktype(socktype), protocol(protocol),
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, const char* service,
             bool reuseaddr, int family, int socktype, int protocol)
             : sock(sock), action(Action::BindInet), name(name ? name : ""), service(service ? service : ""),
-            reuseaddr(reuseaddr), family(family), socktype(socktype), protocol(protocol) {
+            reuseaddr(reuseaddr), family(family), socktype(socktype), protocol(protocol),
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
         has_name = name;
         has_service = service;
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const struct sockaddr* addr, int size,
             ExceptionSink* xsink)
-            : sock(sock), action(Action::BindSockaddr), addr_size(size) {
+            : sock(sock), action(Action::BindSockaddr), addr_size(size),
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
         copyAddress(addr, size, xsink);
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, int family, const struct sockaddr* addr,
             int size, int socktype, int protocol, ExceptionSink* xsink)
             : sock(sock), action(Action::BindFamilySockaddr), family(family), socktype(socktype), protocol(protocol),
-            addr_size(size) {
+            addr_size(size), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
         copyAddress(addr, size, xsink);
     }
 
@@ -1155,17 +1167,19 @@ public:
             case Action::BindInterfacePort:
                 return continueBindInet(xsink);
             case Action::BindUnix:
-                rc = qore_socket_bind_unix_direct(sock, name.c_str(), socktype, protocol, xsink);
+                rc = qore_socket_bind_unix_direct(sock, name.c_str(), socktype, protocol, *sandbox_manager,
+                    xsink);
                 break;
             case Action::BindInet:
                 return continueBindInet(xsink);
             case Action::BindSockaddr:
                 rc = qore_socket_bind_sockaddr_direct(sock, reinterpret_cast<const struct sockaddr*>(&addr),
-                    addr_size, xsink);
+                    addr_size, *sandbox_manager, xsink);
                 break;
             case Action::BindFamilySockaddr:
                 rc = qore_socket_bind_family_sockaddr_direct(sock, family,
-                    reinterpret_cast<const struct sockaddr*>(&addr), addr_size, socktype, protocol, xsink);
+                    reinterpret_cast<const struct sockaddr*>(&addr), addr_size, socktype, protocol,
+                    *sandbox_manager, xsink);
                 break;
             case Action::Listen:
                 rc = qore_socket_listen_direct(sock, backlog);
@@ -1368,6 +1382,8 @@ private:
     std::vector<SocketResolvedAddrInfo> bind_inet_addrs;
     bool bind_inet_resolved = false;
     bool done = false;
+    //! The sandbox that governs a bind, resolved on the thread that requests it (the bind runs on an I/O thread)
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
 };
 
 class QoreSocketControllerAcceptReplacePollOperation : public SocketPollOperationBase {
@@ -1991,7 +2007,7 @@ public:
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr)
             : sock(sock), target(target), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
             pkey(pkey ? pkey->pkRefSelf() : nullptr),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     }
 
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* host, const char* service,
@@ -2000,7 +2016,7 @@ public:
             : sock(sock), target(host), service(service), connect_target(ConnectTarget::Inet), family(family),
             socktype(socktype), protocol(protocol), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
             pkey(pkey ? pkey->pkRefSelf() : nullptr),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     }
 
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* path, int socktype,
@@ -2008,7 +2024,7 @@ public:
             : sock(sock), target(path), connect_target(ConnectTarget::Unix), socktype(socktype),
             protocol(protocol), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
             pkey(pkey ? pkey->pkRefSelf() : nullptr),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     }
 
     DLLLOCAL virtual bool goalReached() const override {
@@ -7565,6 +7581,12 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
 
+    // a connection to a proxy is made for another destination, which the sandbox must allow as well
+    sock->takeSandboxProxyTarget(via_host, via_service);
+    if (!this->sandbox_manager) {
+        via_host.clear();
+    }
+
     sock->do_resolve_event(host, service);
 }
 
@@ -7716,7 +7738,42 @@ int SocketConnectInetHappyEyeballsPollState::getPrimaryPollEvents(int rc) const 
     return he_state == HEBS_RESOLVING ? 0 : rc;
 }
 
+int SocketConnectInetHappyEyeballsPollState::continueProxyTargetCheck(ExceptionSink* xsink) {
+    if (!resolver) {
+        resolver.reset(new QoreCaresAddrInfoResolver(via_host, via_service, AF_UNSPEC, type, protocol));
+    }
+
+    int rc = resolver->continuePoll(xsink);
+    if (*xsink || rc) {
+        return *xsink ? -1 : rc;
+    }
+
+    // the proxy resolves the destination itself, so every address the name resolves to has to be allowed
+    const std::vector<SocketResolvedAddrInfo>& via_addrs = resolver->getAddresses();
+    if (via_addrs.empty()) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED", "cannot check proxy destination '%s' against the sandbox: "
+            "the host name has no addresses", via_host.c_str());
+        return -1;
+    }
+    for (const SocketResolvedAddrInfo& ai : via_addrs) {
+        if (!sandbox_manager->checkNetworkAccess(via_host.c_str(), reinterpret_cast<const struct sockaddr*>(&ai.addr),
+                ai.addrlen, qore_socket_sandbox_proto(ai.family, ai.socktype), xsink)) {
+            return -1;
+        }
+    }
+    resolver.reset();
+    via_host.clear();
+    return 0;
+}
+
 int SocketConnectInetHappyEyeballsPollState::continueResolve(ExceptionSink* xsink) {
+    if (!via_host.empty()) {
+        int rc = continueProxyTargetCheck(xsink);
+        if (*xsink || rc) {
+            return *xsink ? -1 : rc;
+        }
+    }
+
     if (!resolver) {
         resolver.reset(new QoreCaresAddrInfoResolver(host, service, family, type, protocol));
     }
@@ -7785,12 +7842,11 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
     while (next_addr_idx < sorted_addrs.size()) {
         SocketResolvedAddrInfo& p = addrs[sorted_addrs[next_addr_idx]];
 
-        // Check sandbox network security restrictions
+        // Check sandbox network security restrictions on every resolved address; the host name lets an allowed
+        // host pattern apply
         if (sandbox_manager) {
-            int proto = (p.socktype == SOCK_STREAM) ? QSEC_NET_TCP :
-                        (p.socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
-            if (!sandbox_manager->checkNetworkAccess(reinterpret_cast<const struct sockaddr*>(&p.addr), p.addrlen,
-                    proto, xsink)) {
+            if (!sandbox_manager->checkNetworkAccess(host.c_str(), reinterpret_cast<const struct sockaddr*>(&p.addr),
+                    p.addrlen, qore_socket_sandbox_proto(p.family, p.socktype), xsink)) {
                 return -1;
             }
         }
@@ -7927,13 +7983,10 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     strncpy(addr.sun_path, name, sizeof(addr.sun_path) - 1);
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
-    // Check sandbox network security restrictions for UNIX sockets
+    // Check sandbox network and filesystem restrictions for the UNIX socket
     SimpleRefHolder<QoreSandboxManager> smh(qore_socket_ref_sandbox_manager(sandbox_manager));
-    if (smh) {
-        if (!smh->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
-                QSEC_NET_UNIX, xsink)) {
-            return;
-        }
+    if (qore_socket_check_unix_sandbox(*smh, name, false, xsink)) {
+        return;
     }
 
     if ((sock->sock = create_nonblocking_socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
@@ -11415,10 +11468,49 @@ static bool qore_socket_parse_bind_name(const char* bind_name, std::string& host
     return true;
 }
 
-static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
+//! Returns the sandbox protocol flag for a socket of the given address family and type
+static int qore_socket_sandbox_proto(int family, int socktype) {
+#ifndef _Q_WINDOWS
+    if (family == AF_UNIX) {
+        return QSEC_NET_UNIX;
+    }
+#endif
+    return socktype == SOCK_STREAM ? QSEC_NET_TCP : socktype == SOCK_DGRAM ? QSEC_NET_UDP : QSEC_NET_ALL;
+}
+
+//! Checks that the sandbox allows the UNIX socket path to be created (bind) or connected to
+/** A UNIX socket is a file: the network policy decides whether UNIX sockets may be used at all, and the filesystem
+    policy decides which socket files may be reached, so a sandbox without filesystem access cannot reach a local
+    service such as a container or database daemon through its socket file.
+*/
+static int qore_socket_check_unix_sandbox(QoreSandboxManager* sm, const char* path, bool bind,
         ExceptionSink* xsink) {
+#ifdef _Q_WINDOWS
+    return 0;
+#else
+    if (!sm) {
+        return 0;
+    }
+    struct sockaddr_un addr = {};
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    const struct sockaddr* sa = reinterpret_cast<const struct sockaddr*>(&addr);
+    if (bind ? !sm->checkNetworkBind(sa, sizeof(addr), QSEC_NET_UNIX, xsink)
+            : !sm->checkNetworkAccess(path, sa, sizeof(addr), QSEC_NET_UNIX, xsink)) {
+        return -1;
+    }
+    return sm->checkFilesystemAccess(path, bind ? (QSEC_CREATE | QSEC_WRITE) : (QSEC_READ | QSEC_WRITE), xsink)
+        ? 0 : -1;
+#endif
+}
+
+static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     qore_socket_close_private_from_controller(priv);
+    if (qore_socket_check_unix_sandbox(sandbox_manager, name, true, xsink)) {
+        return -1;
+    }
     return priv->bindUNIX(xsink, name, socktype, protocol);
 }
 
@@ -11469,7 +11561,7 @@ static bool qore_socket_ipv6_unavailable(int err) {
 
 static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name, const char* service,
         bool reuseaddr, int family, int protocol, std::vector<SocketResolvedAddrInfo>& addrs,
-        ExceptionSink* xsink) {
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     qore_socket_close_private_from_controller(priv);
 
@@ -11488,12 +11580,26 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         }
     }
 
-    // try each address in order with a socket of its own family; a failed bind closes the socket
+    // try each address in order with a socket of its own family; a failed bind closes the socket.  An address that
+    // the sandbox does not allow is never bound; the first denial is raised if no allowed address can be bound
     int en = 0;
     bool opened = false;
+    ExceptionSink denied_xsink;
     for (size_t i = 0, e = addrs.size(); i < e; ++i) {
         SocketResolvedAddrInfo& ai = addrs[i];
         bool dual_stack_candidate = dual_stack && !i;
+        if (sandbox_manager) {
+            ExceptionSink check_xsink;
+            if (!sandbox_manager->checkNetworkBind(reinterpret_cast<const struct sockaddr*>(&ai.addr), ai.addrlen,
+                    qore_socket_sandbox_proto(ai.family, ai.socktype), &check_xsink)) {
+                if (!denied_xsink) {
+                    denied_xsink.assimilate(check_xsink);
+                } else {
+                    check_xsink.clear();
+                }
+                continue;
+            }
+        }
         if (priv->openINET(ai.family, ai.socktype, protocol)) {
             en = sock_get_raw_error();
             continue;
@@ -11507,6 +11613,8 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         }
         int prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&ai.addr));
         if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr)) {
+            // an allowed address was bound; a denial of another address is not an error
+            denied_xsink.clear();
             return 0;
         }
         en = sock_get_raw_error();
@@ -11517,6 +11625,12 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         }
     }
 
+    if (denied_xsink && !en) {
+        // every candidate was denied by the sandbox
+        xsink->assimilate(denied_xsink);
+        return -1;
+    }
+    denied_xsink.clear();
     if (!opened) {
         qore_socket_error_intern(en, xsink, "SOCKET-BINDINET-ERROR", "error opening socket for bind", 0, name,
             service);
@@ -11566,7 +11680,8 @@ QoreHashNode* QoreSocketControllerSetupPollOperation::continueBindInet(Exception
     }
 
     rc = qore_socket_bind_inet_resolved_direct(sock, has_name ? name.c_str() : nullptr,
-        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs, xsink);
+        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs,
+        *sandbox_manager, xsink);
     done = true;
     return nullptr;
 }
@@ -11612,29 +11727,27 @@ QoreHashNode* SocketSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
     }
 
     rc = qore_socket_bind_inet_resolved_direct(sock->priv->socket, has_name ? name.c_str() : nullptr,
-        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs, xsink);
+        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs,
+        *sandbox_manager, xsink);
     clearNonBlockLocked();
     done = true;
     return nullptr;
 }
 
-static int qore_socket_bind_check_sandbox(const struct sockaddr* addr, int size, int socktype,
-        ExceptionSink* xsink) {
-    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    if (smh) {
-        int proto = socktype == SOCK_STREAM ? QSEC_NET_TCP : socktype == SOCK_DGRAM ? QSEC_NET_UDP : QSEC_NET_ALL;
-        if (!smh->checkNetworkAccess(addr, size, proto, xsink)) {
-            return -1;
-        }
+static int qore_socket_bind_check_sandbox(QoreSandboxManager* sandbox_manager, const struct sockaddr* addr,
+        int size, int socktype, ExceptionSink* xsink) {
+    if (sandbox_manager && !sandbox_manager->checkNetworkBind(addr, size,
+            qore_socket_sandbox_proto(addr->sa_family, socktype), xsink)) {
+        return -1;
     }
     return 0;
 }
 
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
-        ExceptionSink* xsink) {
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
 
-    if (qore_socket_bind_check_sandbox(addr, size, SOCK_STREAM, xsink)) {
+    if (qore_socket_bind_check_sandbox(sandbox_manager, addr, size, SOCK_STREAM, xsink)) {
         return -1;
     }
 
@@ -11665,13 +11778,13 @@ static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr
 }
 
 static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr,
-        int size, int sock_type, int protocol, ExceptionSink* xsink) {
+        int size, int sock_type, int protocol, QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
 
     family = q_get_af(family);
     sock_type = q_get_sock_type(sock_type);
 
-    if (qore_socket_bind_check_sandbox(addr, size, sock_type, xsink)) {
+    if (qore_socket_bind_check_sandbox(sandbox_manager, addr, size, sock_type, xsink)) {
         return -1;
     }
 
@@ -12484,13 +12597,22 @@ AbstractAsyncAction* createPromiseWithNotifierAction(QoreObject* promise_obj,
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
         QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), target(target),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     init(xsink, ssl);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
         QoreSocketObject* sock, bool defer_init) : SocketPollSocketOperationBase(sock), target(target),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
+    init(xsink, ssl, defer_init);
+}
+
+SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
+        QoreSocketObject* sock, bool defer_init, QoreSandboxManager* sandbox_manager)
+        : SocketPollSocketOperationBase(sock), target(target), sandbox_manager(sandbox_manager) {
+    if (sandbox_manager) {
+        sandbox_manager->ref();
+    }
     init(xsink, ssl, defer_init);
 }
 
@@ -12498,7 +12620,7 @@ SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, boo
         const char* service, int family, int socktype, int protocol, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock), target(host), service(service), connect_target(ConnectTarget::Inet),
             family(family), socktype(socktype), protocol(protocol),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     init(xsink, ssl);
 }
 
@@ -12506,21 +12628,21 @@ SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, boo
         const char* service, int family, int socktype, int protocol, QoreSocketObject* sock, bool defer_init)
         : SocketPollSocketOperationBase(sock), target(host), service(service), connect_target(ConnectTarget::Inet),
             family(family), socktype(socktype), protocol(protocol),
-            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     init(xsink, ssl, defer_init);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path,
         int socktype, int protocol, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock), target(path), connect_target(ConnectTarget::Unix),
-            socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     init(xsink, ssl);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path,
         int socktype, int protocol, QoreSocketObject* sock, bool defer_init)
         : SocketPollSocketOperationBase(sock), target(path), connect_target(ConnectTarget::Unix),
-            socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
+            socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     init(xsink, ssl, defer_init);
 }
 
@@ -13316,7 +13438,8 @@ QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink)
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindUnix), name(name),
-        has_name(true), reuseaddr(reuseaddr), socktype(SOCK_STREAM) {
+        has_name(true), reuseaddr(reuseaddr), socktype(SOCK_STREAM),
+        sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     if (qore_socket_parse_bind_name(name, this->name, service, family)) {
         action = Action::BindInet;
         has_service = true;
@@ -13326,7 +13449,7 @@ SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSoc
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int port,
         bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindPort), reuseaddr(reuseaddr),
-        port(port) {
+        port(port), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     service = std::to_string(port);
     has_service = true;
     socktype = SOCK_STREAM;
@@ -13335,7 +13458,8 @@ SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSoc
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* iface,
         int port, bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindInterfacePort),
-        name(iface), has_name(true), reuseaddr(reuseaddr), port(port) {
+        name(iface), has_name(true), reuseaddr(reuseaddr), port(port),
+        sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     service = std::to_string(port);
     has_service = true;
     socktype = SOCK_STREAM;
@@ -13344,14 +13468,15 @@ SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSoc
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         int socktype, int protocol) : SocketPollSocketOperationBase(sock), action(Action::BindUnix), name(name),
-        has_name(true), socktype(socktype), protocol(protocol) {
+        has_name(true), socktype(socktype), protocol(protocol),
+        sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     init(xsink, true);
 }
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         const char* service, bool reuseaddr, int family, int socktype, int protocol)
         : SocketPollSocketOperationBase(sock), action(Action::BindInet), reuseaddr(reuseaddr), family(family),
-        socktype(socktype), protocol(protocol) {
+        socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     if (name) {
         this->name = name;
         has_name = true;
@@ -13488,7 +13613,8 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
         case Action::BindInterfacePort:
             return continueBindInet(xsink);
         case Action::BindUnix:
-            rc = qore_socket_bind_unix_direct(sock->priv->socket, name.c_str(), socktype, protocol, xsink);
+            rc = qore_socket_bind_unix_direct(sock->priv->socket, name.c_str(), socktype, protocol,
+                *sandbox_manager, xsink);
             break;
         case Action::BindInet:
             return continueBindInet(xsink);
@@ -18369,7 +18495,8 @@ QoreHashNode* SocketRecvFromPollOperation::continuePoll(ExceptionSink* xsink) {
 
 SocketSendToPollOperation::SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
         BinaryNode* data, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock), host(host), family(q_get_af(family)), data(data) {
+        : SocketPollSocketOperationBase(sock), host(host), family(q_get_af(family)), data(data),
+        sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
@@ -18442,6 +18569,11 @@ int SocketSendToPollOperation::startSendToPollState(ExceptionSink* xsink) {
     }
 
     const SocketResolvedAddrInfo& ai = addrs.front();
+    // the destination is checked after resolution, so a name resolving to a blocked network is denied
+    if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host.c_str(),
+            reinterpret_cast<const struct sockaddr*>(&ai.addr), ai.addrlen, QSEC_NET_UDP, xsink)) {
+        return -1;
+    }
     memcpy(&dest_addr, &ai.addr, ai.addrlen);
     dest_addr_len = ai.addrlen;
     resolver.reset();

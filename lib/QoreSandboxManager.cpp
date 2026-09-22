@@ -37,6 +37,7 @@
 #include "qore/intern/qore_thread_intern.h"
 
 #include <cassert>
+#include <cctype>
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
@@ -559,35 +560,97 @@ struct qore_net_security_private {
         return false;
     }
 
+    // Returns the host name in the form that is compared: DNS names are case-insensitive (RFC 4343), and a
+    // trailing dot only marks the name as fully qualified
+    static std::string normalizeHostName(const char* hostname) {
+        std::string host(hostname);
+        if (!host.empty() && host.back() == '.') {
+            host.pop_back();
+        }
+        for (char& c : host) {
+            c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+        }
+        return host;
+    }
+
     // Check if host pattern matches hostname
     bool hostMatches(const std::string& pattern, const char* hostname) const {
         // Simple wildcard matching
         if (pattern == "*") return true;
 
-        if (pattern[0] == '*' && pattern[1] == '.') {
-            // *.example.com pattern
-            std::string suffix = pattern.substr(1);  // .example.com
-            std::string host(hostname);
+        std::string host = normalizeHostName(hostname);
+        std::string pat = normalizeHostName(pattern.c_str());
 
-            // Check if hostname ends with suffix
-            if (host.size() >= suffix.size() &&
-                host.compare(host.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        if (pat.size() > 2 && pat[0] == '*' && pat[1] == '.') {
+            // *.example.com pattern: the domain itself or a name with one more label
+            std::string domain = pat.substr(2);  // example.com
+            if (host == domain) {
                 return true;
             }
-            // Also match exact domain (*.example.com should match example.com)
-            if (host == pattern.substr(2)) {
-                return true;
-            }
-            return false;
+            size_t label_len = host.size() - domain.size() - 1;
+            return host.size() > domain.size() + 1
+                && host.compare(host.size() - domain.size(), domain.size(), domain) == 0
+                && host[label_len] == '.'
+                && host.find('.') == label_len;
         }
 
         // Exact match
-        return pattern == hostname;
+        return pat == host;
     }
 
-    // Check if address is in denied ranges
-    bool isDenied(const struct sockaddr* addr) const {
-        for (const auto& range : denied_ranges) {
+    // Check if the host name matches an allowed host pattern
+    bool isHostAllowed(const char* hostname) const {
+        if (!hostname || !*hostname) {
+            return false;
+        }
+        for (const auto& pattern : allowed_hosts) {
+            if (hostMatches(pattern, hostname)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Returns the address that the rules are applied to: an IPv4-mapped IPv6 address carries an IPv4 address, and a
+    // connection to an unspecified address (0.0.0.0 or ::) goes to the local host
+    static const struct sockaddr* normalizeAddr(const struct sockaddr* addr, struct sockaddr_storage& storage,
+            bool unspecified_as_loopback) {
+        if (addr->sa_family == AF_INET6) {
+            const struct sockaddr_in6* sin6 = reinterpret_cast<const struct sockaddr_in6*>(addr);
+            if (IN6_IS_ADDR_V4MAPPED(&sin6->sin6_addr)) {
+                storage = {};
+                struct sockaddr_in* sin = reinterpret_cast<struct sockaddr_in*>(&storage);
+                sin->sin_family = AF_INET;
+                sin->sin_port = sin6->sin6_port;
+                memcpy(&sin->sin_addr, &sin6->sin6_addr.s6_addr[12], sizeof(sin->sin_addr));
+                addr = reinterpret_cast<const struct sockaddr*>(&storage);
+            } else if (unspecified_as_loopback && IN6_IS_ADDR_UNSPECIFIED(&sin6->sin6_addr)) {
+                storage = {};
+                struct sockaddr_in6* out = reinterpret_cast<struct sockaddr_in6*>(&storage);
+                out->sin6_family = AF_INET6;
+                out->sin6_port = sin6->sin6_port;
+                out->sin6_addr = in6addr_loopback;
+                return reinterpret_cast<const struct sockaddr*>(&storage);
+            }
+        }
+        if (unspecified_as_loopback && addr->sa_family == AF_INET) {
+            const struct sockaddr_in* sin = reinterpret_cast<const struct sockaddr_in*>(addr);
+            if (sin->sin_addr.s_addr == htonl(INADDR_ANY)) {
+                struct sockaddr_in out = {};
+                out.sin_family = AF_INET;
+                out.sin_port = sin->sin_port;
+                out.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+                storage = {};
+                memcpy(&storage, &out, sizeof(out));
+                return reinterpret_cast<const struct sockaddr*>(&storage);
+            }
+        }
+        return addr;
+    }
+
+    // Returns true if the address is in an allowed range
+    bool inAllowedRange(const struct sockaddr* addr) const {
+        for (const auto& range : allowed_ranges) {
             if (range.matches(addr)) {
                 return true;
             }
@@ -595,11 +658,9 @@ struct qore_net_security_private {
         return false;
     }
 
-    // Check if address is in allowed ranges
-    bool isAllowed(const struct sockaddr* addr) const {
-        if (allowed_ranges.empty()) return default_allow;
-
-        for (const auto& range : allowed_ranges) {
+    // Check if address is in denied ranges
+    bool isDenied(const struct sockaddr* addr) const {
+        for (const auto& range : denied_ranges) {
             if (range.matches(addr)) {
                 return true;
             }
@@ -638,6 +699,12 @@ struct qore_net_security_private {
         } else if (addr->sa_family == AF_INET6) {
             inet_ntop(AF_INET6, &reinterpret_cast<const struct sockaddr_in6*>(addr)->sin6_addr,
                       buf, sizeof(buf));
+#ifndef _Q_WINDOWS
+        } else if (addr->sa_family == AF_UNIX) {
+            const struct sockaddr_un* sun = reinterpret_cast<const struct sockaddr_un*>(addr);
+            return std::string("UNIX socket ") + std::string(sun->sun_path,
+                strnlen(sun->sun_path, sizeof(sun->sun_path)));
+#endif
         } else {
             return "<unknown>";
         }
@@ -731,7 +798,15 @@ bool QoreNetworkSecurityManager::getDefaultPolicy() const {
 
 bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, socklen_t len,
                                                int proto, ExceptionSink* xsink) {
-    // Check denied ranges first (always take precedence)
+    return checkConnect(nullptr, addr, len, proto, xsink);
+}
+
+bool QoreNetworkSecurityManager::checkConnect(const char* hostname, const struct sockaddr* addr, socklen_t len,
+                                               int proto, ExceptionSink* xsink) {
+    struct sockaddr_storage storage;
+    addr = qore_net_security_private::normalizeAddr(addr, storage, true);
+
+    // Check denied ranges first (always take precedence, also over an allowed host name)
     if (priv->isDenied(addr)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Connection to %s denied by security policy (private/blocked network)",
@@ -747,8 +822,16 @@ bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, sockl
         return false;
     }
 
+    // An allowed host name allows the connection
+    if (priv->isHostAllowed(hostname)) {
+        return true;
+    }
+
     // Check allowed ranges
-    if (!priv->allowed_ranges.empty() && !priv->isAllowed(addr)) {
+    if (!priv->allowed_ranges.empty()) {
+        if (priv->inAllowedRange(addr)) {
+            return true;
+        }
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Connection to %s denied by security policy (not in allowed list)",
             priv->getAddrString(addr).c_str());
@@ -756,7 +839,7 @@ bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, sockl
     }
 
     // Fall back to default policy
-    if (!priv->default_allow && priv->allowed_ranges.empty()) {
+    if (!priv->default_allow) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
             "Connection to %s denied by security policy (default deny)",
             priv->getAddrString(addr).c_str());
@@ -768,15 +851,17 @@ bool QoreNetworkSecurityManager::checkConnect(const struct sockaddr* addr, sockl
 
 bool QoreNetworkSecurityManager::checkBind(const struct sockaddr* addr, socklen_t len,
                                             int proto, ExceptionSink* xsink) {
-    // For bind, we typically want to be more permissive
-    // But still check denied ranges and port restrictions
+    struct sockaddr_storage storage;
+    addr = qore_net_security_private::normalizeAddr(addr, storage, false);
+
     if (priv->isDenied(addr)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
-            "Binding to %s denied by security policy",
+            "Binding to %s denied by security policy (private/blocked network)",
             priv->getAddrString(addr).c_str());
         return false;
     }
 
+    // a system-assigned port (port 0) is not restricted
     int port = priv->getPort(addr);
     if (port > 0 && !priv->isPortAllowed(port, proto)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED",
@@ -784,24 +869,37 @@ bool QoreNetworkSecurityManager::checkBind(const struct sockaddr* addr, socklen_
         return false;
     }
 
+    if (!priv->allowed_ranges.empty()) {
+        if (priv->inAllowedRange(addr)) {
+            return true;
+        }
+        xsink->raiseException("NETWORK-ACCESS-DENIED",
+            "Binding to %s denied by security policy (not in allowed list)",
+            priv->getAddrString(addr).c_str());
+        return false;
+    }
+
+    if (!priv->default_allow) {
+        xsink->raiseException("NETWORK-ACCESS-DENIED",
+            "Binding to %s denied by security policy (default deny)",
+            priv->getAddrString(addr).c_str());
+        return false;
+    }
+
     return true;
 }
 
 bool QoreNetworkSecurityManager::checkHostname(const char* hostname, int port, int proto) const {
-    // Check if any host pattern matches
-    for (const auto& pattern : priv->allowed_hosts) {
-        if (priv->hostMatches(pattern, hostname)) {
-            // Also check port if restrictions are in place
-            if (!priv->allowed_ports.empty() && !priv->isPortAllowed(port, proto)) {
-                return false;
-            }
-            return true;
-        }
+    if (port > 0 && !priv->isPortAllowed(port, proto)) {
+        return false;
     }
+    // a matching host name is allowed unless it resolves to a denied range; any other name can only be allowed
+    // by the address it resolves to
+    return priv->isHostAllowed(hostname) || !priv->allowed_ranges.empty() || priv->default_allow;
+}
 
-    // If no host patterns defined, fall back to default policy
-    // (but final check must still be done on resolved IP)
-    return priv->allowed_hosts.empty() ? priv->default_allow : false;
+bool QoreNetworkSecurityManager::isHostAllowed(const char* hostname) const {
+    return priv->isHostAllowed(hostname);
 }
 
 QoreHashNode* QoreNetworkSecurityManager::getConfiguration(ExceptionSink* xsink) const {
@@ -1064,6 +1162,16 @@ bool QoreSandboxManager::checkFilesystemAccess(const char* path, int mode, Excep
 bool QoreSandboxManager::checkNetworkAccess(const struct sockaddr* addr, socklen_t len,
                                              int proto, ExceptionSink* xsink) {
     return net_mgr.checkConnect(addr, len, proto, xsink);
+}
+
+bool QoreSandboxManager::checkNetworkAccess(const char* hostname, const struct sockaddr* addr, socklen_t len,
+                                             int proto, ExceptionSink* xsink) {
+    return net_mgr.checkConnect(hostname, addr, len, proto, xsink);
+}
+
+bool QoreSandboxManager::checkNetworkBind(const struct sockaddr* addr, socklen_t len,
+                                           int proto, ExceptionSink* xsink) {
+    return net_mgr.checkBind(addr, len, proto, xsink);
 }
 
 QoreSandboxManager* QoreSandboxManager::copy() const {

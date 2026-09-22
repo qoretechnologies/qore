@@ -59,6 +59,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <functional>
+#ifdef DEBUG
+#include <condition_variable>
+#include <mutex>
+#endif
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -122,6 +126,13 @@ DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const 
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
+
+class QoreSandboxManager;
+//! Returns a reference to the sandbox manager whose network policy applies to the calling thread, or nullptr
+/** Socket operations run on async I/O threads without a Program, so every operation that accesses the network
+    resolves the manager on the thread that creates it and keeps it for its checks.
+*/
+DLLLOCAL QoreSandboxManager* qore_socket_ref_policy_sandbox_manager();
 DLLLOCAL int sock_get_error();
 DLLLOCAL void sock_set_raw_error(int rc);
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
@@ -513,6 +524,8 @@ private:
     qore_socket_private* sock;
     SimpleRefHolder<QoreSandboxManager> sandbox_manager;
     std::string host, service;
+    //! The destination that this connection to a proxy is made for, checked against the sandbox first
+    std::string via_host, via_service;
     std::vector<SocketResolvedAddrInfo> addrs;
     std::vector<size_t> sorted_addrs;
     std::vector<ConnAttempt> active_attempts;
@@ -530,6 +543,10 @@ private:
     //! Continue asynchronous DNS resolution
     /** Returns 0 when resolved, 1 when polling must continue, -1 on error */
     DLLLOCAL int continueResolve(ExceptionSink* xsink);
+
+    //! Resolves the destination of a proxy connection and checks every address against the sandbox
+    /** Returns 0 when the destination is allowed, 1 when polling must continue, -1 on error */
+    DLLLOCAL int continueProxyTargetCheck(ExceptionSink* xsink);
 
     //! Handles resolver completion and initializes Happy Eyeballs address ordering
     DLLLOCAL int finishResolve(ExceptionSink* xsink);
@@ -902,19 +919,86 @@ struct qore_socket_private : public QoreReferenceCounter {
     mutable QoreThreadLock tls_state_cache_m;
     mutable std::string ssl_cipher_name_cache;
     mutable std::string ssl_cipher_version_cache;
-    //! Serialises close_internal() SSL shutdown across concurrent callers.
-    /** Two paths can reach close_internal() on the same socket without
-        holding any shared lock: the I/O thread running an H2 client
-        abort → current_op->abort → socket->close, and an app-thread
-        disconnect / HTTPClient destructor calling socket->close directly.
-        Without serialisation they both read ssl != nullptr, both call
-        ssl->shutdown(), and the second touches a freed OpenSSL SSL*
-        (backtrace in CI job 170545: EVP_CIPHER_CTX_get0_cipher SIGSEGV
-        inside SSL_shutdown on a freed cipher ctx).  Taking this lock only
-        around the ssl shutdown/deref block is sufficient — the rest of
-        close_internal() is either idempotent or already guarded by its
-        own locks. */
-    QoreThreadLock ssl_close_m;
+    //! Serialises releasing the descriptor with every other use of it that is made without the outer lock
+    /** Two paths can reach close_internal() on the same socket without holding any shared lock: the I/O thread
+        running an H2 client abort → current_op->abort → socket->close, and an app-thread disconnect / HTTPClient
+        destructor calling socket->close directly; @ref prepareForClose() also shuts the descriptor down without the
+        outer lock by design.
+
+        The system gives the lowest free descriptor number to the next socket or file opened by any thread, so a
+        descriptor number read before a concurrent close can already belong to another connection when it is used:
+        closing or shutting it down again would close or break that connection.  Every release of the descriptor
+        (@ref close_and_reset(), @ref replaceDescriptor()) and every @c ::shutdown() made without the outer lock
+        therefore happen under this lock, and a release happens exactly once.  It also serialises the SSL
+        shutdown/deref pair, which crashed inside SSL_shutdown on freed state when two closers both saw an SSL
+        object (CI job 170545).
+
+        No blocking I/O and no code that can release Qore objects run while this lock is held, so it can be
+        acquired without the outer lock and while the outer lock is held.
+    */
+    QoreThreadLock close_m;
+
+    //! Holds @ref close_m for the scope of the object
+    class CloseLockHelper {
+    public:
+        DLLLOCAL CloseLockHelper(qore_socket_private& priv) : priv(priv) {
+#ifdef DEBUG
+            priv.dbgNoteCloseLockWait();
+#endif
+            priv.close_m.lock();
+        }
+
+        DLLLOCAL ~CloseLockHelper() {
+            priv.close_m.unlock();
+        }
+
+        CloseLockHelper(const CloseLockHelper&) = delete;
+        CloseLockHelper& operator=(const CloseLockHelper&) = delete;
+
+    private:
+        qore_socket_private& priv;
+    };
+
+#ifdef DEBUG
+    //! Debug-only: called by close_and_reset_locked() after the descriptor is closed and before it is reset
+    /** Lets a test reuse the released descriptor number and start a racing close at the exact point where a close
+        without @ref close_m would act on the reused number.
+    */
+    std::function<void()> dbg_after_fd_release;
+
+    //! Debug-only: counts the acquisitions of @ref close_m that have started, for tests
+    int dbg_close_lock_waits = 0;
+    std::mutex dbg_close_lock_m;
+    std::condition_variable dbg_close_lock_cond;
+
+    DLLLOCAL void dbgNoteCloseLockWait() {
+        std::lock_guard<std::mutex> g(dbg_close_lock_m);
+        ++dbg_close_lock_waits;
+        dbg_close_lock_cond.notify_all();
+    }
+
+    //! Debug-only: returns the number of acquisitions of @ref close_m that have started
+    DLLLOCAL int dbgGetCloseLockWaits() {
+        std::lock_guard<std::mutex> g(dbg_close_lock_m);
+        return dbg_close_lock_waits;
+    }
+
+    //! Debug-only: waits until more than @a count acquisitions of @ref close_m have started or @a done returns true
+    /** @a done is evaluated with the internal mutex held and must be made true by a call to
+        @ref dbgNotifyCloseLockWaiters() after it changes
+    */
+    DLLLOCAL void dbgWaitForCloseLockWait(int count, const std::function<bool()>& done) {
+        std::unique_lock<std::mutex> g(dbg_close_lock_m);
+        dbg_close_lock_cond.wait(g, [&]() { return dbg_close_lock_waits > count || done(); });
+    }
+
+    //! Debug-only: wakes threads in @ref dbgWaitForCloseLockWait() after the condition they wait for changed
+    DLLLOCAL void dbgNotifyCloseLockWaiters(const std::function<void()>& change) {
+        std::lock_guard<std::mutex> g(dbg_close_lock_m);
+        change();
+        dbg_close_lock_cond.notify_all();
+    }
+#endif
 
     //! One-shot flag for the currently active fd: first @ref prepareForClose
     //! caller wins and performs the fd shutdown + H2 session-closed mark;
@@ -997,6 +1081,10 @@ struct qore_socket_private : public QoreReferenceCounter {
         @since %Qore 3.0
     */
     QoreThreadLock* outer_lock = nullptr;
+
+    //! The destination that the next connection to a proxy is made for; one-shot, see setSandboxProxyTarget()
+    std::string sandbox_proxy_target_host;
+    std::string sandbox_proxy_target_service;
 
     //! Generation counter bumped on every close / fd swap.
     /** Async controller-backed socket operations snapshot and re-verify this
@@ -1379,10 +1467,17 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL int shutdown_direct() {
-        if (h2_session) {
-            h2_session->markClosed();
+        if (std::shared_ptr<Http2Session> h2 = getH2SessionForClose()) {
+            h2->markClosed();
         }
+        CloseLockHelper cl(*this);
         return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_ARG) : 0;
+    }
+
+    //! Returns the HTTP/2 session to mark closed; the reference is read under @ref close_m
+    DLLLOCAL std::shared_ptr<Http2Session> getH2SessionForClose() {
+        CloseLockHelper cl(*this);
+        return h2_session;
     }
 
     //! Interrupts any in-flight sync I/O on this socket without taking the
@@ -1411,12 +1506,12 @@ struct qore_socket_private : public QoreReferenceCounter {
           2. Issue @c ::shutdown(fd, SHUT_RDWR) on the raw fd.  The
              kernel returns any pending blocking @c recv / @c send with
              EPIPE / ECONNRESET, making @c isSocketDataAvailable /
-             @c asyncIoWait return.  The fd is read without any lock —
-             the race with a concurrent @c close_and_reset is harmless
-             because @c close_and_reset runs inside the very close path
-             we're about to continue from (AutoLocker on priv->m in
-             @c QoreSocketObject::close), so no fd reuse can have
-             happened yet by the same thread.
+             @c asyncIoWait return.  The fd is read and shut down under
+             @ref close_m, which a concurrent close holds while it releases
+             the fd, so the shutdown can never reach a descriptor number
+             that the system has already given to another socket.
+             @ref close_m is never held during blocking I/O, so waiting for
+             it cannot deadlock with the thread blocked in I/O.
 
         Idempotent: @ref pre_close_interrupt_fired ensures at most one
         thread actually issues the shutdown/mark-closed side effects even
@@ -1434,23 +1529,45 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
         // Wake H2 sync consumers (receiveData's retry loops and
         // isStreamComplete).
-        if (h2_session) {
-            h2_session->markClosed();
+        if (std::shared_ptr<Http2Session> h2 = getH2SessionForClose()) {
+            h2->markClosed();
         }
         // Shut down the raw fd to unblock any ::poll / SSL_read /
-        // SSL_write currently in flight on this socket.  A concurrent
-        // close_and_reset() on the SAME thread that called us would be
-        // a re-entrant close and is guarded by the outer AutoLocker on
-        // priv->m; cross-thread, the fd here either (a) is still open
-        // and we unblock the poll, or (b) has already been closed by a
-        // racing close, in which case ::shutdown returns EBADF silently.
-        int fd = sock;
-        if (fd != QORE_INVALID_SOCKET) {
-            ::shutdown(fd, SHUTDOWN_ARG);
+        // SSL_write currently in flight on this socket; if a racing close
+        // has already released the fd, there is nothing to shut down.
+        CloseLockHelper cl(*this);
+        if (sock != QORE_INVALID_SOCKET) {
+            ::shutdown(sock, SHUTDOWN_ARG);
         }
     }
 
+    //! Closes the descriptor and resets the connection state; does nothing if the descriptor is already released
     DLLLOCAL int close_and_reset() {
+        CloseLockHelper cl(*this);
+        return sock != QORE_INVALID_SOCKET ? close_and_reset_locked() : 0;
+    }
+
+    //! Replaces the open descriptor with another one, as for a QUIC connection migration
+    /** @param old_fd the descriptor that the caller read from the socket
+        @param new_fd the descriptor that replaces it
+
+        @return true if @a old_fd was replaced by @a new_fd, in which case the caller must close @a old_fd; false if
+        the socket no longer has @a old_fd, because a concurrent close released it, in which case the caller keeps
+        @a new_fd and must not close @a old_fd
+    */
+    DLLLOCAL bool replaceDescriptor(int old_fd, int new_fd) {
+        CloseLockHelper cl(*this);
+        if (sock != old_fd || old_fd == QORE_INVALID_SOCKET) {
+            return false;
+        }
+        sock = new_fd;
+        // any sync I/O helper mid-wait returns QSE_NOT_OPEN instead of using the old descriptor
+        ++fd_generation;
+        return true;
+    }
+
+    //! Closes the descriptor and resets the connection state; @ref close_m must be held
+    DLLLOCAL int close_and_reset_locked() {
         assert(sock != QORE_INVALID_SOCKET);
         int rc;
         while (true) {
@@ -1465,6 +1582,11 @@ struct qore_socket_private : public QoreReferenceCounter {
             }
         }
         //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
+#ifdef DEBUG
+        if (dbg_after_fd_release) {
+            dbg_after_fd_release();
+        }
+#endif
         sock = QORE_INVALID_SOCKET;
         // Bump fd_generation so any sync I/O helper currently in its
         // poll-wait phase (with outer_lock released) sees the generation
@@ -1503,99 +1625,114 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL int close_internal() {
         //printd(5, "qore_socket_private::close_internal(this: %p) sock: %d\n", this, sock);
-        if (ssl_err_str) {
-            ssl_err_str->deref();
-            ssl_err_str = nullptr;
-        }
-        if (remote_cert) {
-            remote_cert->deref(nullptr);
-            remote_cert = nullptr;
-        }
-        // Reset shared_ptr - will delete session if this is the last reference
-        h2_session.reset();
-        // Clear dispatcher references before clearing sessions to avoid dangling pointers
+        // Concurrent callers are expected (see close_m).  The state that is released here is detached under its lock
+        // and released after the lock is unlocked, because releasing it can run code, such as a destructor, that
+        // closes this socket again.
+
+        // QUIC sessions and HTTP/2 stream callbacks are released before the descriptor is closed; clear dispatcher
+        // references before the sessions go away to avoid dangling pointers
         {
-            AutoLocker al(quic_sessions_lock);
-            for (auto& [id, session] : quic_sessions) {
-                session->clearDispatcher();
+            std::unordered_map<int64_t, std::shared_ptr<QuicSession>> old_quic_sessions;
+            {
+                AutoLocker al(quic_sessions_lock);
+                for (auto& [id, session] : quic_sessions) {
+                    session->clearDispatcher();
+                }
+                old_quic_sessions.swap(quic_sessions);
             }
-            quic_sessions.clear();
         }
         // Free shared server SSL_CTX after all sessions are released
         freeQuicServerSslCtx();
         // Clear HTTP/2 client multiplexing state
         {
-            AutoLocker al(h2_stream_callbacks_lock);
-            for (auto& it : h2_stream_callbacks) {
+            std::unordered_map<int32_t, QoreValue> old_h2_stream_callbacks;
+            {
+                AutoLocker al(h2_stream_callbacks_lock);
+                old_h2_stream_callbacks.swap(h2_stream_callbacks);
+            }
+            for (auto& it : old_h2_stream_callbacks) {
                 it.second.discard(nullptr);
             }
-            h2_stream_callbacks.clear();
         }
-        h2_stream_complete_callback = nullptr;
-        if (sock >= 0) {
-            // Cancel any in-flight I/O on this socket BEFORE touching the SSL
-            // state.  The SSL object is not thread-safe (see SSLSocketHelper.h
-            // line 70: "all operations must be already locked"), and a concurrent
-            // SSL_read/SSL_write on another thread colliding with the SSL_shutdown
-            // below corrupts the internal cipher context — SIGSEGV inside
-            // EVP_CIPHER_get_mode / EVP_CIPHER_CTX_get0_cipher has been observed
-            // under H2 teardown load (e.g. CI jobs 170545, 170659).
-            //
-            // A TCP-level shutdown(SHUT_RDWR) makes any pending/blocking SSL I/O
-            // on other threads return a fatal error (EPIPE/ECONNRESET/WANT_READ
-            // loops resolve to failure), so by the time SSL_shutdown runs below
-            // no other thread is still inside an SSL call on this context.  This
-            // is the "cancel I/O first, then shutdown" invariant.
-            //
-            // Ignore errors from the shutdown syscall: already-shutdown sockets
-            // return ENOTCONN, and we only need best-effort cancellation here.
-            ::shutdown(sock, SHUTDOWN_ARG);
 
-            // if an SSL connection has been established, shut it down first.
-            // Serialise the shutdown/deref pair so concurrent close callers
-            // cannot both see ssl != nullptr and both invoke shutdown on
-            // the same OpenSSL SSL* (one side derefs it to 0 → SSL_free,
-            // the other side crashes inside SSL_shutdown on freed state —
-            // see ssl_close_m comment).
-            {
-                AutoLocker al(ssl_close_m);
+        QoreStringNode* old_ssl_err_str;
+        QoreObject* old_remote_cert;
+        std::shared_ptr<Http2Session> old_h2_session;
+        std::function<void(int32_t, Http2StreamInfo*, ExceptionSink*)> old_h2_stream_complete_callback;
+        int rc = 0;
+        {
+            CloseLockHelper cl(*this);
+            old_ssl_err_str = ssl_err_str;
+            ssl_err_str = nullptr;
+            old_remote_cert = remote_cert;
+            remote_cert = nullptr;
+            old_h2_session = std::move(h2_session);
+            old_h2_stream_complete_callback.swap(h2_stream_complete_callback);
+
+            if (sock >= 0) {
+                // Cancel any in-flight I/O on this socket BEFORE touching the SSL
+                // state.  The SSL object is not thread-safe (see SSLSocketHelper.h
+                // line 70: "all operations must be already locked"), and a concurrent
+                // SSL_read/SSL_write on another thread colliding with the SSL_shutdown
+                // below corrupts the internal cipher context — SIGSEGV inside
+                // EVP_CIPHER_get_mode / EVP_CIPHER_CTX_get0_cipher has been observed
+                // under H2 teardown load (e.g. CI jobs 170545, 170659).
+                //
+                // A TCP-level shutdown(SHUT_RDWR) makes any pending/blocking SSL I/O
+                // on other threads return a fatal error (EPIPE/ECONNRESET/WANT_READ
+                // loops resolve to failure), so by the time SSL_shutdown runs below
+                // no other thread is still inside an SSL call on this context.  This
+                // is the "cancel I/O first, then shutdown" invariant.
+                //
+                // Ignore errors from the shutdown syscall: already-shutdown sockets
+                // return ENOTCONN, and we only need best-effort cancellation here.
+                ::shutdown(sock, SHUTDOWN_ARG);
+
+                // if an SSL connection has been established, shut it down first and release it while the descriptor
+                // is still open; releasing it runs no Qore code
                 if (ssl) {
                     ssl->shutdown();
                     ssl->deref();
                     ssl = nullptr;
                 }
-            }
 
-            if (!socketname.empty()) {
-                if (del) {
-                    unlink(socketname.c_str());
+                if (!socketname.empty()) {
+                    if (del) {
+                        unlink(socketname.c_str());
+                    }
+                    socketname.clear();
                 }
-                socketname.clear();
-            }
-            do_close_event();
-            // issue #3558: increment the connection sequence here. so the connection sequence is different as soon as
-            // it's closed
-            ++connection_id;
+                do_close_event();
+                // issue #3558: increment the connection sequence here. so the connection sequence is different as
+                // soon as it's closed
+                ++connection_id;
 
-            int rc = close_and_reset();
+                rc = close_and_reset_locked();
 
 #ifdef DARWIN
-            // Signal any active kqueue poll that this socket was closed;
-            // on macOS, closing a monitored FD silently removes its kqueue
-            // filter without delivering an event.
-            // Use exchange to atomically claim and clear the fd, ensuring
-            // only one thread writes to the pipe for this socket.
-            int nfd = poll_notify_fd.exchange(-1, std::memory_order_acq_rel);
-            if (nfd >= 0) {
-                char c = 1;
-                while (::write(nfd, &c, 1) == -1 && errno == EINTR) {}
-            }
+                // Signal any active kqueue poll that this socket was closed;
+                // on macOS, closing a monitored FD silently removes its kqueue
+                // filter without delivering an event.
+                // Use exchange to atomically claim and clear the fd, ensuring
+                // only one thread writes to the pipe for this socket.
+                int nfd = poll_notify_fd.exchange(-1, std::memory_order_acq_rel);
+                if (nfd >= 0) {
+                    char c = 1;
+                    while (::write(nfd, &c, 1) == -1 && errno == EINTR) {}
+                }
 #endif
-
-            return rc;
-        } else {
-            return 0;
+            }
         }
+
+        old_h2_session.reset();
+        old_h2_stream_complete_callback = nullptr;
+        if (old_remote_cert) {
+            old_remote_cert->deref(nullptr);
+        }
+        if (old_ssl_err_str) {
+            old_ssl_err_str->deref();
+        }
+        return rc;
     }
 
     DLLLOCAL void setAssumedEncoding(const char* str) {
@@ -2217,6 +2354,24 @@ struct qore_socket_private : public QoreReferenceCounter {
         pre_close_interrupt_fired.store(false, std::memory_order_release);
     }
 
+    //! Sets the destination that the next connection, which is made to a proxy, is made for
+    /** A proxy connects to the destination on the client's behalf, so a sandbox has to allow the destination as
+        well as the proxy: the next INET connection checks every address of @a host against the sandbox that governs
+        it before it connects to the proxy.  The value is consumed by that connection.
+    */
+    DLLLOCAL void setSandboxProxyTarget(const char* host, int port) {
+        sandbox_proxy_target_host = host ? host : "";
+        sandbox_proxy_target_service = std::to_string(port);
+    }
+
+    //! Takes the destination set with setSandboxProxyTarget(), if any
+    DLLLOCAL void takeSandboxProxyTarget(std::string& host, std::string& service) {
+        host.clear();
+        service.clear();
+        host.swap(sandbox_proxy_target_host);
+        service.swap(sandbox_proxy_target_service);
+    }
+
     DLLLOCAL void confirmConnected(const char* host) {
         resetCloseInterrupt();
         listening = false;
@@ -2375,20 +2530,9 @@ struct qore_socket_private : public QoreReferenceCounter {
 #endif
     }
 
-    // the only place where xsink is optional
+    // the only place where xsink is optional; the caller checks the bind against the sandbox, with the manager it
+    // resolved on the thread that requested the bind
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr, ExceptionSink* xsink = 0) {
-        // Check sandbox network security restrictions for bind
-        QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-        if (smh && xsink) {
-            int proto = (stype == SOCK_STREAM) ? QSEC_NET_TCP :
-                        (stype == SOCK_DGRAM) ? QSEC_NET_UDP :
-                        (ai_addr->sa_family == AF_UNIX) ? QSEC_NET_UNIX : QSEC_NET_ALL;
-            if (!smh->network().checkBind(ai_addr, ai_addrlen, proto, xsink)) {
-                close();
-                return -1;
-            }
-        }
-
         reuse(reuseaddr);
 
         if ((::bind(sock, ai_addr, ai_addrlen)) == QORE_SOCKET_ERROR) {

@@ -708,6 +708,199 @@ static void ut_event_loop_remove_recycled_fd(UnitTestCounters& c) {
     close(sv2[1]);
 }
 
+//! Tests that a close racing with the release of a socket's descriptor never reaches the reused descriptor number
+/** The system gives the lowest free descriptor number to the next socket opened by any thread.  A close or
+    prepareForClose() that read the number before a concurrent close released it, and used it afterwards, shut down
+    or closed whatever connection had been given that number in the meantime.  The hook runs after the descriptor is
+    released and before the socket forgets it, which is exactly where an unserialized racer would still read it.
+*/
+static void ut_socket_close_race_releases_descriptor_once(UnitTestCounters& c) {
+    int own[2];
+    int other[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, own)) {
+        UT_ASSERT(c, false, "socketpair() for the socket under test succeeds");
+        return;
+    }
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, other)) {
+        UT_ASSERT(c, false, "socketpair() for the unrelated connection succeeds");
+        close(own[0]);
+        close(own[1]);
+        return;
+    }
+
+    const int fd = own[0];
+    qore_socket_private* priv = new qore_socket_private(fd, AF_UNIX, SOCK_STREAM, 0);
+
+    std::thread racer;
+    bool racer_done = false;
+    bool reused = false;
+    priv->dbg_after_fd_release = [&]() {
+        // another connection gets the released number, as the next socket opened by any thread would
+        reused = dup2(other[0], fd) == fd;
+        int waits = priv->dbgGetCloseLockWaits();
+        // another thread closes the same socket now
+        racer = std::thread([&]() {
+            priv->prepareForClose();
+            priv->close_internal();
+            priv->dbgNotifyCloseLockWaiters([&]() { racer_done = true; });
+        });
+        // continue once the racer waits for the release to finish; a racer that does not wait finishes instead
+        priv->dbgWaitForCloseLockWait(waits, [&]() { return racer_done; });
+    };
+
+    int rc = priv->close_internal();
+    racer.join();
+    UT_ASSERT_EQ(c, 0, rc, "the socket closes");
+    UT_ASSERT(c, reused, "the released descriptor number is given to another connection");
+    UT_ASSERT(c, racer_done, "the racing close finishes");
+    UT_ASSERT(c, priv->sock == QORE_INVALID_SOCKET, "the socket has no descriptor after both closes");
+
+    // the connection that now has the number is neither closed nor shut down
+    bool open = fcntl(fd, F_GETFD) != -1;
+    UT_ASSERT(c, open, "the racing close did not close the reused descriptor");
+    if (open) {
+        char b = 'x';
+        ssize_t sent = write(other[1], &b, 1);
+        UT_ASSERT_EQ(c, (ssize_t)1, sent, "the unrelated connection still sends");
+        char r = 0;
+        ssize_t received = read(fd, &r, 1);
+        UT_ASSERT_EQ(c, (ssize_t)1, received, "the reused descriptor still receives");
+        sent = write(fd, &b, 1);
+        UT_ASSERT_EQ(c, (ssize_t)1, sent, "the reused descriptor was not shut down for sending");
+        close(fd);
+    }
+
+    priv->dbg_after_fd_release = nullptr;
+    priv->deref();
+    close(own[1]);
+    close(other[0]);
+    close(other[1]);
+}
+
+//! Fills in a socket address for the network policy tests and returns its size
+static socklen_t ut_net_addr(struct sockaddr_storage& ss, int family, const char* addr, int port) {
+    ss = {};
+    if (family == AF_INET) {
+        struct sockaddr_in* sin = reinterpret_cast<struct sockaddr_in*>(&ss);
+        sin->sin_family = AF_INET;
+        sin->sin_port = htons(port);
+        inet_pton(AF_INET, addr, &sin->sin_addr);
+        return sizeof(*sin);
+    }
+    struct sockaddr_in6* sin6 = reinterpret_cast<struct sockaddr_in6*>(&ss);
+    sin6->sin6_family = AF_INET6;
+    sin6->sin6_port = htons(port);
+    inet_pton(AF_INET6, addr, &sin6->sin6_addr);
+    return sizeof(*sin6);
+}
+
+//! Returns true if the network policy allows a TCP connection to the given host name and address
+static bool ut_net_connect_allowed(QoreNetworkSecurityManager& net, const char* host, int family, const char* addr,
+        int port) {
+    struct sockaddr_storage ss;
+    socklen_t len = ut_net_addr(ss, family, addr, port);
+    ExceptionSink xsink;
+    bool rv = net.checkConnect(host, reinterpret_cast<const struct sockaddr*>(&ss), len, QSEC_NET_TCP, &xsink);
+    xsink.clear();
+    return rv;
+}
+
+//! Returns true if the network policy allows binding the given TCP address
+static bool ut_net_bind_allowed(QoreNetworkSecurityManager& net, int family, const char* addr, int port) {
+    struct sockaddr_storage ss;
+    socklen_t len = ut_net_addr(ss, family, addr, port);
+    ExceptionSink xsink;
+    bool rv = net.checkBind(reinterpret_cast<const struct sockaddr*>(&ss), len, QSEC_NET_TCP, &xsink);
+    xsink.clear();
+    return rv;
+}
+
+//! Tests the rules of the network policy without the network
+static void ut_network_security_rules(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    {
+        // host patterns: one label for a wildcard, the domain itself, no case, no trailing dot
+        QoreNetworkSecurityManager net;
+        net.addAllowedHost("*.example.com", &xsink);
+        net.addAllowedHost("Exact.Example.ORG", &xsink);
+        bool b = net.isHostAllowed("api.example.com");
+        UT_ASSERT(c, b, "a wildcard pattern matches a name with one more label");
+        b = net.isHostAllowed("api.sub.example.com");
+        UT_ASSERT(c, !b, "a wildcard pattern does not match a name with two more labels");
+        b = net.isHostAllowed("example.com");
+        UT_ASSERT(c, b, "a wildcard pattern matches the domain itself");
+        b = net.isHostAllowed("badexample.com");
+        UT_ASSERT(c, !b, "a wildcard pattern does not match another domain with the same suffix");
+        b = net.isHostAllowed("API.EXAMPLE.COM.");
+        UT_ASSERT(c, b, "host names are compared without case and without a trailing dot");
+        b = net.isHostAllowed("exact.example.org");
+        UT_ASSERT(c, b, "an exact pattern is compared without case");
+        b = net.isHostAllowed(nullptr);
+        UT_ASSERT(c, !b, "no host name matches no pattern");
+
+        // an allowed host is allowed by the default deny policy, but not a blocked address it resolves to
+        b = ut_net_connect_allowed(net, "api.example.com", AF_INET, "203.0.113.5", 443);
+        UT_ASSERT(c, b, "an allowed host name is allowed");
+        b = ut_net_connect_allowed(net, "other.org", AF_INET, "203.0.113.5", 443);
+        UT_ASSERT(c, !b, "another host name is denied by the default deny policy");
+        net.blockPrivateNetworks();
+        b = ut_net_connect_allowed(net, "api.example.com", AF_INET, "10.1.2.3", 443);
+        UT_ASSERT(c, !b, "an allowed host name resolving to a denied range is denied");
+
+        // the pre-check before resolution
+        b = net.checkHostname("api.example.com", 443, QSEC_NET_TCP);
+        UT_ASSERT(c, b, "an allowed host name passes the pre-check");
+        b = net.checkHostname("other.org", 443, QSEC_NET_TCP);
+        UT_ASSERT(c, !b, "a host name that no rule can allow fails the pre-check");
+        net.addAllowedIPRange("203.0.113.0/24", &xsink);
+        b = net.checkHostname("other.org", 443, QSEC_NET_TCP);
+        UT_ASSERT(c, b, "a host name that an allowed range can allow passes the pre-check");
+        net.addAllowedPort(443, QSEC_NET_TCP);
+        b = net.checkHostname("api.example.com", 80, QSEC_NET_TCP);
+        UT_ASSERT(c, !b, "a port that is not allowed fails the pre-check");
+    }
+    {
+        // address forms that the system connects to a blocked address
+        QoreNetworkSecurityManager net;
+        net.setDefaultPolicy(true);
+        net.blockLocalhost();
+        bool b = ut_net_connect_allowed(net, nullptr, AF_INET6, "::ffff:127.0.0.1", 80);
+        UT_ASSERT(c, !b, "an IPv4-mapped loopback address is denied");
+        b = ut_net_connect_allowed(net, nullptr, AF_INET, "0.0.0.0", 80);
+        UT_ASSERT(c, !b, "the unspecified IPv4 destination is denied as the loopback address");
+        b = ut_net_connect_allowed(net, nullptr, AF_INET6, "::", 80);
+        UT_ASSERT(c, !b, "the unspecified IPv6 destination is denied as the loopback address");
+        b = ut_net_connect_allowed(net, nullptr, AF_INET6, "::ffff:203.0.113.5", 80);
+        UT_ASSERT(c, b, "an IPv4-mapped public address is allowed");
+
+        // binds: a wildcard address is not the loopback address
+        b = ut_net_bind_allowed(net, AF_INET, "0.0.0.0", 0);
+        UT_ASSERT(c, b, "a bind on all interfaces is allowed by the default allow policy");
+        b = ut_net_bind_allowed(net, AF_INET6, "::ffff:127.0.0.1", 0);
+        UT_ASSERT(c, !b, "a bind to an IPv4-mapped loopback address is denied");
+    }
+    {
+        // binds follow the default policy, allowed ranges, and allowed ports
+        QoreNetworkSecurityManager net;
+        bool b = ut_net_bind_allowed(net, AF_INET, "127.0.0.1", 0);
+        UT_ASSERT(c, !b, "the default deny policy denies binds");
+        net.addAllowedIPRange("127.0.0.0/8", &xsink);
+        b = ut_net_bind_allowed(net, AF_INET, "127.0.0.1", 0);
+        UT_ASSERT(c, b, "an allowed range allows a bind");
+        b = ut_net_bind_allowed(net, AF_INET, "0.0.0.0", 0);
+        UT_ASSERT(c, !b, "a range that does not contain the wildcard address denies a bind on all interfaces");
+        net.addAllowedPort(8080, QSEC_NET_TCP);
+        b = ut_net_bind_allowed(net, AF_INET, "127.0.0.1", 9090);
+        UT_ASSERT(c, !b, "a specific port that is not allowed is denied");
+        b = ut_net_bind_allowed(net, AF_INET, "127.0.0.1", 8080);
+        UT_ASSERT(c, b, "an allowed port is allowed");
+        b = ut_net_bind_allowed(net, AF_INET, "127.0.0.1", 0);
+        UT_ASSERT(c, b, "a system-assigned port is not restricted");
+    }
+    UT_ASSERT(c, !xsink, "configuring the policies raises no exception");
+    xsink.clear();
+}
+
 static void ut_asyncio_construction(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
@@ -4448,6 +4641,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
+    ut_socket_close_race_releases_descriptor_once(c);
+    ut_network_security_rules(c);
     ut_asyncio_construction(c);
     ut_asyncio_poll_timeout_rounding(c);
     ut_asyncio_autostop(c);

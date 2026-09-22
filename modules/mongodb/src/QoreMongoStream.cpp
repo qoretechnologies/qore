@@ -400,7 +400,8 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         return nullptr;
     }
 
-    QoreSandboxManagerHelper smh;
+    // a policy check honors an active policy barrier
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
 
     // Resolve the hostname
     char port_str[8];
@@ -449,7 +450,8 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         // Check network access if sandbox manager is present
         if (smh) {
             ExceptionSink xsink;
-            if (!smh->checkNetworkAccess(sa, addrlen, IPPROTO_TCP, &xsink)) {
+            // the host name lets an allowed host pattern apply; the protocol is a sandbox protocol flag
+            if (!smh->checkNetworkAccess(host->host, sa, addrlen, QSEC_NET_TCP, &xsink)) {
                 // Network access denied by sandbox
                 if (xsink) {
                     bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,

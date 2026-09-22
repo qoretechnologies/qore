@@ -429,7 +429,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     int64_t not_before_ns_abs)
     : SocketPollSocketOperationBase(sock), host(host), service(std::to_string(port)),
       handshake_timeout_ns_(handshake_timeout_ns), port_(port), family_(q_get_af(family)),
-      not_before_ns_(not_before_ns_abs) {
+      not_before_ns_(not_before_ns_abs), sandbox_manager_(qore_socket_ref_policy_sandbox_manager()) {
     AutoLocker al(sock->priv->m);
 
     // Validate socket
@@ -485,6 +485,12 @@ int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
     }
 
     const SocketResolvedAddrInfo& ai = addrs.front();
+    // the remote address is checked after resolution, so a name resolving to a blocked network is denied; a
+    // connection migration later only changes the local address
+    if (sandbox_manager_ && !sandbox_manager_->checkNetworkAccess(host.c_str(),
+            reinterpret_cast<const struct sockaddr*>(&ai.addr), ai.addrlen, QSEC_NET_UDP, xsink)) {
+        return -1;
+    }
     memcpy(&remote_addr_, &ai.addr, ai.addrlen);
     remote_addrlen_ = ai.addrlen;
     resolver.reset();
@@ -1390,18 +1396,20 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
     // old fd — the epoll registration is cleanly replaced on the next cycle.
     {
         AutoLocker al(sock->priv->m);
+        // the swap also bumps fd_generation so any sync I/O helper mid-wait (lock released) returns QSE_NOT_OPEN on
+        // re-acquire instead of operating on the pre-migration fd; a close that raced with the migration has already
+        // released the old fd, so the new fd is not installed and closed by the guard instead
+        if (!sock->priv->socket->priv->replaceDescriptor(old_fd, new_fd)) {
+            xsink->raiseException("SOCKET-CLOSED", "the socket was closed during QUIC connection migration");
+            return -1;
+        }
         fd_guard.release();
-        sock->priv->socket->priv->sock = new_fd;
-        // Bump fd_generation so any sync I/O helper mid-wait (lock
-        // released) returns QSE_NOT_OPEN on re-acquire instead of
-        // operating on the pre-migration fd.
-        ++sock->priv->socket->priv->fd_generation;
         memcpy(&local_addr_, &new_local, new_local_len);
         local_addrlen_ = new_local_len;
     }
 
     // Close old fd outside the lock — safe because the socket object now
-    // points to new_fd
+    // points to new_fd, and only this thread owns the old one
     ::close(old_fd);
 
     // Send PATH_CHALLENGE + pending request frames immediately so the server

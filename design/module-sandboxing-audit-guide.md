@@ -304,7 +304,7 @@ Search for these patterns that require network security checks:
 | Pattern to Find | Required Check |
 |-----------------|----------------|
 | `connect()` | `checkConnect()` |
-| `bind()` | `checkBind()` |
+| `bind()` | `checkBind()` / `checkNetworkBind()` |
 | `socket()` + connection | Check before connect |
 | `getaddrinfo()` + connect | `checkHostname()` before DNS, `checkConnect()` after |
 | `gethostbyname()` + connect | `checkHostname()` before DNS, `checkConnect()` after |
@@ -374,6 +374,37 @@ Attack scenario without post-resolution check:
 4. Connection goes to metadata endpoint
 
 **Solution**: Always call `checkConnect()` on the resolved `sockaddr` before connecting.
+
+### 2.4a Operations Continued on Another Thread
+
+Socket operations run on async I/O threads (and callback workers) that have no Program, so a
+`QoreSandboxManagerHelper` created there finds no sandbox and every check silently passes.  An
+operation that accesses the network must resolve the manager on the thread that creates it and keep
+it for its checks:
+
+```cpp
+// on the requesting thread, when the operation is created
+SimpleRefHolder<QoreSandboxManager> sandbox_manager(qore_socket_ref_policy_sandbox_manager());
+
+// later, on the I/O thread, for every resolved address
+if (sandbox_manager && !sandbox_manager->checkNetworkAccess(host, addr, len, QSEC_NET_TCP, xsink)) {
+    return -1;
+}
+```
+
+- Use the `Policy` purpose for network checks (`qore_socket_ref_policy_sandbox_manager()` or
+  `QoreSandboxManagerHelper(QoreSandboxManagerHelper::Policy)`), so a policy barrier set with
+  `SandboxManager::callWithSystemPolicy()` is honored.
+- An operation created lazily on the I/O thread (for example a step of a `PollPipeline`) must be given
+  the manager captured when its owner was created (`SocketConnectPollOperation` has a constructor that
+  takes it).
+- A callback worker that continues a request for another thread applies the captured context with
+  `QoreSandboxContextHelper` (see the HTTP client redirect handling).
+- Pass the host name to `checkNetworkAccess()` / `checkConnect()` so allowed host patterns apply; check
+  binds with `checkNetworkBind()` / `checkBind()`, not with the connect check.
+- A UNIX domain socket also needs filesystem access to its path (`checkFilesystemAccess()`).
+- The destination of a proxied request is checked as well as the proxy (see
+  `qore_socket_private::setSandboxProxyTarget()`).
 
 ### 2.5 Common Network Audit Findings
 

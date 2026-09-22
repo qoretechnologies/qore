@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/AsyncCompletionAction.h"
@@ -303,7 +304,7 @@ static bool wsIsClosingDone(const PollPipelinePriv::Context& ctx) {
 // ============================================================
 
 PollPipelinePriv::PollPipelinePriv(QoreObject* self, QoreSocketObject* sock)
-    : SocketPollOperationBase(self), sock_obj(sock) {
+    : SocketPollOperationBase(self), sock_obj(sock), sandbox_manager(qore_socket_ref_policy_sandbox_manager()) {
     // sock is already ref'd by the QPP caller
 }
 
@@ -1675,7 +1676,7 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             sock_obj->ref();
             ReferenceHolder<SocketConnectPollOperation> op(
                 new SocketConnectPollOperation(xsink, false, step.target.c_str(),
-                    sock_obj, true),
+                    sock_obj, true, *sandbox_manager),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -1687,7 +1688,7 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             sock_obj->ref();
             ReferenceHolder<SocketConnectPollOperation> op(
                 new SocketConnectPollOperation(xsink, true, step.target.c_str(),
-                    sock_obj, true),
+                    sock_obj, true, *sandbox_manager),
                 xsink);
             if (*xsink) {
                 return nullptr;

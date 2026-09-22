@@ -335,6 +335,52 @@ sm.addNetworkAllowedPort(53, QSEC_NET_ALL);         # DNS (TCP and UDP)
 sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
     @endcode
 
+    @subsection sandbox_net_rules How Network Access Is Decided
+
+    The network policy is checked for:
+    - every address a TCP connection is attempted to, including each address that the host name resolves to
+      when several addresses are tried (RFC 8305), connections of @ref Qore::HTTPClient "HTTPClient", FTP
+      control and data connections, and connections made in a @ref Qore::PollPipeline "PollPipeline"
+    - the remote address of a QUIC / HTTP/3 connection, including an upgrade to HTTP/3 announced by a server
+    - the destination of every UDP datagram sent with @ref Qore::Socket::startPollSendTo() "Socket::startPollSendTo()"
+    - every local address bound for TCP, UDP, or a UNIX domain socket
+    - the destination of a connection made through an HTTP proxy: the proxy is checked as the address connected
+      to, and every address the destination resolves to is checked as well, because the proxy connects to it on
+      the client's behalf; a destination that cannot be resolved cannot be checked and is denied
+
+    The sandbox that governs an operation is the one of the thread that starts it; an operation continued on an
+    async I/O thread keeps that sandbox.  Network checks honor
+    @ref Qore::SandboxManager::callWithSystemPolicy() "SandboxManager::callWithSystemPolicy()".
+
+    A connection is decided by these rules in order, after DNS resolution, for each address:
+    -# an IPv4-mapped IPv6 address (\c ::ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
+       unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
+       checked as the loopback address
+    -# an address in a denied IP range is denied, also for an allowed host name, so a name that resolves to a
+       blocked network (DNS rebinding) is denied
+    -# a port outside the allowed ports for the protocol is denied
+    -# a host name that matches an allowed host pattern is allowed
+    -# if allowed IP ranges are configured, an address in one of them is allowed and any other address is denied
+    -# otherwise the default policy decides
+
+    A bind is decided by the same rules without host names, except that a system-assigned port (port \c 0) is
+    not restricted by allowed ports.  A bind on all interfaces uses the wildcard address, which an allowed IP range
+    only allows if it contains the wildcard address itself (for example \c 0.0.0.0/0 or \c ::/0); with the default
+    deny policy and no allowed IP ranges, no socket can be bound.
+
+    A UNIX domain socket is a file: in addition to the network policy, connecting to one requires read and write
+    access to the socket file and binding one requires create and write access under the
+    @ref sandbox_filesystem "filesystem policy", so a sandbox without filesystem access cannot reach a local
+    service such as a container or database daemon through its socket file.
+
+    Host name patterns are compared without regard to case and without a trailing dot; \c "*.example.com"
+    matches \c "example.com" and names with one more label, such as \c "api.example.com", but not
+    \c "api.sub.example.com"; \c "*" matches every host name.
+
+    @note Incoming connections accepted by a listening socket, datagrams received, and DNS lookups are not
+    controlled by the network policy; use @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" to disable network access
+    completely.
+
     @subsection sandbox_net_protocols Protocol Constants
 
     The following constants control network protocols:

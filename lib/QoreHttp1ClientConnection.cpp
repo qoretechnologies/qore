@@ -237,6 +237,12 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         }
     }
 
+    // the proxy connects to the target on the client's behalf, so the sandbox must allow the target as well
+    if (use_proxy) {
+        qore_socket_private::get(*my_socket_priv::getPriv(*sock_priv_raw)->socket)->setSandboxProxyTarget(
+            target_host.c_str(), target_port);
+    }
+
     // 3. Create the SocketConnectPollOperation.  The ctor takes an already-ref'd
     //    QoreSocketObject pointer and adopts it.
     sock_priv_raw->ref();
