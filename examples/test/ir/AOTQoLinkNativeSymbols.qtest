@@ -34,6 +34,15 @@
     "input has multiple exported *_script_register symbols".
 */
 class AOTQoLinkNativeSymbolsTest inherits QUnit::Test {
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
+        linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
     public {
         #! aggregate symbol used for the two-input cases here
         const AggSymbol = "QO_LINK_NATIVE_SYMBOLS";
@@ -265,9 +274,9 @@ int main(int, char**) {
         # than the source include tree, so the host TU needs both include dirs in-tree; a
         # non-existent dir is harmlessly ignored for installed layouts.
         string link_out = run(sprintf(
-            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s %s/*.qo -L%s -Wl,-rpath,%s -lqore -o %s",
+            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s %s/*.qo -L%s -Wl,-rpath,%s -lqore -o %s %s",
             libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
-            glue, aggregate, qo_dir, libqore_dir, libqore_dir, exe));
+            glue, aggregate, qo_dir, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
         # the pre-fix failure mode: the aggregate references decorated names no
         # input defines, so the native link fails on unresolved symbols
         assertEq(-1, link_out.find("_script_register"),

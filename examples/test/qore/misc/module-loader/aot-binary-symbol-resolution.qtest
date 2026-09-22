@@ -12,6 +12,15 @@
 %exec-class AotBinarySymbolResolutionTest
 
 class AotBinarySymbolResolutionTest inherits QUnit::Test {
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
+        linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
     private {
         string qore_bin;
         string libqore_dir;
@@ -87,9 +96,10 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
         string undefined_flag = PlatformOS == "Darwin" ? " -Wl,-undefined,dynamic_lookup" : "";
 
         string build_out = backquote(sprintf(
-            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore%s 2>&1",
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore%s %s 2>&1",
             shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
-            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir), undefined_flag));
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir), undefined_flag,
+            libqoreTargetFlags().join(" ")));
         assertTrue(is_file(qmod_path), "compiled unresolved-symbol qmod: " + build_out);
 
         # different dynamic linkers report the unresolved symbol differently: glibc -> "undefined symbol:
@@ -172,9 +182,10 @@ extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_in
         f.close();
 
         string build_cmd = sprintf(
-            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore 2>&1",
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore %s 2>&1",
             shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
-            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir));
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir),
+            libqoreTargetFlags().join(" "));
         string build_out = backquote(build_cmd);
         assertTrue(is_file(qmod_path), "compiled single-map qmod: " + build_out);
 

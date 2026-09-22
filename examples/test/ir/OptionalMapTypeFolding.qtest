@@ -8,6 +8,15 @@
 %exec-class OptionalMapTypeFoldingTest
 
 class OptionalMapTypeFoldingTest inherits QUnit::Test {
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
+        linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
     private {
         string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -80,7 +89,7 @@ class OptionalMapTypeFoldingTest inherits QUnit::Test {
         # binary linked with -L/-l alone has nowhere to look and dies in dyld before main()
         run(dir.path, (ENV.CXX ?? "c++", "-std=c++17", "-g", "-I" + root + "/include",
             "-I" + lib_dir + "/include", get_script_dir() + "/optional_map_cancellation.cpp",
-            "-L" + lib_dir, "-Wl,-rpath," + lib_dir, "-lqore", "-o", executable));
+            "-L" + lib_dir, "-Wl,-rpath," + lib_dir, "-lqore", "-o", executable) + libqoreTargetFlags());
         assertEq("optional-map-cancellation: ok\n", run(dir.path, (executable,)));
         assertEq("optional-map-cancellation: ok\n", run(dir.path, (executable,), True));
     }

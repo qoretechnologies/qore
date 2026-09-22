@@ -22705,6 +22705,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
 //! AOT link configuration read from CMake-generated aot-link.conf
 struct AOTLinkConfig {
     std::string cxx;            //!< C++ compiler path
+    //! the platform version libqore was built for, as compiler driver flags; see QoreAOT::getLinkTargetFlags()
+    std::string target_flags;
     std::string dynamic_libs;   //!< extra libs for dynamic linking (system libs)
     std::string static_libs;    //!< all transitive deps for static linking
     //! the sanitizer options libqore was built with (e.g. \c -fsanitize=thread), for executables
@@ -22718,10 +22720,29 @@ struct AOTLinkConfig {
     2. QORE_LIBDIR env var + "/aot-link.conf" (development builds)
     3. Compiled-in QORE_LIBDIR + "/qore/aot-link.conf" (installed builds)
 */
+std::string QoreAOT::getLinkTargetFlags() {
+#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+    if (getenv("MACOSX_DEPLOYMENT_TARGET")) {
+        return std::string();
+    }
+    // the version this file - and therefore libqore - is being compiled for, as MMmmpp (e.g. 260600, 101500)
+    const int version = __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__;
+    std::string rv = "-mmacosx-version-min=" + std::to_string(version / 10000) + "."
+        + std::to_string((version / 100) % 100);
+    if (version % 100) {
+        rv += "." + std::to_string(version % 100);
+    }
+    return rv;
+#else
+    return std::string();
+#endif
+}
+
 static AOTLinkConfig loadAOTLinkConfig() {
     AOTLinkConfig config;
     // Default C++ compiler
     config.cxx = "c++";
+    config.target_flags = QoreAOT::getLinkTargetFlags();
 
     // Determine config file path
     std::string conf_path;
@@ -22811,6 +22832,9 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         // Static link: use CXX compiler from config, link static lib + all transitive deps
         cmd = config.cxx + " -o " + exe_path + " " + obj_path
             + " " + static_lib;
+        if (!config.target_flags.empty()) {
+            cmd += " " + config.target_flags;
+        }
         // a sanitizer runtime has to be part of the executable, or it is not initialized when libqore starts its
         // threads
         if (!config.sanitize_flags.empty()) {
@@ -22824,6 +22848,9 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         cmd = config.cxx + " -o " + exe_path + " " + obj_path
             + " -L" + libqore_dir + " -lqore"
             + " -Wl,-rpath," + libqore_dir;
+        if (!config.target_flags.empty()) {
+            cmd += " " + config.target_flags;
+        }
         // see the static link above
         if (!config.sanitize_flags.empty()) {
             cmd += " " + config.sanitize_flags;
@@ -25295,6 +25322,9 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     std::string cmd = config.cxx + " -shared -o " + tmp_so_path + " " + obj_path
         + " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
+    if (!config.target_flags.empty()) {
+        cmd += " " + config.target_flags;
+    }
     std::string version_script = createAOTModuleVersionScript(so_path, error);
     if (!error.empty()) {
         return false;
@@ -30192,6 +30222,9 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
     }
     cmd += " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
+    if (!config.target_flags.empty()) {
+        cmd += " " + config.target_flags;
+    }
     std::string version_script = createAOTModuleVersionScript(so_path, error);
     if (!error.empty()) {
         return false;

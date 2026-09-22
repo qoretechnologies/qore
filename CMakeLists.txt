@@ -3044,6 +3044,14 @@ set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 # configuration files
+# Qore::CFLAGS names the flags libqore was compiled with.  CMake passes the macOS deployment target to every
+# compile on its own rather than through CMAKE_CXX_FLAGS, and it defaults it to the host's version when the SDK is
+# newer, while a compiler driver given no target follows the SDK.  A program compiled with CMAKE_CXX_FLAGS alone
+# then targets an older macOS than libqore and the linker warns about it, so the target is named here too.
+set(QORE_LIB_CFLAGS_VALUE "${CMAKE_CXX_FLAGS}")
+if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    string(APPEND QORE_LIB_CFLAGS_VALUE " -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
 message(STATUS "Generating unix-config.h")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/unix-config.h.cmake
                ${CMAKE_BINARY_DIR}/include/qore/intern/unix-config.h)

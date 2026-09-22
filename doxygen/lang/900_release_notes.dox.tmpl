@@ -3200,6 +3200,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::CFLAGS omitting the macOS deployment target the library was built for; a program compiled
+      against the library with those flags targeted an older macOS than the library, and the linker warned about it
     - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X>, \c reference<X>, union
       types, and typed callable types being taken from a destroyed type: they were cached by the address of the
       type they were built from, and a hashdecl, class, or enum allocated at the same address after the
