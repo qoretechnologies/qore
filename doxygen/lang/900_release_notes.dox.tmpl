@@ -3325,6 +3325,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - Fixed IR analysis and JIT compilation in background threads reading the type of the value of a global
       variable, which other threads change when they assign the variable, to tell whether the variable refers to a
       variable in another Program; that is now recorded when the variable is created
+    - Fixed executables built by \c qcc against a sanitizer build of Qore (for example with ThreadSanitizer) crashing
+      at startup: they are now linked with the same sanitizer as the Qore library
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

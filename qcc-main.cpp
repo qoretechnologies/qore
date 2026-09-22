@@ -284,8 +284,20 @@ static void collect_qcc_link_paths(std::vector<std::string>& include_dirs,
     }
 }
 
+#ifndef QORE_QCC_SANITIZE_FLAGS
+#define QORE_QCC_SANITIZE_FLAGS ""
+#endif
+
 //! Add compiler/linker flags for qcc link mode.
+/** The sanitizer that libqore was built with, if any, is added as well: its runtime has to be part of the main
+    executable, or it is not initialized when libqore starts its threads (a ThreadSanitizer build crashed in the first
+    instrumented function of the signal handling thread)
+*/
 static void append_qcc_link_flags(std::string& cmd, const std::vector<std::string>& lib_dirs) {
+    if (*QORE_QCC_SANITIZE_FLAGS) {
+        cmd += " ";
+        cmd += QORE_QCC_SANITIZE_FLAGS;
+    }
     for (const auto& dir : lib_dirs) {
         cmd += " -L" + shell_quote(dir);
     }

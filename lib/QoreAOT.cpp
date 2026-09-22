@@ -22707,6 +22707,8 @@ struct AOTLinkConfig {
     std::string cxx;            //!< C++ compiler path
     std::string dynamic_libs;   //!< extra libs for dynamic linking (system libs)
     std::string static_libs;    //!< all transitive deps for static linking
+    //! the sanitizer options libqore was built with (e.g. \c -fsanitize=thread), for executables
+    std::string sanitize_flags;
     bool loaded = false;
 };
 
@@ -22760,6 +22762,8 @@ static AOTLinkConfig loadAOTLinkConfig() {
             config.dynamic_libs = val;
         } else if (key == "static_libs") {
             config.static_libs = val;
+        } else if (key == "sanitize_flags") {
+            config.sanitize_flags = val;
         }
     }
 
@@ -22807,6 +22811,11 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         // Static link: use CXX compiler from config, link static lib + all transitive deps
         cmd = config.cxx + " -o " + exe_path + " " + obj_path
             + " " + static_lib;
+        // a sanitizer runtime has to be part of the executable, or it is not initialized when libqore starts its
+        // threads
+        if (!config.sanitize_flags.empty()) {
+            cmd += " " + config.sanitize_flags;
+        }
         if (!config.static_libs.empty()) {
             cmd += " " + config.static_libs;
         }
@@ -22815,6 +22824,10 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         cmd = config.cxx + " -o " + exe_path + " " + obj_path
             + " -L" + libqore_dir + " -lqore"
             + " -Wl,-rpath," + libqore_dir;
+        // see the static link above
+        if (!config.sanitize_flags.empty()) {
+            cmd += " " + config.sanitize_flags;
+        }
         if (!config.dynamic_libs.empty()) {
             cmd += " " + config.dynamic_libs;
         }
