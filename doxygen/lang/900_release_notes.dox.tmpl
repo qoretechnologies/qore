@@ -3270,6 +3270,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       only an object that really does belong to a cycle takes the r-section.  Calls on one shared object went
       from peaking at four threads and losing throughput beyond that to scaling past it, and the same fix
       applies to a variable captured by more than one closure
+    - Fixed every function and method call taking a process-wide lock twice, to publish the calling thread's call
+      stack for get_all_thread_call_stacks(); each thread now publishes its own stack with plain stores, and the
+      rare thread reading another thread's stack does all the synchronization, with one memory barrier issued for
+      the whole process on Linux.  Calls went from +7% faster on one thread to +41% on sixteen
+    - Fixed get_all_thread_call_stacks() reading call stack entries of other threads that were not yet fully
+      constructed or already partly destroyed, and the data of threads that had already been deleted, which could
+      crash the process or report garbage; this affected the debugger, which reads the call stacks of all threads
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

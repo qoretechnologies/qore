@@ -2333,12 +2333,11 @@ static QoreProgram* qore_ir_method_execution_program(const QoreMethod* method, c
     return pgm ? pgm : (uvb ? uvb->pgm : nullptr);
 }
 
-class QoreIRInlineCallStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper {
+class QoreIRInlineCallStackLocation : public QoreStackLocation {
 public:
     DLLLOCAL QoreIRInlineCallStackLocation(const QoreProgramLocation* loc, std::string call_name,
             qore_call_t call_type)
-            : QoreProgramStackLocationHelper(this, stmt, pgm), loc(loc), call_name(std::move(call_name)),
-            call_type(call_type) {
+            : loc(loc), call_name(std::move(call_name)), call_type(call_type) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -2362,11 +2361,14 @@ public:
     }
 
 private:
-    const AbstractStatement* stmt;
-    QoreProgram* pgm;
     const QoreProgramLocation* loc = nullptr;
     std::string call_name;
     qore_call_t call_type;
+    // written by stack_helper through its constructor's output references, so they take no initializers
+    const AbstractStatement* stmt;
+    QoreProgram* pgm;
+    // last: pushes this location once it is fully constructed and pops it before any member is destroyed
+    QoreProgramStackLocationHelper stack_helper{this, stmt, pgm};
 };
 
 static const QoreProgramLocation* qore_ir_user_variant_location(const UserVariantBase* uvb) {

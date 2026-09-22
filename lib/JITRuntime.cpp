@@ -9751,16 +9751,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_function_with_base_aot(
 }
 
 // Stack location for JIT/AOT-executed frames.
-class QoreJITStackLocation : public QoreStackLocation, public QoreProgramStackLocationHelper,
-        public QoreAOTStackFrameMarker {
+class QoreJITStackLocation : public QoreStackLocation, public QoreAOTStackFrameMarker {
 public:
     DLLLOCAL QoreJITStackLocation(const std::string& call_name, const QoreProgramLocation* loc,
             const StatementBlock* statements, QoreProgram* pgm, bool is_aot = false)
-        : QoreProgramStackLocationHelper(this, saved_stmt, saved_pgm),
-          call_name(call_name), loc(loc), statements(statements), pgm(pgm), is_aot(is_aot) {
-        if (!this->pgm) {
-            this->pgm = saved_pgm;
-        }
+        : call_name(call_name), loc(loc), statements(statements), pgm(pgm), is_aot(is_aot) {
     }
 
     DLLLOCAL const QoreProgramLocation& getLocation() const override {
@@ -9780,7 +9775,8 @@ public:
     }
 
     DLLLOCAL QoreProgram* getProgram() const override {
-        return pgm;
+        // chosen here rather than assigned once the location is pushed: other threads can read it from then on
+        return pgm ? pgm : saved_pgm;
     }
 
     DLLLOCAL const AbstractStatement* getStatement() const override {
@@ -9793,12 +9789,12 @@ private:
     const StatementBlock* statements;
     QoreProgram* pgm;
     bool is_aot = false;  //!< true when this frame executes an AOT-compiled function natively
-    // saved_stmt and saved_pgm receive old thread-local values from
-    // QoreProgramStackLocationHelper constructor via output references.
-    // IMPORTANT: no default member initializers — they would overwrite the values
-    // written by the base class constructor (same pattern as QoreInternalCallStackLocationHelperBase).
+    // saved_stmt and saved_pgm receive the thread's current statement and program from stack_helper's
+    // constructor via output references, so they take no initializers
     const AbstractStatement* saved_stmt;
     QoreProgram* saved_pgm;
+    // last: pushes this location once it is fully constructed and pops it before any member is destroyed
+    QoreProgramStackLocationHelper stack_helper{this, saved_stmt, saved_pgm};
 };
 
 /** Handle body local instantiation before JIT execution and deopt/cleanup after.

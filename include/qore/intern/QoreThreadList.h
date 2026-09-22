@@ -164,12 +164,6 @@ friend class QoreThreadListIterator;
 friend class QoreThreadDataHelper;
 friend class tid_node;
 public:
-    // lock for reading / writing call stacks externally
-    /** if both lck and stack_lck are grabbed concurrently (for example, when all threads stacks are read externally),
-        then first lck must be acquired, and then stack_lck
-    */
-    mutable QoreRWLock stack_lck;
-
     DLLLOCAL QoreThreadList() {
     }
 
@@ -296,6 +290,16 @@ public:
         const QoreProgramLocation& loc);
 
     DLLLOCAL QoreListNode* getCallStack(const QoreStackLocation* stack_location) const;
+
+    //! Returns the call stack of another thread, or nullptr if it is empty
+    /** @param td the thread's data, which the caller keeps in place by holding lck
+
+        Each thread publishes its own stack without any lock; this makes the thread wait at its next pop until the
+        walk has finished, so that no location the walk can reach is destroyed underneath it.  Only that thread
+        waits, and only if it pops during the walk.  If both are needed, lck is acquired before the thread's
+        stack_walk_lck, as here.
+    */
+    DLLLOCAL QoreListNode* walkCallStack(ThreadData* td) const;
 
     DLLLOCAL QoreHashNode* getParentCallerLocation(const QoreStackLocation* stack_location, size_t offset) const;
 
@@ -430,19 +434,7 @@ DLLLOCAL extern QoreThreadList thread_list;
 
 class QoreThreadListIterator : public AutoLocker {
 public:
-    DLLLOCAL QoreThreadListIterator(bool access_stack = false) : AutoLocker(thread_list.lck),
-            access_stack(access_stack) {
-        if (access_stack) {
-            // grab the call stack write lock to get exclusive access to all thread stacks
-            thread_list.stack_lck.wrlock();
-        }
-    }
-
-    DLLLOCAL ~QoreThreadListIterator() {
-        if (access_stack) {
-            // release the call stack write lock
-            thread_list.stack_lck.unlock();
-        }
+    DLLLOCAL QoreThreadListIterator() : AutoLocker(thread_list.lck) {
     }
 
     DLLLOCAL bool next() {
@@ -460,7 +452,6 @@ public:
 
 protected:
     tid_node* w = nullptr;
-    bool access_stack;
 };
 
 class QoreThreadDataHelper : public AutoLocker {

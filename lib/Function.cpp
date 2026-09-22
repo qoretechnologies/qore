@@ -1275,17 +1275,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         is_aot = uvb && uvb->hasCachedAOT();
     }
 
+    // Cross-program calls execute with the target/source Program's TLPD, but caller-sensitive APIs walk stack
+    // frame Programs, so the frame shows the caller's Program.  It is recorded as the location is pushed, not
+    // assigned afterwards: other threads can read the location from then on.
+    QoreProgram* frame_pgm = pgm_ctx ? old_pgm : nullptr;
+
     // add call to call stack; push builtin location on the stack if executing builtin c++ code
     if (ct == CT_BUILTIN) {
-        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
+        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc, frame_pgm);
     } else {
-        stack_loc = update_get_runtime_stack_location(this, stmt, pgm);
-    }
-    if (pgm_ctx && old_pgm) {
-        // Cross-program calls execute with the target/source Program's TLPD,
-        // but caller-sensitive APIs walk stack frame Programs. Preserve the
-        // caller Program on the visible stack frame.
-        pgm = old_pgm;
+        stack_loc = update_get_runtime_stack_location(this, stmt, pgm, frame_pgm);
     }
     restore_stack = true;
 }

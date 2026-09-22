@@ -82,8 +82,17 @@
 #include <sys/resource.h>
 #endif
 
+#include <atomic>
 #include <cassert>
+#include <cerrno>
 #include <map>
+
+// syscall() and __NR_membarrier come from the Linux includes above
+#if defined(__linux__) && __has_include(<linux/membarrier.h>)
+#include <linux/membarrier.h>
+#define QORE_HAVE_MEMBARRIER 1
+#endif
+
 #include <pthread.h>
 #include <utility>
 #include <vector>
@@ -363,8 +372,23 @@ public:
 
     Context* context_stack = nullptr;
     ProgramParseContext* plStack = nullptr;
-    // current runtime stack location
-    const QoreStackLocation* current_stack_location = nullptr;
+    //! The innermost location of this thread's call stack
+    /** Written only by this thread, when a location is pushed or popped.  Other threads read it only in
+        getAllCallStacks(), which walks the stack it points to; see publish_popped_stack_location() for the
+        handshake that keeps a popped location alive while such a walk may still be reading it.
+
+        Atomic, not guarded by a lock, because every function and method call pushes and pops a location: a lock
+        taken there -- even a per-thread one -- costs atomic read-modify-writes on every call, and the
+        process-wide lock this replaced made every call on every thread contend for one cache line.
+    */
+    std::atomic<const QoreStackLocation*> current_stack_location{nullptr};
+    //! Set while another thread walks this thread's call stack, with stack_walk_lck held
+    std::atomic_bool stack_walked{false};
+    //! Held by a thread walking this thread's call stack for the whole walk
+    /** Serializes walks of this thread's stack, and is what this thread waits on when it pops a location while
+        a walk is in progress; see publish_popped_stack_location().
+    */
+    QoreThreadLock stack_walk_lck;
     // current dynamic runtime location
     const QoreProgramLocation* runtime_loc = &loc_builtin;
     // Stack-frame address of the innermost LIVE non-AOT (AST/IR/JIT) frame that set
@@ -1776,7 +1800,7 @@ void update_context_stack(Context* cstack) {
 
 // only called from the current thread, no locking needed
 const QoreStackLocation* get_runtime_stack_location() {
-    return thread_data.get()->current_stack_location;
+    return thread_data.get()->current_stack_location.load(std::memory_order_relaxed);
 }
 
 static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QoreParseOptions& po) {
@@ -1786,62 +1810,140 @@ static QoreParseOptions apply_runtime_po_override(ThreadData* td, const QorePars
     return (po & ~td->runtime_po_override_mask) | (td->runtime_po_override_value & td->runtime_po_override_mask);
 }
 
+// Whether a thread that pops a call stack location can leave all the ordering to the walker's heavy barrier
+/* Popping a location is a Dekker handshake with a thread walking the stack (see publish_popped_stack_location()):
+   each side stores its own variable and then loads the other's, and a full memory barrier has to separate the store
+   from the load on BOTH sides.  Pops happen twice on every function and method call; walks happen when something
+   asks for every thread's call stack, which is rare.  So when the operating system can do it, the walker issues a
+   barrier on behalf of every thread of the process (membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED) on Linux), and a
+   pop only has to keep the compiler from reordering its store and its load: on x86-64 that makes it two plain
+   moves, with no locked instruction.  Where that is not available, a pop uses sequentially consistent operations.
+
+   Set once in init_qore_threads(), before any other thread exists, and never changed: a pop that relied on the
+   walker's barrier while a walk went without one would be unsafe.
+*/
+static bool stack_walk_heavy_barrier = false;
+
+// Chooses how pops are ordered against walks of the call stack; called once, before any other thread exists
+static void init_stack_walk_barrier() {
+#ifdef QORE_HAVE_MEMBARRIER
+    long cmds = syscall(__NR_membarrier, MEMBARRIER_CMD_QUERY, 0, 0);
+    if (cmds > 0 && (cmds & MEMBARRIER_CMD_PRIVATE_EXPEDITED)
+        && !syscall(__NR_membarrier, MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0)) {
+        stack_walk_heavy_barrier = true;
+    }
+#endif
+}
+
+// Issues a full memory barrier on every running thread of the process; only called if stack_walk_heavy_barrier
+static void stack_walk_barrier() {
+#ifdef QORE_HAVE_MEMBARRIER
+    assert(stack_walk_heavy_barrier);
+    // the process registered for the command in init_stack_walk_barrier(), and the kernel does not fail it for a
+    // registered process; an interrupted call is retried
+    long rc;
+    do {
+        rc = syscall(__NR_membarrier, MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
+    } while (rc && errno == EINTR);
+    assert(!rc);
+#else
+    assert(false);
+#endif
+}
+
+// Publishes a location pushed on this thread's call stack
+/* A push needs no handshake with a thread walking this stack: the new location is linked to the current one before
+   it is published, with release ordering, so a walk either starts below it or sees it fully linked.  A location a walk
+   can reach is only ever freed by a pop, and publish_popped_stack_location() makes a pop wait for the walk.
+*/
+static const QoreStackLocation* publish_pushed_stack_location(ThreadData* td, QoreStackLocation* stack_loc) {
+    const QoreStackLocation* rv = td->current_stack_location.load(std::memory_order_relaxed);
+    stack_loc->setNext(rv);
+    td->current_stack_location.store(stack_loc, std::memory_order_release);
+    return rv;
+}
+
+// Publishes a location restored on this thread's call stack, and waits for any walk that may still read the one
+// replaced
+/* The location being replaced is about to be destroyed with the frame that pushed it, and another thread may be
+   walking this stack in getAllCallStacks().  This is a Dekker handshake with QoreThreadList::walkCallStack(): this
+   thread stores the new location and then loads stack_walked, and a walker stores stack_walked and then loads the
+   location, with a full barrier between the store and the load on both sides (see stack_walk_heavy_barrier).  So
+   either this thread sees the walker's flag and waits for the walk to end by taking stack_walk_lck, which the walker
+   holds throughout, or the walker's load comes after this store and it starts from the restored location, never
+   reaching the one replaced.
+
+   A walk is rare and a pop happens on every call, so the pop is the side kept cheap: with the walker's heavy
+   barrier it is a plain store and a plain load, on memory no other thread writes.  The process-wide read lock this
+   replaced was two contended lock operations, on one mutex shared by every thread, on every call.
+*/
+static void publish_popped_stack_location(ThreadData* td, const QoreStackLocation* stack_loc) {
+#ifdef DEBUG
+    {
+        // The handshake below only protects the locations a walker can reach if the stack changes strictly
+        // last-in, first-out: this must restore the current location's successor, or push a location already linked
+        // to it (RuntimeConfigStackHelper), or leave it as it is.  A location destroyed while another one still
+        // links to it would be reachable by a walk without any pop having waited for that walk.
+        const QoreStackLocation* cur = td->current_stack_location.load(std::memory_order_relaxed);
+        assert(!cur || stack_loc == cur || stack_loc == cur->getNext() || (stack_loc && stack_loc->getNext() == cur));
+    }
+#endif
+    if (stack_walk_heavy_barrier) {
+        td->current_stack_location.store(stack_loc, std::memory_order_release);
+        // the walker's heavy barrier orders the store and the load in hardware; this keeps the compiler from
+        // reordering them
+        std::atomic_signal_fence(std::memory_order_seq_cst);
+        // Acquire, not relaxed: reading the flag that a finished walk cleared must order this thread's reuse of
+        // the popped location's memory after that walk's reads of it.  With a relaxed load, the stores that follow
+        // could be performed before the load on a weakly ordered processor, while the walk is still reading.
+        if (!td->stack_walked.load(std::memory_order_acquire)) {
+            return;
+        }
+    } else {
+        td->current_stack_location.store(stack_loc, std::memory_order_seq_cst);
+        if (!td->stack_walked.load(std::memory_order_seq_cst)) {
+            return;
+        }
+    }
+    // the walker holds this lock until it has finished reading the stack
+    AutoLocker al(td->stack_walk_lck);
+}
+
 // called when pushing a new location on the stack
 const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
-        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm) {
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
 
-    current_pgm = td->current_pgm;
+    // written before the location is pushed: other threads can read it from then on
+    current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     current_stmt = td->runtime_statement;
 
-    const QoreStackLocation* rv = td->current_stack_location;
-
-    // get read access to the stack lock to write to the local thread stack location
-    // locking is necessary due to the fact that thread stacks can be read from other threads
-    QoreAutoRWReadLocker l(thread_list.stack_lck);
-    td->current_stack_location = stack_loc;
-    stack_loc->setNext(rv);
-    return rv;
+    return publish_pushed_stack_location(td, stack_loc);
 }
 
- const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
+const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
         const AbstractStatement*& current_stmt, QoreProgram*& current_pgm,
-        const QoreProgramLocation*& old_runtime_loc) {
+        const QoreProgramLocation*& old_runtime_loc, QoreProgram* frame_pgm) {
     ThreadData* td = thread_data.get();
 
-    current_pgm = td->current_pgm;
+    // written before the location is pushed: other threads can read it from then on
+    current_pgm = frame_pgm ? frame_pgm : td->current_pgm;
     current_stmt = td->runtime_statement;
 
-    const QoreStackLocation* rv = td->current_stack_location;
-
-    // get read access to the stack lock to write to the local thread stack location
-    // locking is necessary due to the fact that thread stacks can be read from other threads
-    QoreAutoRWReadLocker l(thread_list.stack_lck);
-    td->current_stack_location = stack_loc;
-    stack_loc->setNext(rv);
     old_runtime_loc = td->runtime_loc;
     td->runtime_loc = &loc_builtin;
-    return rv;
+    return publish_pushed_stack_location(td, stack_loc);
 }
 
-// called when restoring the previous location
+// called when restoring the previous location, and by RuntimeConfigStackHelper to push one it has already linked
 void update_runtime_stack_location(const QoreStackLocation* stack_loc) {
-    ThreadData* td = thread_data.get();
-
-    // get read access to the stack lock to write to the local thread stack location
-    // locking is necessary due to the fact that thread stacks can be read from other threads
-    QoreAutoRWReadLocker l(thread_list.stack_lck);
-    td->current_stack_location = stack_loc;
+    publish_popped_stack_location(thread_data.get(), stack_loc);
 }
 
 void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc) {
     ThreadData* td = thread_data.get();
-
-    // get read access to the stack lock to write to the local thread stack location
-    // locking is necessary due to the fact that thread stacks can be read from other threads
-    QoreAutoRWReadLocker l(thread_list.stack_lck);
-    td->current_stack_location = stack_loc;
     td->runtime_loc = runtime_loc;
+    publish_popped_stack_location(td, stack_loc);
 }
 
 const AbstractStatement* get_runtime_statement() {
@@ -2088,7 +2190,7 @@ void qore_get_runtime_context(QoreRuntimeContext* rc) {
     rc->loc = td->runtime_loc;
     rc->stmt = td->runtime_statement;
     rc->po = td->runtime_po.getLo();
-    rc->stack_loc = td->current_stack_location;
+    rc->stack_loc = td->current_stack_location.load(std::memory_order_relaxed);
     rc->element = get_implicit_element();
 }
 
@@ -2991,7 +3093,7 @@ RuntimeParseOptionsOverrideHelper::~RuntimeParseOptionsOverrideHelper() {
 QoreParseOptions runtime_get_parse_options_stack(ExceptionSink* xsink, size_t n) {
     assert(n);
     ThreadData* td = thread_data.get();
-    const QoreStackLocation* w = td->current_stack_location;
+    const QoreStackLocation* w = td->current_stack_location.load(std::memory_order_relaxed);
     size_t i = 0;
     //printd(5, "runtime_get_parse_options_stack() n: %d w: %p\n", (int)n, w);
     while (w) {
@@ -3953,6 +4055,9 @@ void init_qore_threads() {
     qore_thread_stack_limit = qore_thread_stack_size - QORE_STACK_GUARD;
 #endif // #ifdef QORE_MANAGE_STACK
 
+    // before any other thread exists; see stack_walk_heavy_barrier
+    init_stack_walk_barrier();
+
     // setup parent thread data
     thread_list.activate(initial_thread = get_thread_entry());
     // mark the initial thread as joined so cleanup() does not call pthread_detach();
@@ -4112,12 +4217,12 @@ QoreHashNode* getAllCallStacks() {
 
 QoreListNode* qore_get_thread_call_stack() {
     ThreadData* td = thread_data.get();
-    return thread_list.getCallStack(td->current_stack_location);
+    return thread_list.getCallStack(td->current_stack_location.load(std::memory_order_relaxed));
 }
 
 QoreHashNode* qore_get_parent_caller_location(size_t offset) {
     ThreadData* td = thread_data.get();
-    return thread_list.getParentCallerLocation(td->current_stack_location, offset);
+    return thread_list.getParentCallerLocation(td->current_stack_location.load(std::memory_order_relaxed), offset);
 }
 
 QoreHashNode* QoreThreadList::getAllCallStacks() {
@@ -4132,22 +4237,67 @@ QoreHashNode* QoreThreadList::getAllCallStacks() {
 
     QoreString str;
 
-    QoreThreadListIterator i(true);
+    ThreadData* own_td = thread_data.get();
+
+    // the thread list lock keeps the data of each listed thread in place while its stack is walked
+    QoreThreadListIterator i;
     while (i.next()) {
         // get call stack
         ThreadData* td = entry[*i].thread_data;
-        if (td && td->current_stack_location) {
-            ReferenceHolder<QoreListNode> stack(getCallStack(td->current_stack_location), nullptr);
-            if (!stack->empty()) {
-                // make hash entry
-                str.clear();
-                str.sprintf("%d", *i);
-                ph->setKeyValueIntern(str.c_str(), stack.release());
+        if (!td) {
+            continue;
+        }
+        ReferenceHolder<QoreListNode> stack(nullptr);
+        if (td == own_td) {
+            // this thread cannot pop a location while it is in here, so it reads its own stack directly
+            const QoreStackLocation* loc = td->current_stack_location.load(std::memory_order_relaxed);
+            if (loc) {
+                stack = getCallStack(loc);
             }
+        } else {
+            stack = walkCallStack(td);
+        }
+        if (stack && !stack->empty()) {
+            // make hash entry
+            str.clear();
+            str.sprintf("%d", *i);
+            ph->setKeyValueIntern(str.c_str(), stack.release());
         }
     }
 
     return h.release();
+}
+
+QoreListNode* QoreThreadList::walkCallStack(ThreadData* td) const {
+    assert(td != thread_data.get());
+    // held for the whole walk: it serializes walks of this stack, and it is what the thread waits on if it pops a
+    // location before the walk has finished
+    AutoLocker al(td->stack_walk_lck);
+
+    // cleared before stack_walk_lck is released, on every path out of the walk
+    class StackWalkFlagHelper {
+    public:
+        StackWalkFlagHelper(std::atomic_bool& walked) : walked(walked) {
+            // the walker's half of the handshake in publish_popped_stack_location(): the flag is stored before the
+            // location is loaded, both sequentially consistent
+            walked.store(true, std::memory_order_seq_cst);
+        }
+
+        ~StackWalkFlagHelper() {
+            walked.store(false, std::memory_order_seq_cst);
+        }
+
+    private:
+        std::atomic_bool& walked;
+    } walk_flag(td->stack_walked);
+
+    if (stack_walk_heavy_barrier) {
+        // the barrier that the thread's pops leave to the walker; see publish_popped_stack_location()
+        stack_walk_barrier();
+    }
+
+    const QoreStackLocation* loc = td->current_stack_location.load(std::memory_order_seq_cst);
+    return loc ? getCallStack(loc) : nullptr;
 }
 
 QoreListNode* QoreThreadList::getCallStack(const QoreStackLocation* stack_location) const {
@@ -4241,31 +4391,43 @@ QoreHashNode* QoreThreadList::getCallStackHash(const QoreStackLocation& stack_lo
     return h.release();
 }
 
+// The thread's data is taken out of the list under lck BEFORE it is deleted: getAllCallStacks() reads the data of
+// every listed thread under lck, and it used to find the pointer to data that had already been freed, in the window
+// between the delete and the lock.
 void QoreThreadList::deleteData(int tid) {
+    {
+        AutoLocker al(lck);
+        entry[tid].thread_data = nullptr;
+    }
+
     delete thread_data.get();
     thread_data.set(nullptr);
-
-    AutoLocker al(lck);
-    entry[tid].thread_data = nullptr;
 }
 
 void QoreThreadList::deleteDataRelease(int tid) {
+    {
+        AutoLocker al(lck);
+        entry[tid].thread_data = nullptr;
+    }
+
     delete thread_data.get();
     thread_data.set(nullptr);
 
     AutoLocker al(lck);
-    entry[tid].thread_data = nullptr;
-
     releaseIntern(tid);
 }
 
 void QoreThreadList::deleteDataReleaseSignalThread() {
     thread_data.get()->del(nullptr);
+    {
+        AutoLocker al(lck);
+        entry[0].thread_data = nullptr;
+    }
+
     delete thread_data.get();
     thread_data.set(nullptr);
 
     AutoLocker al(lck);
-    entry[0].thread_data = nullptr;
     entry[0].joined = true;
     releaseIntern(0);
 }

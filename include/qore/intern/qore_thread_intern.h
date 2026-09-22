@@ -259,10 +259,21 @@ DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 
 DLLLOCAL const QoreStackLocation* get_runtime_stack_location();
+//! Pushes a fully constructed location on the current thread's call stack
+/** @param stack_loc the location; other threads can read it from now on, so it must not change afterwards
+    @param current_stmt receives the thread's current statement, before the location is pushed
+    @param current_pgm receives the program recorded for the location, before it is pushed: frame_pgm if given,
+    otherwise the thread's current program
+    @param frame_pgm the program to record for the location instead of the current one, if any
+
+    @return the previous location, to be restored with update_runtime_stack_location()
+*/
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_location(QoreStackLocation* stack_loc,
-        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm);
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, QoreProgram* frame_pgm = nullptr);
+//! As update_get_runtime_stack_location(), and also sets the runtime location to the builtin location
 DLLLOCAL const QoreStackLocation* update_get_runtime_stack_builtin_location(QoreStackLocation* stack_loc,
-        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc);
+        const AbstractStatement*& current_stmt, QoreProgram*& current_pgm, const QoreProgramLocation*& old_runtime_loc,
+        QoreProgram* frame_pgm = nullptr);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc);
 DLLLOCAL void update_runtime_stack_location(const QoreStackLocation* stack_loc, const QoreProgramLocation* runtime_loc);
 
@@ -579,6 +590,17 @@ public:
     }
 };
 
+//! Pushes a location on the current thread's call stack for the helper's lifetime
+/** Other threads can read the stack as soon as the location is pushed (get_all_thread_call_stacks()), so the
+    location must be fully constructed by then, and must stay intact until it has been popped again.
+
+    Declare the helper as the LAST member of the location's class.  Members are constructed in declaration order,
+    after the class's vtable is in place, and destroyed in reverse order, so the helper pushes the location only
+    once every member that its virtual methods read has been initialized, and pops it before any of them is
+    destroyed.  As a base class it would do both too early: it would push the location before the derived class's
+    members were constructed, while calls to its virtual methods still resolved to the abstract base class, and it
+    would pop the location only after those members had been destroyed.
+*/
 class QoreProgramStackLocationHelper {
 public:
     DLLLOCAL QoreProgramStackLocationHelper(QoreStackLocation* stack_loc, const AbstractStatement*& current_stmt,
@@ -594,9 +616,10 @@ protected:
     const QoreStackLocation* stack_loc;
 };
 
-class QoreInternalCallStackLocationHelperBase : public QoreStackLocation, public QoreProgramStackLocationHelper {
+class QoreInternalCallStackLocationHelper : public QoreStackLocation {
 public:
-    DLLLOCAL QoreInternalCallStackLocationHelperBase() : QoreProgramStackLocationHelper(this, stmt, pgm) {
+    DLLLOCAL QoreInternalCallStackLocationHelper(const QoreProgramLocation& loc, const std::string& call,
+        qore_call_t call_type) : loc(loc), call(call), call_type(call_type) {
     }
 
     DLLLOCAL virtual QoreProgram* getProgram() const {
@@ -605,17 +628,6 @@ public:
 
     DLLLOCAL virtual const AbstractStatement* getStatement() const {
         return stmt;
-    }
-
-protected:
-    const AbstractStatement* stmt;
-    QoreProgram* pgm;
-};
-
-class QoreInternalCallStackLocationHelper : public QoreInternalCallStackLocationHelperBase {
-public:
-    DLLLOCAL QoreInternalCallStackLocationHelper(const QoreProgramLocation& loc, const std::string& call,
-        qore_call_t call_type) : loc(loc), call(call), call_type(call_type) {
     }
 
     //! returns the source location of the element
@@ -636,6 +648,11 @@ protected:
     const QoreProgramLocation& loc;
     const std::string call;
     qore_call_t call_type;
+    // written by stack_helper through its constructor's output references, so they take no initializers
+    const AbstractStatement* stmt;
+    QoreProgram* pgm;
+    // last: pushes this location once it is fully constructed and pops it before any member is destroyed
+    QoreProgramStackLocationHelper stack_helper{this, stmt, pgm};
 };
 
 
