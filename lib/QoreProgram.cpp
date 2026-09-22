@@ -1442,8 +1442,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
             QoreSandboxManager* sm;
             {
                 AutoLocker al(sm_lock);
-                sm = sandbox_manager;
-                sandbox_manager = nullptr;
+                sm = sandbox_manager.exchange(nullptr, std::memory_order_acq_rel);
             }
             if (sm) {
                 sm->deref(xsink);
@@ -3639,11 +3638,11 @@ void QoreProgram::setSandboxManager(QoreSandboxManager* sm) {
     QoreSandboxManager* old;
     {
         AutoLocker al(priv->sm_lock);
-        old = priv->sandbox_manager;
-        priv->sandbox_manager = sm;
         if (sm) {
+            // referenced before it is published: a lookup that finds it without the lock must find it alive
             sm->ref();
         }
+        old = priv->sandbox_manager.exchange(sm, std::memory_order_acq_rel);
     }
     if (old) {
         old->deref(nullptr);
