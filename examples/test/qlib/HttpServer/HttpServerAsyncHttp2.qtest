@@ -129,6 +129,32 @@ class SendResponseHeaderHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that reports what the HTTP/1 response methods of the Socket class do on the socket of the request
+class Http1ResponseMethodsHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        list<string> rv;
+        foreach hash<auto> i in ((
+                {"name": "string body", "call": sub () { s.sendHTTPResponse(200, "OK", "1.1", {}, "body"); }},
+                {"name": "binary body", "call": sub () { s.sendHTTPResponse(200, "OK", "1.1", {}, binary("body")); }},
+                {"name": "InputStream body", "call": sub () {
+                    s.sendHTTPResponse(200, "OK", "1.1", {}, new BinaryInputStream(binary("body")));
+                }},
+                {"name": "callback body", "call": sub () {
+                    s.sendHTTPResponseWithCallback(sub () {}, 200, "OK", "1.1", {});
+                }},
+            )) {
+            try {
+                i.call();
+                rv += sprintf("%s: sent", i.name);
+            } catch (hash<ExceptionInfo> ex) {
+                rv += sprintf("%s: %s: %s", i.name, ex.err, ex.desc);
+            }
+        }
+        return makeResponse(200, rv.join("\n"), {"Content-Type": "text/plain"});
+    }
+}
+
 #! Handler that returns a mixed-case header
 class HeaderCaseHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -373,6 +399,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("basic HTTP/2 async response", \testBasicHttp2Response());
         addTestCase("HTTP/2 empty body returns 204", \testHttp2EmptyBodyBecomes204());
         addTestCase("HTTP/2 rejects Socket::sendHTTPResponseHeader()", \testHttp2SendResponseHeaderRejected());
+        addTestCase("HTTP/2 rejects the HTTP/1 response methods", \testHttp2Http1ResponseMethodsRejected());
         addTestCase("HTTP/2 sendWithRecvCallback no body",
             \testHttp2SendWithRecvCallbackNoBody());
         addTestCase("HTTP/2 sendWithRecvCallback error response",
@@ -423,6 +450,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("empty-body", "/empty-body", NOTHING, new EmptyBodyHandler());
         mServer.setHandler("send-response-header", "/send-response-header", NOTHING,
             new SendResponseHeaderHandler());
+        mServer.setHandler("http1-response-methods", "/http1-response-methods", NOTHING,
+            new Http1ResponseMethodsHandler());
         mServer.setHandler("header-case", "/header-case", NOTHING, new HeaderCaseHandler());
         mServer.setHandler("request-header-case", "/request-header-case", NOTHING,
             new RequestHeaderLowercaseHandler());
@@ -515,6 +544,33 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq(200, resp.status_code);
         assertEq("HTTP2-ERROR: HTTP/1 message attempted on HTTP/2 connection (Socket::sendHTTPResponseHeader)",
             resp.body);
+
+        # nothing was written into the HTTP/2 connection: the next request on it is served normally
+        resp = hc.send(NOTHING, "GET", "/simple");
+        assertEq(200, resp.status_code, "the HTTP/2 connection is intact");
+        assertEq("OK", resp.body);
+    }
+
+    #! Socket::sendHTTPResponse() and Socket::sendHTTPResponseWithCallback() send HTTP/1 messages, so they cannot be
+    #! used on an HTTP/2 connection
+    testHttp2Http1ResponseMethodsRejected() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        hash<auto> resp = hc.send(NOTHING, "GET", "/http1-response-methods");
+        assertEq("2", resp.http_version, "the request is served on HTTP/2");
+        assertEq(200, resp.status_code);
+        string err = "HTTP2-ERROR: HTTP/1 message attempted on HTTP/2 connection (Socket::%s)";
+        assertEq((
+            "string body: " + sprintf(err, "sendHTTPResponse"),
+            "binary body: " + sprintf(err, "sendHTTPResponse"),
+            "InputStream body: " + sprintf(err, "sendHTTPResponse"),
+            "callback body: " + sprintf(err, "sendHTTPResponseWithCallback"),
+        ), resp.body.split("\n"));
 
         # nothing was written into the HTTP/2 connection: the next request on it is served normally
         resp = hc.send(NOTHING, "GET", "/simple");
