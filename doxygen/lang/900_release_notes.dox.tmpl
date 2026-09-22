@@ -249,6 +249,17 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par The Initial Thread Keeps the Process Name on Linux
+    @parblock
+    The library no longer names a process's initial thread <tt>qore/1</tt> on Linux.  There, the initial
+    thread's name is the process name that \c ps, \c top, \c pidof and \c killall use, so every program that
+    initialized the library on its main thread - \c qore itself, a Python interpreter importing \c qoreloader,
+    or any other program embedding the library - was shown and matched as <tt>qore/1</tt>.  @ref Qore::get_thread_name() "get_thread_name()"
+    called in that thread now returns the process name; every other thread is still named
+    <tt>qore/</tt><i>tid</i> by default, as is the initial thread on other platforms, where a thread's name
+    does not change the process name.
+    @endparblock
+
     @par HTTP Response Bodies Follow the Media Type
     @parblock
     The media type of an HTTP response now decides the type of its body in one place, for both the blocking and
