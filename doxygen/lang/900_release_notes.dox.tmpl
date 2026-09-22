@@ -3299,6 +3299,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - Fixed a weak reference (<tt>:=</tt>) to a list being rejected with \c RUNTIME-TYPE-ERROR when assigned to a
       local variable of a list type that is passed by reference or captured by a closure, in the IR, JIT and AOT
       execution modes; a weak reference to a hash was already accepted
+    - Fixed reading a local variable passed by reference or captured by a closure that holds a weak reference
+      (<tt>:=</tt>) to a hash or a list with get_local_vars(), or leaving its block in the IR interpreter,
+      releasing a reference to the hash or list that it did not own, which could free it while it was still in use
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

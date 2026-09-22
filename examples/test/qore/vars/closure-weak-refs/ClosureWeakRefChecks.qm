@@ -24,6 +24,7 @@
 
 %modern
 %allow-weak-references
+%allow-debugger
 
 module ClosureWeakRefChecks {
     version = "1.0";
@@ -35,8 +36,8 @@ module ClosureWeakRefChecks {
 
 /** A local variable that is passed by reference or captured by a closure is closure-bound: its value lives in a
     heap-allocated variable instead of in the frame, and each execution engine reads and writes it through that
-    variable.  These checks give such variables weak references (\c ":=") to a list, and verify that the
-    variable's type accepts them.
+    variable.  These checks give such variables weak references (\c ":=") to a hash or a list, and verify that
+    the value the weak reference points to is neither released early nor rejected by the variable's type.
 
     The checks are in a module so that the same code can be run from source in each execution mode and as a
     compiled (AOT) module.  Each check returns 1 if it passed and 0 if it did not.
@@ -49,6 +50,10 @@ public namespace ClosureWeakRefChecks {
     #! returns the result of every check
     public hash<string, int> sub get_results() {
         return {
+            "weak-hash-local-vars": check_weak_hash_local_vars(),
+            "weak-list-local-vars": check_weak_list_local_vars(),
+            "weak-hash-block-exit": check_weak_hash_block_exit(),
+            "weak-list-block-exit": check_weak_list_block_exit(),
             "weak-list-reference": check_weak_list_reference(),
             "weak-list-closure": check_weak_list_closure(),
             "weak-list-or-nothing": check_weak_list_or_nothing(),
@@ -56,6 +61,54 @@ public namespace ClosureWeakRefChecks {
             "weak-typed-list": check_weak_typed_list(),
             "weak-list-type-error": check_weak_list_type_error(),
         };
+    }
+
+    #! get_local_vars() reads a closure-bound variable holding a weak hash reference without releasing its target
+    int sub check_weak_hash_local_vars() {
+        hash<auto> h = {"a": 1};
+        hash<auto> wh := h;
+        touch(\wh);
+        for (int i = 0; i < 3; ++i) {
+            hash<auto> lv = get_local_vars(0);
+            if (lv.wh.value != {"a": 1}) {
+                return 0;
+            }
+        }
+        return h == {"a": 1} ? 1 : 0;
+    }
+
+    #! get_local_vars() reads a closure-bound variable holding a weak list reference without releasing its target
+    int sub check_weak_list_local_vars() {
+        list<auto> l = (1, 2);
+        list<auto> wl := l;
+        touch(\wl);
+        for (int i = 0; i < 3; ++i) {
+            hash<auto> lv = get_local_vars(0);
+            if (lv.wl.value != (1, 2)) {
+                return 0;
+            }
+        }
+        return l == (1, 2) ? 1 : 0;
+    }
+
+    #! leaving the block of a closure-bound variable holding a weak hash reference does not release its target
+    int sub check_weak_hash_block_exit() {
+        hash<auto> h = {"a": 1};
+        for (int i = 0; i < 10; ++i) {
+            hash<auto> wh := h;
+            touch(\wh);
+        }
+        return h == {"a": 1} ? 1 : 0;
+    }
+
+    #! leaving the block of a closure-bound variable holding a weak list reference does not release its target
+    int sub check_weak_list_block_exit() {
+        list<auto> l = (1, 2);
+        for (int i = 0; i < 10; ++i) {
+            list<auto> wl := l;
+            touch(\wl);
+        }
+        return l == (1, 2) ? 1 : 0;
     }
 
     #! a weak list reference can be assigned to a list variable that is passed by reference

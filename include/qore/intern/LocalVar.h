@@ -475,11 +475,11 @@ public:
         }
 
         if (val.getType() == NT_WEAKREF_HASH) {
-            return val.get<WeakHashReferenceNode>()->get();
+            return val.get<WeakHashReferenceNode>()->get()->refSelf();
         }
 
         if (val.getType() == NT_WEAKREF_LIST) {
-            return val.get<WeakListReferenceNode>()->get();
+            return val.get<WeakListReferenceNode>()->get()->refSelf();
         }
 
         return val.getReferencedValue();
