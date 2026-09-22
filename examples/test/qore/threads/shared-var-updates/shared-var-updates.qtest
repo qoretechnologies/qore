@@ -1,0 +1,107 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class SharedVarUpdatesTest
+
+#! Tests changes that several threads make to the same variable at once
+/** An operation that reads and changes a variable (\c "++v", \c "v += x", ...) changes a global variable, or a local
+    variable that other threads reach through a reference or a closure, in one step in every execution mode, and a
+    thread sees the changes other threads make.  The checks are in shared-var-updates-worker.qr, which is run in each
+    execution mode and as a program compiled with qcc, since each engine has its own code for these operations.
+*/
+class SharedVarUpdatesTest inherits QUnit::Test {
+    public {
+        #! every check the worker makes; each passes with 1
+        const Checks = (
+            "global-pre-increment",
+            "global-post-increment",
+            "global-pre-decrement",
+            "global-post-decrement",
+            "global-plus-equals",
+            "global-minus-equals",
+            "global-float-plus-equals",
+            "global-string-plus-equals",
+            "global-list-plus-equals",
+            "global-hash-member",
+            "referenced-local-plus-equals",
+            "referenced-local-pre-increment",
+            "captured-local-plus-equals",
+            "global-seen-by-loop",
+            "captured-local-seen-by-loop",
+        );
+
+        #! the execution modes that the worker is run in; "" is the default (tiered) mode
+        const ExecModes = ("ast", "ir", "jit", "");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("SharedVarUpdatesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + DirSep + "qcc") ? libqore_dir + DirSep + "qcc"
+                : dirname(qore_bin) + DirSep + "qcc");
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled program", \testCompiledProgram());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string opts = mode ? "--exec-mode=" + mode : "";
+            string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s %s 2>&1", libqore_dir, qore_bin, opts,
+                getWorker()));
+            checkWorkerOutput(mode ?: "default", out);
+        }
+    }
+
+    testCompiledProgram() {
+        TmpDir tmp("qore-shared-var-updates-");
+        string exe = tmp.path + DirSep + "shared-var-updates";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s --strip-source -o %s %s 2>&1", libqore_dir,
+            qcc_bin, exe, getWorker()));
+        assertTrue(is_file(exe), "compiled program: " + compile_out);
+        checkWorkerOutput("aot", backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)));
+    }
+
+    private string getWorker() {
+        return get_script_dir() + DirSep + "shared-var-updates-worker.qr";
+    }
+
+    #! parses the "name=value" lines printed by the worker and checks that every check passed
+    private checkWorkerOutput(string label, string out) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        assertEq(sort(Checks), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (results.pairIterator()) {
+            assertEq(1, i.value, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

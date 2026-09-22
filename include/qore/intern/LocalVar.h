@@ -391,6 +391,42 @@ public:
             && !deferred_scan.load(std::memory_order_acquire);
     }
 
+    //! Evaluates the variable, returning the target of a weak reference without a reference of its own
+    /** @param weak set to true if the variable holds a weak reference, in which case the value returned is its
+        target, borrowed from the variable; otherwise the value returned is referenced for the caller
+
+        The type of the value is read under the lock, since other threads can change the variable.
+    */
+    DLLLOCAL QoreValue evalWeakBorrowed(bool& weak, ExceptionSink* xsink) const {
+        {
+            QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
+            switch (val.getType()) {
+                case NT_WEAKREF:
+                    weak = true;
+                    return val.get<WeakReferenceNode>()->get();
+                case NT_WEAKREF_HASH:
+                    weak = true;
+                    return val.get<WeakHashReferenceNode>()->get();
+                case NT_WEAKREF_LIST:
+                    weak = true;
+                    return val.get<WeakListReferenceNode>()->get();
+                default:
+                    break;
+            }
+        }
+        weak = false;
+        return eval(xsink);
+    }
+
+    //! Returns a new reference to the reference that the variable holds, or nullptr if it holds none
+    DLLLOCAL ReferenceNode* getHeldReference() const {
+        QoreSafeVarRWReadLocker sl(rml, !frameExclusive());
+        if (val.getType() != NT_REFERENCE) {
+            return nullptr;
+        }
+        return val.get<ReferenceNode>()->refRefSelf();
+    }
+
     DLLLOCAL const void* getLValueId() const;
 
     // returns true if the value could contain an object or a closure

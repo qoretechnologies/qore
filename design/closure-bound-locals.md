@@ -39,8 +39,9 @@ own thread: `\var` and closure capture are evaluated in the frame, and every oth
 Then no other thread can reach the variable and nothing on the heap refers to it. It is read and written like a
 plain local variable:
 
-- `eval()`, `getLValue()`, `remove()`, `getReference()`, `getLValueId()` and `clearValue()` take `rml` only when
-  the variable is not frame-exclusive (`QoreSafeVarRWReadLocker` and `QoreSafeVarRWWriteLocker` take an
+- `eval()`, `getLValue()`, `remove()`, `getReference()`, `getLValueId()`, `clearValue()`, `getHeldReference()` and
+  `evalWeakBorrowed()`, and the IR interpreter's integer increment (`incrementClosureVarIntFast()`), take `rml` only
+  when the variable is not frame-exclusive (`QoreSafeVarRWReadLocker` and `QoreSafeVarRWWriteLocker` take an
   optional-lock argument for this).
 - `getLValue()` does not make the variable the scan root (`LValueHelper::setClosure()`). A cycle through the
   variable needs an edge into it, and every such edge holds a reference, so while the count is one no change to the

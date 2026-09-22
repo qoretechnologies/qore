@@ -3309,6 +3309,17 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       reference to it, and only takes its lock and scans once a reference or a closure holding it exists.
       Initializing a local that is then passed by reference with a hash holding a shared object no longer scans
       at all; that code became 1.2 times faster on one thread and 4 times faster from sixteen threads
+    - Fixed changes that several threads make to the same variable at once being lost in the IR, JIT and AOT
+      execution modes, and so also in the default tiered mode once code is promoted from the AST interpreter:
+      <tt>++</tt>, <tt>--</tt>, <tt>+=</tt>, <tt>-=</tt> and the other assignment operators on a global variable,
+      or on a local variable passed by reference or captured by a closure, were compiled as a separate read and
+      write, and the IR interpreter kept its own copy of such variables between calls, so each thread overwrote
+      the changes of the others (eight threads incrementing a global counter 100,000 times each ended at about
+      100,000), and a loop waiting for another thread to change such a variable could wait forever.  Each of
+      these operations is now made on the variable in one step, as in the AST interpreter, and the variable is
+      read every time.  Also fixed the IR interpreter incrementing an integer local variable captured by a
+      closure without the variable's lock, and the IR and JIT execution modes reading the reference held by such
+      a variable, and the kind of weak reference it holds, without its lock
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of
