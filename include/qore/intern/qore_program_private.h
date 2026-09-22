@@ -752,11 +752,15 @@ public:
     // time zone setting for the program
     const AbstractQoreZoneInfo* TZ;
 
-    // lock protecting the sandbox_manager pointer
+    // lock serializing changes to sandbox_manager with the lookups that take a reference to it
     QoreThreadLock sm_lock;
 
-    // sandbox manager for security restrictions
-    QoreSandboxManager* sandbox_manager = nullptr;
+    //! sandbox manager for security restrictions, or nullptr if the program is not sandboxed
+    /** Written only under sm_lock.  Atomic because getSandboxManagerRef() reads it without the lock first: it is
+        called at every cancellation point (every IR loop iteration, via qore_check_cancel()), almost always for a
+        program with no manager, and sm_lock is shared by every thread running in the program.
+    */
+    std::atomic<QoreSandboxManager*> sandbox_manager{nullptr};
 
     // define map
     dmap_t dmap;
@@ -1169,7 +1173,8 @@ public:
 
     //! Returns a ref'd sandbox manager pointer, or nullptr if none/already deleted
     /** The caller must call deref() on the returned pointer when done.
-        Thread-safe: acquires sm_lock and calls optRef() to avoid use-after-free.
+        Thread-safe: a program with no manager is recognized without any lock; otherwise it acquires sm_lock and
+        calls optRef() to avoid use-after-free.
     */
     DLLLOCAL QoreSandboxManager* getSandboxManagerRef();
 

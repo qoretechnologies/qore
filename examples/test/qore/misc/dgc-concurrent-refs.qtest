@@ -1,0 +1,238 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcConcurrentRefsTest
+
+#! An object that counts its destructions
+class Counted {
+    public {
+        string name = "counted";
+        *Counted peer;
+        #! decremented by the destructor, so a test can wait for this object to be destroyed
+        *Counter gone;
+        static Counter destroyed();
+    }
+
+    constructor(*Counter gone) {
+        self.gone = gone;
+    }
+
+    destructor() {
+        Counted::destroyed.inc();
+        if (gone) {
+            gone.dec();
+        }
+    }
+
+    string touch() {
+        return name;
+    }
+}
+
+#! A builtin object whose destructions are counted; its builtin methods take real references to it
+class CountedCounter inherits Counter {
+    public {
+        #! decremented by the destructor, so a test can wait for this object to be destroyed
+        Counter gone;
+        static Counter destroyed();
+    }
+
+    constructor(Counter gone) : Counter(0) {
+        self.gone = gone;
+    }
+
+    destructor() {
+        CountedCounter::destroyed.inc();
+        gone.dec();
+    }
+}
+
+#! Takes and releases references to shared objects from many threads at once
+/** A dereference with nothing to decide releases its reference with one atomic operation and no lock, and the
+    thread that releases the last reference becomes the object's deleter.  These checks count destructor calls: an
+    object that is deleted twice, or not at all, or whose deletion does not wait for a dereference still using it,
+    shows up as a wrong count (or a crash).
+*/
+public class DgcConcurrentRefsTest inherits QUnit::Test {
+    public {
+        #! the number of threads in each check
+        const Threads = 8;
+        #! the number of objects or rounds in each check
+        const Rounds = 200;
+        #! the number of method calls each thread makes per round
+        const Calls = 50;
+        #! how long to wait for an object to be destroyed before reporting that it was not
+        const DestroyTimeout = 60s;
+    }
+
+    private {
+        #! the number of objects that were not destroyed in time, in the current check
+        int missing = 0;
+    }
+
+    constructor() : QUnit::Test("dgc concurrent references", "1.0") {
+        addTestCase("Threads releasing one object at once delete it exactly once", \releasedTogether());
+        addTestCase("Method calls race the release of the last outside reference", \callsRaceLastRelease());
+        addTestCase("Cycles built and released concurrently are all collected", \concurrentCycles());
+        addTestCase("A captured variable shared by threads is released once", \sharedCapturedVariable());
+        addTestCase("Builtin method calls on a shared object balance their references", \sharedBuiltinObject());
+        set_return_value(main());
+    }
+
+    #! Waits for an object's destructor; the thread running it may still be finishing when the test gets here
+    /** A background call keeps its own reference to its arguments until the called code has returned, so a
+        destructor can still be running after the thread has reported that it is done.
+    */
+    private waitDestroyed(Counter gone) {
+        if (gone.waitForZero(DestroyTimeout)) {
+            ++missing;
+        }
+    }
+
+    #! Every thread holds a reference to the same object and all of them release it at the same moment
+    releasedTogether() {
+        int before = Counted::destroyed.getCount();
+        missing = 0;
+        for (int round = 0; round < Rounds; ++round) {
+            Counter gone(1);
+            Counted obj(gone);
+            Counter holding(Threads);
+            Counter go(1);
+            Counter done(Threads);
+            for (int i = 0; i < Threads; ++i) {
+                background sub (Counted mine) {
+                    on_exit done.dec();
+                    holding.dec();
+                    go.waitForZero();
+                    mine.touch();
+                    # released in every thread at once, before this thread reports that it is done
+                    remove mine;
+                }(obj);
+            }
+            holding.waitForZero();
+            # the threads hold the only references once this one is gone
+            remove obj;
+            go.dec();
+            done.waitForZero();
+            waitDestroyed(gone);
+        }
+        assertEq(0, missing, "every object is destroyed");
+        assertEq(Rounds, Counted::destroyed.getCount() - before, "each object is destroyed exactly once");
+    }
+
+    #! Threads call methods on an object while the reference that kept it alive from outside is released
+    callsRaceLastRelease() {
+        int before = Counted::destroyed.getCount();
+        missing = 0;
+        for (int round = 0; round < Rounds; ++round) {
+            Counter gone(1);
+            Counted obj(gone);
+            Counter started(Threads);
+            Counter done(Threads);
+            for (int i = 0; i < Threads; ++i) {
+                background sub (Counted mine) {
+                    on_exit done.dec();
+                    started.dec();
+                    for (int j = 0; j < Calls; ++j) {
+                        mine.touch();
+                    }
+                    # released before this thread reports that it is done, so the count is final afterwards
+                    remove mine;
+                }(obj);
+            }
+            started.waitForZero();
+            # released while the calls are in progress; the last thread to finish deletes the object
+            remove obj;
+            done.waitForZero();
+            waitDestroyed(gone);
+        }
+        assertEq(0, missing, "every object is destroyed");
+        assertEq(Rounds, Counted::destroyed.getCount() - before,
+            "each object is destroyed exactly once, after the last call");
+    }
+
+    #! Every thread builds two-object cycles and drops them, while the other threads do the same
+    concurrentCycles() {
+        int before = Counted::destroyed.getCount();
+        Counter done(Threads);
+        for (int i = 0; i < Threads; ++i) {
+            background sub () {
+                on_exit done.dec();
+                for (int j = 0; j < Rounds; ++j) {
+                    Counted a();
+                    a.peer = new Counted();
+                    a.peer.peer = a;
+                    a.touch();
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(Threads * Rounds * 2, Counted::destroyed.getCount() - before, "every cycle is collected");
+    }
+
+    #! Closures sharing one captured variable are called and released by several threads at once
+    sharedCapturedVariable() {
+        int before = Counted::destroyed.getCount();
+        missing = 0;
+        for (int round = 0; round < Rounds; ++round) {
+            Counter done(Threads);
+            Counter gone(1);
+            {
+                Counted captured(gone);
+                code get = Counted sub () { return captured; };
+                for (int i = 0; i < Threads; ++i) {
+                    background sub (code c) {
+                        on_exit done.dec();
+                        for (int j = 0; j < Calls; ++j) {
+                            c().touch();
+                        }
+                        # released before this thread reports that it is done, so the count is final afterwards
+                        remove c;
+                    }(get);
+                }
+            }
+            done.waitForZero();
+            waitDestroyed(gone);
+        }
+        assertEq(0, missing, "every captured object is destroyed");
+        assertEq(Rounds, Counted::destroyed.getCount() - before, "each captured object is destroyed exactly once");
+    }
+
+    #! Builtin method calls take real references to the object, and the last real reference goes through a lock
+    /** An unbalanced real reference would keep the object alive (no destructor) or delete it early (a crash, or a
+        destructor while calls are still being made).
+    */
+    sharedBuiltinObject() {
+        int before = CountedCounter::destroyed.getCount();
+        missing = 0;
+        for (int round = 0; round < Rounds; ++round) {
+            Counter gone(1);
+            CountedCounter shared(gone);
+            Counter started(Threads);
+            Counter done(Threads);
+            for (int i = 0; i < Threads; ++i) {
+                background sub (CountedCounter c) {
+                    on_exit done.dec();
+                    started.dec();
+                    for (int j = 0; j < Calls; ++j) {
+                        c.inc();
+                        c.dec();
+                    }
+                    # released before this thread reports that it is done, so the count is final afterwards
+                    remove c;
+                }(shared);
+            }
+            started.waitForZero();
+            remove shared;
+            done.waitForZero();
+            waitDestroyed(gone);
+        }
+        assertEq(0, missing, "every object is destroyed");
+        assertEq(Rounds, CountedCounter::destroyed.getCount() - before,
+            "each object is destroyed exactly once, after the last builtin call");
+    }
+}

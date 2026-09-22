@@ -1,0 +1,257 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ConcurrentCallStacksTest
+
+#! Reads the call stacks of other threads while they push and pop call stack locations
+/** Each thread publishes its own call stack with no lock, and get_all_thread_call_stacks() walks the stacks of all
+    other threads while they keep running: a thread that pops a location while its stack is being walked waits until
+    the walk has finished, so that the walk never reads a location that has been destroyed.  These checks read other
+    threads' stacks while they call functions as fast as they can, and while threads are created and exit.
+*/
+public class ConcurrentCallStacksTest inherits QUnit::Test {
+    public {
+        #! the number of threads calling functions while their stacks are read
+        const Callers = 4;
+        #! the number of threads reading all call stacks
+        const Readers = 2;
+        #! the number of times each reader reads all call stacks
+        const Reads = 300;
+        #! the user functions a caller thread can be executing when its stack is read
+        const CallerFrames = {
+            "ConcurrentCallStacksTest::callerLoop": True,
+            "ConcurrentCallStacksTest::chainOuter": True,
+            "ConcurrentCallStacksTest::chainMiddle": True,
+            "ConcurrentCallStacksTest::chainInner": True,
+            "ConcurrentCallStacksTest::shortLived": True,
+            "ConcurrentCallStacksTest::churnLoop": True,
+            "ConcurrentCallStacksTest::registerCaller": True,
+        };
+    }
+
+    private {
+        #! TIDs of the threads calling functions
+        hash<string, bool> caller_tids;
+        #! guards caller_tids and the counts below
+        Mutex lck();
+        #! the number of caller stacks the readers found
+        int caller_stacks_read = 0;
+        #! descriptions of malformed stacks the readers found
+        list<string> errors = ();
+    }
+
+    constructor() : QUnit::Test("concurrent call stacks", "1.0") {
+        addTestCase("A parked thread's stack is read from another thread", \parkedThreadStack());
+        addTestCase("Stacks are read while their threads call functions", \stacksReadWhileCalling());
+        addTestCase("Stacks are read while threads are created and exit", \stacksReadWhileThreadsExit());
+        set_return_value(main());
+    }
+
+    #! Another thread's stack is read with every frame in order while that thread is blocked in a known call chain
+    parkedThreadStack() {
+        Counter parked(1);
+        Counter release(1);
+        Counter done(1);
+        int tid;
+        background sub () {
+            on_exit done.dec();
+            tid = gettid();
+            chainOuter(sub () {
+                parked.dec();
+                release.waitForZero();
+            });
+        }();
+        parked.waitForZero();
+        hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+        release.dec();
+        done.waitForZero();
+
+        *list<hash<CallStackInfo>> stack = stacks{tid};
+        assertEq(True, exists stack, "the parked thread's stack is reported");
+        list<string> functions = map $1.function, stack;
+        if (m_options.verbose) {
+            printf("parked thread %d: %y\n", tid, functions);
+        }
+        # the innermost frames are the wait and the closure; the chain follows in order, innermost first
+        int inner = -1;
+        foreach string function in (functions) {
+            if (function == "ConcurrentCallStacksTest::chainInner") {
+                inner = $#;
+                break;
+            }
+        }
+        assertEq(True, inner >= 0, "the innermost chain frame is on the stack");
+        assertEq("ConcurrentCallStacksTest::chainMiddle", functions[inner + 1], "the middle frame follows");
+        assertEq("ConcurrentCallStacksTest::chainOuter", functions[inner + 2], "the outer frame follows");
+    }
+
+    #! All stacks are read repeatedly while other threads push and pop locations continuously
+    stacksReadWhileCalling() {
+        resetCounts();
+        Counter started(Callers);
+        Counter readers_running(Readers);
+        Counter callers_done(Callers);
+        for (int i = 0; i < Callers; ++i) {
+            background callerLoop(started, readers_running, callers_done);
+        }
+        # the readers only start once every caller is running, and the callers run until the readers are done
+        started.waitForZero();
+        Counter readers_done(Readers);
+        for (int i = 0; i < Readers; ++i) {
+            background readerLoop(readers_running, readers_done);
+        }
+        readers_done.waitForZero();
+        callers_done.waitForZero();
+
+        if (m_options.verbose) {
+            printf("%d reads by %d readers found %d caller stacks\n", Readers * Reads, Readers, caller_stacks_read);
+        }
+        assertEq((), errors, "every stack read is well formed");
+        assertGt(0, caller_stacks_read, "the readers found the callers' stacks");
+    }
+
+    #! All stacks are read repeatedly while threads are created, call functions and exit
+    stacksReadWhileThreadsExit() {
+        resetCounts();
+        Counter started(Callers);
+        Counter readers_running(Readers);
+        Counter churners_done(Callers);
+        for (int i = 0; i < Callers; ++i) {
+            background churnLoop(started, readers_running, churners_done);
+        }
+        started.waitForZero();
+        Counter readers_done(Readers);
+        for (int i = 0; i < Readers; ++i) {
+            background readerLoop(readers_running, readers_done);
+        }
+        readers_done.waitForZero();
+        churners_done.waitForZero();
+
+        assertEq((), errors, "every stack read is well formed while threads exit");
+    }
+
+    private resetCounts() {
+        caller_tids = {};
+        caller_stacks_read = 0;
+        errors = ();
+    }
+
+    private registerCaller() {
+        AutoLock al(lck);
+        caller_tids{gettid()} = True;
+    }
+
+    #! Calls a three-deep chain of functions until every reader has finished
+    private callerLoop(Counter started, Counter readers_running, Counter done) {
+        on_exit done.dec();
+        registerCaller();
+        started.dec();
+        int n = 0;
+        while (readers_running.getCount()) {
+            n += chainOuter();
+        }
+    }
+
+    #! Starts short-lived threads that call functions and exit, until every reader has finished
+    private churnLoop(Counter started, Counter readers_running, Counter done) {
+        on_exit done.dec();
+        registerCaller();
+        started.dec();
+        while (readers_running.getCount()) {
+            Counter exited(1);
+            background shortLived(exited);
+            exited.waitForZero();
+        }
+    }
+
+    private shortLived(Counter exited) {
+        on_exit exited.dec();
+        registerCaller();
+        chainOuter();
+    }
+
+    private int chainOuter(*code at_bottom) {
+        return chainMiddle(at_bottom) + 1;
+    }
+
+    private int chainMiddle(*code at_bottom) {
+        return chainInner(at_bottom) + 1;
+    }
+
+    private int chainInner(*code at_bottom) {
+        if (at_bottom) {
+            at_bottom();
+        }
+        return 1;
+    }
+
+    #! Reads every thread's stack a fixed number of times and checks each caller's stack
+    private readerLoop(Counter readers_running, Counter done) {
+        on_exit {
+            readers_running.dec();
+            done.dec();
+        }
+        int found = 0;
+        list<string> bad = ();
+        for (int i = 0; i < Reads; ++i) {
+            hash<string, list<hash<CallStackInfo>>> stacks = get_all_thread_call_stacks();
+            hash<string, bool> callers;
+            {
+                AutoLock al(lck);
+                callers = caller_tids;
+            }
+            foreach hash<auto> tid_stack in (stacks.pairIterator()) {
+                if (!callers{tid_stack.key}) {
+                    continue;
+                }
+                ++found;
+                *string err = checkCallerStack(tid_stack.value);
+                if (err) {
+                    bad += sprintf("TID %s: %s", tid_stack.key, err);
+                }
+            }
+        }
+        AutoLock al(lck);
+        caller_stacks_read += found;
+        errors += bad;
+    }
+
+    #! Returns a description of what is wrong with a caller thread's stack, or nothing if it is well formed
+    /** A location read after it was destroyed would show up as a frame with a garbled type or function name, or
+        with a user function that the caller threads never run.  A thread that is starting or exiting has only its
+        new-thread frame on the stack, and builtin frames (the counters, the lock) can have any name.
+    */
+    private static *string checkCallerStack(list<hash<CallStackInfo>> stack) {
+        if (!stack) {
+            return "the stack is empty";
+        }
+        foreach hash<CallStackInfo> frame in (stack) {
+            if (frame.function.empty()) {
+                return sprintf("frame %d has no function name", $#);
+            }
+            if (frame.line < 0 || frame.endline < frame.line) {
+                return sprintf("frame %d (%s) has line range %d-%d", $#, frame.function, frame.line, frame.endline);
+            }
+            switch (frame.type) {
+                case "user":
+                    if (!CallerFrames{frame.function}) {
+                        return sprintf("frame %d is user function %y, which no caller runs", $#, frame.function);
+                    }
+                    break;
+                case "builtin":
+                    break;
+                case "new-thread":
+                    if (frame.function != "<background operator>") {
+                        return sprintf("frame %d is new-thread frame %y", $#, frame.function);
+                    }
+                    break;
+                default:
+                    return sprintf("frame %d (%s) has type %y", $#, frame.function, frame.type);
+            }
+        }
+    }
+}

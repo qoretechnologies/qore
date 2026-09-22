@@ -33,6 +33,38 @@ class TypeGraphMcpServerHandler inherits McpServerHandler {
     }
 }
 
+#! Registers tools whose inputs are wildcards: a value of any type, or a union of different base types
+class WildcardMcpServerHandler inherits McpServerHandler {
+    constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
+        HashDataType fields();
+        fields.addField(new QoreDataField("label", "a plain string", StringType));
+        fields.addField(new QoreDataField("any_value", "an optional value of any type", AutoType));
+        fields.addField(new QoreDataField("choice", "a string or an integer",
+            new QoreUnionDataType(("string", "int"))));
+        fields.addField(new QoreDataField("choices", "strings or integers",
+            new ListDataType("list", new QoreUnionDataType(("string", "int")))));
+        registerTool("wildcard-fields-tool", "a tool with wildcard fields", fields, \echo());
+        registerTool("optional-wildcard-tool", "a tool taking an optional value of any type",
+            AbstractDataProviderTypeMap."auto", \echo());
+        registerTool("mandatory-wildcard-tool", "a tool taking a string or an integer",
+            new QoreUnionDataType(("string", "int")), \echo());
+    }
+
+    auto echo(auto arg) {
+        return arg;
+    }
+
+    #! Returns the input schema published for the given tool
+    *hash<auto> getToolInputSchema(string name) {
+        return tmap{name}.input;
+    }
+
+    #! Returns True if the given tool receives its input under the \c data argument
+    *bool getToolNeedsMap(string name) {
+        return tmap{name}.needs_map;
+    }
+}
+
 #! Tests that building a tool's input schema is bounded in time and memory
 /** A tool's input type is traversed as a graph of live type objects, not a tree: a type object reachable from more
     than one parent must be described once, not once per path to it, otherwise building the schema is exponential
@@ -54,6 +86,8 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
     constructor() : Test("McpServerHandlerTypeGraphTest", "1.0") {
         addTestCase("shared subtypes do not blow up the input schema", \sharedSubtypeSchemaTest());
         addTestCase("self-referencing input types terminate", \cyclicSchemaTest());
+        addTestCase("wildcard fields are published as values of any type", \wildcardFieldSchemaTest());
+        addTestCase("wildcard tool inputs keep their calling convention", \wildcardInputSchemaTest());
 
         set_return_value(main());
     }
@@ -122,5 +156,48 @@ public class McpServerHandlerTypeGraphTest inherits QUnit::Test {
         # the cycle is truncated with an opaque object rather than followed
         assertEq("object", schema.properties.self.type, "the cycle is described as an opaque object");
         assertNothing(schema.properties.self.properties, "the cycle is truncated rather than followed");
+    }
+    #! A field of any type, or of a union of different base types, used to be dropped when optional and to fail
+    #! the whole tool when mandatory: the wildcard case fell through into the object case
+    wildcardFieldSchemaTest() {
+        WildcardMcpServerHandler handler(getLogger());
+        *hash<auto> schema = handler.getToolInputSchema("wildcard-fields-tool");
+        assertEq("object", schema.type, "input schema is an object");
+
+        assertEq("string", schema.properties.label.type, "a typed field is described by its type");
+
+        assertEq({"description": "an optional value of any type"}, schema.properties.any_value,
+            "an optional field of any type is published, accepting any value");
+        assertFalse(inlist("any_value", schema.required), "an optional wildcard field is not required");
+
+        assertEq({"description": "a string or an integer"}, schema.properties.choice,
+            "a union of different base types is published, accepting any value");
+        assertTrue(inlist("choice", schema.required), "a mandatory union field stays required");
+
+        hash<auto> choices = schema.properties.choices;
+        assertEq("array", choices.type, "a list of union elements is an array");
+        assertEq({"description": "array items"}, choices.items,
+            "the union elements of a list accept any value");
+        assertTrue(inlist("choices", schema.required), "a mandatory list field stays required");
+    }
+
+    #! A tool taking one wildcard input
+    wildcardInputSchemaTest() {
+        WildcardMcpServerHandler handler(getLogger());
+
+        # an optional wildcard input has always been published as taking no structured input, and its tool
+        # receives the arguments hash as it is; that calling convention must not change
+        assertEq(McpServerHandler::NoInputDescription, handler.getToolInputSchema("optional-wildcard-tool"),
+            "an optional wildcard input keeps the no-input description");
+        assertFalse(handler.getToolNeedsMap("optional-wildcard-tool") ?? False,
+            "an optional wildcard input still receives the arguments hash");
+
+        # a mandatory wildcard input could not be published at all; it is wrapped like any non-object input
+        *hash<auto> schema = handler.getToolInputSchema("mandatory-wildcard-tool");
+        assertEq("object", schema.type, "a mandatory wildcard input is published as an object");
+        assertEq({}, schema.properties.data, "its data argument accepts any value");
+        assertEq(("data",), schema.required, "its data argument is required");
+        assertTrue(handler.getToolNeedsMap("mandatory-wildcard-tool"),
+            "a mandatory wildcard input receives its value under data");
     }
 }

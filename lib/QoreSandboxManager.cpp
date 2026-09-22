@@ -1129,9 +1129,17 @@ QoreSandboxManager* QoreSandboxManager::createWebSafe() {
 //------------------------------------------------------------------------------
 
 QoreSandboxManager* qore_program_private::getSandboxManagerRef() {
+    // Almost every program has no manager, and this runs at every cancellation point of every thread running in
+    // the program, so that is decided without sm_lock.  A manager set concurrently is found by the next lookup,
+    // exactly as if this one had taken the lock just before it was set.
+    if (!sandbox_manager.load(std::memory_order_acquire)) {
+        return nullptr;
+    }
+    // a manager has to be referenced under the lock, which keeps it from being released in between
     AutoLocker al(sm_lock);
-    if (sandbox_manager && sandbox_manager->optRef()) {
-        return sandbox_manager;
+    QoreSandboxManager* sm = sandbox_manager.load(std::memory_order_relaxed);
+    if (sm && sm->optRef()) {
+        return sm;
     }
     return nullptr;
 }

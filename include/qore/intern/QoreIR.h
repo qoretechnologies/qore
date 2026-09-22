@@ -3401,8 +3401,10 @@ public:
 
     //! OSR flag: set by the IR interpreter when a hot loop is detected.
     //! Checked by evalTiered() after IR execution to trigger JIT compilation.
-    //! mutable: written during const IR execution.
-    mutable bool osr_jit_requested = false;
+    //! mutable: written during const IR execution.  Atomic because every thread executing the function reads and
+    //! writes it; a plain bool was a data race.  Relaxed ordering: it is only a hint, and the compilation it
+    //! requests synchronizes on its own.
+    mutable std::atomic_bool osr_jit_requested{false};
 
     // Cached interpreter metadata.  These vectors are structural properties of
     // the IR function, so compute them once and reuse them across recursive and

@@ -2502,7 +2502,13 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
             input_desc = getTypeDescriptionIntern("input", input, prov);
             debug("Creating tool %y (%y) input: %y (%s: %y) -> %y", name, desc, input ? input.getName() : "n/a",
                 input ? input.className() : "n/a", keys (input ? input.getFields() : NOTHING), input_desc);
-            if (input_desc.type.val() && input_desc.type != "object") {
+            # A wildcard input has no structure to publish.  An optional one keeps the no-input description it
+            # has always had, so its tool still receives the arguments hash; a mandatory one could not be
+            # published at all before, and is wrapped like any other non-object input
+            if (exists input_desc && !input_desc && !input.isMandatory()) {
+                remove input_desc;
+            }
+            if (exists input_desc && input_desc.type != "object") {
                 needs_map = True;
                 input_desc = {
                     "type": "object",
@@ -2543,7 +2549,8 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         foreach AbstractDataField field in (fields.iterator()) {
             AbstractDataProviderType t = field.getType();
             *hash<auto> info = getTypeDescription(field.getName(), field.getShortDescription(), t, prov, tmap);
-            if (!info) {
+            # NOTHING omits the field; an empty description is a field of any value
+            if (!exists info) {
                 continue;
             }
             string name = field.getName();
@@ -2578,7 +2585,7 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
     private *hash<auto> getTypeDescription(string name, *string desc, AbstractDataProviderType t,
             *AbstractDataProvider prov, *hash<string, bool> tmap) {
         *hash<auto> info += getTypeDescriptionIntern(name, t, prov, tmap);
-        if (info && desc.val()) {
+        if (exists info && desc.val()) {
             info.description = desc;
         }
         return info;
@@ -2674,8 +2681,12 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 };
                 break;
 
+            # a wildcard (any value, or a union of different base types) is described as the JSON schema that
+            # accepts any value; an empty description is still a description, so callers distinguish it from
+            # NOTHING (omit the parameter) with "exists"
             case NT_ALL:
                 info = {};
+                break;
 
             case NT_OBJECT:
                 if (!t.isMandatory()) {

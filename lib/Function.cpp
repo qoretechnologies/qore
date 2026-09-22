@@ -1275,17 +1275,16 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         is_aot = uvb && uvb->hasCachedAOT();
     }
 
+    // Cross-program calls execute with the target/source Program's TLPD, but caller-sensitive APIs walk stack
+    // frame Programs, so the frame shows the caller's Program.  It is recorded as the location is pushed, not
+    // assigned afterwards: other threads can read the location from then on.
+    QoreProgram* frame_pgm = pgm_ctx ? old_pgm : nullptr;
+
     // add call to call stack; push builtin location on the stack if executing builtin c++ code
     if (ct == CT_BUILTIN) {
-        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc);
+        stack_loc = update_get_runtime_stack_builtin_location(this, stmt, pgm, old_runtime_loc, frame_pgm);
     } else {
-        stack_loc = update_get_runtime_stack_location(this, stmt, pgm);
-    }
-    if (pgm_ctx && old_pgm) {
-        // Cross-program calls execute with the target/source Program's TLPD,
-        // but caller-sensitive APIs walk stack frame Programs. Preserve the
-        // caller Program on the visible stack frame.
-        pgm = old_pgm;
+        stack_loc = update_get_runtime_stack_location(this, stmt, pgm, frame_pgm);
     }
     restore_stack = true;
 }
@@ -6492,8 +6491,8 @@ void UserVariantBase::recordFastCallExecution() const {
     // On-demand promotion: explicit --exec-mode=jit promotes on the first call
     // (threshold 1); tiered mode promotes once the function is hot.
     uint64_t threshold = (pgm && pgm->getExecMode() == QEM_JIT) ? 1 : QoreJIT::getJITThreshold();
-    if (ir->osr_jit_requested) {
-        ir->osr_jit_requested = false;
+    // claimed by one thread only: exchange() reports the request to just the thread that clears it
+    if (ir->osr_jit_requested.exchange(false, std::memory_order_relaxed)) {
         attemptJITCompilation();
     } else if (count >= threshold) {
         attemptJITCompilation();
@@ -6862,8 +6861,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // (threshold 1); tiered mode promotes once the function is hot.
         uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
             ? 1 : QoreJIT::getJITThreshold();
-        if (ir->osr_jit_requested && !jit_compile_failed.load(std::memory_order_acquire)) {
-            ir->osr_jit_requested = false;  // Reset flag
+        // claimed by one thread only: exchange() reports the request to just the thread that clears it
+        if (!jit_compile_failed.load(std::memory_order_acquire)
+                && ir->osr_jit_requested.exchange(false, std::memory_order_relaxed)) {
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                 ir->name.c_str());
             attemptJITCompilation();

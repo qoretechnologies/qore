@@ -70,6 +70,13 @@ int64 q_get_deref_rsection_count() {
 void q_inc_deref_rsection_count() {
     ++deref_rsection_count;
 }
+
+//! the number of dereferences in the current thread that took the locking path
+static thread_local int64 deref_locked_count = 0;
+
+int64 q_get_deref_locked_count() {
+    return deref_locked_count;
+}
 #endif
 
 RObject::~RObject() {
@@ -129,16 +136,52 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
 
 void RObject::derefRealIntern() {
     assert(rrefs > 0);
-    // before allowing the real references to reach zero, we need to ensure that any rset invalidation action has
-    // completed
-    while (rrefs == 1 && rref_wait) {
-        ++rref_waiting;
-        rcond.wait(rlck);
-        --rref_waiting;
+    // Before allowing the real references to reach zero, we need to ensure that any rset invalidation action has
+    // completed.  tryFastDeref() decrements rrefs without rlck, but never to zero, so with rlck held only this
+    // function takes the last real reference away and rref_wait cannot change underneath it; the count is still
+    // decremented with a compare-and-swap, so that a concurrent lock-free decrement between the test and the
+    // decrement cannot make this the one that reaches zero without having waited.
+    int r = rrefs.load(std::memory_order_relaxed);
+    while (true) {
+        assert(r > 0);
+        if (r == 1 && rref_wait) {
+            ++rref_waiting;
+            rcond.wait(rlck);
+            --rref_waiting;
+            r = rrefs.load(std::memory_order_relaxed);
+            continue;
+        }
+        if (rrefs.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed)) {
+            break;
+        }
     }
-    assert(rrefs > 0);
+}
 
-    --rrefs;
+int RObject::tryFastDeref(bool real) {
+    // an object in a recursive set has a collection decision to make
+    if (rset.load(std::memory_order_acquire)) {
+        return -1;
+    }
+    if (real) {
+        // the last real reference goes through the lock; see derefRealIntern()
+        int r = rrefs.load(std::memory_order_relaxed);
+        do {
+            if (r <= 1) {
+                return -1;
+            }
+        } while (!rrefs.compare_exchange_weak(r, r - 1, std::memory_order_acq_rel, std::memory_order_relaxed));
+        // Real references remain, and each of them is a reference too, so this is never the last one; and while
+        // they remain, a deferred scan is left to the dereference that releases the last of them.
+        int refs = references.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        assert(refs > 0);
+        (void)refs;
+        return 1;
+    }
+    // a deferred scan is made by the dereference that finds no real reference left
+    if (deferred_scan.load(std::memory_order_acquire) && !rrefs.load(std::memory_order_acquire)) {
+        return -1;
+    }
+    return (references.fetch_sub(1, std::memory_order_acq_rel) - 1) ? 1 : 0;
 }
 
 // The objects this thread is currently dereferencing, innermost first.
@@ -204,10 +247,7 @@ int RObject::deref(bool real, bool& do_scan, bool& rescan) {
     do_scan = !rrefs;
 
     if (do_scan) {
-        rescan = deferred_scan;
-        if (deferred_scan) {
-            deferred_scan = false;
-        }
+        rescan = deferred_scan.exchange(false);
     } else {
         rescan = false;
     }
@@ -256,7 +296,7 @@ int RObject::checkDeferScan() {
             return 0;
         }
         printd(QRO_LVL, "RObject::checkDeferScan() this: %p (%s) rrefs: %d deferring scan (already deferred: %d)\n",
-            this, getName(), rrefs.load(), (int)deferred_scan);
+            this, getName(), rrefs.load(), (int)deferred_scan.load());
         deferred_scan = true;
         // A scan started at another object reaches this one and assigns it a recursive set even while rrefs > 0,
         // so a set can be attached between one deferred scan and the next.  The graph has just changed again, so
@@ -448,13 +488,18 @@ void qore_dgc_node_dereferenced(AbstractQoreNode* n, ExceptionSink* xsink) {
         rep = erase_node_watch(i);
     }
 
-    // a temporary reference to the member is released like any other reference, which rechecks its set
-    bool valid;
+    // a temporary reference to the member is released like any other reference, which rechecks its set; it is
+    // only taken if the member still has references, and dereferences can release them with no lock
+    // (RObject::tryFastDeref()), so the test and the increment are one compare-and-swap
+    bool valid = false;
     {
-        AutoLocker al(rep->rlck);
-        valid = rep->references > 0;
-        if (valid) {
-            ++rep->references;
+        int r = rep->references.load(std::memory_order_relaxed);
+        while (r > 0) {
+            if (rep->references.compare_exchange_weak(r, r + 1, std::memory_order_acq_rel,
+                    std::memory_order_relaxed)) {
+                valid = true;
+                break;
+            }
         }
     }
     if (valid) {
@@ -639,8 +684,29 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
     return 1;
 }
 
-robject_dereference_helper::robject_dereference_helper(RObject* obj, bool real) : o(obj) {
-    refs = obj->deref(real, do_scan, deferred_scan);
+robject_dereference_helper::robject_dereference_helper(RObject* obj, bool real)
+        : robject_dereference_helper(obj, real, false) {
+}
+
+robject_dereference_helper::robject_dereference_helper(RObject* obj, bool real, bool released_last) : o(obj) {
+#ifdef DEBUG
+    ++deref_locked_count;
+#endif
+    if (released_last) {
+        // a real reference is only released there while others remain, so it is never the last one
+        assert(!real);
+        // RObject::tryFastDeref() released the last reference; register the dereference in progress so that
+        // derefDone() makes the deletion wait for the dereferences of other threads that still use the object.
+        // They registered in the same critical section in which they released their references, and they
+        // released them before this one reached zero, so taking rlck here orders this after them.
+        AutoLocker al(obj->rlck);
+        ++obj->ref_inprogress;
+        refs = 0;
+        do_scan = !obj->rrefs;
+        deferred_scan = false;
+    } else {
+        refs = obj->deref(real, do_scan, deferred_scan);
+    }
     del = !refs;
     // record the dereference this object now has in progress, so that a nested dereference of the
     // same object on this thread does not wait for it (see t_deref_inprogress)

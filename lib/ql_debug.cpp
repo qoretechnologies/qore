@@ -455,14 +455,17 @@ static void ut_qorefile_timed_read_contract(UnitTestCounters& c) {
 
 class TestRSectionPriv : public qore_rsection_priv {
 public:
+    // a writer holds the claim as long as it holds the lock (see qore_var_rwlock_priv), so the fake one does too
     DLLLOCAL void setFakeWriter(int tid) {
         AutoLocker al(l);
+        write_claim = true;
         write_tid = tid;
     }
 
     DLLLOCAL void clearFakeWriterAndNotify() {
         AutoLocker al(l);
         write_tid = -1;
+        write_claim = false;
         notifyIntern();
         unlock_signal();
     }
@@ -4584,6 +4587,16 @@ static QoreValue f_dbg_get_deref_rsection_count(const QoreListNode* params, Runt
     return q_get_deref_rsection_count();
 }
 
+//! returns the number of dereferences in the current thread that took the locking path
+/** A dereference of an object or captured variable that has nothing to decide releases its reference with a single
+    atomic operation and no lock; tests use this to verify that calling methods on a shared object outside a cycle
+    never takes the object's lock.
+*/
+static QoreValue f_dbg_get_deref_locked_count(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    return q_get_deref_locked_count();
+}
+
 //! removes a hash key or object member through QoreTypeSafeReferenceHelper::removeHashObjKey()
 /** @param ref a reference to a hash or object
     @param key the key or member to remove
@@ -4688,6 +4701,8 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_get_rset_restart_count", f_dbg_get_rset_restart_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_deref_rsection_count", f_dbg_get_deref_rsection_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_get_deref_locked_count", f_dbg_get_deref_locked_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
