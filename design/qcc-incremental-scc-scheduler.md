@@ -428,6 +428,53 @@ it answers a failed partial parse: with the group's own parse, which preloads no
 cannot fail that way. A typo in a compiled source still fails fast, without paying for a group
 parse first.
 
+*A preloaded object is run, not only declared (fixed).* Parse commit runs initializers, and the
+initializers of what a compile preloads are among them: on Qorus, `Classes/QorusMapManager.qc`
+declares `static TestMetadata tests = new TestMetadata(...)`, whose constructor calls
+`TestEngine::listStepKinds()`. Code reached that way in a preloaded object is the object's
+source-stripped IR, and registering it needs every class and function it calls declared in the
+Program -- a need the two dependency relations above cannot express, because a late-bound call
+bakes nothing of its target and so is, correctly, no dependency at all. What made the gap
+intermittent is that the two compile modes disagree about it: a whole-group parse resolves the
+call against the declaration it has just parsed and records the callee as a content dependency,
+while a standalone compile defers it through the source-symbol manifest and records it only as a
+late-bound import in the object's symbol index. So the first incremental build after a group
+parse worked, and once the caller had been compiled standalone every later preload of it lost the
+callee:
+
+```
+AOT-SOURCE-IR-ERROR: could not materialize source-stripped function IR for 'listStepKinds': AOT
+  slot map registration failed for 'TestEngine::_static_listStepKinds(*hash<auto>,*string)':
+  unsupported AOT slot metadata: expr slot 48 (STATIC_METHOD_CALL): cannot resolve the call to
+  'TestStepPhasePolicy::validatePhase()': class 'TestStepPhasePolicy' is not declared in this Program
+error: parse commit failed: Classes/QonsoleDesignArtifactStore.qc
+```
+
+Reading the symbol indexes was not an option (1.2 GB of `.idx.json` on Qorus), so `qcc` writes the
+providers beside the object in `<object>.load-requires`, one `require` row per build-group source
+its code needs declared -- the provider a resolved call records, or, for a reference it deferred
+(a class it constructs or names as a type records only its path), the source the group's
+source-symbol manifest names. `componentPreloadOutputs()` closes over these as a third relation.
+They are not ordering edges and not staleness inputs: nothing merges and nothing extra goes stale.
+
+Three related defects were fixed with it:
+
+- the same failure used to exit 1 and so failed the build; it is a property of the preload set, so
+  a parse commit that fails with `AOT-SOURCE-IR-ERROR` while resolving against preloaded objects now
+  exits 78 and the coordinator answers it with the group's parse; and
+- a *construction* of the missing class failed silently: it raises `AOT-PENDING-CLASS`, which
+  parse commit treats as "linked later" and defers, and a read of the variable then deferred it
+  again and returned a value that was never assigned. A static variable initializer is now deferred
+  only at parse commit; a read reports what is still pending, a failed initializer leaves the
+  variable uninitialized, and each initializer is classified from its own exceptions.
+- the declaration form of a construction, `X x(args)`, disagreed with the other two about a class
+  the source-symbol manifest deferred: a scoped `new X()` and a static call report it as pending
+  linking, while `X x(args)` raised a hard `CREATE-OBJECT-ERROR`. On Qorus that failed
+  `Classes/TestEngine.qc`'s own standalone compile (the preloaded `QorusMapManager` initializer runs
+  `listStepKinds()`, which declares `TestStepPhasePolicy policy(rv)`) whenever no earlier record
+  named the class. During an AOT source parse it now raises `AOT-PENDING-CLASS` as well, and the
+  initializer is deferred like any other that reaches a symbol linked later.
+
 *Convexity (fixed — [#5458](https://github.com/qoretechnologies/qore/issues/5458)).*
 Completing the preload set is necessary but not sufficient. The compiled set must also be
 **convex**: no preloaded source may depend on a source the parse compiles. On Qorus,
@@ -482,6 +529,22 @@ against a stale member's previous object only to go stale again in the next pass
 `QORE_QCC_SUBSET_PARSE` remains opt-in. Convexity was the last defect keeping a partial
 parse from compiling consistently; whether it should be the default is a performance
 decision for the escalation floor below, and wants measuring on the trees it would serve.
+
+**Measured on Qorus (2026-09-22), it does not pay for the edit it was meant for.** A comment
+appended to three core sources (`QorusQonsoleCore.qc`, `QorusRestApiHandlerV9.qc`,
+`QonsoleDesignArtifactStore.qc`) leaves three singleton components stale:
+
+|!path|!passes|!sources per parse|!coordinator time
+|standalone compiles (default)|1|1, three times|3m07
+|`QORE_QCC_SUBSET_PARSE=1`|3|1 (convexity left 2, then 1, out)|3m47
+
+`--scc-convex-set` kept only one of the three in each parse -- each of the others would have
+preloaded an object compiled against a source the parse recompiled -- so the partial parse
+became three passes of one source, each paying the parse and planning overhead the one
+standalone pass pays once. On a group this dense the convexity rule turns most multi-source
+stale sets into one source per pass, and a parse of one source is a standalone compile with
+more overhead. Making it the default would need a stale set whose members do not reach each
+other through preloads, which the edits measured here did not produce.
 
 ## What actually causes the mode-transition cascade
 
@@ -718,6 +781,11 @@ link step validates that hash, and a body contract is not part of a declaration 
 The stamp is written with `write_generated_file_if_changed()`, so an unchanged declaration
 keeps its mtime and the edge does not fire. That is the whole mechanism: the file the build
 tool stats moves only when a declaration moves.
+
+(In a group with a coordinator the build tool no longer reads member depfiles at all -- see "The
+build tool reads one depfile per group, not one per object" below. The scheduler still reads
+them for the graph and the preload closure, and a single-source group still hands its one
+recipe the depfile qcc writes, so the narrowing matters to both.)
 
 Two invariants make this work, and both were violated by the obvious implementation:
 
@@ -1008,6 +1076,58 @@ single `rename(2)`. The temporary is named after its target, so concurrent batch
 threads cannot collide, and it does not end in `.d`, so a scan for depfiles cannot
 pick one up mid-write.
 
+## The build tool reads one depfile per group, not one per object
+
+Every object recipe used to carry `DEPFILE <object>.qo.d`. In a group with a coordinator those
+depfiles decided nothing: a recipe behind the coordinator asks the currency question with
+`--source-deps-only`, so one that ran because a module or stub moved found its component current
+and did nothing. What actually carried an external change was the bootstrap's own depfile --
+written by the group parse -- whose recipe runs `--scc-stale` and hands the stale components to
+the coordinator.
+
+They were also expensive. The Makefile generators before CMake 4.0 consolidate a custom
+command's depfile into the target's `compiler_depend.internal`/`compiler_depend.make` by
+**appending** a rewritten depfile's paths to the entry already there, never replacing it
+(`cmDependsCompiler::CheckDependencies()`; CMake 4.0 assigns instead). A member depfile is
+rewritten on every compile, and CMake copies an object recipe into every target that consumes
+its stamp, each with its own consolidated file. On Qorus (CMake 3.31.12):
+
+|!measurement|!value
+|`qore_qcc_QORUS_CORE_MAIN_generation` consolidated dependencies|840 MB + 923 MB, 14.7M lines
+|lines for `QorusQonsoleCore.qc`'s stamp|29,496, for 326 distinct paths (each repeated up to 112 times)
+|every target's `compiler_depend*` in the build tree|9.6 GB, 7 GB of it temporaries of interrupted rewrites
+|CMake dependency scan after a three-object incremental compile|50 s
+
+And they left a gap. An input a member started reading after the group's last shared parse --
+a module it began to `%requires` -- is recorded only by that member's standalone compile, not by
+the bootstrap's depfile, so an edit to it rebuilt nothing. On Qorus 40 modules and module
+sources were in that state, among them `QorusTokenEntitlement.qmod`, which the same project
+builds.
+
+So a group with a coordinator now has one **external-input stamp**, `.qcc-external-inputs.stamp`
+beside the generation records, whose custom command only touches it and whose depfile names
+every build input from outside the group that any member's depfile records
+(`qore-qo-source-order --scc-external-inputs`, the union of `externalDepfileInputs()`). The
+bootstrap depends on the stamp, so a move in any of those inputs reaches the bootstrap's
+currency check, which compares it against every member's stamp and hands exactly the members
+that read it to the coordinator. The coordinator rewrites the depfile at the end of every
+successful plan -- its compiles are what change the set -- and only when the set changed, so
+CMake consolidates it rarely; on Qorus it names 176 paths. Object recipes carry no `DEPFILE`;
+a single-source group, which has no coordinator, still gives its one recipe qcc's depfile.
+
+Configuring also resets the consolidated dependencies of the group's own targets (source
+content, source symbols, bootstrap, coordinator, objects, generation) and removes the
+temporaries an interrupted rewrite left: CMake keeps a target's consolidated dependencies when
+the depfiles that produced them go away, so a tree configured by an earlier `QoreMacros.cmake`
+would otherwise keep reading gigabytes of dependencies that no longer exist. The next build
+reads the remaining depfiles again, which takes a fraction of a second. Targets a project
+defines itself that consume the object stamps keep what they had consolidated -- they stop
+growing, but the file stays until it is deleted.
+
+Two depfiles still accumulate under CMake before 4.0 and are left alone: the bootstrap's, which
+the group parse rewrites (about 8 KB per parse), and the external-input stamp's, which changes
+only when the set of external inputs does. Both are reset whenever the project is configured.
+
 ## A covered input has to be recognised however its path is spelled
 
 The generation token accounts for every in-context source, digest sidecar and sibling artifact
@@ -1159,6 +1279,16 @@ which two builders can still race to restore.
     group's own parse, which preloads nothing.
 19. A consumer's dependency on a provider's body contract covers the rows it baked, and
     nothing else the provider publishes.
+20. A publication under a frozen graph records the prerequisites its own compile wrote. The
+    record is computed from the frozen graph with the component's own depfile edges as the
+    compile left them, so a prerequisite the compile gained is in it, and the next freeze does
+    not find the component stale for a dependency it was built with.
+21. The build tool watches a group with a coordinator through one depfile: every input from
+    outside the group that any member recorded, rewritten only when that set changes. No
+    object recipe hands the build tool a depfile of its own.
+22. A preload set is closed over what the code of each preloaded object needs declared when it
+    runs at parse commit (`<object>.load-requires`), as well as over its dependencies. A
+    late-bound call is never a dependency, whichever compile mode recorded the object.
 
 ## Tests
 
@@ -1177,17 +1307,21 @@ which two builders can still race to restore.
 - `examples/test/ir/AOTIncrementalDeps.qtest` — what a compile records as a dependency,
   including that a folded constant narrows to the provider's declaration contract, that a
   comment-only provider edit leaves it byte-identical, and that a changed value does not;
-  folded enum members in both compile modes; the body-contract rows a consumer records; and
-  that a preloaded object's module loads in a program a `--stub` parse left mid-parse
+  folded enum members in both compile modes; the body-contract rows a consumer records;
+  that a preloaded object's module loads in a program a `--stub` parse left mid-parse; and
+  that a preloaded object's code that cannot load at parse commit exits 78 while a failure
+  in the compiled source's own initializer exits 1
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a cascade walked to convergence, a pass that changes
   nothing escalating instead of lapping, a compile that gains an edge to a current
   provider converging in one pass (and one that closes a cycle keeping the frozen
-  graph's record for the parse to replace), the escalation floor following
+  graph's record for the parse to replace), the external-input depfile the coordinator
+  writes (one rule, escaped, rewritten only on change), the escalation floor following
   whether a partial parse is configured, a partial parse leaving a non-convex member for
-  the next pass, and a preload failure on the default path falling back to the group's
-  parse
+  the next pass, a preload failure on the default path falling back to the group's
+  parse, and a preload closing over load requirements transitively without them becoming
+  ordering edges
 - `examples/test/ir/AOTSymbolIndex.qtest` — the symbol index and the source-symbol
   manifest, including a subset parse resolving a provider it compiles itself
 - `examples/test/ir/AOTQoLock.qtest` — the lock helper: status passthrough (including the
@@ -1195,4 +1329,13 @@ which two builders can still race to restore.
   that a SIGKILLed holder's lock is free with nothing to reclaim, that the lock file
   survives, and that arguments are not re-split by a shell
 - `examples/test/ir/AOTDepfileAtomicWrite.qtest` — depfile publication atomicity
-- `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end
+- `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end, including
+  that no member depfile reaches a target consuming the object stamps, that a module a member
+  started requiring after the group parse is watched and an edit to it rebuilds that member
+  alone, and that configuring resets the consolidated dependencies an earlier configuration
+  left
+  left, and that code a preloaded sibling runs at parse commit finds what it calls -- a static
+  method, a function and a construction -- after its caller was compiled standalone
+- `examples/test/qore/misc/static-var-deferred-init.qtest` -- a static variable initializer is
+  deferred only at parse commit: reads report what is still pending, a failure is reported by
+  every read, and initializers are classified from their own exceptions

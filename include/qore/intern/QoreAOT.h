@@ -773,6 +773,20 @@ public:
     */
     static bool lastCompileFailedInPreload();
 
+    //! Compiler driver flags that make a native link target the platform version libqore was built for
+    /** On macOS a link that names no deployment target gets the compiler driver's default, which follows the
+        SDK and can be older than the one libqore was built for: CMake builds for the host's macOS version when
+        the SDK is newer than the host.  The linker then warns that the output is built for an older macOS than
+        libqore, on every executable and module qcc links.  The flag names the version the compiler reported
+        while building libqore itself.
+
+        A \c MACOSX_DEPLOYMENT_TARGET in the environment is an explicit choice the compiler driver already
+        honors, so nothing is returned then.  Other platforms need no flag.
+
+        @return the flags, without surrounding spaces, or an empty string
+    */
+    static std::string getLinkTargetFlags();
+
     //! Compile a parsed program to a standalone executable
     /** The binary uses serialized metadata.
         @param pgm parsed QoreProgram (must have been parsed successfully)

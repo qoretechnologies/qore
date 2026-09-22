@@ -1090,10 +1090,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - new functions:
       - @ref Qore::call_async() "call_async()": spawns a background thread to execute a callable and returns a
         @ref Qore::Thread::Future "Future" for the result
-      - @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()": calls a callable while holding the
-        global module-load lock, so that %Qore code (for example a module performing lazy initialization that can
-        load further modules) can establish a consistent lock order with its own locks and avoid the ABBA deadlock
-        described in @ref qore_3_0_0_new_features "Module-Loading Lock Hierarchy"
+      - @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()": calls a callable and returns its
+        result; module loading takes no process-global lock, so this is a plain call, described in
+        @ref qore_3_0_0_new_features "Module-Loading Lock Hierarchy"
       - @ref Qore::cancel_thread() "cancel_thread()": requests cooperative cancellation of another thread
       - @ref Qore::channel_select() "channel_select()": waits on multiple @ref Qore::Thread::Channel "Channel"
         objects for the first ready operation (send or recv)
@@ -1510,29 +1509,25 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @par Module-Loading Lock Hierarchy
     @parblock
-    Cold runtime module loads serialize on a process-global lock while applying @ref exec_mode_aot "AOT"
-    module commands
-    and running module initializers.  Because applying a module's commands can call into that
-    module (for example to import Java classes), a binary module that holds a private lock while
-    triggering a module load could invert the lock order and deadlock against a concurrent load.
+    Module loading does not serialize on a process-global lock.  Each module is initialized by one
+    thread while other threads that need it wait for that thread, and a wait that would close a cycle
+    between threads raises a \c CIRCULAR-MODULE-DEPENDENCY exception instead of deadlocking.  A
+    module's own @ref Qore::Program "Program" can be the target of a module load while another thread
+    imports the module, and the import excludes that load for as long as it copies the module's
+    declarations.
 
-    Binary modules can now participate in that hierarchy explicitly:
-    - @ref QoreModuleLoadLockHelper "QoreModuleLoadLockHelper" acquires the module-load lock, which must be taken <i>before</i>
-      any module-private lock that is held across a call back into module loading &mdash; whether
-      directly via \c ModuleManager::runTimeLoadModule(), or indirectly through a callback from a
-      foreign runtime such as a JVM classloader
-    - @ref QoreModuleInnerLockHelper "QoreModuleInnerLockHelper" marks a module-private lock as inner to the module-load lock;
-      debug builds then assert that the order is respected rather than deadlocking in the field
+    Because loading a module can call into it (for example to import Java classes), a module must
+    never hold one of its private locks across the start of a module load: the thread loading the
+    module can need that lock while the holder waits for the load.  Binary modules can have debug
+    builds check this:
+    - @ref QoreModuleInnerLockHelper "QoreModuleInnerLockHelper" marks a module-private lock that code running inside a
+      module load can take
+    - @ref QoreModuleLoadLockHelper "QoreModuleLoadLockHelper" marks the current thread as inside a module load; it acquires
+      no lock, and in debug builds it asserts that no marked lock is held when a thread starts its outermost module load
 
-    The lock is recursive, so nested module loads are safe.  It is intended for cold paths only:
-    already-loaded modules keep a lock-free fast path, and module authors should avoid taking the
-    module-load lock on cache-hit paths that cannot reach module loading.
-
-    %Qore-language modules can participate in the same hierarchy with the new
-    @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()" function, which runs a callable while
-    holding the module-load lock; a module that performs lazy initialization under its own lock (and whose
-    initialization can load further modules) should acquire the module-load lock first via this function so the
-    global order remains "module-load lock &rarr; module-private lock".
+    @ref Qore::call_with_module_load_lock() "call_with_module_load_lock()" calls a callable and returns its result.
+    It takes no lock; a module performing lazy initialization under its own lock should release that lock before
+    anything in the initialization can load a module.
     @endparblock
 
     @par RFC 7231 / RFC 2822 Date Parsing
@@ -3256,6 +3251,26 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::CFLAGS omitting the macOS deployment target the library was built for; a program compiled
+      against the library with those flags targeted an older macOS than the library, and the linker warned about it
+    - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X>, \c reference<X>, union
+      types, and typed callable types being taken from a destroyed type: they were cached by the address of the
+      type they were built from, and a hashdecl, class, or enum allocated at the same address after the
+      @ref Qore::Program "Program" declaring the first one was destroyed was given the first type's derived
+      types - a different type, whose element type no longer existed.  Type checks and error messages then
+      depended on the memory allocator
+    - Fixed @ref Qore::Program::importClass() "Program::importClass()",
+      @ref Qore::Program::importFunction() "Program::importFunction()",
+      @ref Qore::Program::importGlobalVariable() "Program::importGlobalVariable()", and
+      @ref Qore::Program::importHashDecl() "Program::importHashDecl()" writing the target
+      @ref Qore::Program "Program" while threads already running code in it looked names up, which could crash;
+      parsing into a Program now also excludes threads reading its declarations from another Program
+    - Fixed @ref Qore::Program::importSystemApi() "Program::importSystemApi()" and the related
+      \c Program::importSystem*() methods racing with a module being loaded into the calling
+      @ref Qore::Program "Program" by another thread: the import copied the calling Program's system API
+      without excluding that load and without the target Program's parse lock, so it could crash or fail with a
+      spurious \c IMPORT-SYSTEM-API-ERROR conflict with itself.  A binary module being loaded into a Program
+      now also excludes threads looking up names in that Program until its declarations are in place
     - Fixed stream sockets bound on all interfaces binding only the IPv4 wildcard address, so they could not be
       reached over IPv6; a client of \c "localhost", which resolves to \c ::1 first, could connect to an unrelated
       IPv6 service holding the same port number instead and have its request reset.  A bind on all interfaces is
@@ -3388,6 +3403,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       its programs with qore_destroy_program(), such as an executable that \c qcc links from \c .qo objects, could
       free library state, and the thread counter itself when the process exited, while a background thread was
       still using it
+    - Fixed a weak reference (<tt>:=</tt>) to a list whose last strong reference was released reading the list's
+      freed entries in release builds, and fixed taking and releasing a new reference to such a list or hash
+      through the weak reference freeing it a second time, which deleted it while the weak reference still pointed
+      to it.  Such a list or hash now reads as empty, and changing it raises \c LIST-ERROR or \c HASH-ERROR in
+      every execution mode, where the IR, JIT and AOT modes changed it.  Also fixed emptying a hash that stays in
+      use (the thread-local data of a pooled thread, for example) marking it as gone out of scope, and a value
+      appended to a list that has gone out of scope being leaked
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

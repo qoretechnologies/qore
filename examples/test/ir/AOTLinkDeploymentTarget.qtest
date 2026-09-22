@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTLinkDeploymentTargetTest
+
+#! qcc links executables and modules for the macOS version libqore was built for
+/** A link that names no deployment target gets the compiler driver's default, which follows the SDK, while
+    CMake builds libqore for the host's macOS version when the SDK is newer than the host.  Every executable and
+    module qcc linked then targeted an older macOS than the libqore it links against, and the linker said so:
+
+    @verbatim
+ld: warning: building for macOS-26.0, but linking with dylib '@rpath/libqore.20.dylib' which was built for
+newer version 26.6
+    @endverbatim
+
+    which failed every test that rejects unexpected output from a qcc run.  qcc now passes the version the
+    compiler reported while building libqore, unless MACOSX_DEPLOYMENT_TARGET chooses one explicitly.
+*/
+class AOTLinkDeploymentTargetTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string lib_dir;
+        string qcc_bin;
+        string otool;
+    }
+
+    constructor() : QUnit::Test("AOTLinkDeploymentTargetTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        lib_dir = ENV.QORE_LIBDIR ?? dirname(realpath(qore_bin));
+        qcc_bin = ENV.QCC ?? lib_dir + "/qcc";
+        otool = trim(backquote("command -v otool 2>/dev/null || true"));
+        addTestCase("an executable targets libqore's macOS version", \executable());
+        addTestCase("a module targets libqore's macOS version", \module());
+        addTestCase("MACOSX_DEPLOYMENT_TARGET is still honored", \explicitTarget());
+        set_return_value(main());
+    }
+
+    executable() {
+        checkPlatform();
+        TmpDir tmp("qore-aot-link-target-");
+        string script = tmp.path + "/hello.q";
+        write(script, "%modern\nprintf(\"hello\\n\");\n");
+        string exe = tmp.path + "/hello";
+        string out = run(sprintf("%s -o %s %s", shellQuote(qcc_bin), shellQuote(exe), shellQuote(script)));
+        assertTrue(is_file(exe), "qcc linked the executable: " + out);
+        assertEq(-1, out.find("ld: warning"), "the link does not warn: " + out);
+        assertEq(libqoreMinOS(), minOS(exe), "the executable targets libqore's macOS version");
+        assertEq("hello\n", run(shellQuote(exe)), "and runs");
+    }
+
+    module() {
+        checkPlatform();
+        TmpDir tmp("qore-aot-link-target-");
+        string source = tmp.path + "/LinkTargetMod.qm";
+        write(source, "%modern\nmodule LinkTargetMod { version = \"1.0\"; desc = \"test\"; author = \"Qore\"; "
+            "url = \"https://qore.org\"; }\npublic namespace LinkTargetMod { public string sub hello() { "
+            "return \"hello\"; } }\n");
+        string qmod = tmp.path + "/LinkTargetMod.qmod";
+        string out = run(sprintf("%s -m -o %s %s", shellQuote(qcc_bin), shellQuote(qmod), shellQuote(source)));
+        assertTrue(is_file(qmod), "qcc linked the module: " + out);
+        assertEq(-1, out.find("ld: warning"), "the link does not warn: " + out);
+        assertEq(libqoreMinOS(), minOS(qmod), "the module targets libqore's macOS version");
+    }
+
+    explicitTarget() {
+        checkPlatform();
+        # an explicit choice that differs from libqore's, which the result must follow; 15.0 is the last release
+        # before the version numbers jumped to 26, and far above the oldest macOS on arm64 (11.0)
+        string older = "15.0";
+        if (libqoreMinOS() == older) {
+            older = "14.0";
+        }
+        TmpDir tmp("qore-aot-link-target-");
+        string script = tmp.path + "/hello.q";
+        write(script, "%modern\nprintf(\"hello\\n\");\n");
+        string exe = tmp.path + "/hello";
+        string out = run(sprintf("MACOSX_DEPLOYMENT_TARGET=%s %s -o %s %s", older, shellQuote(qcc_bin),
+            shellQuote(exe), shellQuote(script)));
+        assertTrue(is_file(exe), "qcc linked the executable: " + out);
+        assertEq(older, minOS(exe), "the executable follows MACOSX_DEPLOYMENT_TARGET");
+    }
+
+    private checkPlatform() {
+        if (PlatformOS != "Darwin") {
+            testSkip("the deployment target only applies to macOS");
+        }
+        if (!otool) {
+            testSkip("otool is not available");
+        }
+        if (!is_executable(qcc_bin)) {
+            testSkip("qcc not found at " + qcc_bin);
+        }
+    }
+
+    #! the minimum macOS version recorded in a Mach-O file's LC_BUILD_VERSION load command
+    private string minOS(string path) {
+        string out = backquote(sprintf("%s -l %s", shellQuote(otool), shellQuote(path)));
+        *list<*string> m = (out =~ x/LC_BUILD_VERSION[\s\S]*?minos ([0-9.]+)/);
+        if (!m) {
+            throw "TEST-ERROR", sprintf("no LC_BUILD_VERSION in %s: %s", path, out);
+        }
+        return m[0];
+    }
+
+    #! the minimum macOS version libqore was built for
+    private string libqoreMinOS() {
+        *list<string> libs = glob(lib_dir + "/libqore.[0-9]*.dylib");
+        if (!libs) {
+            throw "TEST-ERROR", "no libqore found in " + lib_dir;
+        }
+        return minOS(libs[0]);
+    }
+
+    private string run(string cmd) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s 2>&1", shellQuote(lib_dir),
+            shellQuote(lib_dir), cmd));
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private static write(string path, string body) {
+        File f();
+        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(body);
+        f.close();
+    }
+}

@@ -650,6 +650,25 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     return err;
 }
 
+//! Reports a class deferred at parse time that cannot be resolved when the object is constructed
+/** During an AOT source parse the class is a build-group declaration that is linked later: the compile resolves
+    against preloaded objects that need not declare it, and code run at parse commit (a static variable initializer)
+    can reach the construction before it exists.  That is reported as pending linking, as a scoped `new` or a static
+    call reports it, so that the initializer is deferred rather than failing the compile.  Anywhere else the class
+    is simply missing.
+*/
+static void raiseUnresolvedDynamicClass(const std::string& class_name, ExceptionSink* xsink) {
+    if (*xsink) {
+        return;
+    }
+    if (qore_aot_source_parse_active()) {
+        xsink->raiseException("AOT-PENDING-CLASS", "class '%s' is pending AOT source linking for instantiation",
+            class_name.c_str());
+        return;
+    }
+    xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation", class_name.c_str());
+}
+
 QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
     // NOTE: VRN_OBJECT is handled separately by the NewObject IR opcode, which calls
     // qore_class_private::execConstructor() directly. This method only handles the
@@ -669,10 +688,7 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
         case VRN_DYNAMIC_OBJECT: {
             const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
             if (!qc) {
-                if (!*xsink) {
-                    xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation",
-                        dynamic_class_name.c_str());
-                }
+                raiseUnresolvedDynamicClass(dynamic_class_name, xsink);
                 return QoreValue();
             }
             if (getProgram()->getParseOptions() & qc->getDomain()) {
@@ -746,10 +762,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
         case VRN_DYNAMIC_OBJECT: {
             const QoreClass* qc = qore_aot_resolve_class_ref(getProgram(), dynamic_class_name.c_str(), false);
             if (!qc) {
-                if (!*xsink) {
-                    xsink->raiseException("CREATE-OBJECT-ERROR", "cannot resolve class '%s' for instantiation",
-                        dynamic_class_name.c_str());
-                }
+                raiseUnresolvedDynamicClass(dynamic_class_name, xsink);
                 return QoreValue();
             }
             if (getProgram()->getParseOptions() & qc->getDomain()) {

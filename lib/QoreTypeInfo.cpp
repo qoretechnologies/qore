@@ -576,6 +576,22 @@ struct WildcardTypeCacheKey {
 typedef std::map<WildcardTypeCacheKey, QoreWildcardTypeInfo*> wildcard_type_map_t;
 static wildcard_type_map_t wildcard_type_map;
 
+//! Every type and type-parameter owner some derived-type cache entry is keyed by, guarded by ctl
+/** Lets qore_purge_derived_types() return at once for the great majority of destroyed types, which no
+    derived type was ever built on, instead of scanning every cache for each one.
+*/
+static std::unordered_set<const void*> derived_type_keys;
+
+//! Records the keys of a new derived-type cache entry; the caller holds ctl
+static void noteDerivedTypeKeys(const void* first, const type_vec_t& types) {
+    if (first) {
+        derived_type_keys.insert(first);
+    }
+    for (const QoreTypeInfo* t : types) {
+        derived_type_keys.insert(t);
+    }
+}
+
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
 
@@ -658,6 +674,117 @@ void init_qore_types() {
     do_maps(softAutoListTypeInfo, softAutoListOrNothingTypeInfo);
 }
 
+//! derived types removed from the caches because a type they refer to was destroyed; deleted at library cleanup
+static std::vector<QoreTypeInfo*> retired_derived_types;
+
+void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2) {
+    std::set<const QoreTypeInfo*> dead;
+    if (ti1) {
+        dead.insert(ti1);
+    }
+    if (ti2) {
+        dead.insert(ti2);
+    }
+    if (!owner && dead.empty()) {
+        return;
+    }
+
+    auto any_dead = [&dead](const type_vec_t& types) -> bool {
+        for (const QoreTypeInfo* t : types) {
+            if (dead.count(t)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    AutoLocker al(ctl);
+
+    if (!(owner && derived_type_keys.count(owner)) && !(ti1 && derived_type_keys.count(ti1))
+            && !(ti2 && derived_type_keys.count(ti2))) {
+        return;
+    }
+
+    // one pass removes the entries built directly on a dead type or owner and marks what they produced as
+    // dead in turn; passes repeat until one removes nothing, which reaches every derived type however deeply
+    // it nests (list<list<hash<X>>>, a union containing one, a callable returning one, ...)
+    //
+    // There is deliberately no qore_check_cancel() in these loops: this runs in the destructor of the type's
+    // owner, and stopping part way would leave entries keyed by an address about to be freed
+    bool removed;
+    do {
+        removed = false;
+        auto retire = [&](QoreTypeInfo* ti) {
+            retired_derived_types.push_back(ti);
+            dead.insert(ti);
+            removed = true;
+        };
+        for (tmap_t* m : {&ch_map, &chon_map, &cl_map, &clon_map, &chr_map, &cr_map, &cron_map, &csl_map,
+                &cslon_map}) {
+            for (tmap_t::iterator i = m->begin(); i != m->end();) {
+                if (dead.count(i->first)) {
+                    retire(i->second);
+                    i = m->erase(i);
+                } else {
+                    ++i;
+                }
+            }
+        }
+        for (union_map_t* m : {&union_map, &union_on_map}) {
+            for (union_map_t::iterator i = m->begin(); i != m->end();) {
+                if (any_dead(i->first)) {
+                    retire(i->second);
+                    i = m->erase(i);
+                } else {
+                    ++i;
+                }
+            }
+        }
+        for (complex_code_map_t::iterator i = complex_code_map.begin(); i != complex_code_map.end();) {
+            if (dead.count(i->first.returnType) || any_dead(i->first.paramTypes)) {
+                retire(i->second);
+                i = complex_code_map.erase(i);
+            } else {
+                ++i;
+            }
+        }
+        for (parameterized_class_map_t::iterator i = parameterized_class_map.begin();
+                i != parameterized_class_map.end();) {
+            if ((owner && i->first.baseClass == owner) || any_dead(i->first.typeArgs)) {
+                retire(i->second);
+                i = parameterized_class_map.erase(i);
+            } else {
+                ++i;
+            }
+        }
+        for (type_parameter_map_t::iterator i = type_parameter_map.begin(); i != type_parameter_map.end();) {
+            if (owner && i->first.owner == owner) {
+                retire(i->second);
+                i = type_parameter_map.erase(i);
+            } else {
+                ++i;
+            }
+        }
+        for (wildcard_type_map_t::iterator i = wildcard_type_map.begin(); i != wildcard_type_map.end();) {
+            if (i->first.bound && dead.count(i->first.bound)) {
+                retire(i->second);
+                i = wildcard_type_map.erase(i);
+            } else {
+                ++i;
+            }
+        }
+    } while (removed);
+
+    // the dead addresses no longer key any entry; the retired types are never freed before cleanup, so their
+    // addresses cannot be reused, but the destroyed owner's and types' addresses can
+    if (owner) {
+        derived_type_keys.erase(owner);
+    }
+    for (const QoreTypeInfo* t : dead) {
+        derived_type_keys.erase(t);
+    }
+}
+
 void delete_qore_types() {
     // dereference global default values
     NullString->deref();
@@ -710,6 +837,10 @@ void delete_qore_types() {
     // Clean up wildcard type argument cache
     for (auto& i : wildcard_type_map)
         delete i.second;
+    // derived types removed from the caches when a type they were built on was destroyed
+    for (QoreTypeInfo* i : retired_derived_types)
+        delete i;
+    retired_derived_types.clear();
 }
 
 void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
@@ -906,6 +1037,7 @@ const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
         return i->second;
 
     QoreComplexHashTypeInfo* ti = qore_new_container_type<QoreComplexHashTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     ch_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -925,6 +1057,7 @@ const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vt
         return i->second;
 
     QoreComplexHashOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexHashOrNothingTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     chon_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -944,6 +1077,7 @@ const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
         return i->second;
 
     QoreComplexListTypeInfo* ti = qore_new_container_type<QoreComplexListTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     cl_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -963,6 +1097,7 @@ const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vt
         return i->second;
 
     QoreComplexListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexListOrNothingTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     clon_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1033,6 +1168,7 @@ const QoreTypeInfo* qore_get_complex_softlist_type(const QoreTypeInfo* vti) {
         return i->second;
 
     QoreComplexSoftListTypeInfo* ti = qore_new_container_type<QoreComplexSoftListTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     csl_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1052,6 +1188,7 @@ const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo
         return i->second;
 
     QoreComplexSoftListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexSoftListOrNothingTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     cslon_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1068,6 +1205,7 @@ const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* vti
         return i->second;
 
     QoreComplexHardReferenceTypeInfo* ti = qore_new_container_type<QoreComplexHardReferenceTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     chr_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1084,6 +1222,7 @@ const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo* vti) {
         return i->second;
 
     QoreComplexReferenceTypeInfo* ti = qore_new_container_type<QoreComplexReferenceTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     cr_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1100,6 +1239,7 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
         return i->second;
 
     QoreComplexReferenceOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexReferenceOrNothingTypeInfo>(vti);
+    derived_type_keys.insert(vti);
     cron_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1324,6 +1464,7 @@ const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
 
     QoreParameterizedClassTypeInfo* ti = new QoreParameterizedClassTypeInfo(qc, normalized_args, or_nothing,
         value_type);
+    noteDerivedTypeKeys(key.baseClass, key.typeArgs);
     parameterized_class_map.insert(i, parameterized_class_map_t::value_type(key, ti));
     return ti;
 }
@@ -1348,6 +1489,7 @@ const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t 
     }
 
     QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    derived_type_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
 }
@@ -1372,6 +1514,7 @@ const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* o
     }
 
     QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    derived_type_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
 }
@@ -1396,6 +1539,7 @@ const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* 
     }
 
     QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    derived_type_keys.insert(key.owner);
     type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
     return ti;
 }
@@ -1422,6 +1566,7 @@ static const QoreTypeInfo* qore_get_wildcard_type_intern(QoreWildcardKind kind, 
     }
 
     QoreWildcardTypeInfo* ti = new QoreWildcardTypeInfo(kind, bound);
+    derived_type_keys.insert(key.bound);
     wildcard_type_map.insert(i, wildcard_type_map_t::value_type(key, ti));
     return ti;
 }
@@ -1809,6 +1954,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     // Create the union type
     QoreUnionTypeInfo* ti = new QoreUnionTypeInfo(std::move(accept_vec), std::move(return_vec), name,
         or_nothing || has_nothing);
+    noteDerivedTypeKeys(nullptr, key);
     cache[key] = ti;
     return ti;
 }
@@ -2206,6 +2352,7 @@ const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
     // Create the typed callable type
     QoreComplexCodeTypeInfo* ti = new QoreComplexCodeTypeInfo(return_type, std::move(params_copy),
         varargs, or_nothing);
+    noteDerivedTypeKeys(key.returnType, key.paramTypes);
     complex_code_map[key] = ti;
     return ti;
 }

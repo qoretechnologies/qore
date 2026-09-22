@@ -1198,10 +1198,14 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
         applyDefaultExecMode();
     }
 
-    // copy parent feature list
-    for (auto& i : p_pgm->priv->featureList) {
-        assert(featureList.find(i) == featureList.end());
-        featureList.insert(i);
+    // copy parent feature list; this Program is not visible to other threads yet, but the parent's list gains
+    // entries while a module is loaded into the parent in another thread
+    {
+        QoreSafeRWReadLocker rl(p_pgm->priv->featureLock);
+        for (auto& i : p_pgm->priv->featureList) {
+            assert(featureList.find(i) == featureList.end());
+            featureList.insert(i);
+        }
     }
 
     // copy top-level local variables in case any are referenced in static methods in the parent program (static
@@ -1779,16 +1783,25 @@ void qore_program_private::runtimeImportSystemFunctionsIntern(const qore_program
     }
     if (po_locked) {
         xsink->raiseException("IMPORT-SYSTEM-API-ERROR", "parse options have been locked on this program object");
+        return;
     }
     pwo.parse_options &= ~PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS;
     qore_root_ns_private::runtimeImportSystemFunctions(*RootNS, *spgm.RootNS, xsink);
 }
 
+// Every runtime import of the system API below writes this Program's committed namespace and reads the calling
+// Program's.  The target's parse lock excludes other writers to it; RuntimeNamespaceMergeLocker excludes runtime
+// readers of the target - which could otherwise resolve a name against a half-copied namespace or a half-rebuilt
+// index - and runtime writers of the source, such as a module being loaded into the calling Program by another
+// thread, whose containers the copy iterates.
 void qore_program_private::runtimeImportSystemClasses(ExceptionSink* xsink) {
     // must acquire current program before setting program context below
     const QoreProgram* spgm = getProgram();
-    // acquire safe access to parse structures in the source program
-    ProgramRuntimeParseAccessHelper rah(xsink, pgm);
+    ProgramRuntimeParseContextHelper pch(xsink, pgm);
+    if (*xsink) {
+        return;
+    }
+    RuntimeNamespaceMergeLocker rnml(*RootNS, *spgm->priv->RootNS);
 
     runtimeImportSystemClassesIntern(*spgm->priv, xsink);
     // issue #3461: must rebuild all indexes here or symbols will appear missing
@@ -1798,8 +1811,11 @@ void qore_program_private::runtimeImportSystemClasses(ExceptionSink* xsink) {
 void qore_program_private::runtimeImportSystemHashDecls(ExceptionSink* xsink) {
     // must acquire current program before setting program context below
     const QoreProgram* spgm = getProgram();
-    // acquire safe access to parse structures in the source program
-    ProgramRuntimeParseAccessHelper rah(xsink, pgm);
+    ProgramRuntimeParseContextHelper pch(xsink, pgm);
+    if (*xsink) {
+        return;
+    }
+    RuntimeNamespaceMergeLocker rnml(*RootNS, *spgm->priv->RootNS);
 
     runtimeImportSystemHashDeclsIntern(*spgm->priv, xsink);
     // Resolve cross-namespace parent hashdecl pointers after import
@@ -1812,8 +1828,11 @@ void qore_program_private::runtimeImportSystemHashDecls(ExceptionSink* xsink) {
 void qore_program_private::runtimeImportSystemConstants(ExceptionSink* xsink) {
     // must acquire current program before setting program context below
     const QoreProgram* spgm = getProgram();
-    // acquire safe access to parse structures in the source program
-    ProgramRuntimeParseAccessHelper rah(xsink, pgm);
+    ProgramRuntimeParseContextHelper pch(xsink, pgm);
+    if (*xsink) {
+        return;
+    }
+    RuntimeNamespaceMergeLocker rnml(*RootNS, *spgm->priv->RootNS);
 
     runtimeImportSystemConstantsIntern(*spgm->priv, xsink);
     // issue #3461: must rebuild all indexes here or symbols will appear missing
@@ -1823,8 +1842,12 @@ void qore_program_private::runtimeImportSystemConstants(ExceptionSink* xsink) {
 void qore_program_private::runtimeImportSystemFunctions(ExceptionSink* xsink) {
     // must acquire current program before setting program context below
     const QoreProgram* spgm = getProgram();
-    // acquire safe access to parse structures in the source program
-    ProgramRuntimeParseAccessHelper rah(xsink, pgm);
+    ProgramRuntimeParseContextHelper pch(xsink, pgm);
+    if (*xsink) {
+        return;
+    }
+    RuntimeNamespaceMergeLocker rnml(*RootNS, *spgm->priv->RootNS);
+
     runtimeImportSystemFunctionsIntern(*spgm->priv, xsink);
     // issue #3461: must rebuild all indexes here or symbols will appear missing
     qore_root_ns_private::get(*RootNS)->rebuildAllIndexes();
@@ -1833,8 +1856,12 @@ void qore_program_private::runtimeImportSystemFunctions(ExceptionSink* xsink) {
 void qore_program_private::runtimeImportSystemApi(ExceptionSink* xsink) {
     // must acquire current program before setting program context below
     const QoreProgram* spgm = getProgram();
-    // acquire safe access to parse structures in the source program
-    ProgramRuntimeParseAccessHelper rah(xsink, pgm);
+    ProgramRuntimeParseContextHelper pch(xsink, pgm);
+    if (*xsink) {
+        return;
+    }
+    RuntimeNamespaceMergeLocker rnml(*RootNS, *spgm->priv->RootNS);
+
     runtimeImportSystemClassesIntern(*spgm->priv, xsink);
     if (*xsink) {
         return;
@@ -1851,11 +1878,10 @@ void qore_program_private::runtimeImportSystemApi(ExceptionSink* xsink) {
     if (*xsink) {
         return;
     }
-    // merge builtin module / feature list
-    for (const auto& i : spgm->priv->featureList) {
-        if (featureList.find(i) == featureList.end()) {
-            featureList.insert(i);
-        }
+    // merge builtin module / feature list; both lists are shared with other threads, so the source's is copied
+    // under its own lock and then added under this Program's
+    for (const auto& i : spgm->priv->copyFeatureList()) {
+        addFeature(i.c_str());
     }
     // issue #3461: must rebuild all indexes here or symbols will appear missing
     qore_root_ns_private::get(*RootNS)->rebuildAllIndexes();
@@ -1912,6 +1938,8 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
     ProgramRuntimeParseContextHelper pch(xsink, pgm);
     if (*xsink)
         return;
+    // parse ownership excludes other writers; this excludes threads resolving names in this Program
+    RuntimeNamespaceWriteLocker rnwl(*RootNS);
 
     // find/create target namespace based on source namespace
     QoreNamespace* tns;
@@ -1964,6 +1992,8 @@ void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_pri
     ProgramRuntimeParseContextHelper pch(xsink, pgm);
     if (*xsink)
         return;
+    // parse ownership excludes other writers; this excludes threads resolving names in this Program
+    RuntimeNamespaceWriteLocker rnwl(*RootNS);
 
     // find/create target namespace based on source namespace
     QoreNamespace* tns;
@@ -1998,6 +2028,8 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     RootQoreNamespace* parent_RootNS = parent.priv->RootNS;
     RootQoreNamespace* child_RootNS = child.priv->RootNS;
     qore_root_ns_private* parent_root = qore_root_ns_private::get(*parent_RootNS);
+    // the parent's root indexes are iterated below while a module can be loaded into the parent in another thread
+    RuntimeNamespaceMergeLocker rnml(*child_RootNS, *parent_RootNS);
 
     // Hashdecls: walk parent's root index, copy entries marked re-export into
     // child. Each entry was tagged via Program::importHashDecl(... reexport=True)
@@ -2067,6 +2099,8 @@ void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u,
     ProgramRuntimeParseContextHelper pch(xsink, pgm);
     if (*xsink)
         return;
+    // parse ownership excludes other writers; this excludes threads resolving names in this Program
+    RuntimeNamespaceWriteLocker rnwl(*RootNS);
 
     if (new_name && strstr(new_name, "::")) {
         NamedScope nscope(new_name);
@@ -2111,6 +2145,8 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
     if (*xsink) {
         return;
     }
+    // parse ownership excludes other writers; this excludes threads resolving names in the target Program
+    RuntimeNamespaceWriteLocker rnwl(*tpgm.RootNS);
 
     // find/create target namespace based on source namespace
     QoreString tmp;

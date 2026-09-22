@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ImportSystemApiConcurrentLoadTest
+
+#! Program::importSystemApi() while a module is being loaded into the Program it imports from
+/** Program::importSystemApi() copies the system API of the calling Program into the target Program and
+    rebuilds the target's indexes.  It took neither Program's namespace lock, and not even the target's
+    parse lock: the copy iterated the calling Program's namespace containers while another thread
+    loading a binary module into that Program added to them, and the import saw entries twice and
+    failed on a conflict with itself:
+
+    @verbatim
+IMPORT-SYSTEM-API-ERROR: cannot import system class Reflection::AbstractClass due to the presence of
+an existing class without the injection flag set
+    @endverbatim
+
+    A binary module's namespace initialization also wrote the target's namespace without its namespace
+    write lock, so a reader holding the read lock was not excluded from it at all.
+
+    Each round creates a Program, starts threads importing the system API from it into new Programs,
+    and loads binary modules into it meanwhile.  The race runs in a child process so that a crash fails
+    an assertion rather than the test run.  Without the fix every run of 60 rounds failed two to four
+    imports on the machine the fix was made on.
+*/
+class ImportSystemApiConcurrentLoadTest inherits QUnit::Test {
+    public {
+        #! binary modules built in this repository; those that cannot be loaded are left out
+        const Modules = ("astparser", "avro", "dataframe", "i18n", "json", "krb5", "linenoise", "logger_bin",
+            "ml", "mongodb", "ocr", "protobuf", "reflection", "sshutil", "tokenizer");
+
+        #! the fewest loadable binary modules that give the race enough to overlap with
+        const MinModules = 5;
+
+        const Rounds = 60;
+        const Threads = 8;
+        const ImportsPerThread = 30;
+        const Runs = 2;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("ImportSystemApiConcurrentLoadTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("importing the system API while a module is loaded into its source",
+            \importDuringModuleLoad());
+        set_return_value(main());
+    }
+
+    importDuringModuleLoad() {
+        list<string> modules = ();
+        foreach string mod in (Modules) {
+            try {
+                Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+                p.loadModule(mod);
+                push modules, mod;
+            } catch (hash<ExceptionInfo> ex) {
+                # not built on this platform
+            }
+        }
+        if (modules.size() < MinModules) {
+            testSkip(sprintf("only %d binary module(s) can be loaded: %y", modules.size(), modules));
+        }
+
+        TmpDir tmp("qore-import-system-api-");
+        string script = tmp.path + "/race.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(sprintf("%%modern
+%%no-child-restrictions
+
+int imports = 0;
+int failures = 0;
+int loaded = 0;
+for (int r = 0; r < %d; ++r) {
+    Program s(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    s.parse(\"hash<auto> sub imp(int n) {
+    hash<auto> rv = {\\\"ok\\\": 0, \\\"failed\\\": 0};
+    for (int i = 0; i < n; ++i) {
+        try {
+            Program p(PO_NEW_STYLE | PO_NO_SYSTEM_API | PO_NO_CHILD_PO_RESTRICTIONS);
+            p.importSystemApi();
+            ++rv.ok;
+        } catch (hash<ExceptionInfo> ex) {
+            ++rv.failed;
+            stderr.printf(\\\"%%%%s: %%%%s\\\\\\\\n\\\", ex.err, ex.desc);
+        }
+    }
+    return rv;
+}\", \"imp\");
+    Counter start(1);
+    Counter running();
+    for (int t = 0; t < %d; ++t) {
+        running.inc();
+        background sub () {
+            on_exit running.dec();
+            start.waitForZero();
+            hash<auto> rv = s.callFunction(\"imp\", %d);
+            imports += rv.ok;
+            failures += rv.failed;
+        }();
+    }
+    start.dec();
+    foreach string m in (ARGV) {
+        s.loadModule(m);
+        ++loaded;
+    }
+    running.waitForZero();
+}
+printf(\"DONE imports=%%d failures=%%d loaded=%%d\\n\", imports, failures, loaded);
+", Rounds, Threads, ImportsPerThread));
+        f.close();
+
+        int expected = Rounds * Threads * ImportsPerThread;
+        for (int run = 1; run <= Runs; ++run) {
+            string output = backquote(sprintf("%s %s %s 2>&1; echo \"rc=$?\"", qore_bin, script,
+                modules.join(" ")));
+            *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+            assertEq("0", rc[0], sprintf("run %d: the child exits normally: %s", run, output));
+            *list<*string> counts = (output =~ x/DONE imports=([0-9]+) failures=([0-9]+) loaded=([0-9]+)/);
+            assertTrue(exists counts, sprintf("run %d: the child completes: %s", run, output));
+            assertEq(Rounds * modules.size(), counts[2].toInt(),
+                sprintf("run %d: every round loaded the modules into the source Program: %s", run, output));
+            assertEq(0, counts[1].toInt(), sprintf("run %d: no import failed: %s", run, output));
+            assertEq(expected, counts[0].toInt(), sprintf("run %d: every import completed: %s", run, output));
+        }
+    }
+}

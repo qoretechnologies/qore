@@ -51,6 +51,14 @@ const BodyContractSuffix = ".body-contract.stamp";
     and the generation token digests only those rows of the provider's stamp.
 */
 const BodyContractImportsSuffix = ".body-contract-imports";
+#! The sidecar naming the sources an object's code needs declared wherever it is loaded.
+/** Parse commit runs the initializers of what a compile preloads, and code they reach in a
+    preloaded object registers only in a Program declaring every class and function it calls.
+    Those providers are not build dependencies -- a late-bound call bakes nothing of its target
+    -- so no depfile names them.  qcc writes this beside the object (`require` rows naming a
+    provider source), and a preload set is closed over it as well as over the depfiles.
+*/
+const LoadRequiresSuffix = ".load-requires";
 const SOURCE_SYMBOL_CACHE_VERSION = 1;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
@@ -1411,6 +1419,8 @@ class SourceOrderEngine {
             whole group several times for a set that never changes.
         */
         *hash<string, string> outputs_by_stem;
+        #! Group members by canonical source path, indexed once per process; see loadRequirementOutputs().
+        *hash<string, string> outputs_by_source;
         #! Depfile prerequisites by depfile path, parsed once per process.
         hash<string, list<string>> depfile_inputs = {};
         #! Build inputs from outside the group by member output, filtered once.
@@ -2043,6 +2053,45 @@ class SourceOrderEngine {
                 }
                 *string member = by_stem{stem};
                 if (!exists member || seen{member}) {
+                    continue;
+                }
+                seen{member} = True;
+                push rv, member;
+            }
+        }
+        return rv;
+    }
+
+    #! The group members whose declarations the code in \a outputs needs wherever it is loaded.
+    /** Read from each object's load-requires sidecar, which names provider SOURCES; a source
+        outside the group, or one the sidecar spells in a form no member matches, is skipped.
+        An object without the sidecar -- compiled by a qcc that did not write it, or requiring
+        nothing -- contributes nothing, which is what the closure saw before it existed.
+    */
+    list<string> loadRequirementOutputs(hash<SourceOrderContext> context_info,
+            softlist<string> outputs) {
+        if (!exists outputs_by_source) {
+            hash<string, string> index = {};
+            for (int i = 0; i < context_info.inputs.size(); ++i) {
+                index{canonicalCached(context_info.inputs[i])} = context_info.outputs[i];
+            }
+            outputs_by_source = index;
+        }
+        hash<string, string> by_source = outputs_by_source;
+        hash<string, bool> seen = {};
+        list<string> rv = ();
+        foreach string output in (outputs) {
+            string path = output + LoadRequiresSuffix;
+            if (!is_file(path)) {
+                continue;
+            }
+            *list<list<string>> rows = parseLengthPrefixedRows(path);
+            foreach list<string> row in (rows) {
+                if (row[0] != "require" || row.size() != 2) {
+                    continue;
+                }
+                *string member = by_source{canonicalCached(row[1])};
+                if (!exists member || member == output || seen{member}) {
                     continue;
                 }
                 seen{member} = True;
@@ -2988,7 +3037,7 @@ class SourceOrderEngine {
         CONSUMER of one of these sources brings that source's own declarations
         back and the parse can no longer make them.
 
-        Two edge kinds reach a preload, and both are needed:
+        Two dependency edges reach a preload, and both are needed:
 
           * PREREQUISITES, the members reachable over required edges -- recorded
             when a compile folds a provider's value or bakes its link-time hash;
@@ -3016,6 +3065,20 @@ class SourceOrderEngine {
         brings its own unmet requirements, and preloading a class whose base is
         absent fails the parse just as surely ("cannot resolve base class ... for
         class ...").
+
+        And a preloaded member is not only declared: parse commit runs initializers,
+        and code they reach in a preloaded object is that object's source-stripped IR,
+        which registers only in a Program declaring every class and function it calls.
+        A late-bound call leaves no dependency of either kind -- it bakes nothing of its
+        target -- so the closure also follows each member's LOAD REQUIREMENTS, the
+        providers qcc records beside the object (see LoadRequiresSuffix).  Without them
+        a whole-group parse happened to record the provider as a content dependency and
+        a standalone compile of the same source did not, so the first standalone compile
+        of a caller left every later preload of it without its callee:
+
+              AOT-SOURCE-IR-ERROR: ... cannot resolve the call to
+                'StepPhasePolicy::validate()': class 'StepPhasePolicy' is not
+                declared in this Program
 
         These are not ordering edges.  Widening the preload set leaves the
         decomposition alone: it neither merges components nor changes what the
@@ -3052,9 +3115,10 @@ class SourceOrderEngine {
     }
 
     #! Every component a parse of \a selected resolves against, with its providers.
-    /** The relation componentPreloadOutputs() closes over: required edges and content
-        dependencies together, walked from the compiled components through everything
-        they preload.  Keyed by component; the compiled components are included.
+    /** The relation componentPreloadOutputs() closes over: required edges, content
+        dependencies and load requirements together, walked from the compiled components
+        through everything they preload.  Keyed by component; the compiled components are
+        included.
     */
     private hash<string, list<int>> preloadProviderEdges(hash<SourceOrderComponents> components,
             hash<SourceOrderContext> context_info, softlist<int> selected) {
@@ -3086,7 +3150,8 @@ class SourceOrderEngine {
             foreach int node in (components.members[component]) {
                 push member_outputs, context_info.outputs[node];
             }
-            foreach string output in (contentDependencyOutputs(context_info, member_outputs)) {
+            foreach string output in (contentDependencyOutputs(context_info, member_outputs)
+                    + loadRequirementOutputs(context_info, member_outputs)) {
                 *int provider = component_of_output{output};
                 if (exists provider && provider != component) {
                     providers{string(provider)} = True;
@@ -3715,6 +3780,27 @@ class SourceOrderEngine {
         return external;
     }
 
+    #! Every build input from outside the group that any member's depfile records.
+    /** The union of externalDepfileInputs() over the group, sorted.  This is what
+        the build tool has to watch for the group as a whole: a member records a
+        module or an include only in its own depfile, and a standalone compile that
+        adds one after the group's last shared parse is the only record of it.
+    */
+    list<string> groupExternalInputs(hash<SourceOrderContext> context_info) {
+        *hash<string, bool> covered;
+        hash<string, bool> inputs = {};
+        foreach string output in (context_info.outputs) {
+            if (!is_file(output + ".d")) {
+                continue;
+            }
+            foreach string dependency in (externalDepfileInputs(output, context_info,
+                    \covered)) {
+                inputs{dependency} = True;
+            }
+        }
+        return sort(keys inputs);
+    }
+
     #! The group context's modification time, or NOTHING when it does not exist.
     /** The context is a configure-time artifact rewritten only when its content
         changes, so its modification time is the group's build-input generation.
@@ -4145,6 +4231,23 @@ sub atomicWriteIfChanged(string path, string content) {
     rename(temporary, path);
 }
 
+#! \a path escaped as a make depfile target or prerequisite.
+string sub makeDepfilePath(string path) {
+    return replace(replace(replace(path, "$", "$$"), "#", "\\#"), " ", "\\ ");
+}
+
+#! One make depfile rule: \a target depends on every path in \a inputs.
+/** Spaces and \c # are backslash-escaped and \c $ is doubled, which is what
+    both make and CMake's depfile reader expect of a prerequisite.
+*/
+string sub makeDepfile(string target, list<string> inputs) {
+    string text = makeDepfilePath(target) + ":";
+    foreach string input in (inputs) {
+        text += " \\\n    " + makeDepfilePath(input);
+    }
+    return text + "\n";
+}
+
 string sub cmakeQuote(string value) {
     string result;
     for (int offset = 0; offset < value.size(); ++offset) {
@@ -4187,6 +4290,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "           CONTEXT SCC\n"
         "       %s --scc-graph-generation CONTEXT\n"
         "       %s --scc-freeze-graph SNAPSHOT [--batch-stamp STAMP] CONTEXT\n"
+        "       %s --scc-external-inputs STAMP CONTEXT\n"
         "\n"
         "SCC selects a strongly connected component of the required-edge graph by\n"
         "its index or by its key. Only a key is stable across a build: component\n"
@@ -4234,9 +4338,14 @@ sub usage(*string error = NOTHING, bool success = False) {
         "a snapshot naming an older publication is discarded for a live scan: the\n"
         "file outlives the build that wrote it, and a recipe the build tool\n"
         "scheduled ahead of the next freeze must not apply the previous build's\n"
-        "edge set.\n",
+        "edge set.\n"
+        "\n"
+        "--scc-external-inputs writes STAMP.d, a make depfile whose one rule names\n"
+        "STAMP and every build input from outside the group that any member's\n"
+        "depfile records -- the toolchain, loaded modules, stubs and includes.  The\n"
+        "file is rewritten only when that set changes.\n",
         name, name, name, name, name, name, name, name, name, name, name, name, name,
-        name, name);
+        name, name, name);
     if (success) {
         printf("%s", text);
     } else {
@@ -4407,6 +4516,7 @@ int sub main() {
     *string component_map_prefix;
     *string component_generation_map;
     *string graph_snapshot_output;
+    *string external_inputs_stamp;
     *string expected_generation;
     *string expected_graph_generation;
     *string direct_map_prefix;
@@ -4464,7 +4574,8 @@ int sub main() {
                 || arg == "--batch-artifact-current"
                 || arg == "--scc-map-cmake"
                 || arg == "--scc-generation-map"
-                || arg == "--scc-freeze-graph") {
+                || arg == "--scc-freeze-graph"
+                || arg == "--scc-external-inputs") {
             if (++index >= ARGV.size()) {
                 usage(sprintf("argument expected after %s", arg));
             }
@@ -4480,6 +4591,8 @@ int sub main() {
                 component_generation_map = ARGV[index];
             } else if (arg == "--scc-freeze-graph") {
                 graph_snapshot_output = ARGV[index];
+            } else if (arg == "--scc-external-inputs") {
+                external_inputs_stamp = ARGV[index];
             } else {
                 batch_bootstrap_stamp = ARGV[index];
             }
@@ -4513,6 +4626,8 @@ int sub main() {
             component_generation_map = arg.substr(21);
         } else if (arg.startsWith("--scc-freeze-graph=")) {
             graph_snapshot_output = arg.substr(19);
+        } else if (arg.startsWith("--scc-external-inputs=")) {
+            external_inputs_stamp = arg.substr(22);
         } else if (arg.startsWith("--batch-artifact-current=")) {
             batch_bootstrap_stamp = arg.substr(25);
         } else if (arg.startsWith("-")) {
@@ -4574,6 +4689,14 @@ int sub main() {
     }
 
     SourceOrderEngine engine();
+    if (exists external_inputs_stamp) {
+        if (positional.size() != 1) {
+            usage("--scc-external-inputs accepts only a context argument");
+        }
+        atomicWriteIfChanged(external_inputs_stamp + ".d",
+            makeDepfile(external_inputs_stamp, engine.groupExternalInputs(context_info)));
+        return 0;
+    }
     if (exists graph_snapshot_output) {
         if (positional.size() != 1) {
             usage("--scc-freeze-graph accepts only a context argument");

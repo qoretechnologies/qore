@@ -102,6 +102,8 @@ public:
         for (auto& i : parameterized_hashdecl_cache) {
             typed_hash_decl_private::get(*i.second)->deref();
         }
+        // the next hashdecl allocated can reuse these addresses
+        qore_purge_derived_types(thd, typeInfo, orNothingTypeInfo);
         delete typeInfo;
         delete orNothingTypeInfo;
         delete parse_parent;

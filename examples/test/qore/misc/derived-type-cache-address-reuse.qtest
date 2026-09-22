@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DerivedTypeCacheAddressReuseTest
+
+#! A derived type is never taken from a destroyed type whose address was reused
+/** Derived types such as list<hash<X>> are cached by the address of the type they are built from.  When the
+    Program declaring X was destroyed, the cache kept the entry, and a hashdecl allocated at the same address
+    in another Program was given list<hash<X>> for list<hash<Y>> - a different type, whose element type no
+    longer existed.  Whether it happened depended on the allocator, so misc/hashdecl.qtest failed in most runs
+    with
+
+    @verbatim
+RUNTIME-TYPE-ERROR: key 'items' expects type 'list<hash<Parent>>', but got type 'list<hash<ParseA>>'
+    @endverbatim
+
+    naming a hashdecl from a Program destroyed earlier in the test.
+
+    Every derived-type cache is covered by a type built from the hashdecl, class, or enum of a Program that
+    is then destroyed; the next Program declares another type and uses the same derived types, which must
+    name it.  Many iterations make reuse of the destroyed addresses all but certain.
+*/
+class DerivedTypeCacheAddressReuseTest inherits QUnit::Test {
+    public {
+        const Iterations = 200;
+
+        #! derived types built from the placeholder X; each must name the type it is built from
+        const DerivedTypes = (
+            "list<X>",
+            "*list<X>",
+            "softlist<X>",
+            "*softlist<X>",
+            "hash<string, X>",
+            "*hash<string, X>",
+            "reference<X>",
+            "*reference<X>",
+        );
+    }
+
+    constructor() : QUnit::Test("DerivedTypeCacheAddressReuseTest", "1.0") {
+        addTestCase("hashdecl", \testHashDecl());
+        addTestCase("class", \testClass());
+        addTestCase("enum", \testEnum());
+        set_return_value(main());
+    }
+
+    testHashDecl() {
+        checkReuse("hashdecl Old { int i; }", "hash<Old>", "hashdecl New { int i; }", "hash<New>");
+    }
+
+    testClass() {
+        checkReuse("class Old { int v() { return 1; } }", "Old", "class New { int v() { return 1; } }", "New");
+    }
+
+    testEnum() {
+        checkReuse("enum Old { A = 1 }", "Old", "enum New { A = 1 }", "New");
+    }
+
+    #! Declares \a old_decl and every derived type of \a old_type in one Program, destroys it, and checks that
+    #! the same derived types of \a new_type in the next Program name the new type
+    private checkReuse(string old_decl, string old_type, string new_decl, string new_type) {
+        int checked = 0;
+        for (int i = 0; i < Iterations; ++i) {
+            {
+                Program old_pgm(PO_NEW_STYLE);
+                old_pgm.parse(old_decl + "\n" + makeFunctions(old_type), "old");
+                # the function signatures built every derived type of the old type
+                assertEq(DerivedTypes.size(), old_pgm.callFunction("count"), "the old Program was parsed");
+            }
+            Program new_pgm(PO_NEW_STYLE);
+            new_pgm.parse(new_decl + "\n" + makeFunctions(new_type), "new");
+            for (int n = 0; n < DerivedTypes.size(); ++n) {
+                string param_type = getParamType(new_pgm, n);
+                if (param_type !~ /\bNew\b/ || param_type =~ /\bOld\b/) {
+                    assertEq(replace(DerivedTypes[n], "X", new_type), param_type,
+                        sprintf("iteration %d: %s names %s", i, DerivedTypes[n], new_type));
+                    return;
+                }
+            }
+            ++checked;
+        }
+        assertEq(Iterations, checked, sprintf("every derived type of %s named it in every iteration", new_type));
+    }
+
+    #! The parameter type of fN() in \a pgm, as the variant list of a failed call reports it
+    private string getParamType(Program pgm, int n) {
+        try {
+            pgm.callFunction("f" + n, "a value of no parameter's type");
+        } catch (hash<ExceptionInfo> ex) {
+            *list<*string> m = (ex.desc =~ x/f[0-9]+\((.*) v\)/);
+            if (m) {
+                return m[0];
+            }
+            return ex.err + ": " + ex.desc;
+        }
+        return "<no error>";
+    }
+
+    #! One function per derived type of \a type, taking it as its parameter type
+    private string makeFunctions(string type) {
+        string code = sprintf("int sub count() { return %d; }\n", DerivedTypes.size());
+        int n = 0;
+        foreach string derived in (DerivedTypes) {
+            code += sprintf("sub f%d(%s v) {}\n", n++, replace(derived, "X", type));
+        }
+        return code;
+    }
+}

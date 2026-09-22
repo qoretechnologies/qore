@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ImportConcurrentLookupTest
+
+#! Program::importClass(), importFunction() and importGlobalVariable() while threads look names up in the target
+/** The imports wrote the target Program's committed namespace - the containers and the lookup indexes -
+    under its parse lock alone.  Parse ownership excludes other writers, and it keeps new calls from
+    entering the Program, but not threads already running code in it: a runtime lookup such as
+    call_function() read a function index that an import was rehashing, and the process crashed.
+
+    Each round parses a target Program whose own code looks names up in a loop, starts threads running
+    that code, and imports classes, functions and global variables into it from another Program
+    meanwhile.  The race runs in a child process so that a crash fails an assertion rather than the test
+    run.  Without the fix one run in three crashed on the machine the fix was made on; six runs are made.
+*/
+class ImportConcurrentLookupTest inherits QUnit::Test {
+    public {
+        const Rounds = 40;
+        const Writes = 150;
+        const Runs = 6;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("ImportConcurrentLookupTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("importing into a Program while threads look names up in it", \importDuringLookup());
+        set_return_value(main());
+    }
+
+    importDuringLookup() {
+        TmpDir tmp("qore-import-concurrent-lookup-");
+        string script = tmp.path + "/race.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(sprintf("%%modern
+%%no-child-restrictions
+
+int lookups = 0;
+int writes = 0;
+for (int r = 0; r < %d; ++r) {
+    # the source of the imports
+    Program src(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    string sdefs = \"\";
+    for (int i = 0; i < %d; ++i) {
+        sdefs += sprintf(\"public class SrcClass%%d { int v() { return %%d; } }\\npublic int sub src_func%%d() { return %%d; }\\nour int src_var%%d = %%d;\\n\", i, i, i, i, i, i);
+    }
+    sdefs += \"sub imp(Program t, int i) { t.importClass(\\\"SrcClass\\\" + i); t.importFunction(\\\"src_func\\\" + i); t.importGlobalVariable(\\\"src_var\\\" + i); }\\n\";
+    src.parse(sdefs, \"src\");
+
+    Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    t.parse(\"our bool stop = False;
+int sub base() { return 1; }
+int sub loop() {
+    int c = 0;
+    int i = 0;
+    while (!stop) {
+        c += call_function(\\\"base\\\");
+        try { c += call_function(\\\"src_func\\\" + (i++ %% 50)); } catch (hash<ExceptionInfo> ex) {}
+    }
+    return c;
+}
+sub halt() { stop = True; }\", \"t\");
+
+    Counter running();
+    for (int k = 0; k < 6; ++k) {
+        running.inc();
+        background sub () {
+            on_exit running.dec();
+            lookups += t.callFunction(\"loop\");
+        }();
+    }
+    on_exit {
+        t.callFunction(\"halt\");
+        running.waitForZero();
+    }
+    for (int i = 0; i < %d; ++i) {
+        src.callFunction(\"imp\", t, i);
+        ++writes;
+    }
+}
+printf(\"DONE writes=%%d lookups=%%d\\n\", writes, lookups);
+", Rounds, Writes, Writes));
+        f.close();
+
+        for (int run = 1; run <= Runs; ++run) {
+            string output = backquote(sprintf("%s %s 2>&1; echo \"rc=$?\"", qore_bin, script));
+            *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+            assertEq("0", rc[0], sprintf("run %d: the child exits normally: %s", run, output));
+            *list<*string> counts = (output =~ x/DONE writes=([0-9]+) lookups=([0-9]+)/);
+            assertTrue(exists counts, sprintf("run %d: the child completes: %s", run, output));
+            assertEq(Rounds * Writes, counts[0].toInt(), sprintf("run %d: every import completed: %s", run,
+                output));
+            assertTrue(counts[1].toInt() > 0, sprintf("run %d: threads looked names up meanwhile: %s", run,
+                output));
+        }
+    }
+}

@@ -242,6 +242,9 @@ const BuildHost =     qore(new QoreStringNode(qore_build_host));
 const Compiler =      qore(new QoreStringNode(qore_cplusplus_compiler));
 
 //! A string giving the C++ compiler flags used to build %Qore
+/** On macOS this includes the deployment target the library was built for (\c -mmacosx-version-min), so that a
+    program compiled against the library with these flags targets the same macOS version
+*/
 const CFLAGS =        qore(new QoreStringNode(qore_cflags));
 
 //! A string giving the linker flags used to build %Qore

@@ -8,6 +8,15 @@
 %exec-class RecursiveClosureLocalsTest
 
 class RecursiveClosureLocalsTest inherits QUnit::Test {
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
+        linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
     private {
         string qore_bin = executablePath(ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore");
         string lib_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
@@ -131,7 +140,7 @@ class RecursiveClosureLocalsTest inherits QUnit::Test {
             "-I" + lib_dir + "/include", "-I" + llvm_include,
             get_script_dir() + "/recursive_closure_locals.cpp", "-L" + lib_dir,
             "-L" + llvm_lib, "-Wl,-rpath," + lib_dir, "-Wl,-rpath," + llvm_lib,
-            "-lqore") + llvm_link + ("-o", executable));
+            "-lqore") + llvm_link + ("-o", executable) + libqoreTargetFlags());
         assertEq("recursive-closure-locals: ok\n", run(dir.path, (executable, source)));
     }
 

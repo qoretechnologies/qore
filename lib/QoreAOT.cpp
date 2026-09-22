@@ -22705,6 +22705,8 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
 //! AOT link configuration read from CMake-generated aot-link.conf
 struct AOTLinkConfig {
     std::string cxx;            //!< C++ compiler path
+    //! the platform version libqore was built for, as compiler driver flags; see QoreAOT::getLinkTargetFlags()
+    std::string target_flags;
     std::string dynamic_libs;   //!< extra libs for dynamic linking (system libs)
     std::string static_libs;    //!< all transitive deps for static linking
     //! the sanitizer options libqore was built with (e.g. \c -fsanitize=thread), for executables
@@ -22718,10 +22720,29 @@ struct AOTLinkConfig {
     2. QORE_LIBDIR env var + "/aot-link.conf" (development builds)
     3. Compiled-in QORE_LIBDIR + "/qore/aot-link.conf" (installed builds)
 */
+std::string QoreAOT::getLinkTargetFlags() {
+#if defined(__APPLE__) && defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+    if (getenv("MACOSX_DEPLOYMENT_TARGET")) {
+        return std::string();
+    }
+    // the version this file - and therefore libqore - is being compiled for, as MMmmpp (e.g. 260600, 101500)
+    const int version = __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__;
+    std::string rv = "-mmacosx-version-min=" + std::to_string(version / 10000) + "."
+        + std::to_string((version / 100) % 100);
+    if (version % 100) {
+        rv += "." + std::to_string(version % 100);
+    }
+    return rv;
+#else
+    return std::string();
+#endif
+}
+
 static AOTLinkConfig loadAOTLinkConfig() {
     AOTLinkConfig config;
     // Default C++ compiler
     config.cxx = "c++";
+    config.target_flags = QoreAOT::getLinkTargetFlags();
 
     // Determine config file path
     std::string conf_path;
@@ -22811,6 +22832,9 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         // Static link: use CXX compiler from config, link static lib + all transitive deps
         cmd = config.cxx + " -o " + exe_path + " " + obj_path
             + " " + static_lib;
+        if (!config.target_flags.empty()) {
+            cmd += " " + config.target_flags;
+        }
         // a sanitizer runtime has to be part of the executable, or it is not initialized when libqore starts its
         // threads
         if (!config.sanitize_flags.empty()) {
@@ -22824,6 +22848,9 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         cmd = config.cxx + " -o " + exe_path + " " + obj_path
             + " -L" + libqore_dir + " -lqore"
             + " -Wl,-rpath," + libqore_dir;
+        if (!config.target_flags.empty()) {
+            cmd += " " + config.target_flags;
+        }
         // see the static link above
         if (!config.sanitize_flags.empty()) {
             cmd += " " + config.sanitize_flags;
@@ -25295,6 +25322,9 @@ static bool linkSharedLib(const std::string& obj_path, const std::string& so_pat
     std::string cmd = config.cxx + " -shared -o " + tmp_so_path + " " + obj_path
         + " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
+    if (!config.target_flags.empty()) {
+        cmd += " " + config.target_flags;
+    }
     std::string version_script = createAOTModuleVersionScript(so_path, error);
     if (!error.empty()) {
         return false;
@@ -27417,6 +27447,32 @@ bool QoreAOT::lastCompileFailedInPreload() {
     return aot_compile_failed_in_preload;
 }
 
+//! True when a parse commit failed because code in a preloaded object could not be loaded
+/** Parse commit runs code -- constant and static variable initializers -- and code it calls in a preloaded
+    object is that object's source-stripped IR, which can only be registered in a Program declaring every class
+    and function it calls.  The target of the compile is parsed from source, so a source-stripped function that
+    cannot be materialized always belongs to a preloaded object: the failure is a property of the preload set,
+    not of the source, and a parse that preloads nothing does not have it.
+
+    @param xsink the parse commit's exception sink, examined over its whole exception chain
+    @param preloaded true when the compile resolved against preloaded objects
+*/
+static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preloaded) {
+    if (!preloaded || !xsink.isException()) {
+        return false;
+    }
+    for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+        if (ex->err.getType() != NT_STRING) {
+            continue;
+        }
+        QoreStringValueHelper err(ex->err);
+        if (!strcmp(err->c_str(), "AOT-SOURCE-IR-ERROR")) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct QoreAOTSiblingPreload {
     //! The blob bytes the preloaded shells were built from.
     /** They must outlive the deserializer: the symbol index, the debug metadata
@@ -28054,6 +28110,7 @@ bool QoreAOT::compileScriptFilesBatch(
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
+        aot_compile_failed_in_preload = qore_aot_commit_failed_in_preload(xsink, (bool)sibling_preload.mdes);
         xsink.handleExceptions();
         error = "parse commit failed in batch compile";
         return false;
@@ -29274,6 +29331,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
+        aot_compile_failed_in_preload = qore_aot_commit_failed_in_preload(xsink, (bool)sibling_mdes);
         xsink.handleExceptions();
         error = "parse commit failed: " + target_canon;
         return false;
@@ -30192,6 +30250,9 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
     }
     cmd += " -L" + libqore_dir + " -lqore"
         + " -Wl,-rpath," + libqore_dir;
+    if (!config.target_flags.empty()) {
+        cmd += " " + config.target_flags;
+    }
     std::string version_script = createAOTModuleVersionScript(so_path, error);
     if (!error.empty()) {
         return false;

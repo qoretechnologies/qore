@@ -43,6 +43,8 @@
 #include "qore/vector_map"
 #include "qore/QoreRWLock.h"
 
+#include <functional>
+
 #include <atomic>
 #include <map>
 #include <unordered_map>
@@ -1397,6 +1399,26 @@ protected:
         bool locked;
     };
 
+    //! Exception-safe runtime namespace write lock, for one write to this root's committed namespace
+    /** Recursive for the current thread.  Hold it for the write alone: see RuntimeNamespaceWriteLocker.
+    */
+    class RuntimeNamespaceWriteGuard {
+    public:
+        DLLLOCAL RuntimeNamespaceWriteGuard(qore_root_ns_private& root) : root(root) {
+            root.runtimeNamespaceWriteLock();
+        }
+
+        DLLLOCAL ~RuntimeNamespaceWriteGuard() {
+            root.runtimeNamespaceWriteUnlock();
+        }
+
+    private:
+        qore_root_ns_private& root;
+
+        RuntimeNamespaceWriteGuard(const RuntimeNamespaceWriteGuard&) = delete;
+        RuntimeNamespaceWriteGuard& operator=(const RuntimeNamespaceWriteGuard&) = delete;
+    };
+
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
 
@@ -1659,13 +1681,18 @@ protected:
     DLLLOCAL AbstractCallReferenceNode* parseResolveCallReferenceIntern(UnresolvedProgramCallReferenceNode* fr);
 
     DLLLOCAL void parseCommit() {
-        // commit pending function lookup entries
-        for (fmap_t::iterator i = pend_fmap.begin(), e = pend_fmap.end(); i != e; ++i) {
-            fmap.update(i);
-        }
-        pend_fmap.clear();
+        {
+            // other threads can be resolving names in this Program while it is parsed into; runtime
+            // initialization below runs user code, so it must stay outside the lock
+            RuntimeNamespaceWriteGuard wg(*this);
+            // commit pending function lookup entries
+            for (fmap_t::iterator i = pend_fmap.begin(), e = pend_fmap.end(); i != e; ++i) {
+                fmap.update(i);
+            }
+            pend_fmap.clear();
 
-        qore_ns_private::parseCommit();
+            qore_ns_private::parseCommit();
+        }
         // exceptions can be thrown when performing runtime initialization
         qore_ns_private::parseCommitRuntimeInit(getProgram()->getParseExceptionSink());
     }
@@ -2421,6 +2448,8 @@ public:
     }
 
     DLLLOCAL void parseRollback(ExceptionSink* xsink, bool atomic_rollback = false) {
+        // other threads can be resolving names in this Program while a parse into it is rolled back
+        RuntimeNamespaceWriteGuard wg(*this);
         // roll back pending function lookup entries
         pend_fmap.clear();
 
@@ -2592,12 +2621,16 @@ public:
     }
 
     DLLLOCAL static int addPendingVariant(qore_ns_private& nsp, const char* name, AbstractQoreFunctionVariant* v) {
-        return getRootNS()->rpriv->addPendingVariantIntern(nsp, name, v);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->addPendingVariantIntern(nsp, name, v);
     }
 
     DLLLOCAL static int addPendingVariant(qore_ns_private& nsp, const NamedScope& name,
             AbstractQoreFunctionVariant* v) {
-        return getRootNS()->rpriv->addPendingVariantIntern(nsp, name, v);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->addPendingVariantIntern(nsp, name, v);
     }
 
     DLLLOCAL static int runtimeImportFunction(RootQoreNamespace& rns, ExceptionSink* xsink, QoreNamespace& ns,
@@ -2706,7 +2739,9 @@ public:
     }
 
     DLLLOCAL static bool parseResolveGlobalVarsAndClassHierarchies() {
-        return getRootNS()->rpriv->parseResolveGlobalVarsAndClassHierarchiesIntern();
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseResolveGlobalVarsAndClassHierarchiesIntern();
     }
 
     DLLLOCAL static void parseCommit(RootQoreNamespace& rns) {
@@ -2793,34 +2828,48 @@ public:
     DLLLOCAL static void parseAddConstant(const QoreProgramLocation* loc, QoreNamespace& ns, const NamedScope& name,
             QoreValue value, bool pub, const QoreTypeInfo* typeInfo = nullptr,
             QoreParseTypeInfo* parseTypeInfo = nullptr) {
-        getRootNS()->rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo, parseTypeInfo);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddConstantIntern(loc, ns, name, value, pub, typeInfo, parseTypeInfo);
     }
 
     // returns 0 for success, non-zero for error
     DLLLOCAL static int parseAddMethodToClass(const QoreProgramLocation* loc, const NamedScope& name,
             MethodVariantBase* qcmethod, bool static_flag) {
-        return getRootNS()->rpriv->parseAddMethodToClassIntern(loc, name, qcmethod, static_flag);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseAddMethodToClassIntern(loc, name, qcmethod, static_flag);
     }
 
     DLLLOCAL static void parseAddClass(const QoreProgramLocation* loc, const NamedScope& name, QoreClass* oc) {
-        getRootNS()->rpriv->parseAddClassIntern(loc, name, oc);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddClassIntern(loc, name, oc);
     }
 
     DLLLOCAL static void parseAddHashDecl(const QoreProgramLocation* loc, const NamedScope& name, TypedHashDecl* hd) {
-        getRootNS()->rpriv->parseAddHashDeclIntern(loc, name, hd);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddHashDeclIntern(loc, name, hd);
     }
 
     DLLLOCAL static void parseAddEnum(const QoreProgramLocation* loc, const NamedScope& name, QoreEnumDecl* ed) {
-        getRootNS()->rpriv->parseAddEnumIntern(loc, name, ed);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddEnumIntern(loc, name, ed);
     }
 
     DLLLOCAL static void parseAddTypedef(const QoreProgramLocation* loc, const NamedScope& name,
             const QoreTypeInfo* typeInfo, QoreParseTypeInfo* parseTypeInfo, bool pub) {
-        getRootNS()->rpriv->parseAddTypedefIntern(loc, name, typeInfo, parseTypeInfo, pub);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddTypedefIntern(loc, name, typeInfo, parseTypeInfo, pub);
     }
 
     DLLLOCAL static void parseAddNamespace(QoreNamespace* nns) {
-        getRootNS()->rpriv->parseAddNamespaceIntern(nns);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        rpriv->parseAddNamespaceIntern(nns);
     }
 
     DLLLOCAL static const QoreFunction* parseResolveFunction(const NamedScope& nscope) {
@@ -2841,17 +2890,23 @@ public:
 
     DLLLOCAL static Var* parseAddResolvedGlobalVarDef(const QoreProgramLocation* loc, const NamedScope& vname,
             const QoreTypeInfo* typeInfo, qore_var_t type = VT_GLOBAL) {
-        return getRootNS()->rpriv->parseAddResolvedGlobalVarDefIntern(loc, vname, typeInfo, type);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseAddResolvedGlobalVarDefIntern(loc, vname, typeInfo, type);
     }
 
     DLLLOCAL static Var* parseAddGlobalVarDef(const QoreProgramLocation* loc, const NamedScope& vname,
             QoreParseTypeInfo* typeInfo, qore_var_t type = VT_GLOBAL) {
-        return getRootNS()->rpriv->parseAddGlobalVarDefIntern(loc, vname, typeInfo, type);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseAddGlobalVarDefIntern(loc, vname, typeInfo, type);
     }
 
     DLLLOCAL static Var* parseCheckImplicitGlobalVar(const QoreProgramLocation* loc, const NamedScope& name,
             const QoreTypeInfo* typeInfo) {
-        return getRootNS()->rpriv->parseCheckImplicitGlobalVarIntern(loc, name, typeInfo);
+        qore_root_ns_private* rpriv = getRootNS()->rpriv;
+        RuntimeNamespaceWriteGuard wg(*rpriv);
+        return rpriv->parseCheckImplicitGlobalVarIntern(loc, name, typeInfo);
     }
 
     DLLLOCAL static Var* parseFindGlobalVar(const char* vname) {
@@ -3359,6 +3414,18 @@ public:
         rns.rpriv->runtimeNamespaceWriteUnlock();
     }
 
+    //! Acquires the namespace read lock unless the current thread owns the write lock
+    /** @return true if the lock was acquired and must be released with runtimeNamespaceReadUnlock()
+    */
+    DLLLOCAL static bool runtimeNamespaceReadLock(const RootQoreNamespace& rns) {
+        return rns.rpriv->runtimeNamespaceReadLock();
+    }
+
+    //! Releases a read lock acquired with runtimeNamespaceReadLock()
+    DLLLOCAL static void runtimeNamespaceReadUnlock(const RootQoreNamespace& rns, bool locked) {
+        rns.rpriv->runtimeNamespaceReadUnlock(locked);
+    }
+
     DLLLOCAL static qore_ns_private* getQore(RootQoreNamespace& rns) {
         return rns.rpriv->qoreNS->priv;
     }
@@ -3377,11 +3444,51 @@ public:
     }
 };
 
-//! Excludes runtime namespace readers for the duration of a committed-namespace merge
-/** Concurrent \a writers are already excluded by the target Program's parse lock, which every
-    merge below runs under; this locker adds the only thing the parse lock does not provide, which
-    is exclusion against runtime readers in other threads, so that no thread can resolve a name
-    against a half-merged namespace.
+//! Excludes runtime namespace readers while the current thread writes a committed namespace
+/** Every runtime write to a Program's committed namespace holds this lock, so that a reader - a
+    runtime lookup in the same Program, or a thread copying from it into another Program under
+    RuntimeNamespaceMergeLocker - never sees a container that is being modified.  Parse ownership,
+    which writers also hold, excludes other writers but not readers.
+
+    Scope it to the write alone.  Holding it across code that waits for another thread that must
+    resolve a name in the same Program deadlocks the two threads.
+*/
+class RuntimeNamespaceWriteLocker {
+public:
+    DLLLOCAL RuntimeNamespaceWriteLocker(RootQoreNamespace& rns) : rns(rns) {
+        qore_root_ns_private::runtimeNamespaceWriteLock(rns);
+    }
+
+    DLLLOCAL ~RuntimeNamespaceWriteLocker() {
+        qore_root_ns_private::runtimeNamespaceWriteUnlock(rns);
+    }
+
+private:
+    RootQoreNamespace& rns;
+
+    RuntimeNamespaceWriteLocker(const RuntimeNamespaceWriteLocker&) = delete;
+    RuntimeNamespaceWriteLocker& operator=(const RuntimeNamespaceWriteLocker&) = delete;
+};
+
+//! Fences both namespaces of a committed-namespace merge: the target against readers, the source against writers
+/** Concurrent writers to the \a target are already excluded by the target Program's parse lock,
+    which every merge runs under; the write lock taken here adds the only thing the parse lock does
+    not provide, which is exclusion against runtime readers in other threads, so that no thread can
+    resolve a name against a half-merged namespace.
+
+    The \a source needs the opposite fence.  A merge - a module import, or an import of the system
+    API - reads the source's namespace containers directly, and a module's shared Program is itself
+    the target of runtime merges: code in an AOT
+    module runs in the module's Program, so a \c load_module() call there merges another module
+    into the very namespace that every import of the module copies from.  Nothing held by the
+    importing thread excludes that writer -- its parse lock is the importing Program's, not the
+    module's -- and a merge that iterated a constant list while the writer appended to it read a
+    reallocated vector and crashed in ConstantList::mergeUserPublic().  The read lock on the source
+    root excludes the writer for the length of the merge; a thread that already owns the source's
+    write lock does not take it again.
+
+    The two locks are taken in address order, so two merges running in opposite directions between
+    the same two roots cannot each hold one lock while waiting for the other.
 
     Scope it to the merge transaction alone - scan, copy and index rebuild - and never hold it
     across the deferred AOT initialization that follows.  That initialization waits for the
@@ -3392,16 +3499,28 @@ public:
 */
 class RuntimeNamespaceMergeLocker {
 public:
-    DLLLOCAL RuntimeNamespaceMergeLocker(RootQoreNamespace& rns) : rns(rns) {
-        qore_root_ns_private::runtimeNamespaceWriteLock(rns);
+    DLLLOCAL RuntimeNamespaceMergeLocker(RootQoreNamespace& target, const RootQoreNamespace& source)
+            : target(target), source(source) {
+        assert(qore_root_ns_private::get(target) != qore_root_ns_private::get(source));
+        if (std::less<const qore_root_ns_private*>()(qore_root_ns_private::get(source),
+                qore_root_ns_private::get(target))) {
+            source_locked = qore_root_ns_private::runtimeNamespaceReadLock(source);
+            qore_root_ns_private::runtimeNamespaceWriteLock(target);
+        } else {
+            qore_root_ns_private::runtimeNamespaceWriteLock(target);
+            source_locked = qore_root_ns_private::runtimeNamespaceReadLock(source);
+        }
     }
 
     DLLLOCAL ~RuntimeNamespaceMergeLocker() {
-        qore_root_ns_private::runtimeNamespaceWriteUnlock(rns);
+        qore_root_ns_private::runtimeNamespaceReadUnlock(source, source_locked);
+        qore_root_ns_private::runtimeNamespaceWriteUnlock(target);
     }
 
 private:
-    RootQoreNamespace& rns;
+    RootQoreNamespace& target;
+    const RootQoreNamespace& source;
+    bool source_locked = false;
 
     RuntimeNamespaceMergeLocker(const RuntimeNamespaceMergeLocker&) = delete;
     RuntimeNamespaceMergeLocker& operator=(const RuntimeNamespaceMergeLocker&) = delete;

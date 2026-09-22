@@ -427,6 +427,12 @@ int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
         }
         return -1;
     }
+    // a list whose last reference was released can still be reached through a weak reference, but not changed: the
+    // AST checks this when it takes the lvalue (qore_list_private::getLValue()), and the compiled stores come here
+    if (priv->checkValid(xsink)) {
+        val.discard(xsink);
+        return -1;
+    }
     if (index >= priv->length) {
         priv->resize(index + 1);
     }
@@ -444,6 +450,8 @@ int QoreListNode::setEntry(size_t index, QoreValue val, ExceptionSink* xsink) {
 
 int QoreListNode::push(QoreValue val, ExceptionSink* xsink) {
     if (priv->checkValid(xsink)) {
+        // the value is owned by the list whatever the outcome, so a rejected value is released here
+        val.discard(xsink);
         return -1;
     }
     return priv->push(val, xsink);
@@ -453,7 +461,8 @@ int QoreListNode::push(QoreValue val, ExceptionSink* xsink) {
 int QoreListNode::insert(QoreValue val, ExceptionSink* xsink) {
     assert(reference_count() == 1);
     ValueHolder holder(val, xsink);
-    if (priv->checkVal(holder, xsink)) {
+    // see setEntry(): a list whose last reference was released cannot be changed
+    if (priv->checkValid(xsink) || priv->checkVal(holder, xsink)) {
         return -1;
     }
 
@@ -1005,6 +1014,16 @@ void qore_container_free_helper::freeEntry(QoreValue& entry, ExceptionSink* xsin
 
 // does a deep dereference
 bool QoreListNode::derefImpl(ExceptionSink* xsink) {
+    // A list that was already freed was referenced again through a weak reference, which keeps the node allocated
+    // after its last reference is released.  Only what it was given since is freed: the weak reference that its
+    // first release dropped must not be dropped again, which would delete the node under its weak holders.
+    if (!priv->valid) {
+        for (size_t i = 0; i < priv->length; ++i) {
+            priv->entry[i].discard(xsink);
+        }
+        priv->length = 0;
+        return false;
+    }
     qore_container_free_helper cfh(this, xsink);
     if (cfh.freeEntries()) {
         for (size_t i = 0; i < priv->length; ++i) {

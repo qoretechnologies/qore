@@ -13716,8 +13716,12 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
 
     // Applying an AOT module to a Program walks shared module namespace trees,
     // loads reexported modules, updates per-module init state, and executes
-    // generated init functions.  None of that is safe to interleave with the
-    // same work for another Program using the same shared AOT module metadata.
+    // generated init functions, concurrently with the same work for other
+    // Programs: the process-wide module-load lock this helper used to take is
+    // retired, and it now only tracks the lock-order depth.  The shared module
+    // namespace is fenced for the merge by RuntimeNamespaceMergeLocker below, and
+    // the per-module init state by the AOT module state lock and the shadow
+    // population claim.
     QoreModuleLoadLockHelper aot_module_al;
 
     ExceptionSink local_xsink;
@@ -13867,7 +13871,11 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         // are not yet indexed.  The deferred initialization further down must run outside this
         // scope, because it waits for the per-module shadow builder whose owner needs to read this
         // same namespace.
-        RuntimeNamespaceMergeLocker rnml(*target_root);
+        //
+        // The module's own namespace is fenced against writers for the same span: module code runs
+        // in the module's Program, so a load_module() call in it merges into mod_root while this
+        // thread copies from it.
+        RuntimeNamespaceMergeLocker rnml(*target_root, *mod_root);
 
         printd(5, "AOT module ns_init '%s': calling scanMergeCommittedNamespace\n", mod_name);
         qore_root_ns_private::scanMergeCommittedNamespace(*target_root, *mod_root, qmc);

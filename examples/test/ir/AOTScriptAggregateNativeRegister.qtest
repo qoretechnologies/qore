@@ -11,6 +11,15 @@
 %exec-class AOTScriptAggregateNativeRegisterTest
 
 class AOTScriptAggregateNativeRegisterTest inherits QUnit::Test {
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
+        linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
     private {
         string qore_bin;
         string qcc_bin;
@@ -140,9 +149,9 @@ int main(int, char**) {
         # (the CI runs build/qore); a non-existent dir is harmlessly ignored by the
         # compiler for installed layouts whose include tree already has everything.
         string link_out = run(sprintf(
-            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s/*.qo %s -L%s -Wl,-rpath,%s -lqore -o %s",
+            "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s/*.qo %s -L%s -Wl,-rpath,%s -lqore -o %s %s",
             libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
-            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe));
+            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
         assertTrue(is_file(exe), "linked native-register aggregate host: " + link_out);
 
         string out = run(sprintf(

@@ -568,7 +568,8 @@ public:
         ha.assign(val, xsink);
     }
 
-    DLLLOCAL bool derefImpl(ExceptionSink* xsink, bool reverse = false) {
+    //! Frees all members; the hash itself stays valid (see clear())
+    DLLLOCAL void freeMembers(ExceptionSink* xsink, bool reverse = false) {
         if (reverse) {
             for (qhlist_t::reverse_iterator i = member_list.rbegin(), e = member_list.rend(); i != e; ++i) {
                 (*i)->val.discard(xsink);
@@ -584,6 +585,13 @@ public:
         member_list.clear();
         hm.clear();
         obj_count = 0;
+    }
+
+    //! Frees all members of a hash whose last reference was released, and marks it as freed
+    /** A weak reference can keep the node allocated after this; \c valid then tells that it was freed.
+    */
+    DLLLOCAL bool derefImpl(ExceptionSink* xsink, bool reverse = false) {
+        freeMembers(xsink, reverse);
         valid = false;
         return true;
     }
@@ -632,8 +640,13 @@ public:
         return ha.swap(val);
     }
 
+    //! Empties a hash that stays in use (an object's members before it is released, a thread's data)
+    /** Unlike derefImpl(), the hash is not marked as freed: marking it made a hash that is used again, such as the
+        thread-local data of a pooled thread, reject changes, and made its eventual release look like the release of
+        a freed hash.
+    */
     DLLLOCAL void clear(ExceptionSink* xsink, bool reverse) {
-        derefImpl(xsink, reverse);
+        freeMembers(xsink, reverse);
     }
 
     DLLLOCAL size_t size() const {

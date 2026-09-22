@@ -291,12 +291,18 @@ static void collect_qcc_link_paths(std::vector<std::string>& include_dirs,
 //! Add compiler/linker flags for qcc link mode.
 /** The sanitizer that libqore was built with, if any, is added as well: its runtime has to be part of the main
     executable, or it is not initialized when libqore starts its threads (a ThreadSanitizer build crashed in the first
-    instrumented function of the signal handling thread)
+    instrumented function of the signal handling thread).  So is the platform version libqore was built for, or the
+    linker warns that the executable targets an older macOS than libqore
 */
 static void append_qcc_link_flags(std::string& cmd, const std::vector<std::string>& lib_dirs) {
     if (*QORE_QCC_SANITIZE_FLAGS) {
         cmd += " ";
         cmd += QORE_QCC_SANITIZE_FLAGS;
+    }
+    // the platform version libqore was built for; see QoreAOT::getLinkTargetFlags()
+    std::string target_flags = QoreAOT::getLinkTargetFlags();
+    if (!target_flags.empty()) {
+        cmd += " " + target_flags;
     }
     for (const auto& dir : lib_dirs) {
         cmd += " -L" + shell_quote(dir);
@@ -8665,6 +8671,172 @@ static bool add_aot_body_contract_depfile_inputs(
     return true;
 }
 
+//! Suffix of the sidecar naming the sources an object's code needs declared when it is loaded
+static const char AOTLoadRequiresSuffix[] = ".load-requires";
+
+//! The build group's source-symbol manifest, read once; nullptr when the compile was given none
+static const QoreAOTSourceSymbolManifest* qcc_source_symbol_manifest(std::string& error) {
+    static QoreAOTSourceSymbolManifest manifest;
+    static bool loaded = false;
+    if (!source_symbol_manifest_path) {
+        return nullptr;
+    }
+    if (!loaded) {
+        if (!read_source_symbol_manifest(source_symbol_manifest_path, manifest, error)) {
+            return nullptr;
+        }
+        loaded = true;
+    }
+    return &manifest;
+}
+
+//! The one source declaring \a path in \a symbols, or an empty string
+/** Resolved as a source parse resolves a deferred build-group symbol: by its full path, else -- for a name
+    written without its namespace, or with a namespace the declaration does not spell the same way -- by the
+    last segment when exactly one declaration carries it.  A symbol two sources declare names no provider.
+*/
+static std::string qcc_source_symbol_provider(const QoreAOTSourceSymbolMap& symbols, std::string path) {
+    while (path.size() > 2 && path[0] == ':' && path[1] == ':') {
+        path.erase(0, 2);
+    }
+    if (path.empty()) {
+        return std::string();
+    }
+    auto i = symbols.find(path);
+    if (i != symbols.end()) {
+        return i->second.size() == 1 ? *i->second.begin() : std::string();
+    }
+    size_t pos = path.rfind("::");
+    std::string name = pos == std::string::npos ? path : path.substr(pos + 2);
+    const std::unordered_set<std::string>* unique = nullptr;
+    for (const auto& symbol : symbols) {
+        size_t symbol_pos = symbol.first.rfind("::");
+        if ((symbol_pos == std::string::npos ? symbol.first : symbol.first.substr(symbol_pos + 2)) != name) {
+            continue;
+        }
+        if (unique) {
+            return std::string();
+        }
+        unique = &symbol.second;
+    }
+    return unique && unique->size() == 1 ? *unique->begin() : std::string();
+}
+
+//! The build-group source that declares what an import record names, or an empty string
+/** A call the compile resolved against a preloaded object records its provider; a reference the compile
+    deferred to link time -- a class it constructs or names as a type -- records only the path, and its provider
+    is looked up in the build group's source-symbol manifest.  A member is provided by the source declaring its
+    class.
+*/
+static std::string qcc_import_provider_source(const QoreAOTSymbolIndexRecord& rec,
+        const QoreAOTSourceSymbolManifest* manifest) {
+    if (!rec.provider_source_file.empty() && rec.provider_source_file.front() != '<') {
+        return canonical_existing_path(rec.provider_source_file);
+    }
+    if (!manifest) {
+        return std::string();
+    }
+    // a method path can carry its signature, whose parameter types contain "::" of their own
+    std::string path = rec.qore_path.substr(0, rec.qore_path.find('('));
+    switch (rec.kind) {
+        case QoreAOTSymbolKind::CLASS:
+            return qcc_source_symbol_provider(manifest->classes, path);
+        case QoreAOTSymbolKind::HASHDECL:
+            return qcc_source_symbol_provider(manifest->hashdecls, path);
+        case QoreAOTSymbolKind::FUNCTION:
+            return qcc_source_symbol_provider(manifest->functions, path);
+        case QoreAOTSymbolKind::GLOBAL:
+            return qcc_source_symbol_provider(manifest->globals, path);
+        case QoreAOTSymbolKind::METHOD:
+        case QoreAOTSymbolKind::STATIC_METHOD:
+        case QoreAOTSymbolKind::CONSTRUCTOR:
+        case QoreAOTSymbolKind::STATIC_VAR:
+        case QoreAOTSymbolKind::CONSTANT: {
+            size_t pos = path.rfind("::");
+            if (pos == std::string::npos || !pos) {
+                return std::string();
+            }
+            return qcc_source_symbol_provider(manifest->classes, path.substr(0, pos));
+        }
+        default:
+            return std::string();
+    }
+}
+
+//! Records the build-group sources an object's code needs declared wherever it is loaded.
+/** An object preloaded into another compile is not only declared there: parse commit runs initializers, and code
+    they reach in a preloaded object is that object's source-stripped IR, which registers only in a Program that
+    declares every class and function it calls.  Those providers are not build dependencies -- a late-bound call
+    bakes nothing of its target, so the object need not be rebuilt when the target changes -- and so the depfile
+    does not name them, and a whole-group parse and a standalone compile do not even agree on whether they appear
+    there.  The scheduler closes a preload set over this record as well as over the depfile.
+
+    Format 1, one row per provider source after the header, the field length-prefixed as in the contracts:
+
+        require\t<n>:<provider source path>
+
+    Written only if the content changed, and removed when the object requires nothing from another source.
+
+    @param object_path the generated `.qo` whose symbol index names what it imports
+    @param error receives a description on failure
+
+    @return true on success, false with @a error set on failure */
+static bool write_aot_load_requires(const std::string& object_path, std::string& error) {
+    const std::string path = object_path + AOTLoadRequiresSuffix;
+    if (!depfile_declaration_contract_stamps) {
+        return true;
+    }
+    const QoreAOTSourceSymbolManifest* manifest = qcc_source_symbol_manifest(error);
+    if (!manifest && !error.empty()) {
+        return false;
+    }
+
+    QOLinkInputInfo consumer;
+    if (!collect_qo_link_input(object_path.c_str(), consumer, error)) {
+        return false;
+    }
+    std::set<std::string> owned_sources;
+    for (size_t i = 0; i < consumer.index.defined.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT load-requires owned-source collection", error)) {
+            return false;
+        }
+        const std::string& source = consumer.index.defined[i].source_file;
+        if (!source.empty() && source.front() != '<') {
+            owned_sources.insert(canonical_existing_path(source));
+        }
+    }
+    std::set<std::string> providers;
+    for (size_t i = 0; i < consumer.index.imported.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT load-requires collection", error)) {
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord& rec = consumer.index.imported[i];
+        std::string provider = qcc_import_provider_source(rec, manifest);
+        if (provider.empty() || owned_sources.count(provider)) {
+            continue;
+        }
+        if (!rec.consumer_source_file.empty()
+                && canonical_existing_path(rec.consumer_source_file) == provider) {
+            continue;
+        }
+        providers.insert(std::move(provider));
+    }
+    if (providers.empty()) {
+        if (!unlink(path.c_str()) || errno == ENOENT) {
+            return true;
+        }
+        error = "cannot remove stale load requirements '" + path + "': " + strerror(errno);
+        return false;
+    }
+    std::string content = "format=1\n";
+    for (const std::string& provider : providers) {
+        content += "require\t";
+        append_aot_contract_field(content, provider);
+        content.push_back('\n');
+    }
+    return write_generated_file_if_changed(path, content, error);
+}
+
 static bool rewrite_depfile_source_content_stamps(
         const std::string& depfile, const std::string& depfile_target,
         std::string& error) {
@@ -10054,6 +10226,11 @@ int main(int argc, char** argv) {
                     qore_cleanup();
                     return 1;
                 }
+                if (!write_aot_load_requires(object, error)) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                    qore_cleanup();
+                    return 1;
+                }
                 if (!rewrite_depfile_source_content_stamps(depfile,
                         object + ".stamp", error)) {
                     fprintf(stderr, "error: %s\n", error.c_str());
@@ -10523,6 +10700,9 @@ int main(int argc, char** argv) {
                     && !add_aot_body_contract_depfile_inputs(output,
                         script_lib_dirs, depfile_path,
                         qcc_depfile_target(output), error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                rc = 1;
+            } else if (!rc && depfile_path && !write_aot_load_requires(output, error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
             } else if (!rc && depfile_path

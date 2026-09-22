@@ -411,6 +411,13 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     declaration responsible; the build scheduler answers that by compiling the group in one shared
     parse, which preloads nothing, while any other compile failure still stops the build.
 
+    A preloaded fragment is also run: parse commit evaluates static variable initializers, including
+    those of preloaded classes, and code they reach in a fragment can only be loaded in a program that
+    declares every class and function it calls.  A call that is resolved at run time is not a build
+    dependency, so \c qcc records those providers beside each object separately, and the build
+    scheduler preloads them together with the object; the same failure is also reported with status
+    \c 78.
+
     What a rebuild covers is decided by contracts rather than by source bytes.  A consumer that folds
     a provider's compile-time constant or enum member leaves no trace of it in the emitted object, so
     the build records a dependency on that provider's <b>declaration contract</b>, which is identical
@@ -420,6 +427,14 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
     provider's optimised bodies move underneath an object that linked against them, while a change
     to an entry the consumer did not bake leaves it current.  A component is not stale merely
     because its own compile changed which providers it records.
+
+    Build inputs from outside a group - the toolchain, loaded modules, stubs and includes - are watched
+    for the whole group through one depfile listing every such input a member's compile recorded,
+    including a module a member started requiring after the group was last compiled in one parse.
+    An edit to one of them rebuilds the members that read it.  Object recipes in a group of more
+    than one source do not give the build tool depfiles of their own: with the Makefile generators
+    before CMake 4.0 a rewritten depfile is appended to what the build tool already consolidated
+    rather than replacing it, and hundreds of object depfiles grew those files without bound.
 
     A parse of part of a group (\c QORE_QCC_SUBSET_PARSE=1) compiles only the part of the stale set
     in which no preloaded fragment stands between two compiled sources, because such a fragment was

@@ -11,6 +11,15 @@
 %exec-class AOTConstructorParameterReceiverLifetimeTest
 
 class AOTConstructorParameterReceiverLifetimeTest inherits QUnit::Test {
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    /** A driver compiled without it targets the compiler's default, which can be older than libqore's, and the
+        linker then warns that libqore was built for a newer macOS.  Qore::CFLAGS names it on macOS.
+    */
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
     private {
         string qcc_bin;
         string libqore_dir;
@@ -179,9 +188,9 @@ int main(int, char**) {
         string cxx = ENV.CXX ?? "g++";
         string link_out = run(sprintf(
             "LD_LIBRARY_PATH=%s %s -std=c++17 -I%s -I%s %s %s/*.qo %s"
-            " -L%s -Wl,-rpath,%s -lqore -o %s",
+            " -L%s -Wl,-rpath,%s -lqore -o %s %s",
             libqore_dir, cxx, source_root + "/include", libqore_dir + "/include",
-            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe));
+            glue, qo_dir, aggregate, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
         assertTrue(is_file(exe), optimization + " aggregate host linked: " + link_out);
 
         string out = run(sprintf("LD_LIBRARY_PATH=%s %s", libqore_dir, exe));

@@ -3054,6 +3054,14 @@ set_target_properties(qore PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}
 set_target_properties(qore PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
 # configuration files
+# Qore::CFLAGS names the flags libqore was compiled with.  CMake passes the macOS deployment target to every
+# compile on its own rather than through CMAKE_CXX_FLAGS, and it defaults it to the host's version when the SDK is
+# newer, while a compiler driver given no target follows the SDK.  A program compiled with CMAKE_CXX_FLAGS alone
+# then targets an older macOS than libqore and the linker warns about it, so the target is named here too.
+set(QORE_LIB_CFLAGS_VALUE "${CMAKE_CXX_FLAGS}")
+if (APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET)
+    string(APPEND QORE_LIB_CFLAGS_VALUE " -mmacosx-version-min=${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
 message(STATUS "Generating unix-config.h")
 configure_file(${CMAKE_SOURCE_DIR}/cmake/unix-config.h.cmake
                ${CMAKE_BINARY_DIR}/include/qore/intern/unix-config.h)
@@ -3918,8 +3926,8 @@ add_custom_target(install-qore-qlib-aot
 
 # Self-healing guarantee for the in-tree source qmod symlinks.  The per-qmod
 # create_symlink command only recreates a symlink when its qmod target rebuilds,
-# but the qcc-format-change cleanup (RemoveSourceQmodSymlinks.cmake) removes the
-# symlinks unconditionally — so a partial build, or up-to-date qmods, after a
+# but the qcc-format-change cleanup (RemoveSourceQmodSymlinks.cmake) removes every
+# symlink into this build tree — so a partial build, or up-to-date qmods, after a
 # format-changing change can leave a module without its symlink and silently fall
 # back to slow source parsing at load.  This idempotent step recreates any
 # missing/incorrect symlink from the already-built qmods, both on (re)configure

@@ -4037,6 +4037,25 @@ DLLLOCAL const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHa
 DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* owner, size_t index,
     const char* name, bool or_nothing = false);
 
+//! Removes every cached derived type that refers to a type or type-parameter owner about to be destroyed
+/** The derived-type caches (list<T>, hash<string, T>, references, unions, callable types, parameterized
+    classes, type parameters, wildcards) are keyed by the address of the types and owners they are built
+    from.  When a class, hashdecl, enum or signature is destroyed, its address can be reused by the next one
+    allocated, and a cache entry left behind would hand the new type the derived type of the old one - a
+    different type, and one whose element type no longer exists.  The owner of a type calls this before
+    freeing it; derived types built on the removed ones are removed as well, transitively.
+
+    Removed types are not deleted: something destroyed after the owner in the same teardown can still hold
+    a pointer to one.  They are kept and deleted with the rest of the cache at library cleanup, as every
+    cached type was before.
+
+    @param owner the class, hashdecl or signature being destroyed, as it keys the parameterized-class and
+    type-parameter caches; may be nullptr
+    @param ti1 a type being destroyed; may be nullptr
+    @param ti2 a second type being destroyed (the or-nothing variant); may be nullptr
+*/
+DLLLOCAL void qore_purge_derived_types(const void* owner, const QoreTypeInfo* ti1, const QoreTypeInfo* ti2);
+
 //! Returns the unbounded generic wildcard type argument
 DLLLOCAL const QoreTypeInfo* qore_get_wildcard_type();
 
