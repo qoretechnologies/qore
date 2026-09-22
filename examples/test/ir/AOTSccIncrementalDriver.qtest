@@ -86,6 +86,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testCascadingInvalidationIsWalkedToConvergence());
         addTestCase("a pass that changes nothing escalates instead of looping",
             \testAPassThatChangesNothingEscalates());
+        addTestCase("a compile that records a new edge to a current provider converges",
+            \testACompileThatDiscoversAnEdgeConverges());
+        addTestCase("a compile that closes a cycle is still published and then rebuilt",
+            \testACompileThatClosesACycleIsRebuiltTogether());
         addTestCase("the escalation floor follows what serves the band below it",
             \testEscalationFloorFollowsThePartialParse());
         addTestCase("concurrent recipes publish one coherent generation",
@@ -1207,6 +1211,123 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq((), stalePlan(fx).stale, "which leaves the group current");
     }
 
+    #! A compile's own new edges are part of what it publishes.
+    /** The whole-group parse and a standalone compile of the same source record
+        different contract edges: the group's parse resolves some references inside
+        its own parse, and a standalone compile resolves them against preloaded
+        objects and records a contract edge to each one it used.  So the first
+        standalone compile after a group parse can record an edge to a provider that
+        the group's depfile never named -- here c's compile adds d, which is current
+        and is not rebuilt.
+
+        The pass publishes against the graph it froze, which did not have that edge.
+        A record computed from that graph alone omits the new prerequisite, the next
+        freeze reads the edge from c's depfile, and c is stale again right after it
+        was built: the pass leaves exactly what it compiled, the coordinator calls the
+        plan non-convergent, and every incremental build of the group ends in the
+        group's own parse.  Seen on Qorus as three edited sources costing a 13-minute
+        rebuild of 950 objects.
+    */
+    testACompileThatDiscoversAnEdgeConverges() {
+        TmpDir tmp("qore-aot-driver-discovered-edge-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        # Only c's compile records the extra edge, and it records it every time, as
+        # a standalone compile of that source would.
+        writeCompiler(fx, NOTHING,
+            "case \"$(basename \"$src\")\" in c.qc) "
+            + "printf '%s: %s %s %s\\n' \"$out.stamp\" \"$src\" "
+            + sprintf("%y %y", fx.qo_dir + "/a.qo.compile-contract.stamp",
+                fx.qo_dir + "/d.qo.compile-contract.stamp")
+            + " > \"$out.d\" ;; esac");
+        # The escalation would be a whole-group parse; this one works, so a
+        # regression shows up as the assertions below rather than as a failed build.
+        writeBatchCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+        string before = graphGeneration(fx);
+
+        write(fx.src_dir + "/c.qc", isolatedSource("c") + "# edited\n");
+        hash<auto> planned = stalePlan(fx);
+        assertEq(1, planned.stale.size(), "one edited source: " + planned.output);
+        assertEq(fx.src_dir + "/c.qc", planned.stale[0].source,
+            "and it is c: " + planned.output);
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertEq(-1, result.output.find("is not converging"),
+            "the pass that compiled c does not leave c stale: " + result.output);
+        assertEq(-1, result.output.find("selecting the shared-parse batch"),
+            "and the group's own parse is never reached: " + result.output);
+        assertEq(("c.qc c.qo",), compiles(fx), "c is compiled once, alone");
+        assertEq((), stalePlan(fx).stale, "and the group is current");
+
+        # The edge really is new, so the record could not have come from the graph
+        # the pass was planned against.
+        string after = graphGeneration(fx);
+        assertTrue(before != after, "c's compile added a dependency-graph edge");
+        hash<auto> component = componentFor(fx.qo_dir, "c");
+        hash<auto> committed = record(fx, component.key);
+        assertEq(after, committed.graph_generation,
+            "c's record names the graph its own depfile produced");
+        list<string> prerequisites = sort(map basename($1.provides[0].output),
+            committed.manifest.prerequisites);
+        assertEq(("a.qo", "d.qo"), prerequisites,
+            "and lists the provider c's compile discovered as a prerequisite");
+
+        # And a build with nothing changed compiles nothing.
+        hash<auto> again = plan(fx);
+        assertEq(0, again.rc, "the next build succeeds: " + again.output);
+        assertEq(1, compiles(fx).size(), "and compiles nothing: " + again.output);
+    }
+
+    #! A discovered edge that changes the decomposition is not hidden by the record.
+    /** Publishing c's own new edges must not describe a component the frozen graph
+        does not have.  When c's compile records an edge to d and d already consumes
+        c, the two become one strongly connected component that only the shared
+        parse can build; c's publication keeps the frozen graph's record, and the
+        next pass finds the merged component stale and parses it.
+    */
+    testACompileThatClosesACycleIsRebuiltTogether() {
+        TmpDir tmp("qore-aot-driver-discovered-cycle-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeDepfile(fx.qo_dir, "d", "c");
+        writeCompiler(fx, NOTHING,
+            "case \"$(basename \"$src\")\" in c.qc) "
+            + "printf '%s: %s %s %s\\n' \"$out.stamp\" \"$src\" "
+            + sprintf("%y %y", fx.qo_dir + "/a.qo.compile-contract.stamp",
+                fx.qo_dir + "/d.qo.compile-contract.stamp")
+            + " > \"$out.d\" ;; esac");
+        writeBatchCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+        string frozen_key = componentFor(fx.qo_dir, "c").key;
+
+        write(fx.src_dir + "/c.qc", isolatedSource("c") + "# edited\n");
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        hash<auto> merged = componentFor(fx.qo_dir, "c");
+        assertEq("2", merged.size, "c's compile merged c and d: " + result.output);
+        *hash<auto> standalone = record(fx, frozen_key);
+        assertTrue(exists standalone, "c's standalone compile was published");
+        assertEq(1, standalone.manifest.prerequisites.size(),
+            "against the component the frozen graph had, whose only prerequisite is a");
+        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
+            "the merged component is built by the group's parse: " + result.output);
+        assertEq((), stalePlan(fx).stale, "and the group is current");
+    }
+
     #! The closure is compared against whatever serves the band below it.
     /** With a partial parse the band below the whole-group parse is ONE parse
         over the stale set, so the group's own parse is worth reaching for only
@@ -1278,8 +1399,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     /** The reported failure needed concurrency to become visible, so the fix is
         held to it: eighteen workers resolve identity, take locks, select
         preloads, compile and publish simultaneously, and one of them rewrites
-        another component's depfile in the middle of it -- the mutation that
-        renumbered the decomposition under everybody else.
+        its own depfile in the middle of it -- the mutation that renumbered the
+        decomposition under everybody else.
 
         Nothing here waits on a timer.  The workers are started together and
         joined, so the check is deterministic rather than a sampled race.
@@ -1299,10 +1420,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         # once; the a<->b cycle would otherwise be one unit of work.
         hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
         # c is the only component with a predecessor, so dropping its contract
-        # edge is a real change to the live graph and to c's own preload.
-        writeCompiler(fx, "printf '%s' " + sprintf("%y",
+        # edge is a real change to the live graph.  c's compile does it, as a real
+        # compile rewrites its own depfile: nothing else writes a member's depfile.
+        writeCompiler(fx, NOTHING,
+            "case \"$(basename \"$src\")\" in c.qc) printf '%s' " + sprintf("%y",
             fx.qo_dir + "/c.qo.stamp: " + fx.src_dir + "/c.qc\n") + " > "
-            + sprintf("%y", fx.qo_dir + "/c.qo.d"));
+            + sprintf("%y", fx.qo_dir + "/c.qo.d") + " ;; esac");
         write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
 
         hash<auto> frozen = runTool(("--scc-freeze-graph",
@@ -1340,6 +1463,13 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         list<string> failed = ();
         list<string> unpublished = ();
         string generation = trim(frozen.output);
+        # The mutation has to have actually happened, or the run above proves
+        # nothing: the live graph must now differ from the one every worker
+        # planned against, and only the next freeze may adopt it.
+        hash<auto> live = runTool(("--scc-graph-generation", fx.context));
+        assertEq(0, live.rc, "the live graph is readable");
+        assertNeq(generation, trim(live.output),
+            "a worker really did move the graph while the others were running");
         foreach string name in (fx.names) {
             string log = read(fx.qo_dir + "/" + name + ".worker.log");
             if (trim(read(fx.qo_dir + "/" + name + ".worker.rc")) != "rc=0") {
@@ -1354,22 +1484,17 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
                 push unpublished, name;
                 continue;
             }
-            assertEq(generation, committed.graph_generation,
-                name + " is published against the one frozen graph");
+            # c's record describes what c's own compile depended on, and c's
+            # depfile is the only one that moved.
+            assertEq(name == "c" ? trim(live.output) : generation,
+                committed.graph_generation,
+                name + " is published against the frozen graph and its own depfile");
         }
         assertEq((), failed,
             "every concurrent worker exits successfully" + workerReport(fx, failed));
         assertEq((), unpublished,
             "every component publishes a generation record"
                 + workerReport(fx, unpublished));
-
-        # The mutation has to have actually happened, or the run above proves
-        # nothing: the live graph must now differ from the one every worker
-        # published against, and only the next freeze may adopt it.
-        hash<auto> live = runTool(("--scc-graph-generation", fx.context));
-        assertEq(0, live.rc, "the live graph is readable");
-        assertNeq(generation, trim(live.output),
-            "a worker really did move the graph while the others were running");
     }
 
     #! A lock file left behind by a dead builder is not an obstacle.
