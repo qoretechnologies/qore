@@ -946,7 +946,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         #! Accept header list
         const list<auto> AcceptList = (
 %ifndef NoYaml
-            MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
+            MimeTypeYaml, MimeTypeYamlRpc,
 %endif
 %ifndef NoXml
             MimeTypeXml, MimeTypeXmlApp,

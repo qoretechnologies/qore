@@ -225,6 +225,7 @@ public class Main inherits QUnit::Test {
         addTestCase("pool factory", \testPoolFactory());
         addTestCase("pool with options", \testPoolWithOptions());
         addTestCase("pool concurrent", \testPoolConcurrent());
+        addTestCase("Accept header lists each media type once", \testAcceptHeaderUnique());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -455,6 +456,25 @@ public class Main inherits QUnit::Test {
         assertEq(VALUE_TEXT.output, ret.body);
 
         assertTrue(rc instanceof RestClient::RestClient);
+    }
+
+    #! Tests that the Accept header lists each media type once
+    /** \c MimeTypeYamlApp and \c MimeTypeYaml are both \c "application/yaml", so listing both sent the same media
+        range twice.
+    */
+    testAcceptHeaderUnique() {
+        list<string> types = RestClient::RestClient::Accept.split(",");
+        assertEq(RestClient::RestClient::AcceptList, types,
+            "the header is built from the accepted media types");
+        hash<string, int> seen;
+        foreach string type in (types) {
+            assertFalse(seen.hasKey(type), sprintf("%y is listed once", type));
+            seen{type} = $#;
+        }
+        assertTrue(seen.hasKey(MimeTypeYaml), "the registered YAML media type is accepted");
+        assertTrue(seen.hasKey(MimeTypeYamlRpc), "the legacy YAML media type is accepted");
+        assertEq(elements types, RestClient::RestClient::AcceptMap.size(),
+            "every accepted media type appears in the header");
     }
 
     testPoolConcurrent() {
