@@ -17,6 +17,15 @@
 %exec-class CMakeBuildHelpersTest
 
 class CMakeBuildHelpersTest inherits QUnit::Test {
+    public {
+        #! How the engine in testIncrementalExecutedCalleePreload() reaches its provider, by variant name
+        const ExecutedCalleeVariants = {
+            "static-method": "return StepPhasePolicy::validate(41);",
+            "function": "return stepPhaseOffset() + 41;",
+            "construction": "StepPhasePolicy policy(41);\n        return policy.get() + 1;",
+        };
+    }
+
     private {
         string qore_bin;
         string qore_build_dir;
@@ -65,6 +74,11 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testIncrementalConstantOwnerPreload());
         addTestCase("a group watches what its members read from outside it through one depfile",
             \testGroupExternalInputsDepfile());
+        # one case per kind of reference, so a failure in one does not hide the others
+        foreach hash<auto> variant in (ExecutedCalleeVariants.pairIterator()) {
+            addTestCase("an incremental compile preloads what a preloaded sibling's code runs at parse commit: "
+                + variant.key, \testIncrementalExecutedCalleePreload(), (variant.key, variant.value));
+        }
 
         set_return_value(main());
     }
@@ -2193,6 +2207,154 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
         assertEq(0, occurrences(converged, "qcc: script-context .qo"),
             "the build after the incremental compile converges: " + converged);
+    }
+
+    #! An incremental compile must be preloaded with everything a preloaded sibling's code reaches at parse commit.
+    /** The group is the shape a Qorus incremental build failed on (TestEngine, TestMetadata, QorusMapManager,
+        TestStepPhasePolicy).  `registry.qc` initializes a static class variable by calling into `engine.qc`,
+        and `engine.qc` reaches `policy.qc` from that code; `store.qc` folds a constant from `registry.qc`.  A
+        standalone compile of `store.qc` preloads `registry.qc`, whose static initializer runs at parse commit
+        and materializes the engine's source-stripped IR, and registering that IR needs every class and
+        function it calls:
+
+          AOT-SOURCE-IR-ERROR: could not materialize source-stripped function IR for 'kinds': AOT slot map
+            registration failed for 'StepEngine::_static_kinds()': unsupported AOT slot metadata: expr slot 0
+            (STATIC_METHOD_CALL): cannot resolve the call to 'StepPhasePolicy::validate()': class
+            'StepPhasePolicy' is not declared in this Program
+          error: parse commit failed: .../store.qc
+
+        The group's own parse records `engine.qc`'s use of `policy.qc` as a declaration-contract dependency,
+        so the first incremental build after it succeeds.  A standalone compile of `engine.qc` defers the
+        reference through the source-symbol manifest instead and records it only as a late-bound import in
+        the object's symbol index, so once `engine.qc` has been compiled standalone no edge the preload
+        closure walks reaches `policy.qc` any more.  Editing `engine.qc` and `store.qc` together is exactly
+        that: the coordinator compiles `engine.qc` first, then `store.qc` in the same pass.
+
+        Each variant reaches the provider through a different kind of reference, because each is imported
+        differently: a static method call and a plain function call record their provider source in the
+        object's index, while a construction records only the class.
+    */
+    testIncrementalExecutedCalleePreload(string variant, string engine_body) {
+        TmpDir tmp("qore-cmake-qcc-exec-preload-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        # the provider: nothing in the group names it except the engine's code
+        write(snippets_dir + "/policy.qc", "%new-style
+public class StepPhasePolicy {
+    public {
+        int base;
+    }
+    constructor(int base) {
+        self.base = base;
+    }
+    public static int validate(int v) {
+        return v + 1;
+    }
+    int get() {
+        return base;
+    }
+}
+public int sub stepPhaseOffset() {
+    return 1;
+}
+");
+        # the engine: its constant is what makes it part of every preload below
+        write(snippets_dir + "/engine.qc", "%new-style
+public class StepEngine {
+    public {
+        const Marker = 3;
+    }
+    public static int kinds() {
+        " + engine_body + "
+    }
+}
+");
+        # a static initializer: runs the engine's code whenever this object is preloaded
+        write(snippets_dir + "/registry.qc", "%new-style
+public class StepRegistry {
+    public {
+        const Marker = StepEngine::Marker;
+        static int kinds = StepEngine::kinds();
+    }
+}
+");
+        # the consumer: a content dependency on the registry, none on the engine's callees
+        write(snippets_dir + "/store.qc", "%new-style
+public class ArtifactStore {
+    public {
+        const Marker = StepRegistry::Marker;
+    }
+    static int kinds() {
+        return StepRegistry::kinds;
+    }
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoExecPreload NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP execpreload
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/policy.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/engine.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/registry.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/store.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/scc-map.cmake"),
+            variant + ": configured the executed-callee group: " + configure);
+
+        string clean = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(4, occurrences(clean, "qcc: script-context .qo"),
+            variant + ": the clean build compiles every member in one shared parse: " + clean);
+
+        # the engine and the consumer together: the engine is compiled standalone first, then the
+        # consumer in the same pass, preloading the registry and the engine
+        foreach string name in (("engine", "store")) {
+            string member = snippets_dir + "/" + name + ".qc";
+            write(member, read(member) + "# documentation-only correction\n");
+        }
+        string edited = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(-1, edited.find("parse commit failed"),
+            variant + ": code a preloaded sibling runs at parse commit finds everything it calls: " + edited);
+        assertEq(-1, edited.find("is not declared in this Program"),
+            variant + ": no preloaded object is left calling a class nothing declares: " + edited);
+        assertEq(-1, edited.find("could not be resolved"),
+            variant + ": no preloaded object is left calling a function nothing declares: " + edited);
+        assertEq(1, occurrences(edited, "one at a time"),
+            variant + ": the plan really does take the standalone path this covers: " + edited);
+        assertEq(2, occurrences(edited, "qcc: script-context .qo"),
+            variant + ": only the edited components are recompiled: " + edited);
+
+        # the consumer alone, now that the engine's object is the standalone one
+        string member = snippets_dir + "/store.qc";
+        write(member, read(member) + "# a second correction\n");
+        string again = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(-1, again.find("parse commit failed"),
+            variant + ": a later standalone compile still preloads what the engine calls: " + again);
+        assertEq(1, occurrences(again, "qcc: script-context .qo"),
+            variant + ": only the edited component is recompiled: " + again);
+
+        string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            variant + ": the build after the incremental compiles converges: " + converged);
     }
 
     #! A group's object recipes carry no depfile; one depfile watches what the group reads from outside.
