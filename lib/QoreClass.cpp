@@ -6972,46 +6972,40 @@ int QoreVarInfo::parseInit(const char* name) {
     return err;
 }
 
-int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
+int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink, bool defer_pending) {
     printd(5, "QoreVarInfo::evalInit() %s committing %s var (exp: %s)\n", name, privpub(access), exp.getFullTypeName());
 
     if (eval_init) {
         return 0;
     }
 
+    // The initializer is evaluated into its own sink: the caller's sink is shared by every initializer committed
+    // with this one, so classifying it would let one initializer's exception decide another's outcome.
+    ExceptionSink init_xsink;
+    // set while the initializer runs so that one that reads the variable itself sees its current value instead of
+    // recursing
+    eval_init = true;
     if (exp) {
-        eval_init = true;
-        // evaluate expression
-        ValueEvalOptimizedRefHolder val(exp, xsink);
-        if (*xsink) {
-            if (qore_is_deferred_runtime_init_exception(xsink)) {
-                xsink->clear();
-                eval_init = false;
-                return 0;
-            }
-            return -1;
-        }
-        if (assignInitFiltered(name, val.takeReferencedValue(), xsink)) {
-            if (qore_is_deferred_runtime_init_exception(xsink)) {
-                xsink->clear();
-                eval_init = false;
-                return 0;
-            }
-            return -1;
+        ValueEvalOptimizedRefHolder val(exp, &init_xsink);
+        if (!init_xsink) {
+            assignInitFiltered(name, val.takeReferencedValue(), &init_xsink);
         }
     } else {
-        eval_init = true;
-        if (init(xsink)) {
-            if (qore_is_deferred_runtime_init_exception(xsink)) {
-                xsink->clear();
-                eval_init = false;
-                return 0;
-            }
-            return -1;
-        }
+        init(&init_xsink);
+    }
+    if (!init_xsink) {
+        return 0;
     }
 
-    return 0;
+    // a variable whose initialization failed has no value; leaving it marked initialized would make every later
+    // read return a value that was never assigned
+    eval_init = false;
+    if (defer_pending && qore_is_deferred_runtime_init_exception(&init_xsink)) {
+        init_xsink.clear();
+        return 0;
+    }
+    xsink->assimilate(init_xsink);
+    return -1;
 }
 
 int QoreVarInfo::assignInitFiltered(const char* name, QoreValue v, ExceptionSink* xsink) {
@@ -7094,8 +7088,8 @@ void QoreVarMap::parseCommitRuntimeInit(ExceptionSink* xsink) {
     init = true;
     assert(xsink);
     for (auto& i : member_list) {
-        // initialize variable
-        if (i.second->evalInit(i.first, xsink)) {
+        // initialize variable; one that reads a symbol linked later is evaluated by its first read
+        if (i.second->evalInit(i.first, xsink, true)) {
             continue;
         }
     }

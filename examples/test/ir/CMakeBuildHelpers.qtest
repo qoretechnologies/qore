@@ -2343,6 +2343,14 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         assertEq(2, occurrences(edited, "qcc: script-context .qo"),
             variant + ": only the edited components are recompiled: " + edited);
 
+        # what the standalone compile of the engine records for the preload closure; the construction names only
+        # the class, whose provider comes from the group's source-symbol manifest
+        string requires = read(glob(build_dir + "/qo/*engine_qc.qo.load-requires")[0] ?? "");
+        assertTrue(requires.find("/srcs/policy.qc") != -1,
+            variant + ": the engine records the source its code calls as a load requirement: " + requires);
+        assertEq(-1, requires.find("/srcs/engine.qc"),
+            variant + ": an object does not record its own source: " + requires);
+
         # the consumer alone, now that the engine's object is the standalone one
         string member = snippets_dir + "/store.qc";
         write(member, read(member) + "# a second correction\n");

@@ -428,6 +428,53 @@ it answers a failed partial parse: with the group's own parse, which preloads no
 cannot fail that way. A typo in a compiled source still fails fast, without paying for a group
 parse first.
 
+*A preloaded object is run, not only declared (fixed).* Parse commit runs initializers, and the
+initializers of what a compile preloads are among them: on Qorus, `Classes/QorusMapManager.qc`
+declares `static TestMetadata tests = new TestMetadata(...)`, whose constructor calls
+`TestEngine::listStepKinds()`. Code reached that way in a preloaded object is the object's
+source-stripped IR, and registering it needs every class and function it calls declared in the
+Program -- a need the two dependency relations above cannot express, because a late-bound call
+bakes nothing of its target and so is, correctly, no dependency at all. What made the gap
+intermittent is that the two compile modes disagree about it: a whole-group parse resolves the
+call against the declaration it has just parsed and records the callee as a content dependency,
+while a standalone compile defers it through the source-symbol manifest and records it only as a
+late-bound import in the object's symbol index. So the first incremental build after a group
+parse worked, and once the caller had been compiled standalone every later preload of it lost the
+callee:
+
+```
+AOT-SOURCE-IR-ERROR: could not materialize source-stripped function IR for 'listStepKinds': AOT
+  slot map registration failed for 'TestEngine::_static_listStepKinds(*hash<auto>,*string)':
+  unsupported AOT slot metadata: expr slot 48 (STATIC_METHOD_CALL): cannot resolve the call to
+  'TestStepPhasePolicy::validatePhase()': class 'TestStepPhasePolicy' is not declared in this Program
+error: parse commit failed: Classes/QonsoleDesignArtifactStore.qc
+```
+
+Reading the symbol indexes was not an option (1.2 GB of `.idx.json` on Qorus), so `qcc` writes the
+providers beside the object in `<object>.load-requires`, one `require` row per build-group source
+its code needs declared -- the provider a resolved call records, or, for a reference it deferred
+(a class it constructs or names as a type records only its path), the source the group's
+source-symbol manifest names. `componentPreloadOutputs()` closes over these as a third relation.
+They are not ordering edges and not staleness inputs: nothing merges and nothing extra goes stale.
+
+Three related defects were fixed with it:
+
+- the same failure used to exit 1 and so failed the build; it is a property of the preload set, so
+  a parse commit that fails with `AOT-SOURCE-IR-ERROR` while resolving against preloaded objects now
+  exits 78 and the coordinator answers it with the group's parse; and
+- a *construction* of the missing class failed silently: it raises `AOT-PENDING-CLASS`, which
+  parse commit treats as "linked later" and defers, and a read of the variable then deferred it
+  again and returned a value that was never assigned. A static variable initializer is now deferred
+  only at parse commit; a read reports what is still pending, a failed initializer leaves the
+  variable uninitialized, and each initializer is classified from its own exceptions.
+- the declaration form of a construction, `X x(args)`, disagreed with the other two about a class
+  the source-symbol manifest deferred: a scoped `new X()` and a static call report it as pending
+  linking, while `X x(args)` raised a hard `CREATE-OBJECT-ERROR`. On Qorus that failed
+  `Classes/TestEngine.qc`'s own standalone compile (the preloaded `QorusMapManager` initializer runs
+  `listStepKinds()`, which declares `TestStepPhasePolicy policy(rv)`) whenever no earlier record
+  named the class. During an AOT source parse it now raises `AOT-PENDING-CLASS` as well, and the
+  initializer is deferred like any other that reaches a symbol linked later.
+
 *Convexity (fixed — [#5458](https://github.com/qoretechnologies/qore/issues/5458)).*
 Completing the preload set is necessary but not sufficient. The compiled set must also be
 **convex**: no preloaded source may depend on a source the parse compiles. On Qorus,
@@ -1239,6 +1286,9 @@ which two builders can still race to restore.
 21. The build tool watches a group with a coordinator through one depfile: every input from
     outside the group that any member recorded, rewritten only when that set changes. No
     object recipe hands the build tool a depfile of its own.
+22. A preload set is closed over what the code of each preloaded object needs declared when it
+    runs at parse commit (`<object>.load-requires`), as well as over its dependencies. A
+    late-bound call is never a dependency, whichever compile mode recorded the object.
 
 ## Tests
 
@@ -1257,8 +1307,10 @@ which two builders can still race to restore.
 - `examples/test/ir/AOTIncrementalDeps.qtest` — what a compile records as a dependency,
   including that a folded constant narrows to the provider's declaration contract, that a
   comment-only provider edit leaves it byte-identical, and that a changed value does not;
-  folded enum members in both compile modes; the body-contract rows a consumer records; and
-  that a preloaded object's module loads in a program a `--stub` parse left mid-parse
+  folded enum members in both compile modes; the body-contract rows a consumer records;
+  that a preloaded object's module loads in a program a `--stub` parse left mid-parse; and
+  that a preloaded object's code that cannot load at parse commit exits 78 while a failure
+  in the compiled source's own initializer exits 1
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a cascade walked to convergence, a pass that changes
@@ -1267,8 +1319,9 @@ which two builders can still race to restore.
   graph's record for the parse to replace), the external-input depfile the coordinator
   writes (one rule, escaped, rewritten only on change), the escalation floor following
   whether a partial parse is configured, a partial parse leaving a non-convex member for
-  the next pass, and a preload failure on the default path falling back to the group's
-  parse
+  the next pass, a preload failure on the default path falling back to the group's
+  parse, and a preload closing over load requirements transitively without them becoming
+  ordering edges
 - `examples/test/ir/AOTSymbolIndex.qtest` — the symbol index and the source-symbol
   manifest, including a subset parse resolving a provider it compiles itself
 - `examples/test/ir/AOTQoLock.qtest` — the lock helper: status passthrough (including the
@@ -1281,3 +1334,8 @@ which two builders can still race to restore.
   started requiring after the group parse is watched and an edit to it rebuilds that member
   alone, and that configuring resets the consolidated dependencies an earlier configuration
   left
+  left, and that code a preloaded sibling runs at parse commit finds what it calls -- a static
+  method, a function and a construction -- after its caller was compiled standalone
+- `examples/test/qore/misc/static-var-deferred-init.qtest` -- a static variable initializer is
+  deferred only at parse commit: reads report what is still pending, a failure is reported by
+  every read, and initializers are classified from their own exceptions

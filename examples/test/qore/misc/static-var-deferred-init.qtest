@@ -1,0 +1,195 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class StaticVarDeferredInitTest
+
+#! A static class variable initializer that cannot run yet is deferred at parse commit, and only there.
+/** Parse commit leaves unevaluated an initializer that reads a symbol which is not available yet -- an external
+    stub constant, or a sibling AOT symbol that is linked later -- and the variable's first read evaluates it.  The
+    pending symbol is recognized by the exception code (AOT-PENDING-CLASS here), which is why the initializers below
+    raise it themselves.
+
+    A read used to defer it again: the variable was left unassigned and the read returned a value that was never
+    assigned, so `R::k + 1` evaluated to 1 in a program that declared `static int k`.  A failed initializer also
+    left the variable marked initialized, so only the first read reported the failure and every later one returned
+    nothing.
+*/
+class StaticVarDeferredInitTest inherits QUnit::Test {
+    constructor() : QUnit::Test("static variable deferred initialization", "1.0", \ARGV) {
+        addTestCase("a read reports an initializer that is still pending", \pendingRead());
+        addTestCase("a failed initializer is reported by every read", \failedReadRepeats());
+        addTestCase("a failed initializer at parse commit fails the parse", \failedCommit());
+        addTestCase("one initializer's exception does not decide another's outcome", \isolatedInitializers());
+        addTestCase("a successful initializer runs once", \successRunsOnce());
+        addTestCase("an initializer reading its own variable does not recurse", \selfReference());
+        set_return_value(main());
+    }
+
+    private Program parse(string code) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS);
+        p.parse(code, "static-var-deferred-init");
+        return p;
+    }
+
+    #! Calls \a func in \a p, returning the error code it raised or its return value as a string.
+    private string outcome(Program p, string func) {
+        try {
+            return sprintf("value %y", p.callFunction(func));
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+
+    pendingRead() {
+        Program p = parse("
+class C {
+    public {
+        static int runs = 0;
+    }
+}
+class R {
+    public {
+        static int k = R::f();
+    }
+    static int f() {
+        ++C::runs;
+        throw \"AOT-PENDING-CLASS\", \"still pending\";
+    }
+}
+int sub read() { return R::k + 1; }
+int sub runs() { return C::runs; }
+");
+        # parse commit deferred it: the parse succeeded, and the initializer ran once
+        int committed = p.callFunction("runs");
+        assertEq("AOT-PENDING-CLASS", outcome(p, "read"),
+            "a read of a variable whose initializer is still pending reports it instead of reading nothing");
+        assertEq("AOT-PENDING-CLASS", outcome(p, "read"), "and so does the next read");
+        assertEq(committed + 2, p.callFunction("runs"), "each read evaluates the initializer again");
+    }
+
+    failedReadRepeats() {
+        Program p = parse("
+class C {
+    public {
+        static int calls = 0;
+    }
+}
+class R {
+    public {
+        static int k = R::f();
+    }
+    static int f() {
+        # pending at parse commit, a real failure from the first read on
+        throw ++C::calls == 1 ? \"AOT-PENDING-CLASS\" : \"INIT-FAILED\", \"initializer failed\";
+    }
+}
+int sub read() { return R::k; }
+");
+        assertEq("INIT-FAILED", outcome(p, "read"), "the first read reports the failure");
+        assertEq("INIT-FAILED", outcome(p, "read"),
+            "a failed initializer leaves the variable uninitialized, so the next read reports it too");
+    }
+
+    failedCommit() {
+        string err;
+        try {
+            parse("
+class R {
+    public {
+        static int k = R::f();
+    }
+    static int f() {
+        throw \"INIT-FAILED\", \"initializer failed\";
+    }
+}
+");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("INIT-FAILED", err, "an initializer that fails for any other reason fails the parse");
+    }
+
+    isolatedInitializers() {
+        Program p = parse("
+class R {
+    public {
+        static int pending = R::f();
+        static int ok = 42;
+    }
+    static int f() {
+        throw \"AOT-PENDING-CLASS\", \"still pending\";
+    }
+}
+int sub ok() { return R::ok; }
+");
+        assertEq("value 42", outcome(p, "ok"), "a deferred initializer does not affect the next one");
+
+        # the pending initializer runs after the failing one, while the parse sink already holds its exception
+        string err;
+        try {
+            parse("
+class R {
+    public {
+        static int failed = R::fail();
+        static int pending = R::pend();
+    }
+    static int fail() {
+        throw \"INIT-FAILED\", \"initializer failed\";
+    }
+    static int pend() {
+        throw \"AOT-PENDING-CLASS\", \"still pending\";
+    }
+}
+");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertEq("INIT-FAILED", err, "a pending initializer does not discard another initializer's failure");
+    }
+
+    successRunsOnce() {
+        Program p = parse("
+class C {
+    public {
+        static int runs = 0;
+    }
+}
+class R {
+    public {
+        static int k = R::f();
+    }
+    static int f() {
+        return ++C::runs * 10;
+    }
+}
+int sub read() { return R::k; }
+int sub runs() { return C::runs; }
+");
+        assertEq("value 10", outcome(p, "read"), "the value assigned at parse commit is read");
+        assertEq("value 10", outcome(p, "read"), "and is not evaluated again");
+        assertEq(1, p.callFunction("runs"), "the initializer ran once");
+    }
+
+    selfReference() {
+        Program p = parse("
+class R {
+    public {
+        static int k = R::f();
+    }
+    static int f() {
+        # the variable is being initialized: it has no value yet
+        return exists R::k ? -1 : 7;
+    }
+}
+int sub read() { return R::k; }
+");
+        assertEq("value 7", outcome(p, "read"), "the initializer sees its variable unassigned and completes");
+    }
+}

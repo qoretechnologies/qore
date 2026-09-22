@@ -451,6 +451,9 @@ function(_QORE_QCC_OBJECT_ARTIFACT_PATHS _out_var _output)
         # The body-contract rows this object baked, written beside it only when it baked one
         # (see qcc's write_aot_body_contract_imports()); the scheduler digests just those rows.
         "${_output}.body-contract-imports"
+        # The build-group sources this object's code needs declared wherever it is loaded, written beside it only
+        # when it needs one (see qcc's write_aot_load_requires()); the scheduler closes preload sets over them.
+        "${_output}.load-requires"
         "${_output}.stamp"
         "${_output}.source.manifest.json"
         "${_output}.source-parse-defines"

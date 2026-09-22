@@ -74,8 +74,10 @@ Each \fB.qo\fP found is preloaded as a declaration shell, so the sources
 being compiled resolve references to other sources' declarations at parse time;
 the modules each preloaded object was compiled with are loaded first, as a
 \fB%requires\fP in the parse would load them.
-If the preloaded objects cannot be loaded or resolved, the compile exits with
-status 78 and names the module or declaration that could not be resolved; see
+If the preloaded objects cannot be loaded or resolved, or code in them that
+runs at parse commit (such as a static variable initializer) calls a class or
+function no preloaded object or source declares, the compile exits with status
+78 and names the module or declaration that could not be resolved; see
 \fBEXIT STATUS\fP.
 .TP
 .B \-\-output\-dir =\fIdir\fP
@@ -278,7 +280,7 @@ while it was compiling; nothing is published, and the build can be repeated.
 .TP
 .B 78
 A \fB\-c\fP compile could not load or resolve the objects preloaded with
-\fB\-L\fP.
+\fB\-L\fP, or could not load code in them that ran at parse commit.
 This concerns the preload set rather than the sources compiled, so a build
 system can answer it by compiling the sources together with the objects that
 would otherwise have been preloaded.

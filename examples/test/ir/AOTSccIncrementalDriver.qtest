@@ -58,6 +58,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testPreloadFollowsTheComponentNotTheIndex());
         addTestCase("a preload closes over content dependencies, not required edges alone",
             \testPreloadClosesOverContentDependencies());
+        addTestCase("a preload closes over what preloaded code needs at load time",
+            \testPreloadClosesOverLoadRequirements());
         addTestCase("an external source edit is still reported as one",
             \testExternalSourceEditIsReported());
         addTestCase("a frozen graph removes the transition entirely",
@@ -560,6 +562,62 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "a content dependency is not promoted to an ordering edge: " + prerequisites.output);
         assertEq(1, componentFor(qo_dir, "e").size.toInt(),
             "the content-dependency provider keeps its own component");
+    }
+
+    #! Writes NAME's load-requires sidecar naming \a sources, as qcc writes it.
+    private writeLoadRequires(string qo_dir, string name, list<string> sources) {
+        string body = "format=1\n";
+        foreach string source in (sources) {
+            body += sprintf("require\t%d:%s\n", source.size(), source);
+        }
+        write(qo_dir + "/" + name + ".qo.load-requires", body);
+    }
+
+    #! The basenames --scc-preload prints for NAME's component.
+    private list<string> preloadNames(hash<auto> fx, string name) {
+        hash<auto> result = runTool(("--scc-preload", fx.context, componentFor(fx.qo_dir, name).key));
+        assertEq(0, result.rc, "--scc-preload for " + name + ": " + result.output);
+        return sort(map basename(trim($1)), result.output.split("\n"), trim($1));
+    }
+
+    #! A preload must reach what the code of a preloaded object calls, not only what it depends on.
+    /** Parse commit runs initializers, and code they reach in a preloaded object registers only in a
+        Program declaring every class and function it calls.  A late-bound call leaves neither a
+        required edge nor a content dependency -- it bakes nothing of its target -- so qcc records
+        those providers beside the object, and the closure follows them like the other two.
+
+        Here `a` calls into `e`, and `e` into `f`, recorded only as load requirements; `c` requires
+        `a`.  A compile of `c` preloads `a`, so it needs `e` and, through it, `f`.
+    */
+    testPreloadClosesOverLoadRequirements() {
+        TmpDir tmp("qore-aot-driver-preload-load-");
+        hash<auto> fx = fixture(tmp.path, (), True, ("e", "f"));
+        string qo_dir = fx.qo_dir;
+        assertEq(("a.qo", "b.qo"), preloadNames(fx, "c"), "the preload before any load requirement is recorded");
+
+        writeLoadRequires(qo_dir, "a", (fx.src_dir + "/e.qc",));
+        writeLoadRequires(qo_dir, "e", (fx.src_dir + "/f.qc",));
+        assertEq(("a.qo", "b.qo", "e.qo", "f.qo"), preloadNames(fx, "c"),
+            "the preload reaches what preloaded code calls, transitively");
+        assertEq(("e.qo", "f.qo"), preloadNames(fx, "a"),
+            "a component's own load requirements are preloaded for it");
+
+        # a source outside the group, and a record that cannot be read, add nothing
+        writeLoadRequires(qo_dir, "d", (tmp.path + "/elsewhere.qc",));
+        assertEq(0, preloadNames(fx, "d").size(), "a provider outside the group is not a member to preload");
+        write(qo_dir + "/e.qo.load-requires", "not a record\n");
+        assertEq(("a.qo", "b.qo", "e.qo"), preloadNames(fx, "c"),
+            "an unreadable record contributes nothing");
+
+        # load requirements are not ordering edges: no component merges and nothing is promoted
+        writeLoadRequires(qo_dir, "e", (fx.src_dir + "/c.qc",));
+        assertEq(1, componentFor(qo_dir, "e").size.toInt(), "a load requirement does not merge components");
+        hash<auto> prerequisites = runTool(("--scc-prerequisites", fx.context, componentFor(qo_dir, "c").key));
+        assertEq(0, prerequisites.rc, "--scc-prerequisites for c: " + prerequisites.output);
+        assertEq(-1, prerequisites.output.find("\te"),
+            "a load requirement is not promoted to an ordering edge: " + prerequisites.output);
+        assertEq(("a.qo", "b.qo", "e.qo"), preloadNames(fx, "c"),
+            "a component is never preloaded with its own members, even when preloaded code calls into it");
     }
 
     testExternalSourceEditIsReported() {

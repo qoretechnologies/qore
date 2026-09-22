@@ -27447,6 +27447,32 @@ bool QoreAOT::lastCompileFailedInPreload() {
     return aot_compile_failed_in_preload;
 }
 
+//! True when a parse commit failed because code in a preloaded object could not be loaded
+/** Parse commit runs code -- constant and static variable initializers -- and code it calls in a preloaded
+    object is that object's source-stripped IR, which can only be registered in a Program declaring every class
+    and function it calls.  The target of the compile is parsed from source, so a source-stripped function that
+    cannot be materialized always belongs to a preloaded object: the failure is a property of the preload set,
+    not of the source, and a parse that preloads nothing does not have it.
+
+    @param xsink the parse commit's exception sink, examined over its whole exception chain
+    @param preloaded true when the compile resolved against preloaded objects
+*/
+static bool qore_aot_commit_failed_in_preload(ExceptionSink& xsink, bool preloaded) {
+    if (!preloaded || !xsink.isException()) {
+        return false;
+    }
+    for (QoreException* ex = xsink.getException(); ex; ex = ex->next) {
+        if (ex->err.getType() != NT_STRING) {
+            continue;
+        }
+        QoreStringValueHelper err(ex->err);
+        if (!strcmp(err->c_str(), "AOT-SOURCE-IR-ERROR")) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct QoreAOTSiblingPreload {
     //! The blob bytes the preloaded shells were built from.
     /** They must outlive the deserializer: the symbol index, the debug metadata
@@ -28084,6 +28110,7 @@ bool QoreAOT::compileScriptFilesBatch(
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
+        aot_compile_failed_in_preload = qore_aot_commit_failed_in_preload(xsink, (bool)sibling_preload.mdes);
         xsink.handleExceptions();
         error = "parse commit failed in batch compile";
         return false;
@@ -29304,6 +29331,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
+        aot_compile_failed_in_preload = qore_aot_commit_failed_in_preload(xsink, (bool)sibling_mdes);
         xsink.handleExceptions();
         error = "parse commit failed: " + target_canon;
         return false;

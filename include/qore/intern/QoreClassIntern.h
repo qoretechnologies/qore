@@ -1220,7 +1220,19 @@ public:
         assert(!val.hasValue());
     }
 
-    DLLLOCAL int evalInit(const char* name, ExceptionSink* xsink);
+    //! evaluates the variable's initializer if it has not been evaluated yet
+    /** @param name the variable's name, for error messages
+        @param xsink receives the initializer's exceptions
+        @param defer_pending true only at parse commit: an initializer that reads a symbol which is not available
+        yet (an external stub constant, or a sibling AOT symbol linked later -- see
+        qore_is_deferred_runtime_init_exception()) is left unevaluated instead of failing, and is evaluated by its
+        first read; a read passes false, so a symbol that is still unavailable then is reported to the reader
+        instead of the read returning a value that was never assigned
+
+        @return 0 for OK (including a deferred initializer), -1 if an exception was raised; the variable is marked
+        initialized only when its initializer succeeds
+    */
+    DLLLOCAL int evalInit(const char* name, ExceptionSink* xsink, bool defer_pending = false);
 
     //! assigns the initial value after applying the declared type's input conversion
     /** takes ownership of the value in all cases

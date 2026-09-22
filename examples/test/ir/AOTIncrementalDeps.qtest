@@ -66,6 +66,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("ordinary cross-file call has no body dependency", \testOrdinaryCallNotBodyDep());
         addTestCase("source parse can execute a preloaded AOT body",
             \testSourceParsePreloadedBody());
+        addTestCase("a preloaded body that cannot load at parse commit is a preload failure",
+            \testPreloadedBodyUnloadableAtCommit());
+        addTestCase("a construction parse commit reaches before its class is linked is deferred",
+            \testCommitConstructionOfLaterLinkedClass());
         addTestCase("repeated AOT compilation is byte reproducible",
             \testByteReproducibleObject());
         # enum members route through the SAME constant hook as a folded constant: they are registered as
@@ -874,6 +878,122 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "consumer links with the provider: " + link);
         assertEq("42", trim(run(sprintf("%s %s/parse-app", env, tmp_dir))),
             "consumer preserves the value produced during source parse");
+    }
+
+    #! Runs \a cmd, returning its exit status and output.
+    private hash<auto> runStatus(string cmd) {
+        string out = run("{ " + cmd + "; } 2>&1; echo QCC-EXIT=$?");
+        *list<string> m = (out =~ x/QCC-EXIT=([0-9]+)/);
+        return {"rc": m ? m[0].toInt() : -1, "out": out};
+    }
+
+    # Parse commit runs the initializers of what it preloads, and code they call in a preloaded object is that
+    # object's source-stripped IR, which registers only in a Program that declares everything it calls.  A preload
+    # set that leaves out a class that code calls therefore fails the commit -- a property of the preload set and
+    # not of the source, which qcc reports with exit status 78 so that an incremental build can answer it with a
+    # parse that preloads nothing.  A failure in the compiled source's own code is still exit status 1.
+    testPreloadedBodyUnloadableAtCommit() {
+        TmpDir tmp = initDirs();
+        compileSibling("commit_policy", "public class CommitPolicy {\n"
+            + "    public static int check(int v) { return v + 1; }\n"
+            + "}\n");
+        compileSibling("commit_engine", "public class CommitEngine {\n"
+            + "    public { const Marker = 3; }\n"
+            + "    public static int kinds() { return CommitPolicy::check(41); }\n"
+            + "}\n");
+        compileSibling("commit_registry", "public class CommitRegistry {\n"
+            + "    public { const Marker = CommitEngine::Marker; static int kinds = CommitEngine::kinds(); }\n"
+            + "}\n");
+
+        # the preload set the consumer is given: the registry and the engine, not the engine's callee
+        string partial_dir = tmp_dir + "/partial";
+        mkdir(partial_dir);
+        foreach string name in (("commit_engine", "commit_registry")) {
+            string copy = run(sprintf("cp %s/%s.qo %s/", lib_dir, name, partial_dir));
+            assertTrue(is_file(partial_dir + "/" + name + ".qo"), "copied " + name + ": " + copy);
+        }
+
+        string src = tmp_dir + "/commit_store.qc";
+        write(src, "%new-style\npublic class CommitStore {\n"
+            + "    public { const Marker = CommitRegistry::Marker; }\n"
+            + "}\n");
+        hash<auto> result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/commit_store.qo %s",
+            env, qcc_bin, partial_dir, partial_dir, src));
+        assertTrue(result.out.find("AOT-SOURCE-IR-ERROR") != -1,
+            "the registry's initializer cannot load the engine's code without its callee: " + result.out);
+        assertEq(78, result.rc, "a preloaded object's code that cannot load is a preload failure: " + result.out);
+
+        # with the callee preloaded as well, the same compile succeeds
+        result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/commit_store.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, src));
+        assertEq(0, result.rc, "the complete preload set loads the engine's code: " + result.out);
+
+        # the compiled source's own initializer failing at parse commit, against a complete preload set, is the
+        # source's failure
+        string own = tmp_dir + "/commit_own.qc";
+        write(own, "%new-style\npublic class CommitOwn {\n"
+            + "    public { const Marker = CommitRegistry::Marker; static int k = CommitOwn::f(); }\n"
+            + "    static int f() { throw \"COMMIT-OWN-ERROR\", \"the source's own failure\"; }\n"
+            + "}\n");
+        result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/commit_own.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, own));
+        assertTrue(result.out.find("COMMIT-OWN-ERROR") != -1, "the source's initializer failed: " + result.out);
+        assertEq(1, result.rc, "a failure in the compiled source is not a preload failure: " + result.out);
+    }
+
+    # The shape of a Qorus TestEngine compile: the source constructs a build-group class with a declaration
+    # (`Policy p(41)`), which the source-symbol manifest defers because no preloaded object declares it, and a
+    # preloaded object's static initializer calls that code at parse commit.  The class is linked later, so the
+    # initializer is pending, exactly as it is for a scoped `new Policy(41)` or a static call; it used to fail the
+    # compile instead ("CREATE-OBJECT-ERROR: cannot resolve class 'Policy' for instantiation").
+    testCommitConstructionOfLaterLinkedClass() {
+        TmpDir tmp = initDirs();
+        string manifest = tmp_dir + "/symbols.manifest";
+        write(manifest, sprintf("format=1\nclass\tLaterPolicy\t%s/later_policy.qc\n"
+            + "class\tLaterEngine\t%s/later_engine.qc\nclass\tLaterRegistry\t%s/later_registry.qc\n",
+            tmp_dir, tmp_dir, tmp_dir));
+        hash<string, string> sources = {
+            "later_policy": "public class LaterPolicy {\n"
+                + "    public { int base; }\n"
+                + "    constructor(int b) { base = b; }\n"
+                + "    int get() { return base; }\n"
+                + "}\n",
+            "later_engine": "public class LaterEngine {\n"
+                + "    public { const Marker = 1; }\n"
+                + "    public static int kinds() { LaterPolicy p(41); return p.get(); }\n"
+                + "}\n",
+            "later_registry": "public class LaterRegistry {\n"
+                + "    public { const M = LaterEngine::Marker; static int k = LaterEngine::kinds(); }\n"
+                + "}\n"
+                + "int sub main() { printf(\"%d\\n\", LaterRegistry::k); return 0; }\n",
+        };
+        foreach hash<auto> i in (sources.pairIterator()) {
+            write(tmp_dir + "/" + i.key + ".qc", "%new-style\n" + i.value);
+        }
+        foreach string name in (("later_policy", "later_engine", "later_registry")) {
+            hash<auto> result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN "
+                "--source-symbol-manifest=%s -o %s/%s.qo %s/%s.qc", env, qcc_bin, lib_dir, manifest, lib_dir, name,
+                tmp_dir, name));
+            assertEq(0, result.rc, "compiled " + name + " with its providers preloaded: " + result.out);
+        }
+
+        # the engine alone again, preloading the registry but not the policy
+        string partial_dir = tmp_dir + "/partial";
+        mkdir(partial_dir);
+        string copy = run(sprintf("cp %s/later_registry.qo %s/", lib_dir, partial_dir));
+        assertTrue(is_file(partial_dir + "/later_registry.qo"), "copied the registry: " + copy);
+        hash<auto> result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --source-symbol-manifest=%s "
+            "-o %s/later_engine.qo %s/later_engine.qc", env, qcc_bin, partial_dir, manifest, partial_dir, tmp_dir));
+        assertEq(-1, result.out.find("CREATE-OBJECT-ERROR"),
+            "a class linked later is not reported as missing: " + result.out);
+        assertEq(0, result.rc, "the registry's initializer is deferred until the class is linked: " + result.out);
+
+        # and linked with the class, the program computes the value the deferred initializer did not
+        string app = tmp_dir + "/later-app";
+        string link = run(sprintf("%s %s -o %s %s/later_policy.qo %s/later_engine.qo %s/later_registry.qo",
+            env, qcc_bin, app, lib_dir, partial_dir, lib_dir));
+        assertTrue(is_file(app), "linked the program: " + link);
+        assertEq("41", trim(run(sprintf("%s %s", env, app))), "the deferred initializer runs in the linked program");
     }
 
     # A folded `Enum::Member` leaves no trace in the emitted object, exactly like a folded constant, so the compile
