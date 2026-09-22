@@ -765,6 +765,14 @@ DLLLOCAL void qore_aot_clear_all_module_namespace_data(ExceptionSink& xsink);
 //! AOT compiler class — compiles a parsed QoreProgram to a standalone executable
 class QoreAOT {
 public:
+    //! True if the last compile on this thread failed loading or resolving the objects it preloaded
+    /** A compile with library paths resolves what it does not compile from `.qo` objects, and a failure
+        there concerns the preload set the caller chose rather than the sources compiled: a parse of the
+        whole group, which preloads nothing, cannot fail that way.  qcc reports it with an exit status of
+        its own so that a build scheduler can fall back to such a parse instead of giving up.
+    */
+    static bool lastCompileFailedInPreload();
+
     //! Compile a parsed program to a standalone executable
     /** The binary uses serialized metadata.
         @param pgm parsed QoreProgram (must have been parsed successfully)

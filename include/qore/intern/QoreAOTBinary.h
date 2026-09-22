@@ -2807,6 +2807,9 @@ private:
     bool resolveFunctionCallDefaults(std::string& error);
     bool deserializeHashDecls(std::string& error);
     bool deserializeEnums(std::string& error);
+    //! Registers a deserialized enum's members in its member-access namespace, creating the namespace if the
+    //! blob did not carry one
+    void addEnumMemberNamespace(qore_ns_private* parent, const qore_enum_decl_private& edp);
     bool deserializeTypedefs(std::string& error);
     bool deserializeConstants(std::string& error);
     bool deserializeGlobals(std::string& error);

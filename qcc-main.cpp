@@ -818,6 +818,14 @@ static const char* aggregate_contract_stamp_path = nullptr;
 // consumer's recorded import against.  Kept apart from the declaration contract so a
 // consumer can depend on one without depending on the other.
 static const char* body_contract_stamp_path = nullptr;
+
+//! Exit status of a -c compile that failed loading or resolving the objects it preloaded with -L
+/** Such a failure concerns the preload set the build chose, not the sources compiled -- a parse of the
+    whole group preloads nothing and cannot fail this way -- so the build scheduler answers it with that
+    parse instead of giving up (see tools/qore-qo-incremental-plan).  Distinct from 75 and 76, which the
+    scheduler already uses for a moved source and a moved dependency graph.
+*/
+static constexpr int QCC_EXIT_PRELOAD_FAILED = 78;
 // Extra content dependencies that affect the generated artifact but are not
 // necessarily visible to qcc as positional inputs (build context files, generated
 // stubs, external tool configuration, etc.).
@@ -1049,7 +1057,9 @@ static void print_usage(const char* prog) {
            "                         fragment decls are preloaded so cross-file type\n"
            "                         refs in the target source resolve at parse time\n"
            "                         (C-style: .qo ~ .o + .h).  Enables `qcc -c <file>`\n"
-           "                         for plain multi-file Qore apps with no .qm.\n");
+           "                         for plain multi-file Qore apps with no .qm.  A\n"
+           "                         compile that cannot load or resolve the preloaded\n"
+           "                         objects exits with status 78.\n");
     printf("      --output-dir=DIR   Output directory for `-c` compile.  With multiple\n"
            "                         sources (batch mode) this is required and all\n"
            "                         .qo files land in DIR sharing one parse cycle.\n"
@@ -8429,6 +8439,50 @@ static bool rewrite_aot_declaration_contract_depfile(
     return true;
 }
 
+//! Suffix of the sidecar naming the body-contract rows an object baked, beside the object itself
+static const char AOTBodyContractImportsSuffix[] = ".body-contract-imports";
+
+//! Removes an object's body-contract imports sidecar; a missing file is not an error
+static bool remove_aot_body_contract_imports(const std::string& path, std::string& error) {
+    if (!unlink(path.c_str()) || errno == ENOENT) {
+        return true;
+    }
+    error = "cannot remove stale body-contract imports '" + path + "': " + strerror(errno);
+    return false;
+}
+
+//! Writes the body-contract rows an object baked, one `import` row per (provider stamp, symbol)
+/** Format 1, one row per line after the header, each field length-prefixed as in the
+    contracts themselves -- symbol paths can contain any byte, a newline included:
+
+        import\t<n>:<provider .qo.body-contract.stamp path><n>:<qore path>
+
+    The provider stamp is spelled exactly as the depfile spells it, which is how the
+    scheduler pairs the two.  A row names a symbol, not a hash: the scheduler digests the
+    provider's CURRENT rows for these symbols, so a consumer is stale exactly when one of
+    them moved, and a symbol the provider no longer publishes a body contract for counts
+    as moved.
+
+    Written only if the content changed, and removed when there is nothing to record.
+*/
+static bool write_aot_body_contract_imports(const std::string& path, std::vector<std::string>& rows,
+        std::string& error) {
+    if (rows.empty()) {
+        return remove_aot_body_contract_imports(path, error);
+    }
+    std::sort(rows.begin(), rows.end());
+    rows.erase(std::unique(rows.begin(), rows.end()), rows.end());
+    std::string content = "format=1\n";
+    for (size_t i = 0; i < rows.size(); ++i) {
+        if (!qo_link_check_cancel(i, "AOT body-contract import serialization", error)) {
+            return false;
+        }
+        content += rows[i];
+        content.push_back('\n');
+    }
+    return write_generated_file_if_changed(path, content, error);
+}
+
 //! Records the body contract of every provider whose body hash this object baked.
 /** The scheduler's generation token watches a predecessor's DECLARATION contract,
     which carries no body-contract hashes -- that is what makes it identical between
@@ -8449,6 +8503,13 @@ static bool rewrite_aot_declaration_contract_depfile(
     comes from the compile-contract edge the previous pass recorded for the same
     provider, and spelling this one with that suffix would promote it to a required
     edge and collapse the component decomposition.
+
+    The edge names the provider's whole body contract, but a consumer links against only
+    the rows it baked, so the rows themselves are recorded beside the object in
+    `<object>.body-contract-imports` (see write_aot_body_contract_imports()).  The
+    scheduler watches those rows and nothing else: a provider recompiled in the other
+    compile mode republishes a different body hash for symbols its parse could prove more
+    or less about, and a consumer that baked none of them has nothing to relink.
 
     @param object_path the generated `.qo` whose symbol index names what it imports
     @param depfile the Make-format dependency file to extend; a missing file is a no-op
@@ -8485,7 +8546,8 @@ static bool add_aot_body_contract_depfile_inputs(
         }
     }
 
-    std::set<std::string> baked_sources;
+    // provider source -> the symbols whose body contract this object baked from it
+    std::map<std::string, std::set<std::string>> baked_sources;
     for (size_t i = 0; i < consumer.index.imported.size(); ++i) {
         if (!qo_link_check_cancel(i,
                 "AOT body-contract import collection", error)) {
@@ -8501,11 +8563,13 @@ static bool add_aot_body_contract_depfile_inputs(
         }
         std::string canon = canonical_existing_path(provider);
         if (!owned_sources.count(canon)) {
-            baked_sources.insert(std::move(canon));
+            baked_sources[std::move(canon)].insert(rec.qore_path);
         }
     }
+    const std::string imports_path = object_path + AOTBodyContractImportsSuffix;
     if (baked_sources.empty()) {
-        return true;
+        // a previous compile of this object may have baked some
+        return remove_aot_body_contract_imports(imports_path, error);
     }
 
     AOTCompileContractProviderMap local_providers;
@@ -8533,7 +8597,9 @@ static bool add_aot_body_contract_depfile_inputs(
     }
     bool changed = false;
     size_t provider_i = 0;
-    for (const std::string& provider : baked_sources) {
+    std::vector<std::string> import_rows;
+    for (const auto& baked : baked_sources) {
+        const std::string& provider = baked.first;
         if (!qo_link_check_cancel(provider_i++,
                 "AOT body-contract depfile merge", error)) {
             return false;
@@ -8557,10 +8623,24 @@ static bool add_aot_body_contract_depfile_inputs(
         if (!is_file(body_stamp)) {
             continue;
         }
+        size_t symbol_i = 0;
+        for (const std::string& qore_path : baked.second) {
+            if (!qo_link_check_cancel(symbol_i++, "AOT body-contract import collection", error)) {
+                return false;
+            }
+            std::string row = "import\t";
+            append_aot_contract_field(row, body_stamp);
+            append_aot_contract_field(row, qore_path);
+            import_rows.push_back(std::move(row));
+        }
         if (present.insert(body_stamp).second) {
             deps.push_back(std::move(body_stamp));
             changed = true;
         }
+    }
+    // written before the depfile names the stamps it qualifies, so a scheduler that sees the edge sees the rows
+    if (!write_aot_body_contract_imports(imports_path, import_rows, error)) {
+        return false;
     }
     if (!changed) {
         return true;
@@ -9799,8 +9879,9 @@ int main(int argc, char** argv) {
         qore_aot_set_module_dep_sink(nullptr);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
+            int batch_rc = QoreAOT::lastCompileFailedInPreload() ? QCC_EXIT_PRELOAD_FAILED : 1;
             qore_cleanup();
-            return 1;
+            return batch_rc;
         }
         std::sort(dep_module_files.begin(), dep_module_files.end());
         dep_module_files.erase(std::unique(dep_module_files.begin(),
@@ -10378,7 +10459,7 @@ int main(int argc, char** argv) {
         qore_aot_set_module_dep_sink(nullptr);
         if (!script_ok) {
             fprintf(stderr, "error: %s\n", error.c_str());
-            rc = 1;
+            rc = QoreAOT::lastCompileFailedInPreload() ? QCC_EXIT_PRELOAD_FAILED : 1;
         } else {
             std::sort(dep_module_files.begin(), dep_module_files.end());
             dep_module_files.erase(std::unique(dep_module_files.begin(),

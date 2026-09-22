@@ -135,14 +135,46 @@ neither did:
    `tools/qore-qo-source-order` closes over both kinds for every caller: the
    standalone compile, the subset parse and the compile plan alike.
 
-One case still loses its provider: an enum's members are registered with
-`ConstantList::add()`, which stamps a builtin location, so folding `SomeEnum::Member`
-records no dependency on the source declaring the enum. It is latent today because the
-enum name also produces a required source-summary edge, which is what actually keeps the
-consumer correct — see
-[#5460](https://github.com/qoretechnologies/qore/issues/5460).
+**An enum member is a folded constant too**
+([#5460](https://github.com/qoretechnologies/qore/issues/5460)). `Enum::Member` is
+resolved through the same `ConstantList::find()` hook, so it is recorded the same way —
+provided the member constant carries the enum's source location. It did not, in either
+compile mode:
 
-Coverage: `AOTIncrementalDeps.qtest` (the batch records the fold),
+- A parsed enum registered its members with `ConstantList::add()`, which stamps
+  `<builtin>`, and `qore_aot_note_referenced_decl()` skips synthetic locations. A batch
+  folding a member recorded nothing.
+- A preloaded `.qo` shell registered no members at all. The writer skips member
+  constants — they are builtin entries — and the enum's member namespace was restored
+  empty, so a standalone compile found the namespace, found no member, and deferred the
+  reference to run time as `auto`. Nothing was folded and nothing was recorded, and the
+  same source published a different declaration than it did in a group parse, where the
+  member folds with its declared type.
+
+What kept consumers correct was only the source-symbol summary edge for the enum's
+name, which needs that name to resolve to one provider: two sources declaring
+same-named enums in different namespaces had no dependency of any kind.
+
+Every path that makes members addressable now goes through
+`qore_ns_private::addEnumMemberConstants()`, which gives each member the location of
+its enum's declaration: the parser's, a module merge's (the copied declaration keeps
+it) and a deserialized shell's (`deserializeEnums()` stamps the blob's source, as it
+does for the blob's classes and constants, and restores the member namespace exactly
+as the parser makes it). A system enum's declaration location is `<builtin>`, so its
+members stay builtin.
+
+Folding members in standalone compiles exposed a code-generation defect that group
+parses had always had: AOT lowers `ConstEnum` to a load from the function's own
+expression-slot table (the member is resolved by name when the object is loaded), but
+the fast-entry analysis listed it as context-independent, and a context-independent
+callee runs on its *caller's* context. A static method returning one enum member read
+whatever its caller kept in that slot — another member, or an unrelated expression
+(`expects type 'enum<Color>', but got type 'static method call'`). `ConstEnum` no
+longer qualifies a function for a context-independent entry.
+
+Coverage: `AOTIncrementalDeps.qtest` (the batch records the fold; standalone and batch
+enum folds, the narrowed edge, same-named enums, and mode-independent declarations),
+`AOTSmoke.qtest` (enum members returned through fast entries),
 `AOTSccIncrementalDriver.qtest` (the closure reaches the provider) and
 `CMakeBuildHelpers.qtest` (the whole path, through a real incremental build).
 

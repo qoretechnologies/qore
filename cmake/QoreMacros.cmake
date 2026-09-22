@@ -416,6 +416,9 @@ function(_QORE_QCC_OBJECT_ARTIFACT_PATHS _out_var _output)
         # file rather than none.  It is listed here so the pruner recognises it as
         # this object's rather than as a stale artifact to remove.
         "${_output}.body-contract.stamp"
+        # The body-contract rows this object baked, written beside it only when it baked one
+        # (see qcc's write_aot_body_contract_imports()); the scheduler digests just those rows.
+        "${_output}.body-contract-imports"
         "${_output}.stamp"
         "${_output}.source.manifest.json"
         "${_output}.source-parse-defines"

@@ -3092,6 +3092,17 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     const char* raw_path = QoreTypeInfo::getPath(ti);
     bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
 
+    // An enum renders from the namespace it is declared in, as a hashdecl does -- never from the path its type
+    // was built with.  The parser builds that path rooted (`::EP::Color`) and a deserialized shell unrooted, as
+    // the writer records it, so one enum rendered two ways, and every declaration mentioning it published a
+    // different contract depending on whether the enum's source was in the same parse or preloaded.
+    if (aotSerializableTypePathStartsWith(raw_path, "enum<")
+            || aotSerializableTypePathStartsWith(raw_path, "*enum<")) {
+        if (const QoreEnumDecl* ed = QoreTypeInfo::getReturnEnum(ti)) {
+            return std::string(*raw_path == '*' ? "*enum<" : "enum<") + ed->getNamespacePath() + ">";
+        }
+    }
+
     const QoreClass* qc = QoreTypeInfo::returnsSingle(ti)
         ? QoreTypeInfo::getUniqueReturnClass(ti)
         : (or_nothing ? QoreTypeInfo::getReturnClass(ti) : nullptr);
@@ -7017,6 +7028,15 @@ static std::string aotTypePathString(const QoreTypeInfo* ti, bool no_narrow = fa
 }
 
 static std::string aotValueTypeName(const QoreValue& value) {
+    // an enum's type is named from the namespace it is declared in, as getAOTSerializableTypePath() names it: the
+    // path its type was built with depends on how the declaration was written, not on where it lives
+    if (value.isEnum()) {
+        const QoreEnumMember* member = value.getEnumMember();
+        const QoreEnumDecl* decl = member ? member->getEnumDecl() : nullptr;
+        if (decl) {
+            return "enum<" + decl->getNamespacePath() + ">";
+        }
+    }
     QoreString type_scratch;
     const char* full_type = value.getFullTypeName(true, type_scratch);
     return full_type ? full_type : "";
@@ -17508,8 +17528,17 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
             continue;
         }
 
-        // Create the QoreEnumDecl with default base type (will be resolved later if needed)
-        QoreEnumDecl* ed = new QoreEnumDecl(name, nspath, bigIntTypeInfo);
+        // Create the QoreEnumDecl with default base type (will be resolved later if needed).  The writer records
+        // the unrooted namespace path; the enum's type is built rooted, as the parser and qpp build it, so a
+        // shell's enum<::EP::Color> is the same type name the enum has when its source is parsed
+        std::string type_path = nspath ? nspath : "";
+        if (type_path.compare(0, 2, "::")) {
+            type_path.insert(0, "::");
+        }
+        QoreEnumDecl* ed = new QoreEnumDecl(name, type_path.c_str(), bigIntTypeInfo);
+        // declared in this blob's source, like its classes and constants: the member constants below take this
+        // location, and it is what a compile folding one of them records as its provider
+        qore_enum_decl_private::get(*ed)->setParseLocation(getBlobLocation());
 
         // Store base type path for later resolution if it's not the default
         if (base_type_path && *base_type_path) {
@@ -17552,9 +17581,46 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
                 qore_ns_private::get(*pp_ed->RootNS));
             rpriv->edmap.update(ed->getName(), ns_list[ns_idx], ed);
         }
+
+        // Make the members addressable as `Enum::Member`, as parsing the declaration does.  Neither the members
+        // nor their namespace are in the blob: the members are builtin constants the writer skips, which leaves
+        // the builtin member namespace empty, and the writer drops that too.  Without this, a parse resolving
+        // against the shell finds no member and defers the reference to run time as `auto` -- so the same
+        // source folds an enum value with its declared type in a group parse and does not in a standalone one,
+        // and records no dependency on the enum's source in either.  Indexed with every other namespace by the
+        // later rebuildAllIndexes().
+        addEnumMemberNamespace(ns_list[ns_idx], *edp);
     }
 
     return true;
+}
+
+void QoreAOTBinaryDeserializer::addEnumMemberNamespace(qore_ns_private* parent, const qore_enum_decl_private& edp) {
+    const char* enum_name = edp.getName();
+    qore_ns_private* ens_priv;
+    auto it = parent->nsl.nsmap.find(enum_name);
+    if (it != parent->nsl.nsmap.end()) {
+        ens_priv = qore_ns_private::get(*it->second);
+    } else {
+        // the parser rejects this collision within one source; across blobs, leave the class alone as the
+        // enum-conflict check above leaves an existing enum alone
+        if (parent->classList.find(enum_name)) {
+            printd(2, "AOT: enum '%s' has no member namespace: a class of the same name exists\n", enum_name);
+            return;
+        }
+        // made exactly as qore_ns_private::parseAddPendingEnum() makes it -- including the builtin flag, which
+        // keeps an otherwise empty member namespace out of the objects compiled against this one, as the
+        // parsed enum's is kept out
+        std::unique_ptr<QoreNamespace> ens(new QoreNamespace(enum_name));
+        ens_priv = qore_ns_private::get(*ens);
+        if (edp.isPublic()) {
+            ens_priv->setPublic();
+        }
+        ens_priv->path = parent->path == "::" ? parent->path + enum_name : parent->path + "::" + enum_name;
+        // the parent takes ownership
+        parent->ns->addNamespace(ens.release());
+    }
+    ens_priv->addEnumMemberConstants(edp);
 }
 
 bool QoreAOTBinaryDeserializer::deserializeTypedefs(std::string& error) {

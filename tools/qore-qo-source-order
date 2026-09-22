@@ -12,7 +12,7 @@
 # contract.  Bump it whenever source summaries or graph construction change;
 # command/output and orchestration-only edits must not make every large consumer
 # rescan all of its sources on the next otherwise-no-op build.
-const CACHE_VERSION = 38;
+const CACHE_VERSION = 39;
 #! The sidecar beside a batch stamp that dates the group's last shared parse.
 /** The batch stamp cannot date it: the build tool also uses the stamp for
     ordering, so recipes that publish nothing touch it.  qore-qo-batch-bootstrap
@@ -41,6 +41,16 @@ const DeclarationContractSuffix = ".aggregate-contract.stamp";
     the cascade that folding these hashes into the declaration contract would cause.
 */
 const BodyContractSuffix = ".body-contract.stamp";
+#! The sidecar naming the body-contract rows a member baked, beside its object.
+/** A provider publishes one body contract for every symbol it has one for, and a consumer
+    links against only the ones it baked.  Watching the whole stamp made a consumer stale
+    whenever ANY of the provider's body hashes moved -- and they move for every symbol a
+    group parse proves more about than a standalone one, so switching a provider between
+    the two compile modes rebuilt every consumer of it however little they took.  qcc
+    writes this beside the object (`import` rows naming the provider stamp and the symbol),
+    and the generation token digests only those rows of the provider's stamp.
+*/
+const BodyContractImportsSuffix = ".body-contract-imports";
 const SOURCE_SYMBOL_CACHE_VERSION = 1;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
@@ -1388,6 +1398,10 @@ class SourceOrderEngine {
         hash<string, string> contract_digests = {};
         #! Body-contract digests by provider member output, computed once per process.
         hash<string, string> body_contract_digests = {};
+        #! A provider's body-contract rows by symbol, parsed once per process; see bodyContractRows().
+        hash<string, hash<string, list<string>>> body_contract_rows = {};
+        #! Providers whose body-contract stamp could not be read as rows; see bodyContractRows().
+        hash<string, bool> body_contract_unparsed = {};
         #! Canonical forms of depfile paths, resolved once per process.
         hash<string, string> canonical_paths = {};
         #! Group members by object basename, indexed once per process.
@@ -1480,22 +1494,46 @@ class SourceOrderEngine {
         return result;
     }
 
-    private hash<string, bool> uniqueSymbols(hash<string, list<int>> providers,
-            hash<string, int> unique_provider) {
-        hash<string, bool> result = {};
-        foreach string symbol in (providers.keys()) {
-            if (providers{symbol}.size() == 1 && exists unique_provider{symbol}) {
-                result{symbol} = True;
+    #! The one source declaring each symbol among the given provider kinds.
+    /** A symbol two sources declare -- as the same kind or as two of the given kinds -- has
+        no entry: which one a mention names cannot be told from the summaries.  Other kinds
+        are not consulted: a mention that can only name a class is not ambiguous because some
+        source declares a constant of the same name.
+    */
+    private hash<string, int> uniqueKindProviders(hash<string, list<int>> providers,
+            *hash<string, list<int>> other_providers) {
+        hash<string, int> result = {};
+        hash<string, bool> symbols = stringSet(keys providers);
+        if (other_providers) {
+            symbols += stringSet(keys other_providers);
+        }
+        foreach string symbol in (keys symbols) {
+            hash<string, bool> sources = {};
+            foreach int source in (providers{symbol} ?? ()) {
+                sources{string(source)} = True;
+            }
+            foreach int source in (other_providers{symbol} ?? ()) {
+                sources{string(source)} = True;
+            }
+            if (sources.size() == 1) {
+                result{symbol} = (keys sources)[0].toInt();
             }
         }
         return result;
     }
 
-    private addMentionProviders(reference<hash<string, bool>> mentions,
-            list<string> values, hash<string, bool> allowed) {
-        foreach string symbol in (values) {
-            if (exists allowed{symbol}) {
-                mentions{symbol} = True;
+    #! Adds an edge from the unique provider of each mentioned symbol to \a consumer.
+    /** A consumer that declares the symbol itself has no edge to add: its unique provider is
+        itself, and addEdge() does not add a self edge.
+    */
+    private addKindEdges(reference<list<hash<string, bool>>> outgoing,
+            reference<list<hash<string, bool>>> incoming,
+            reference<list<hash<string, bool>>> required, int consumer, *list<string> mentions,
+            hash<string, int> unique, bool is_required = False) {
+        foreach string symbol in (mentions) {
+            *int provider = unique{symbol};
+            if (exists provider) {
+                addEdge(\outgoing, \incoming, \required, provider, consumer, is_required);
             }
         }
     }
@@ -1542,10 +1580,18 @@ class SourceOrderEngine {
             }
         }
         hash<string, bool> provider_symbols = stringSet(unique_provider.keys());
-        hash<string, bool> unique_classes = uniqueSymbols(class_provider_sources, unique_provider);
-        hash<string, bool> unique_enums = uniqueSymbols(enum_provider_sources, unique_provider);
-        hash<string, bool> unique_hashdecls = uniqueSymbols(hashdecl_provider_sources, unique_provider);
-        hash<string, bool> unique_functions = uniqueSymbols(function_provider_sources, unique_provider);
+        # A mention that can only name one KIND of declaration resolves among the sources declaring that kind.
+        # Requiring the name to be unique across every kind let an unrelated declaration hide the provider: a
+        # class constant `QorusDataTypeCatalogue::Map` made `class OmqMap inherits Map` record no edge to the
+        # source declaring `OMQ::Map`, so the preload closure of every consumer of OmqMap left its base out and
+        # the compile failed with "cannot resolve base class '::OMQ::Map' for class 'OmqMap'".
+        hash<string, int> unique_classes = uniqueKindProviders(class_provider_sources);
+        hash<string, int> unique_enums = uniqueKindProviders(enum_provider_sources);
+        hash<string, int> unique_hashdecls = uniqueKindProviders(hashdecl_provider_sources);
+        hash<string, int> unique_functions = uniqueKindProviders(function_provider_sources);
+        # a type name can be a class or a hashdecl, and only one source may declare either
+        hash<string, int> unique_class_or_hashdecl = uniqueKindProviders(class_provider_sources,
+            hashdecl_provider_sources);
         hash<string, int> unique_parse_defines = {};
         foreach string symbol in (parse_define_provider_sources.keys()) {
             if (parse_define_provider_sources{symbol}.size() == 1) {
@@ -1571,13 +1617,8 @@ class SourceOrderEngine {
             hash<string, list<string>> summary = summaries[consumer];
             hash<string, bool> local_provides = provides_by_source[consumer];
 
-            foreach string symbol in (summary.inheritance_mentions) {
-                if (!exists provider_symbols{symbol} || exists local_provides{symbol}) {
-                    continue;
-                }
-                addEdge(\outgoing, \incoming, \required,
-                    unique_provider{symbol}, consumer, True);
-            }
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.inheritance_mentions,
+                unique_classes, True);
             foreach string symbol in (summary.hard_mentions) {
                 if (!exists provider_symbols{symbol} || exists local_provides{symbol}) {
                     continue;
@@ -1586,71 +1627,35 @@ class SourceOrderEngine {
                     unique_provider{symbol}, consumer, True);
             }
 
-            hash<string, bool> mentions = {};
-            hash<string, bool> class_or_hashdecl = unique_classes;
-            foreach string symbol in (unique_hashdecls.keys()) {
-                class_or_hashdecl{symbol} = True;
-            }
-            addMentionProviders(\mentions, summary.decl_type_mentions, class_or_hashdecl);
-            addMentionProviders(\mentions, summary.hash_type_mentions, unique_hashdecls);
-            foreach string symbol in (summary.enum_type_mentions) {
-                if (!exists unique_enums{symbol} || exists local_provides{symbol}) {
-                    continue;
-                }
-                addEdge(\outgoing, \incoming, \required,
-                    unique_provider{symbol}, consumer, True);
-            }
-            foreach string symbol in (summary.call_ref_functions) {
-                if (!exists unique_functions{symbol} || exists local_provides{symbol}) {
-                    continue;
-                }
-                addEdge(\outgoing, \incoming, \required,
-                    unique_provider{symbol}, consumer, True);
-            }
-            foreach string symbol in (summary.call_ref_classes) {
-                if (exists unique_classes{symbol} && !exists local_provides{symbol}) {
-                    addEdge(\outgoing, \incoming, \required,
-                        unique_provider{symbol}, consumer);
-                }
-            }
-            addMentionProviders(\mentions, summary.constructed_decl_type_mentions,
-                class_or_hashdecl);
-            addMentionProviders(\mentions, summary.new_hash_type_mentions, unique_hashdecls);
-            foreach string symbol in (summary.new_object_mentions) {
-                if (exists unique_classes{symbol} && !exists local_provides{symbol}) {
-                    addEdge(\outgoing, \incoming, \required,
-                        unique_provider{symbol}, consumer);
-                }
-            }
-            foreach string symbol in (summary.class_for_name_mentions) {
-                if (exists unique_classes{symbol} && !exists local_provides{symbol}) {
-                    addEdge(\outgoing, \incoming, \required,
-                        unique_provider{symbol}, consumer);
-                }
-            }
-            addMentionProviders(\mentions, summary.create_object_mentions, unique_classes);
-            addMentionProviders(\mentions, summary.static_call_mentions, unique_classes);
-            foreach string symbol in (summary.param_default_static_call_mentions) {
-                if (!exists unique_classes{symbol} || exists local_provides{symbol}) {
-                    continue;
-                }
-                addEdge(\outgoing, \incoming, \required,
-                    unique_provider{symbol}, consumer, True);
-            }
-            addMentionProviders(\mentions, summary.static_ref_mentions, unique_classes);
-            foreach string symbol in (summary.static_ref_mentions) {
-                if (!exists unique_enums{symbol} || exists local_provides{symbol}) {
-                    continue;
-                }
-                addEdge(\outgoing, \incoming, \required,
-                    unique_provider{symbol}, consumer, True);
-            }
-            foreach string symbol in (mentions.keys()) {
-                if (!exists local_provides{symbol}) {
-                    addEdge(\outgoing, \incoming, \required,
-                        unique_provider{symbol}, consumer);
-                }
-            }
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.decl_type_mentions,
+                unique_class_or_hashdecl);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.hash_type_mentions,
+                unique_hashdecls);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.enum_type_mentions,
+                unique_enums, True);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.call_ref_functions,
+                unique_functions, True);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.call_ref_classes,
+                unique_classes);
+            addKindEdges(\outgoing, \incoming, \required, consumer,
+                summary.constructed_decl_type_mentions, unique_class_or_hashdecl);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.new_hash_type_mentions,
+                unique_hashdecls);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.new_object_mentions,
+                unique_classes);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.class_for_name_mentions,
+                unique_classes);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.create_object_mentions,
+                unique_classes);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.static_call_mentions,
+                unique_classes);
+            addKindEdges(\outgoing, \incoming, \required, consumer,
+                summary.param_default_static_call_mentions, unique_classes, True);
+            # `Scope::name` names a class's static member or an enum's member
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.static_ref_mentions,
+                unique_classes);
+            addKindEdges(\outgoing, \incoming, \required, consumer, summary.static_ref_mentions,
+                unique_enums, True);
 
             foreach string included in (summary.includes) {
                 string name = basename(included);
@@ -2078,6 +2083,139 @@ class SourceOrderEngine {
             push rv, member;
         }
         return sort(rv);
+    }
+
+    #! The body-contract rows \a output baked, as provider member output -> symbols.
+    /** NOTHING when the member has no readable record of them: an object compiled before
+        qcc recorded its rows, or one whose record is not in the format this reads.  The
+        caller then watches the whole provider stamp, which is what every consumer did
+        before the rows were recorded -- so a tree built by an older qcc keeps its
+        publications rather than rebuilding every consumer of a body contract at once.
+    */
+    private *hash<string, hash<string, bool>> bodyContractImports(string output) {
+        string path = output + BodyContractImportsSuffix;
+        if (!is_file(path)) {
+            return;
+        }
+        *list<list<string>> rows = parseLengthPrefixedRows(path);
+        if (!exists rows) {
+            return;
+        }
+        hash<string, hash<string, bool>> rv = {};
+        foreach list<string> row in (rows) {
+            if (row[0] != "import" || row.size() != 3 || row[1].size() <= BodyContractSuffix.size()
+                    || row[1].substr(-BodyContractSuffix.size()) != BodyContractSuffix) {
+                return;
+            }
+            string provider = absoluteNormalized(row[1].substr(0, row[1].size() - BodyContractSuffix.size()));
+            rv{provider}{row[2]} = True;
+        }
+        return rv;
+    }
+
+    #! Splits a length-prefixed contract file into rows, each the row kind followed by its fields.
+    /** The format qcc writes contracts and their sidecars in: a `format=N` header line,
+        then one row per line, `<kind>\t<n>:<field><n>:<field>...`, where n is the field's
+        length in BYTES -- a field can hold any byte, a newline included.  The file is read
+        as ISO-8859-1, one character per byte, so those lengths are this string's offsets.
+
+        @return NOTHING if the file is not in that shape
+    */
+    private static *list<list<string>> parseLengthPrefixedRows(string path) {
+        string text = ReadOnlyFile::readTextFile(path, "ISO-8859-1");
+        int pos = text.find("\n");
+        if (pos < 0 || text.substr(0, 7) != "format=") {
+            return;
+        }
+        ++pos;
+        int len = text.size();
+        list<list<string>> rows = ();
+        while (pos < len) {
+            int tab = text.find("\t", pos);
+            if (tab < 0) {
+                return;
+            }
+            list<string> row = (text.substr(pos, tab - pos),);
+            pos = tab + 1;
+            while (pos < len && text[pos] != "\n") {
+                int colon = text.find(":", pos);
+                if (colon <= pos) {
+                    return;
+                }
+                string digits = text.substr(pos, colon - pos);
+                if (digits !~ /^[0-9]+$/) {
+                    return;
+                }
+                int field_len = digits.toInt();
+                if (colon + 1 + field_len > len) {
+                    return;
+                }
+                push row, text.substr(colon + 1, field_len);
+                pos = colon + 1 + field_len;
+            }
+            if (pos >= len) {
+                return;
+            }
+            # the row's newline
+            ++pos;
+            push rows, row;
+        }
+        return rows;
+    }
+
+    #! A provider's body-contract rows, each re-serialized, by the symbol it describes.
+    /** Both row kinds are kept for a symbol: `body` is the Qore path's hash and `native-body`
+        a fast entry's, and `--link-qo` validates either.  NOTHING when the stamp is missing
+        or not in the length-prefixed shape.
+    */
+    private *hash<string, list<string>> bodyContractRows(string output) {
+        *hash<string, list<string>> cached = body_contract_rows{output};
+        if (exists cached || body_contract_unparsed{output}) {
+            return cached;
+        }
+        string path = output + BodyContractSuffix;
+        *list<list<string>> rows = is_file(path) ? parseLengthPrefixedRows(path) : NOTHING;
+        if (!exists rows) {
+            body_contract_unparsed{output} = True;
+            return;
+        }
+        hash<string, list<string>> rv = {};
+        foreach list<string> row in (rows) {
+            if (row.size() < 2) {
+                body_contract_unparsed{output} = True;
+                return;
+            }
+            string serialized = row[0] + "\t" + foldl $1 + $2, (map sprintf("%d:%s", $1.size(), $1), row[1..]);
+            if (!rv{row[1]}) {
+                rv{row[1]} = ();
+            }
+            push rv{row[1]}, serialized;
+        }
+        body_contract_rows{output} = rv;
+        return rv;
+    }
+
+    #! The part of one provider's body contract that \a symbols were linked against.
+    /** A symbol the provider no longer publishes a body contract for contributes a marker
+        rather than nothing, so its disappearance moves the digest: `--link-qo` fails an
+        import it can no longer match as surely as one whose hash moved.  Falls back to the
+        whole stamp when the stamp cannot be read as rows.
+    */
+    private string memberBodyContractRowsDigest(string output, hash<string, bool> symbols) {
+        *hash<string, list<string>> rows = bodyContractRows(output);
+        if (!exists rows) {
+            return memberBodyContractDigest(output);
+        }
+        list<string> parts = ();
+        foreach string symbol in (sort(keys symbols)) {
+            *list<string> symbol_rows = rows{symbol};
+            if (symbol_rows) {
+                parts += sort(symbol_rows);
+            } else {
+                push parts, sprintf("missing\t%d:%s", symbol.size(), symbol);
+            }
+        }
+        return "rows:" + digest("sha256", binary(join("\n", parts))).toHex();
     }
 
     #! The body contract one provider member publishes, digested once per process.
@@ -2874,50 +3012,13 @@ class SourceOrderEngine {
     */
     list<string> componentPreloadOutputs(hash<SourceOrderComponents> components,
             hash<SourceOrderContext> context_info, softlist<int> selected) {
-        hash<string, int> component_of_output = {};
-        for (int component = 0; component < components.members.size(); ++component) {
-            foreach int node in (components.members[component]) {
-                component_of_output{context_info.outputs[node]} = component;
-            }
-        }
         hash<string, bool> compiled = {};
-        hash<string, bool> reached = {};
-        list<int> pending = ();
         foreach int resolved in (selected) {
             foreach int node in (components.members[resolved]) {
                 compiled{context_info.outputs[node]} = True;
             }
-            string resolved_key = string(resolved);
-            if (!exists reached{resolved_key}) {
-                reached{resolved_key} = True;
-                push pending, resolved;
-            }
         }
-        # A breadth-first walk over DIRECT predecessors reaches every transitive
-        # one, so the closure stays linear in the graph rather than resolving a
-        # transitive prerequisite set per component.
-        while (pending) {
-            int component = pop pending;
-            list<int> providers = components.predecessors[component];
-            list<string> member_outputs = ();
-            foreach int node in (components.members[component]) {
-                push member_outputs, context_info.outputs[node];
-            }
-            foreach string output in (contentDependencyOutputs(context_info, member_outputs)) {
-                *int provider = component_of_output{output};
-                if (exists provider) {
-                    push providers, provider;
-                }
-            }
-            foreach int provider in (providers) {
-                string provider_key = string(provider);
-                if (exists reached{provider_key}) {
-                    continue;
-                }
-                reached{provider_key} = True;
-                push pending, provider;
-            }
-        }
+        hash<string, list<int>> reached = preloadProviderEdges(components, context_info, selected);
         list<string> preload = ();
         foreach int candidate in (components.topological_order) {
             if (!exists reached{string(candidate)}) {
@@ -2931,6 +3032,186 @@ class SourceOrderEngine {
             }
         }
         return preload;
+    }
+
+    #! Every component a parse of \a selected resolves against, with its providers.
+    /** The relation componentPreloadOutputs() closes over: required edges and content
+        dependencies together, walked from the compiled components through everything
+        they preload.  Keyed by component; the compiled components are included.
+    */
+    private hash<string, list<int>> preloadProviderEdges(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, softlist<int> selected) {
+        hash<string, int> component_of_output = {};
+        for (int component = 0; component < components.members.size(); ++component) {
+            foreach int node in (components.members[component]) {
+                component_of_output{context_info.outputs[node]} = component;
+            }
+        }
+        hash<string, list<int>> reached = {};
+        list<int> pending = ();
+        foreach int resolved in (selected) {
+            string resolved_key = string(resolved);
+            if (!exists reached{resolved_key}) {
+                reached{resolved_key} = ();
+                push pending, resolved;
+            }
+        }
+        # A breadth-first walk over DIRECT predecessors reaches every transitive
+        # one, so the closure stays linear in the graph rather than resolving a
+        # transitive prerequisite set per component.
+        while (pending) {
+            int component = pop pending;
+            hash<string, bool> providers = {};
+            foreach int provider in (components.predecessors[component]) {
+                providers{string(provider)} = True;
+            }
+            list<string> member_outputs = ();
+            foreach int node in (components.members[component]) {
+                push member_outputs, context_info.outputs[node];
+            }
+            foreach string output in (contentDependencyOutputs(context_info, member_outputs)) {
+                *int provider = component_of_output{output};
+                if (exists provider && provider != component) {
+                    providers{string(provider)} = True;
+                }
+            }
+            list<int> provider_list = ();
+            foreach string provider_key in (keys providers) {
+                int provider = provider_key.toInt();
+                push provider_list, provider;
+                if (!exists reached{provider_key}) {
+                    reached{provider_key} = ();
+                    push pending, provider;
+                }
+            }
+            reached{string(component)} = sort(provider_list);
+        }
+        return reached;
+    }
+
+    #! The part of \a selected one parse can compile with nothing preloaded between its members.
+    /** A parse resolves what it does not compile from `.qo` shells, and a shell is what its
+        source compiled to against the PREVIOUS generation of everything it depends on.  So
+        when a compiled member reaches another compiled member through a preloaded one --
+        Y preloads X, and X was compiled against Z, which this parse recompiles -- X brings
+        back what it saw of Z, and the parse's own Z is shadowed by it:
+
+          INVALID-MEMBER: 'type' is not a registered member of class 'ReleaseScriptMetadata'
+
+        Making the set convex by compiling X as well was measured to take most of a real
+        group into every parse, whatever was edited.  Leaving members OUT instead costs
+        nothing the build would not do anyway: a member left out is still stale and is
+        compiled by the next pass, after X -- if what it preloads went stale with Z -- has
+        been recompiled against the new Z.
+
+        Members are taken in dependency order, providers first, and each is kept only if it
+        neither reaches nor is reached from an already-kept member through a preloaded one.
+        The relation includes content dependencies, which are not ordering edges and can
+        form cycles between components, so removing every offending member at once could
+        leave nothing; the first member is always kept.  A path from a member back to ITSELF
+        through what it preloads is not a reason to leave it out: that is a standalone
+        compile of it, which is what the build does without a partial parse.
+
+        \return the kept components, in the order \a selected lists them
+    */
+    list<int> convexComponentSubset(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, softlist<int> selected) {
+        hash<string, list<int>> providers = preloadProviderEdges(components, context_info, selected);
+        hash<string, list<int>> consumers = {};
+        foreach hash<auto> i in (providers.pairIterator()) {
+            foreach int provider in (i.value) {
+                string provider_key = string(provider);
+                if (!consumers{provider_key}) {
+                    consumers{provider_key} = ();
+                }
+                push consumers{provider_key}, i.key.toInt();
+            }
+        }
+        hash<string, bool> wanted = {};
+        foreach int component in (selected) {
+            wanted{string(component)} = True;
+        }
+        hash<string, bool> kept = {};
+        hash<string, bool> deferred = {};
+        foreach int candidate in (components.topological_order) {
+            string candidate_key = string(candidate);
+            if (!wanted{candidate_key}) {
+                continue;
+            }
+            # a member that preloads one left out would compile against what that member was, and go stale
+            # again as soon as the next pass compiles it
+            if (kept && (reachesThroughPreload(candidate, providers, kept)
+                    || reachesThroughPreload(candidate, consumers, kept)
+                    || reachesAny(candidate, providers, kept, deferred))) {
+                deferred{candidate_key} = True;
+                continue;
+            }
+            kept{candidate_key} = True;
+        }
+        list<int> rv = ();
+        foreach int component in (selected) {
+            if (kept{string(component)}) {
+                push rv, component;
+            }
+        }
+        return rv;
+    }
+
+    #! True if a member of \a targets is reached from \a start over \a edges without crossing \a kept.
+    private static bool reachesAny(int start, hash<string, list<int>> edges, hash<string, bool> kept,
+            hash<string, bool> targets) {
+        if (!targets) {
+            return False;
+        }
+        hash<string, bool> seen = {string(start): True};
+        list<int> pending = (start,);
+        while (pending) {
+            int node = pop pending;
+            foreach int next in (edges{string(node)} ?? ()) {
+                string next_key = string(next);
+                if (targets{next_key}) {
+                    return True;
+                }
+                if (!kept{next_key} && !seen{next_key}) {
+                    seen{next_key} = True;
+                    push pending, next;
+                }
+            }
+        }
+        return False;
+    }
+
+    #! True if a member of \a kept is reached from \a start over \a edges through a node outside it.
+    /** A neighbour in \a kept is compiled by the same parse, so reaching it directly is not a
+        preload at all; reaching \a start again is a cycle through its own preloads, which a
+        standalone compile of it has as well.
+    */
+    private static bool reachesThroughPreload(int start, hash<string, list<int>> edges,
+            hash<string, bool> kept) {
+        string start_key = string(start);
+        hash<string, bool> seen = {start_key: True};
+        list<int> pending = ();
+        foreach int next in (edges{start_key} ?? ()) {
+            string next_key = string(next);
+            if (!kept{next_key} && !seen{next_key}) {
+                seen{next_key} = True;
+                push pending, next;
+            }
+        }
+        while (pending) {
+            int node = pop pending;
+            foreach int next in (edges{string(node)} ?? ()) {
+                string next_key = string(next);
+                if (kept{next_key}) {
+                    return True;
+                }
+                if (!seen{next_key}) {
+                    seen{next_key} = True;
+                    push pending, next;
+                }
+            }
+        }
+        return False;
     }
 
     #! Every component a rebuild of \a seeds would leave stale, seeds included.
@@ -3038,19 +3319,12 @@ class SourceOrderEngine {
         rebuilt 13 objects in 23 qcc invocations, where the same edit built a
         second time from the state that left needed 1.
 
-        KNOWN BOUND, and the open edge of this design.  A consumer that BAKED a
-        provider's body-contract hash -- 1139 of 24337 import records across 280
-        of 875 objects in one real group, on about ten providers -- must still be
-        rebuilt when that hash moves, or the aggregate link fails with "qo-link
-        hash mismatch" naming an object the build had no recorded reason to
-        rebuild.  A declaration contract does not carry body-contract hashes, so
-        this digest no longer sees such a move.  The correct form is per consumer
-        -- the compile contract for a predecessor this consumer baked a body
-        contract from, the declaration contract for every other -- and the marker
-        for that set is which providers the consumer's own symbol index records a
-        `body_contract_hash` for.  The failure mode is a build failure rather
-        than a silently stale object, which is why this is a stated bound and not
-        a silent hazard.  See design/qcc-incremental-scc-scheduler.md.
+        A consumer that BAKED a provider's body-contract hash must still be rebuilt
+        when that hash moves, or the aggregate link fails with "qo-link hash
+        mismatch".  A declaration contract does not carry body-contract hashes, so
+        this digest does not see such a move; the generation carries the rows the
+        consumer baked separately, in its "body-contracts" (see
+        memberBodyContractRowsDigest()).  See design/qcc-incremental-scc-scheduler.md.
     */
     private string memberContractDigest(string output) {
         *string cached = contract_digests{output};
@@ -3191,21 +3465,42 @@ class SourceOrderEngine {
         # contract and 280 consume one.  It is listed apart from the prerequisites
         # because a body-baked provider need not be a predecessor of this component at
         # all -- and because the two answer different questions about it.
-        list<hash<auto>> body_contracts = ();
-        hash<string, bool> body_seen = {};
+        #
+        # What each member linked against is the rows it baked, not the provider's whole
+        # stamp, so the digest covers the union of those rows over the members.  A member
+        # that names a provider without recording its rows makes the whole stamp the
+        # component's dependency on it, as it was before the rows were recorded.
+        hash<string, string> body_providers = {};
+        hash<string, hash<string, bool>> body_symbols = {};
+        hash<string, bool> body_whole = {};
         foreach int node in (components.members[component]) {
-            foreach string provider in (
-                    bodyContractDependencyOutputs(context_info.outputs[node])) {
-                string canonical_provider = absoluteNormalized(provider);
-                if (body_seen{canonical_provider}) {
-                    continue;
-                }
-                body_seen{canonical_provider} = True;
-                push body_contracts, (
-                    "output": canonical_provider,
-                    "body_contract_digest": memberBodyContractDigest(provider),
-                );
+            string member_output = context_info.outputs[node];
+            list<string> body_outputs = bodyContractDependencyOutputs(member_output);
+            if (!body_outputs) {
+                continue;
             }
+            *hash<string, hash<string, bool>> imports = bodyContractImports(member_output);
+            foreach string provider in (body_outputs) {
+                string canonical_provider = absoluteNormalized(provider);
+                if (!exists body_providers{canonical_provider}) {
+                    body_providers{canonical_provider} = provider;
+                }
+                *hash<string, bool> symbols = imports{canonical_provider};
+                if (symbols) {
+                    body_symbols{canonical_provider} += symbols;
+                } else {
+                    body_whole{canonical_provider} = True;
+                }
+            }
+        }
+        list<hash<auto>> body_contracts = ();
+        foreach hash<auto> i in (body_providers.pairIterator()) {
+            push body_contracts, (
+                "output": i.key,
+                "body_contract_digest": body_whole{i.key}
+                    ? memberBodyContractDigest(i.value)
+                    : memberBodyContractRowsDigest(i.value, body_symbols{i.key}),
+            );
         }
         body_contracts = sortByOutput(body_contracts);
         list<hash<auto>> prerequisites = ();
@@ -3769,7 +4064,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-map-cmake PREFIX CONTEXT\n"
         "       %s --cmake-plan GROUP CONTEXT\n"
         "       %s --scc-generation-map FILE CONTEXT\n"
-        "       %s [--scc-publish-set|--scc-current-set|--scc-preload-set]\n"
+        "       %s [--scc-publish-set|--scc-current-set|--scc-preload-set|--scc-convex-set]\n"
         "           CONTEXT KEY_FILE\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
         "           |--scc-current-all|--scc-stale|--scc-source-stale]\n"
@@ -3790,6 +4085,12 @@ sub usage(*string error = NOTHING, bool success = False) {
         "its index or by its key. Only a key is stable across a build: component\n"
         "indexes are a function of the graph, which the build's own depfiles\n"
         "change.\n"
+        "\n"
+        "--scc-convex-set prints the keys of the components in KEY_FILE that one\n"
+        "parse can compile together: a component is left out when something it\n"
+        "would preload was itself compiled against another listed component, whose\n"
+        "previous declarations the preloaded object would bring back.  What is left\n"
+        "out stays stale for the next pass.\n"
         "\n"
         "Exit 75 means the member sources moved away from the --expect source\n"
         "token -- an agent outside the build edited them. Exit 76 means the\n"
@@ -4043,7 +4344,7 @@ int sub main() {
                 || arg == "--scc-stale" || arg == "--scc-source-stale"
                 || arg == "--scc-compile-plan" || arg == "--scc-graph-generation"
                 || arg == "--scc-publish-set" || arg == "--scc-current-set"
-                || arg == "--scc-preload-set") {
+                || arg == "--scc-preload-set" || arg == "--scc-convex-set") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -4288,7 +4589,7 @@ int sub main() {
             }
         }
         if (component_command == "publish-set" || component_command == "current-set"
-                || component_command == "preload-set") {
+                || component_command == "preload-set" || component_command == "convex-set") {
             # A shared parse over PART of a group publishes exactly the
             # components it compiled.  Naming them in a file rather than on the
             # command line keeps a subset of any size addressable, and resolving
@@ -4322,6 +4623,13 @@ int sub main() {
                 foreach string output in (
                         engine.componentPreloadOutputs(components, context_info, selected)) {
                     printf("%s\n", output);
+                }
+                return 0;
+            }
+            if (component_command == "convex-set") {
+                foreach int component in (
+                        engine.convexComponentSubset(components, context_info, selected)) {
+                    printf("%s\n", components.component_keys[component]);
                 }
                 return 0;
             }

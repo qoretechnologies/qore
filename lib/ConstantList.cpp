@@ -820,14 +820,14 @@ cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const 
 }
 
 cnemap_t::iterator ConstantList::add(const char* name, QoreValue value, const QoreTypeInfo* typeInfo,
-        ClassAccess access) {
+        ClassAccess access, const QoreProgramLocation* loc) {
 #ifdef DEBUG
     if (cnemap.find(name) != cnemap.end()) {
         printd(0, "ConstantList::add() %s added twice!", name);
         assert(false);
     }
 #endif
-    ConstantEntry* ce = new ConstantEntry(&loc_builtin, name, value,
+    ConstantEntry* ce = new ConstantEntry(loc ? loc : &loc_builtin, name, value,
         typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo(),
         true, true, true, access);
     return cnemap.insert(cnemap_t::value_type(ce->getName(), ce)).first;
