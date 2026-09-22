@@ -53,6 +53,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testManagedQccOutputPruning());
         addTestCase("source qmod links reject stale format artifacts",
             \testSourceQmodSymlinkFreshness());
+        addTestCase("source qmod link cleanup keeps other build trees' links",
+            \testSourceQmodSymlinkOtherBuildTree());
         addTestCase("module source globs track added and removed sources",
             \testModuleSourceGlobTracking());
         addTestCase("qcc format fingerprint covers every AOT format source",
@@ -228,6 +230,71 @@ qore_user_modules(\"qlib/Fixture\")
             shellQuote(source_qlib), shellQuote(build_qmods), shellQuote(format_stamp), shellQuote(script)));
         assertEq(qmod, readlink(link),
             "a rebuilt qmod is linked after the format stamp: " + fresh);
+    }
+
+    #! Tests that one build tree's qmod link cleanup leaves the links of another build tree
+    /** Regression test: the qcc format-change cleanup of one build tree removed every source qmod link, so building
+        a second tree (such as a debug build that does not link source modules) silently took the AOT qmods of the
+        first tree away from its tests.
+    */
+    testSourceQmodSymlinkOtherBuildTree() {
+        TmpDir tmp("qore-source-qmod-trees-");
+        string source_qlib = tmp.path + "/qlib";
+        string remove_script = realpath(get_script_dir() + "/../../../cmake/RemoveSourceQmodSymlinks.cmake");
+        string ensure_script = realpath(get_script_dir() + "/../../../cmake/EnsureSourceQmodSymlinks.cmake");
+
+        # module A is linked into tree "release", module B into tree "debug"
+        hash<string, string> links;
+        hash<string, string> qmods;
+        foreach hash<auto> h in ({"module": "ModA", "tree": "release"}, {"module": "ModB", "tree": "debug"}) {
+            string source_module = source_qlib + "/" + h.module;
+            string build_module = tmp.path + "/" + h.tree + "/qlib-qmod/" + h.module;
+            mkdir(source_module, 0755, True);
+            mkdir(build_module, 0755, True);
+            write(source_module + "/" + h.module + ".qm",
+                sprintf("%%modern\nmodule %s { version = \"1.0\"; }\n", h.module));
+            qmods{h.module} = build_module + "/" + h.module + ".qmod";
+            write(qmods{h.module}, "fixture qmod\n");
+            links{h.module} = source_module + "/" + h.module + ".qmod";
+        }
+        # tree "debug" also built module A, but its link belongs to tree "release"
+        string debug_moda = tmp.path + "/debug/qlib-qmod/ModA/ModA.qmod";
+        mkdir(dirname(debug_moda), 0755, True);
+        write(debug_moda, "fixture qmod\n");
+        symlink(qmods.ModA, links.ModA);
+        symlink(qmods.ModB, links.ModB);
+        # a relative link into tree "debug" is recognized as well
+        string source_modc = source_qlib + "/ModC";
+        mkdir(source_modc, 0755, True);
+        mkdir(tmp.path + "/debug/qlib-qmod/ModC", 0755, True);
+        write(tmp.path + "/debug/qlib-qmod/ModC/ModC.qmod", "fixture qmod\n");
+        symlink("../../debug/qlib-qmod/ModC/ModC.qmod", source_modc + "/ModC.qmod");
+
+        # the format-change cleanup of tree "debug" removes only its own links
+        string out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -P %s",
+            shellQuote(source_qlib), shellQuote(tmp.path + "/debug/qlib-qmod"), shellQuote(remove_script)));
+        assertTrue(is_link(links.ModA), "the link into the other build tree is kept: " + out);
+        assertEq(qmods.ModA, readlink(links.ModA), "the link into the other build tree is unchanged: " + out);
+        assertFalse(is_link(links.ModB), "the link into the cleaning build tree is removed: " + out);
+        assertFalse(is_link(source_modc + "/ModC.qmod"), "a relative link into the cleaning tree is removed: " + out);
+        assertTrue(out.find("Removed 2 generated source qmod symlink(s)") >= 0, out);
+
+        # the stale-artifact check of tree "debug" does not remove tree "release"'s link to a fresh qmod
+        string format_stamp = tmp.path + "/debug/qcc-format.stamp";
+        write(format_stamp, "format=1\n");
+        assertEq(0, system(sprintf("touch -t 202601010000 %s && touch -t 202601010001 %s",
+                shellQuote(debug_moda), shellQuote(format_stamp))),
+            "the fixture establishes deterministic stale timestamps");
+        out = run(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s -DQORE_QCC_FORMAT_STAMP=%s -P %s",
+            shellQuote(source_qlib), shellQuote(tmp.path + "/debug/qlib-qmod"), shellQuote(format_stamp),
+            shellQuote(ensure_script)));
+        assertTrue(is_link(links.ModA), "a stale artifact in another tree keeps the link: " + out);
+        assertEq(qmods.ModA, readlink(links.ModA), "a stale artifact in another tree leaves the link alone: " + out);
+
+        # the cleanup requires the build tree whose links it removes
+        assertNeq(0, system(sprintf("cmake -DQORE_SOURCE_QLIB_DIR=%s -P %s > /dev/null 2>&1",
+            shellQuote(source_qlib), shellQuote(remove_script))), "the cleanup refuses to run without a build tree");
+        assertTrue(is_link(links.ModA), "a refused cleanup removes nothing");
     }
 
     testDownstreamCatalogInstallRoot() {

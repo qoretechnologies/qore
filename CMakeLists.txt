@@ -3040,6 +3040,7 @@ add_custom_command(
     OUTPUT ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     COMMAND ${CMAKE_COMMAND}
         -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+        -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
         -P ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
     COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     DEPENDS ${QCC_FORMAT_STAMP} ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
