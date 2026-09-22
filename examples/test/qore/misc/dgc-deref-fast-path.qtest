@@ -69,6 +69,8 @@ public class DgcDerefFastPathTest inherits QUnit::Test {
         addTestCase("Threads sharing an object do not serialize on it", \sharedObjectDerefsDoNotSerialize());
         addTestCase("A captured variable outside a cycle takes no r-section",
             \capturedVariableDerefTakesNoRSection());
+        addTestCase("A method call outside a cycle takes no lock at all", \methodCallTakesNoLock());
+        addTestCase("A dereference inside a cycle takes the lock", \derefInsideACycleTakesTheLock());
         addTestCase("A cycle built around a shared object is still collected", \sharedObjectCycleIsCollected());
         addTestCase("A cycle through a captured variable is still collected", \capturedVariableCycleIsCollected());
         set_return_value(main());
@@ -181,6 +183,42 @@ public class DgcDerefFastPathTest inherits QUnit::Test {
         assertEq(0, taken, "a captured variable outside a cycle takes no r-section");
     }
 
+    #! Releasing the reference a method call holds on an object outside a cycle must not take the object's lock
+    /** The dereference is decided and made with no lock at all (RObject::tryFastDeref()): no r-section, no rlck,
+        no weak reference guard.  Every call on a shared object releases such a reference.
+    */
+    methodCallTakesNoLock() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("locked dereference counts require a debug build");
+        }
+        Plain p();
+        int before = derefLockedCount();
+        for (int i = 0; i < Calls; ++i) {
+            p.touchNothing();
+            p.readMember();
+        }
+        int taken = derefLockedCount() - before;
+        if (m_options.verbose) {
+            printf("%d method calls outside a cycle: %d locked dereferences\n", Calls * 2, taken);
+        }
+        assertEq(0, taken, "no method call on an object outside a cycle takes the lock");
+    }
+
+    #! The lock-free path must decline for an object that really does have a collection decision to make
+    derefInsideACycleTakesTheLock() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("locked dereference counts require a debug build");
+        }
+        Node a();
+        a.peer = new Node();
+        a.peer.peer = a;
+        int before = derefLockedCount();
+        a.touchNothing();
+        int taken = derefLockedCount() - before;
+        assertGt(0, taken, "a dereference of an object in a recursive set takes the locking path");
+        remove a;
+    }
+
     #! A cycle built around an object that threads are already sharing must still be collected
     /** The fast path reads the recursive set with no lock, so the transition from "no set" to "in a set" is
         the case that must not be missed.
@@ -216,7 +254,12 @@ public class DgcDerefFastPathTest inherits QUnit::Test {
         assertEq(destroyed + 2, Node::destroyed, "a cycle through a captured variable is collected");
     }
 
-    #! Returns the number of dereferences in this thread that took an object's exclusive r-section
+    #! Returns the number of dereferences in this thread that took the locking path
+    private static int derefLockedCount() {
+        return call_function("dbg_get_deref_locked_count");
+    }
+
+    #! Returns the number of times a dereference in this thread took an object's exclusive r-section
     private static int derefRSectionCount() {
         return call_function("dbg_get_deref_rsection_count");
     }

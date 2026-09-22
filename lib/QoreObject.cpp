@@ -1291,6 +1291,22 @@ void qore_object_private::unsetRealReference() {
 void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     assert(qore_var_rwlock_priv::get(rml)->write_tid >= -1);
 
+    printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
+        "rrefs %d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
+        references.load() - 1, rrefs.load(), rrefs.load() - (real ? 1 : 0));
+    if (qore_trace_object_refs_enabled) {
+        qore_trace_object_ref("deref", this, obj, status == OS_OK ? getClassName() : "<deleted>",
+            references.load(), references.load() - 1, real);
+    }
+
+    // Fast path: a dereference with nothing to decide releases the reference with one atomic operation and no lock,
+    // and does not touch the object again; see RObject::tryFastDeref().  This is the reference that every method
+    // call on the object releases when its frame is torn down.
+    int fast = tryFastDeref(real);
+    if (fast > 0) {
+        return;
+    }
+
     // Keep this object ALLOCATED for the duration of the call.
     //
     // A scan started here holds references on the graph it walks and releases them when it ends
@@ -1309,18 +1325,8 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
     RSetDerefHelper cycle_cleanup(xsink);
 
     {
-        //printd(5, "qore_object_private::customDeref() this: %p '%s' references: %d->%d (trefs: %d) status: %d\n",
-        //    this, getClassName(), references, references - 1, tRefs.reference_count(), status);
-
-        printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
-            "rrefs %d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
-            references.load() - 1, rrefs.load(), rrefs.load() - (real ? 1 : 0));
-        if (qore_trace_object_refs_enabled) {
-            qore_trace_object_ref("deref", this, obj, status == OS_OK ? getClassName() : "<deleted>",
-                references.load(), references.load() - 1, real);
-        }
-
-        robject_dereference_helper qodh(this, real);
+        // if the fast path released the last reference, the helper only registers this dereference in progress
+        robject_dereference_helper qodh(this, real, !fast);
         int ref_copy = qodh.getRefs();
 
         // in case this is the last reference (even in recursive cases), ref_copy will remain equal to references throughout this code
@@ -1373,7 +1379,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
 
                     printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' rset: %p (valid: %d) "
                         "rcount: %d refs: %d/%d rrefs: %d (deferred: %d do_scan: %d)\n", this, getClassName(), rs,
-                        RSet::isValid(rs), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan,
+                        RSet::isValid(rs), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan.load(),
                         qodh.doScan());
 
                     if (!rs) {
@@ -1553,7 +1559,9 @@ void qore_object_private::deleteOrDefer(ExceptionSink* xsink, RSetDerefHelper& c
 }
 
 int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
-    AutoLocker al(rlck);
+    // no lock: every method call on the object comes through here, and taking a reference needs none (see
+    // customRefIntern()); rlck never ordered this test against deletion anyway, since the status is changed
+    // under the object's rml write lock
     if (status == OS_DELETED) {
         xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call method '%s()' on an object that has already "
                 "been deleted", mname);
@@ -1940,22 +1948,25 @@ void QoreObject::doDelete(ExceptionSink* xsink) {
 }
 
 void qore_object_private::customRefIntern(bool real) {
-    if (!references.load())
-        tRef();
-
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customRefIntern() this: %p obj: %p '%s' references %d->%d " \
         "rrefs: %d->%d\n", this, obj, getClassName(), references.load(), references.load() + 1, rrefs.load(),
         rrefs.load() + (real ? 1 : 0));
     if (qore_trace_object_refs_enabled) {
         qore_trace_object_ref("ref", this, obj, getClassName(), references.load(), references.load() + 1, real);
     }
-    ++references;
-    if (real)
-        ++rrefs;
+    // No lock: the count is atomic, and a reference taken when there were none (a destructor making its object
+    // reachable again) takes the weak reference that keeps the object allocated; nothing else can release that
+    // reference before this thread does, so taking the weak one right after the increment is safe.  Relaxed, as
+    // for any reference count increment: the reference being copied already keeps the object alive.
+    if (!references.fetch_add(1, std::memory_order_relaxed)) {
+        tRef();
+    }
+    if (real) {
+        rrefs.fetch_add(1, std::memory_order_relaxed);
+    }
 }
 
 void QoreObject::customRef() const {
-   AutoLocker al(priv->rlck);
    priv->customRefIntern(false);
 }
 
@@ -1966,7 +1977,6 @@ bool QoreObject::derefImpl(ExceptionSink* xsink) {
 }
 
 void QoreObject::realRef() {
-    AutoLocker al(priv->rlck);
     priv->customRefIntern(true);
 }
 

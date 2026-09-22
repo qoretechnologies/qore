@@ -73,6 +73,12 @@ DLLLOCAL int64 q_get_deref_rsection_count();
 
 //! Records that a dereference took an object's exclusive r-section
 DLLLOCAL void q_inc_deref_rsection_count();
+
+//! Returns the number of dereferences in the current thread that took the locking path
+/** A dereference with nothing to decide releases its reference with no lock (RObject::tryFastDeref()); every other
+    one constructs a robject_dereference_helper, which takes the object's rlck; see dbg_get_deref_locked_count().
+*/
+DLLLOCAL int64 q_get_deref_locked_count();
 #endif
 
 class RObject {
@@ -167,8 +173,11 @@ public:
     // clobbered, which decides whether a scan asks the object whether it may be deleted at all.
     // Distinct objects are distinct memory locations, so unpacking them removes the overlap.
 
-    // do we need to make a scan when the object is eligible for it?  written under rlck
-    bool deferred_scan;
+    //! do we need to make a scan when the object is eligible for it?  written under rlck
+    /** Atomic because tryFastDeref() reads it with no lock: a dereference that would have to make the deferred scan
+        takes the locking path.
+    */
+    std::atomic_bool deferred_scan;
     // do we need to call isValidImpl()?  set at construction and never written again
     bool needs_is_valid;
     // the number of rset invalidations in progress; written under rlck
@@ -207,8 +216,25 @@ public:
     // return value: the final reference value after the deref
     DLLLOCAL int deref(bool real, bool& do_scan, bool& rescan);
 
-    // decrements rref
+    // decrements rref; called with rlck held
     DLLLOCAL void derefRealIntern();
+
+    //! Releases a reference with no lock at all when the dereference has nothing to decide
+    /** @param real whether the reference is a real reference (see realRef())
+
+        @return 1 if the reference was released and others remain, in which case the caller must not touch the
+        object again; 0 if the reference was released and it was the last one, in which case the caller continues
+        as the object's deleter (see robject_dereference_helper's released-last constructor); -1 if nothing was
+        released, in which case the caller takes the locking path
+
+        The locking path has nothing to do when the object is in no recursive set and no deferred scan is due, so
+        that is decided before the reference is released: afterwards another thread may delete the object, and a
+        dereference that returns 1 never touches it again, which is why it does not have to register as a
+        dereference in progress.  A real reference is released here only while other real references remain,
+        because the last one has to wait for rset invalidations in progress and may have to make the deferred scan;
+        see derefRealIntern().  See design/dgc.md, "A dereference that has nothing to decide takes no lock".
+    */
+    DLLLOCAL int tryFastDeref(bool real);
 
     // wait_only=true means: we do not claim deleter status (so the "deleter vs. waiter" invariant
     // is not tripped) but we still wait for other in-progress derefs to complete — used by the
@@ -781,6 +807,15 @@ protected:
 
 public:
     DLLLOCAL robject_dereference_helper(RObject* obj, bool real = false);
+
+    //! Creates the helper for a dereference whose reference may already have been released
+    /** @param obj the object
+        @param real whether the reference is a real reference
+        @param released_last true if RObject::tryFastDeref() has already released the reference and it was the last
+        one; the helper then only registers the dereference in progress, so that the deletion that follows waits for
+        the dereferences of other threads that are still using the object
+    */
+    DLLLOCAL robject_dereference_helper(RObject* obj, bool real, bool released_last);
 
     DLLLOCAL ~robject_dereference_helper();
 

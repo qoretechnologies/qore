@@ -438,6 +438,39 @@ Both now decide on a plain atomic load of `rset`:
 So a null set plus no deferred scan means "nothing to do", and that is read with no lock at all. Anything
 else takes the read lock and the exclusive r-section exactly as before, and reads the state again there.
 
+### Releasing the reference without `rlck`
+
+Deciding that there is nothing to do is only half of it: releasing the reference used to take the object's `rlck`
+mutex three times per method call (`QoreObject::customRef()`, then `RObject::deref()` and `RObject::derefDone()`),
+plus two atomic operations on the weak reference count for the guard at the top of `customDeref()`. On a shared
+object that mutex is one more lock every calling thread contends for. `RObject::tryFastDeref()` now does the whole
+dereference with no lock:
+
+- It decides **before** releasing the reference: no recursive set (`rset`), and no deferred scan due - a deferred scan
+  is only made by a dereference that finds no real reference left, so `deferred_scan` matters only while `rrefs` is
+  zero. Those are exactly the cases in which the locking path does nothing.
+- It then releases the reference with one atomic decrement. If other references remain it returns, and it never
+  touches the object again, so it does not register as a dereference in progress (`ref_inprogress`): the only reason
+  to register is to make a deleting thread wait for a dereference that still uses the object.
+- If it released the **last** reference, the thread becomes the deleter: `robject_dereference_helper`'s released-last
+  constructor registers it under `rlck`, and the deletion waits for other threads' dereferences in progress as
+  before. Those registered in the same critical section in which they released their references, before this one
+  reached zero, so taking `rlck` orders it after them.
+- A **real** reference is released there only while other real references remain (a compare-and-swap that never
+  takes `rrefs` to zero). The last real reference goes through `rlck`, because it has to wait for rset
+  invalidations in progress (`rref_wait`) and may have to make the deferred scan. `derefRealIntern()` decrements
+  with a compare-and-swap too, so a concurrent lock-free decrement cannot make it the one that reaches zero without
+  having waited.
+- Taking a reference (`customRef()`, `realRef()`, `startCall()`, `ClosureVarValue::ref()`) is a plain atomic
+  increment. `qore_dgc_node_dereferenced()`, which takes a reference only if the member still has one, does it as a
+  compare-and-swap now that references can reach zero without `rlck`.
+- The weak-reference guard in `customDeref()` is only taken on the locking path, which is where scans can cascade
+  back into the object.
+
+Taking and releasing the reference that a method call holds on a shared object in no cycle therefore costs one
+atomic increment and one atomic decrement of its reference count (two of each for a real reference) and a few plain
+loads.
+
 This is safe because the r-section never ordered a dereference against a scan that starts *after* it, only
 against one already in progress. A dereference that took the r-section first saw the same null set that the
 lock-free load sees, and the scan committed its set afterwards either way. The error in the other direction
@@ -450,8 +483,6 @@ Debug builds count the r-section acquisitions made by dereferences per thread
 cycle take none, that an object inside one still does, and that cycles built around an object and through a
 captured variable are still collected.
 
-The per-object `rlck` mutex that `RObject::deref()`, `RObject::derefDone()` and `QoreObject::customRef()`
-take is what now limits how far a shared object scales; unlike the r-section it never blocks on a scan.
 
 ### A scan may be re-entered under a write lock the calling thread already holds
 

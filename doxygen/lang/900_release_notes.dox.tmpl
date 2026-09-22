@@ -3277,6 +3277,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - Fixed get_all_thread_call_stacks() reading call stack entries of other threads that were not yet fully
       constructed or already partly destroyed, and the data of threads that had already been deleted, which could
       crash the process or report garbage; this affected the debugger, which reads the call stacks of all threads
+    - Fixed every method call on an object taking the object's reference count lock three times to take and release
+      its reference to the object, which serialized all threads calling methods on a shared object; a reference is
+      now taken and released with a single atomic operation whenever the cycle collector has nothing to decide, and
+      only an object in a cycle, or the release of the last reference held by a call in progress on it, takes the
+      lock.  The same applies to a variable captured by closures that run in several threads.  Calls on one shared
+      object from eight threads became 1.4 to 2.5 times faster depending on the execution mode, and from sixteen
+      threads 2 to 3.8 times faster, with AOT-compiled code gaining the most
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of

@@ -3419,33 +3419,39 @@ void ClosureVarValue::remove(LValueRemoveHelper& lvrh) {
 }
 
 void ClosureVarValue::ref() const {
-   AutoLocker al(rlck);
-   //printd(5, "ClosureVarValue::ref() this: %p refs: %d -> %d val: %s\n", this, references, references + 1, val.getTypeName());
-   ++references;
+    // no lock: the count is atomic, and the reference being copied keeps the variable alive
+    references.fetch_add(1, std::memory_order_relaxed);
 }
 
 void ClosureVarValue::deref(ExceptionSink* xsink) {
-    RSetDerefHelper cycle_cleanup(xsink);
     // NOTE: do not access val here without holding rml; val may be modified concurrently
     // by another thread that holds a reference to this ClosureVarValue
     printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p\n", this,
         references.load(), references.load() - 1, rcount, rset.load(std::memory_order_relaxed));
 
+    // Fast path: a captured variable in no recursive set has nothing for this dereference to decide, so the
+    // reference is released with one atomic operation and no lock; see RObject::tryFastDeref().  A variable shared
+    // between closures is dereferenced whenever one of them goes out of scope.
+    int fast = tryFastDeref(false);
+    if (fast > 0) {
+        return;
+    }
+
+    RSetDerefHelper cycle_cleanup(xsink);
     int ref_copy;
     bool do_del = false;
     {
-        robject_dereference_helper qodh(this);
+        // if the fast path released the last reference, the helper only registers this dereference in progress
+        robject_dereference_helper qodh(this, false, !fast);
         ref_copy = qodh.getRefs();
 
         if (!ref_copy) {
             do_del = true;
         }
-        // Fast path: a captured variable that is in no recursive set has nothing for this dereference to
-        // decide, and the loop below takes the rsection EXCLUSIVELY to reach that conclusion, serializing
-        // every thread that releases a reference to a variable shared between closures.  rcount is zero
-        // whenever rset is null (see RObject::rset) and ref_copy is non-zero here, so the loop would find
-        // ref_copy != rcount and break without doing anything.  See design/dgc.md, "A dereference that has
-        // nothing to decide takes no lock".
+        // The loop below takes the rsection EXCLUSIVELY, so it is only entered for a variable in a recursive set: a
+        // variable in none has nothing to decide (rcount is zero whenever rset is null, see RObject::rset, and
+        // ref_copy is non-zero here).  The fast path above already declined for this dereference, but a set can
+        // have been released since.  See design/dgc.md, "A dereference that has nothing to decide takes no lock".
         else if (rset.load(std::memory_order_acquire)) {
             while (true) {
                 {
