@@ -179,6 +179,11 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - a listener added with a service or port and no address listens on all interfaces in both address families
+      with one dual-stack socket, so a client reaches it through any address of the host, including \c ::1, which
+      \c "localhost" resolves to first; it was bound on the IPv4 wildcard address only, so such a client could
+      reach an unrelated IPv6 service holding the same port number instead.  IPv4 clients are reported with their
+      IPv4 addresses in the \c "peer-info" of the request context
     - fixed sending two conflicting response header fields when a handler or the server configuration used a
       name in another case than the server, as with \c "content-type": the server added its own
       \c Content-Type, \c Date, \c Server, or \c Connection field, and a configured header was not replaced by
@@ -1218,6 +1223,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @note This method blocks until async I/O is ready to accept connections.
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
+
+        @note The listener listens on all interfaces with one dual-stack socket that serves both IPv4 and IPv6
+        clients; see @ref Qore::Socket::bindINET() "Socket::bindINET()"
      */
     hash<auto> addListener(int port) {
         hash<auto> rv = addListenerAsync(port).get();
@@ -1271,6 +1279,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note By default (\c sync: \c True), this method blocks until async I/O is ready to accept connections.
         Set \c sync: \c False in \a opts to add multiple listeners without blocking, then call
         @ref waitForAsyncIo() manually.
+
+        @note A listener with a \c service and no \c node or \c family listens on all interfaces with one
+        dual-stack socket that serves both IPv4 and IPv6 clients; see @ref Qore::Socket::bindINET()
+        "Socket::bindINET()"
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
         hash<auto> rv = addListenerAsync(opts).get();

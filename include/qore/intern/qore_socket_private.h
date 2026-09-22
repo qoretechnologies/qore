@@ -1864,6 +1864,10 @@ struct qore_socket_private : public QoreReferenceCounter {
             //printd(1, "qore_socket_private::accept_internal() rc: %d, %d bytes returned\n", rc, size);
 
             if (rc >= 0 && source) {
+                if (reportsIpv4MappedAsIpv4()) {
+                    socklen_t addr_len = size;
+                    unmapIpv4MappedAddr(addr_in, addr_len);
+                }
                 // get ipv4 or ipv6 address
                 char ifname[INET6_ADDRSTRLEN];
                 if (inet_ntop(addr_in.ss_family, qore_get_in_addr((struct sockaddr *)&addr_in), ifname,
@@ -2353,6 +2357,24 @@ struct qore_socket_private : public QoreReferenceCounter {
         return setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
     }
 
+    //! Makes the open IPv6 socket accept IPv4 traffic as well, as IPv4-mapped IPv6 addresses (RFC 3493 section 5.3)
+    /** The option is always set explicitly, because the default differs between systems (Linux follows the
+        \c net.ipv6.bindv6only sysctl; Windows and the BSDs default to IPv6-only sockets).
+
+        @return 0 for success, -1 if the system does not support dual-stack sockets
+    */
+    DLLLOCAL int setDualStack() {
+        assert(sock != QORE_INVALID_SOCKET);
+        assert(sfamily == AF_INET6);
+#ifdef IPV6_V6ONLY
+        int opt = 0;
+        return setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+#else
+        sock_set_raw_error(ENOPROTOOPT);
+        return -1;
+#endif
+    }
+
     // the only place where xsink is optional
     DLLLOCAL int bindIntern(struct sockaddr* ai_addr, size_t ai_addrlen, int prt, bool reuseaddr, ExceptionSink* xsink = 0) {
         // Check sandbox network security restrictions for bind
@@ -2435,6 +2457,37 @@ struct qore_socket_private : public QoreReferenceCounter {
 #endif // windows
     }
 
+    //! Converts an IPv4-mapped IPv6 socket address (\c ::ffff:a.b.c.d) to the IPv4 socket address it represents
+    /** A dual-stack IPv6 socket carries the traffic of IPv4 nodes with IPv4-mapped IPv6 addresses (RFC 4291 section
+        2.5.5.2); the node is an IPv4 node, so it is reported with its IPv4 address and address family.  Other
+        addresses are left unchanged.
+    */
+    DLLLOCAL static void unmapIpv4MappedAddr(struct sockaddr_storage& addr, socklen_t& len) {
+        if (addr.ss_family != AF_INET6) {
+            return;
+        }
+        const struct sockaddr_in6* in6 = reinterpret_cast<const struct sockaddr_in6*>(&addr);
+        if (!IN6_IS_ADDR_V4MAPPED(&in6->sin6_addr)) {
+            return;
+        }
+        struct sockaddr_in in4 = {};
+        in4.sin_family = AF_INET;
+        in4.sin_port = in6->sin6_port;
+        memcpy(&in4.sin_addr, &in6->sin6_addr.s6_addr[12], sizeof(in4.sin_addr));
+        addr = {};
+        memcpy(&addr, &in4, sizeof(in4));
+        len = sizeof(in4);
+    }
+
+    //! Returns true if addresses of this socket are reported as IPv4 addresses when they are IPv4-mapped
+    /** A stream socket hides the address family of its peer once it is connected, so an IPv4 peer is reported as
+        an IPv4 peer even if a dual-stack IPv6 socket carries its traffic.  A datagram socket is left as it is,
+        because the application addresses each datagram with the address family of the socket.
+    */
+    DLLLOCAL bool reportsIpv4MappedAsIpv4() const {
+        return stype == SOCK_STREAM && sfamily == AF_INET6;
+    }
+
     DLLLOCAL int getPeerSockAddr(ExceptionSink* xsink, struct sockaddr_storage& addr, socklen_t& len) const {
         assert(xsink);
         if (sock == QORE_INVALID_SOCKET) {
@@ -2446,6 +2499,9 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (getpeername(sock, (struct sockaddr*)&addr, &len)) {
             qore_socket_error(xsink, "SOCKET-GETPEERINFO-ERROR", "error in getpeername()");
             return -1;
+        }
+        if (reportsIpv4MappedAsIpv4()) {
+            unmapIpv4MappedAddr(addr, len);
         }
 
         return 0;
@@ -2471,6 +2527,9 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
 
         len = local_len;
+        if (reportsIpv4MappedAsIpv4()) {
+            unmapIpv4MappedAddr(addr, len);
+        }
         return 0;
     }
 

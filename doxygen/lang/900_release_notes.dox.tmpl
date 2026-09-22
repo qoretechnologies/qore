@@ -249,6 +249,25 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
+    @parblock
+    A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
+    with @ref Qore::Socket::bindINET() "Socket::bindINET()" without an address or an address family, is now one
+    dual-stack socket on the IPv6 wildcard address \c "::", which serves IPv4 clients as well; this includes
+    @ref HttpServer::HttpServer "HttpServer" listeners added with a service or port only.  Its socket information
+    reports the IPv6 wildcard address, and a port that is in use in either address family can no longer be bound
+    on all interfaces; such a bind raises \c SOCKET-BIND-ERROR, where it bound the IPv4 wildcard address before.
+    Only a system without IPv6 or without dual-stack sockets binds the IPv4 wildcard address instead.
+
+    IPv4 nodes are reported with their IPv4 addresses on all stream sockets:
+    @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()",
+    @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()", and the address of an accepted connection
+    report \c "192.0.2.1" and @ref Qore::AF_INET "AF_INET" where a connection carried by a dual-stack socket
+    reported the IPv4-mapped IPv6 address \c "::ffff:192.0.2.1" and @ref Qore::AF_INET6 "AF_INET6".  This affects
+    listeners bound explicitly on \c "::", such as those added with
+    @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" with a service only.
+    @endparblock
+
     @par The Initial Thread Keeps the Process Name on Linux
     @parblock
     The library no longer names a process's initial thread <tt>qore/1</tt> on Linux.  There, the initial
@@ -3237,6 +3256,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed stream sockets bound on all interfaces binding only the IPv4 wildcard address, so they could not be
+      reached over IPv6; a client of \c "localhost", which resolves to \c ::1 first, could connect to an unrelated
+      IPv6 service holding the same port number instead and have its request reset.  A bind on all interfaces is
+      now one dual-stack socket (see @ref qore_3_0_0_compatibility)
+    - Fixed @ref Qore::Socket::bindINET() "Socket::bindINET()" trying only the first resolved address; a failed
+      bind closed the socket, so the other addresses were tried on a closed socket
     - Fixed Base64 conversion of an empty binary leaving an unterminated string buffer, which could expose
       uninitialized bytes during JSON serialization
     - Fixed @ref Qore::Serializable "Serializable" deserialization losing a reference to a container that is

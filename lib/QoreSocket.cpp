@@ -11422,8 +11422,54 @@ static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int soc
     return priv->bindUNIX(xsink, name, socktype, protocol);
 }
 
+//! Puts the IPv6 wildcard address for the resolved port at the front of the stream socket bind candidates
+/** A bind with neither an address nor an address family is a request to bind on all interfaces, but the passive
+    lookup for it resolves only the IPv4 wildcard address.  A socket bound there cannot be reached over IPv6, not
+    even over the loopback address \c ::1 that \c "localhost" resolves to first (RFC 6724), and an unrelated IPv6
+    socket can hold the same port number, so a client may connect to a different service entirely.  A dual-stack
+    socket on the IPv6 wildcard address serves both address families, and when the port is assigned by the system,
+    the port is free in both.
+
+    Datagram sockets keep the resolved IPv4 wildcard address, because the application addresses each datagram with
+    the address family of the socket.
+
+    @return true if the IPv6 wildcard address is the first candidate, false if no IPv4 wildcard address for a
+    stream socket was resolved
+*/
+static bool qore_socket_add_dual_stack_wildcard(std::vector<SocketResolvedAddrInfo>& addrs) {
+    for (size_t i = 0, e = addrs.size(); i < e; ++i) {
+        const SocketResolvedAddrInfo& ai = addrs[i];
+        if (ai.family != AF_INET || ai.socktype != SOCK_STREAM
+                || reinterpret_cast<const struct sockaddr_in*>(&ai.addr)->sin_addr.s_addr != htonl(INADDR_ANY)) {
+            continue;
+        }
+        SocketResolvedAddrInfo ai6;
+        ai6.family = AF_INET6;
+        ai6.socktype = ai.socktype;
+        ai6.protocol = ai.protocol;
+        ai6.addrlen = sizeof(struct sockaddr_in6);
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&ai6.addr);
+        in6->sin6_family = AF_INET6;
+        in6->sin6_port = reinterpret_cast<const struct sockaddr_in*>(&ai.addr)->sin_port;
+        in6->sin6_addr = in6addr_any;
+        addrs.insert(addrs.begin(), std::move(ai6));
+        return true;
+    }
+    return false;
+}
+
+//! Returns true if the error means that the system cannot use IPv6 sockets or addresses
+static bool qore_socket_ipv6_unavailable(int err) {
+#ifdef _Q_WINDOWS
+    return err == WSAEAFNOSUPPORT || err == WSAEPROTONOSUPPORT || err == WSAEADDRNOTAVAIL;
+#else
+    return err == EAFNOSUPPORT || err == EPROTONOSUPPORT || err == EADDRNOTAVAIL;
+#endif
+}
+
 static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name, const char* service,
-        bool reuseaddr, int protocol, std::vector<SocketResolvedAddrInfo>& addrs, ExceptionSink* xsink) {
+        bool reuseaddr, int family, int protocol, std::vector<SocketResolvedAddrInfo>& addrs,
+        ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     qore_socket_close_private_from_controller(priv);
 
@@ -11434,28 +11480,49 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         return -1;
     }
 
+    bool dual_stack = !name && family == AF_UNSPEC && qore_socket_add_dual_stack_wildcard(addrs);
+
     if (priv->hasEventQueue()) {
         for (auto& ai : addrs) {
             priv->do_resolved_event(reinterpret_cast<const struct sockaddr*>(&ai.addr));
         }
     }
 
-    const SocketResolvedAddrInfo& first = addrs.front();
-    if (priv->openINET(first.family, first.socktype, protocol)) {
-        qore_socket_error(xsink, "SOCKET-BINDINET-ERROR", "error opening socket for bind", 0, name, service);
-        return -1;
-    }
-
-    int prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&first.addr));
+    // try each address in order with a socket of its own family; a failed bind closes the socket
     int en = 0;
-    for (auto& ai : addrs) {
+    bool opened = false;
+    for (size_t i = 0, e = addrs.size(); i < e; ++i) {
+        SocketResolvedAddrInfo& ai = addrs[i];
+        bool dual_stack_candidate = dual_stack && !i;
+        if (priv->openINET(ai.family, ai.socktype, protocol)) {
+            en = sock_get_raw_error();
+            continue;
+        }
+        opened = true;
+        // an IPv6 socket that cannot also serve IPv4 would not bind all interfaces; the IPv4 wildcard follows
+        if (dual_stack_candidate && priv->setDualStack()) {
+            en = sock_get_raw_error();
+            priv->close();
+            continue;
+        }
+        int prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&ai.addr));
         if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr)) {
             return 0;
         }
         en = sock_get_raw_error();
+        // only a system without IPv6 falls back to the IPv4 wildcard; any other error, such as a port in use in
+        // either address family, means that the port cannot be bound on all interfaces
+        if (dual_stack_candidate && !qore_socket_ipv6_unavailable(en)) {
+            break;
+        }
     }
 
-    qore_socket_error_intern(en, xsink, "SOCKET-BIND-ERROR", "error binding on socket", 0, name, service);
+    if (!opened) {
+        qore_socket_error_intern(en, xsink, "SOCKET-BINDINET-ERROR", "error opening socket for bind", 0, name,
+            service);
+    } else {
+        qore_socket_error_intern(en, xsink, "SOCKET-BIND-ERROR", "error binding on socket", 0, name, service);
+    }
     return -1;
 }
 
@@ -11499,7 +11566,7 @@ QoreHashNode* QoreSocketControllerSetupPollOperation::continueBindInet(Exception
     }
 
     rc = qore_socket_bind_inet_resolved_direct(sock, has_name ? name.c_str() : nullptr,
-        has_service ? service.c_str() : nullptr, reuseaddr, protocol, bind_inet_addrs, xsink);
+        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs, xsink);
     done = true;
     return nullptr;
 }
@@ -11545,7 +11612,7 @@ QoreHashNode* SocketSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
     }
 
     rc = qore_socket_bind_inet_resolved_direct(sock->priv->socket, has_name ? name.c_str() : nullptr,
-        has_service ? service.c_str() : nullptr, reuseaddr, protocol, bind_inet_addrs, xsink);
+        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs, xsink);
     clearNonBlockLocked();
     done = true;
     return nullptr;

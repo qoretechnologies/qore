@@ -693,6 +693,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode H1 keep-alive server close", \asyncModeH1KeepAliveServerCloseTest());
         addTestCase("async mode connection refused", \asyncModeConnectionRefusedTest());
         addTestCase("listenerStarted notification", \listenerStartedTest());
+        addTestCase("wildcard listener serves all address families", \wildcardListenerAllFamiliesTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -755,6 +756,62 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         delete mServer;
         delete mHandler;
         delete mAsyncServer;
+    }
+
+    #! Tests that a listener on all interfaces is reached through every address of "localhost"
+    /** Regression test: a listener added with only a service bound the IPv4 wildcard address, so a client of
+        \c "localhost", which resolves to \c ::1 first (RFC 6724), could connect to an unrelated IPv6 service that
+        held the same port number and have its request reset.  IPv4 clients must still be reported with their IPv4
+        addresses.
+    */
+    wildcardListenerAllFamiliesTest() {
+        Logger logger("wildcard-listener-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        on_exit delete server;
+        Queue q();
+        server.setDefaultHandler("peer-info", new PeerInfoFutureHandler(q));
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{"service": 0});
+
+        list<hash<auto>> targets = (
+            {"host": "127.0.0.1", "address": "127.0.0.1", "family": AF_INET},
+        );
+        bool has_ipv6;
+        Socket v6();
+        try {
+            v6.bindINET("::1", 0, True, AF_INET6);
+            v6.close();
+            has_ipv6 = True;
+        } catch (hash<ExceptionInfo> ex) {
+            # no IPv6 loopback on this host; only the IPv4 wildcard can be bound
+        }
+        if (has_ipv6) {
+            assertEq(AF_INET6, linfo.family, "all interfaces are bound with one dual-stack socket");
+            assertEq("::", linfo.address);
+            targets += (
+                {"host": "[::1]", "address": "::1", "family": AF_INET6},
+                {"host": "localhost"},
+            );
+        }
+
+        foreach hash<auto> target in (targets) {
+            HTTPClient client({"url": sprintf("http://%s:%d", target.host, linfo.port), "timeout": 5s});
+            on_exit client.disconnect();
+            assertEq("ok", client.get("/"), target.host);
+            hash<auto> peer_info = q.get(5s){"peer-info"};
+            if (target.address) {
+                assertEq(target.address, peer_info.address, target.host);
+                assertEq(target.family, peer_info.family, target.host);
+            } else {
+                # the request was answered by this listener over the address that the name resolved to first
+                assertTrue(inlist(peer_info.address, ("::1", "127.0.0.1")), target.host);
+            }
+        }
     }
 
     # verifies that the listenerStarted() notification is delivered when listeners start; with the
