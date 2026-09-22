@@ -353,6 +353,13 @@ void qore_init(qore_license_t license, const char* def_charset, bool show_module
 // unloaded in case there are any module-specific thread
 // cleanup functions to be run...
 void qore_cleanup() {
+    // A background thread finishes its teardown after it has left its Program, with thread_counter.dec() as the last
+    // thing it does, so a host that has only destroyed its Programs (qore_destroy_program() waits for the threads
+    // running in them) can still have threads finishing here, using what this function frees and, once the process
+    // exits, the counter itself; the qore binary waits in ~QoreProgramHelper() already.  Teardown cannot be
+    // interrupted, so this is the internal, non-interruptible wait.
+    thread_counter.waitForZero();
+
     // set shutdown flag for external modules
     qore_shutdown.store(true, std::memory_order_relaxed);
 

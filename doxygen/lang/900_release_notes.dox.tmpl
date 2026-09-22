@@ -3327,6 +3327,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       variable in another Program; that is now recorded when the variable is created
     - Fixed executables built by \c qcc against a sanitizer build of Qore (for example with ThreadSanitizer) crashing
       at startup: they are now linked with the same sanitizer as the Qore library
+    - Fixed qore_cleanup() not waiting for background threads to finish their teardown: a host that destroyed
+      its programs with qore_destroy_program(), such as an executable that \c qcc links from \c .qo objects, could
+      free library state, and the thread counter itself when the process exited, while a background thread was
+      still using it
     - Fixed recursive reference scans replacing a recursive set with an identical one every time they reached
       it; a scan that finds the sets it would compute already in place now leaves them alone, so it no longer
       releases and retakes a weak reference to every member of the set, drops and re-registers the watches of
