@@ -1,0 +1,212 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTUnqualifiedStaticMethodRefTest
+
+#! Verifies that an unqualified call reference to a static method of the same class compiles with qcc
+/** Inside a class, \c \\isInstalled() naming a static method of the class was parsed into a parse-only node that
+    AOT lowering did not support, so qcc failed with "unsupported AOT method reference lowering" while the same
+    code ran interpreted; the qualified form \c \\Store::isInstalled() compiled.  The same node also dropped the
+    class context, so an unqualified reference to a private static method that was called outside the class
+    failed with RUNTIME-OVERLOAD-ERROR even when interpreted.  Both spellings now resolve to the same call
+    reference node.
+
+    Every probe is run in a module loaded from source and in the same module compiled by qcc, with and without
+    bare references (\c %new-style vs \c %old-style), from static and from non-static methods.
+*/
+class AOTUnqualifiedStaticMethodRefTest inherits QUnit::Test {
+    public {
+        const ModuleName = "AotUnqualStaticRef";
+
+        #! written by the probe script; one line per probe, each must print {a: True, b: False}
+        const Probes = (
+            "static qualified",
+            "static unqualified",
+            "instance qualified",
+            "instance unqualified",
+            "escaped unqualified",
+        );
+
+        #! expected output of each probe
+        const Expected = "{a: True, b: False}";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTUnqualifiedStaticMethodRefTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("new-style module loaded from source", \testSourceModule(), "%new-style");
+        addTestCase("old-style module loaded from source", \testSourceModule(), "%old-style");
+        addTestCase("new-style module compiled by qcc", \testAotModule(), "%new-style");
+        addTestCase("old-style module compiled by qcc", \testAotModule(), "%old-style");
+        addTestCase("reference to an instance method from a static method", \testNegative());
+        set_return_value(main());
+    }
+
+    #! The module under test, parsed with the given style directive
+    /** Local variables are written with the \c $ prefix, which is removed when bare references are enabled
+    */
+    private string moduleSource(string style) {
+        string src = style + "\n"
+            "%require-types\n"
+            "%strict-args\n"
+            "\n"
+            "module " + ModuleName + " {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"unqualified static method call reference probe\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "\n"
+            "public namespace " + ModuleName + " {\n"
+            "public class Store {\n"
+            "    static hash<auto> runQualified(list<string> $names) {\n"
+            "        return Store::check($names, \\Store::isInstalled());\n"
+            "    }\n"
+            "\n"
+            "    static hash<auto> runUnqualified(list<string> $names) {\n"
+            "        return check($names, \\isInstalled());\n"
+            "    }\n"
+            "\n"
+            "    hash<auto> instanceQualified(list<string> $names) {\n"
+            "        return Store::check($names, \\Store::isInstalled());\n"
+            "    }\n"
+            "\n"
+            "    hash<auto> instanceUnqualified(list<string> $names) {\n"
+            "        return Store::check($names, \\isInstalled());\n"
+            "    }\n"
+            "\n"
+            "    # the reference leaves the class and is called from the probe script, which has no access\n"
+            "    # to the private method\n"
+            "    static code<bool(string)> getRef() {\n"
+            "        return \\isInstalled();\n"
+            "    }\n"
+            "\n"
+            "    private static bool isInstalled(string $name) {\n"
+            "        return $name == \"a\";\n"
+            "    }\n"
+            "\n"
+            "    private static hash<auto> check(list<string> $names, code<bool(string)> $installed) {\n"
+            "        return map {$1: $installed($1)}, $names;\n"
+            "    }\n"
+            "}\n"
+            "}\n";
+        if (style == "%new-style") {
+            src =~ s/\$([a-z])/$1/g;
+        }
+        return src;
+    }
+
+    #! A script that loads the module and runs every probe
+    private string scriptSource() {
+        return "%modern\n%requires " + ModuleName + "\n"
+            "list<string> l = (\"a\", \"b\");\n"
+            "printf(\"static qualified: %y\\n\", Store::runQualified(l));\n"
+            "printf(\"static unqualified: %y\\n\", Store::runUnqualified(l));\n"
+            "Store s();\n"
+            "printf(\"instance qualified: %y\\n\", s.instanceQualified(l));\n"
+            "printf(\"instance unqualified: %y\\n\", s.instanceUnqualified(l));\n"
+            "code<bool(string)> c = Store::getRef();\n"
+            "printf(\"escaped unqualified: %y\\n\", map {$1: c($1)}, l);\n";
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string moduleDir(string dir) {
+        return ENV.QORE_MODULE_DIR ? dir + ":" + ENV.QORE_MODULE_DIR : dir;
+    }
+
+    #! Runs the probe script with the given module directory and returns its output
+    private string runProbe(string module_dir) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s %s 2>&1",
+            libqore_dir, libqore_dir, moduleDir(module_dir), qore_bin, module_dir + "/probe.qr"));
+    }
+
+    #! Compiles the module source with qcc; returns the compiler output
+    private string compile(string dir, string src, string qmod) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s --module -o %s %s 2>&1",
+            libqore_dir, libqore_dir, moduleDir(dir), qcc_bin, qmod, src));
+    }
+
+    #! Asserts that every probe produced the expected result
+    private checkProbes(string out) {
+        map assertEq(True, out.find($1 + ": " + Expected) != -1, sprintf("%s: %s", $1, out)), Probes;
+        assertEq(-1, out.find("-ERROR"), out);
+    }
+
+    #! baseline: the module loaded from source
+    testSourceModule(string style) {
+        TmpDir tmp("qore-aot-unqual-static-ref-src-");
+        write(tmp.path + "/" + ModuleName + ".qm", moduleSource(style));
+        write(tmp.path + "/probe.qr", scriptSource());
+        checkProbes(runProbe(tmp.path));
+    }
+
+    #! the qcc-compiled module must compile and behave identically
+    testAotModule(string style) {
+        TmpDir tmp("qore-aot-unqual-static-ref-aot-");
+        string src = tmp.path + "/" + ModuleName + ".qm";
+        string qmod = tmp.path + "/" + ModuleName + ".qmod";
+        write(src, moduleSource(style));
+        write(tmp.path + "/probe.qr", scriptSource());
+
+        string compile_out = compile(tmp.path, src, qmod);
+        assertEq(-1, compile_out.find("unsupported AOT method reference lowering"), compile_out);
+        assertTrue(is_file(qmod), compile_out);
+        # remove the source so that only the AOT image can satisfy the module requirement
+        unlink(src);
+        assertFalse(is_file(src));
+
+        checkProbes(runProbe(tmp.path));
+    }
+
+    #! an unqualified reference to an instance method has no object in a static method: rejected in both modes
+    testNegative() {
+        TmpDir tmp("qore-aot-unqual-static-ref-neg-");
+        string src = tmp.path + "/" + ModuleName + ".qm";
+        string qmod = tmp.path + "/" + ModuleName + ".qmod";
+        write(src, "%new-style\n%require-types\n%strict-args\n"
+            "module " + ModuleName + " {\n"
+            "    version = \"1.0\"; desc = \"negative probe\"; author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "public namespace " + ModuleName + " {\n"
+            "public class Store {\n"
+            "    static code<bool(string)> getRef() {\n"
+            "        return \\instanceMethod();\n"
+            "    }\n"
+            "    bool instanceMethod(string name) {\n"
+            "        return name == \"a\";\n"
+            "    }\n"
+            "}\n"
+            "}\n");
+        write(tmp.path + "/probe.qr", "%modern\n%requires " + ModuleName + "\nprintf(\"%y\\n\", Store::getRef());\n");
+
+        string out = runProbe(tmp.path);
+        assertRegex("PARSE-EXCEPTION: reference to function 'instanceMethod\\(\\)' cannot be resolved", out);
+
+        string compile_out = compile(tmp.path, src, qmod);
+        assertFalse(is_file(qmod), compile_out);
+        assertRegex("reference to function 'instanceMethod\\(\\)' cannot be resolved", compile_out);
+    }
+}

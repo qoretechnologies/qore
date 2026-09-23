@@ -3279,6 +3279,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       @ref Qore::Program "Program" the exiting thread had run code in: the exiting thread released its reference
       to the @ref Qore::Program "Program" before removing its thread-local data from it, and when that reference
       was the last one, it read the deleted @ref Qore::Program "Program"
+    - Fixed an unqualified call reference to a private static method of the current class (e.g.
+      <tt>\\check()</tt> instead of <tt>\\MyClass::check()</tt>) failing with \c RUNTIME-OVERLOAD-ERROR when called
+      from outside the class; the unqualified form now captures the class context like the qualified form
     - Fixed @ref Qore::CFLAGS omitting the macOS deployment target the library was built for; a program compiled
       against the library with those flags targeted an older macOS than the library, and the linker warned about it
     - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X>, \c reference<X>, union

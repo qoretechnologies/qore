@@ -165,25 +165,4 @@ public:
     DLLLOCAL ParseScopedSelfMethodReferenceNode(const QoreProgramLocation* loc, NamedScope *n_nscope);
 };
 
-class StaticMethodReferenceNode : public AbstractParseObjectMethodReferenceNode {
-public:
-    DLLLOCAL StaticMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* meth);
-
-protected:
-    // returns a RunTimeObjectMethodReference or nullptr if there's an exception
-    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
-    DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
-
-    DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
-
-    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return callReferenceTypeInfo;
-    }
-
-private:
-    const QoreMethod* meth;
-
-    DLLLOCAL virtual ~StaticMethodReferenceNode();
-};
-
 #endif

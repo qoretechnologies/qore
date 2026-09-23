@@ -436,28 +436,6 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
     return meth ? 0 : -1;
 }
 
-StaticMethodReferenceNode::StaticMethodReferenceNode(const QoreProgramLocation* loc, const QoreMethod* meth)
-        : AbstractParseObjectMethodReferenceNode(loc), meth(meth) {
-}
-
-StaticMethodReferenceNode::~StaticMethodReferenceNode() {
-}
-
-// returns a RunTimeObjectMethodReference or nullptr if there's an exception
-QoreValue StaticMethodReferenceNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-    RuntimeConfig& rc = rc_get_current_ref();
-    return evalImpl(rc, needs_deref, xsink);
-}
-
-QoreValue StaticMethodReferenceNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    assert(needs_deref);
-    return new LocalStaticMethodCallReferenceNode(loc, meth);
-}
-
-int StaticMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
-    return 0;
-}
-
 ParseScopedSelfMethodReferenceNode::ParseScopedSelfMethodReferenceNode(const QoreProgramLocation* loc,
         NamedScope* n_nscope) : AbstractParseObjectMethodReferenceNode(loc), nscope(n_nscope), method(0) {
 }
@@ -608,7 +586,9 @@ int UnresolvedCallReferenceNode::parseInit(QoreValue& val, QoreParseContext& par
         const QoreMethod* m = priv->parseFindStaticMethod(str, priv);
         if (m) {
             assert(m->isStatic());
-            val = new StaticMethodReferenceNode(loc, m);
+            // resolve to the same node as the qualified form (\Class::method()) so that both spellings
+            // evaluate and lower identically
+            val = new LocalStaticMethodCallReferenceNode(loc, m);
             delete this;
             return 0;
         }
