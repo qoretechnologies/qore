@@ -79,6 +79,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             addTestCase("an incremental compile preloads what a preloaded sibling's code runs at parse commit: "
                 + variant.key, \testIncrementalExecutedCalleePreload(), (variant.key, variant.value));
         }
+        addTestCase("a partial parse runs a preloaded provider's body from a constant initializer",
+            \testSubsetParseInitializerCallsPreloadedBody());
 
         set_return_value(main());
     }
@@ -2363,6 +2365,163 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         string converged = run(sprintf("cmake --build %s -- -j9", build_dir));
         assertEq(0, occurrences(converged, "qcc: script-context .qo"),
             variant + ": the build after the incremental compiles converges: " + converged);
+    }
+
+    #! A partial parse's constant initializers run code whose body is in a preloaded object.
+    /** Parse commit runs user code, so a constant initializer in a source a partial parse compiles
+        can call across the boundary into a source it preloads (issue #5466).  The group is the shape
+        the Qorus report named: `action.qc`'s `TypeMap` folds `MapManager::groups`, a static variable
+        `manager.qc` initializes by calling `GroupRuntimeContext::hostOmqMap()` in `context.qc`, and
+        that constructs an `OmqMap` from `omqmap.qc`, which `context.qc` names only as a type and in a
+        `new` expression.  On Qorus it failed as:
+
+          RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
+            no value instead (while initializing constant 'TypeMap')
+
+        That was not a missing body -- a preloaded `.qo` carries its source-stripped IR and parse
+        commit executes it -- but a missing *declaration*: `omqmap.qc` had no edge the preload closure
+        walked, so it was neither compiled nor preloaded, the construction was deferred as pending
+        linking, and the deferred value read as no value.  Both halves are covered elsewhere for the
+        standalone path; this covers them through a real partial parse of several sources, with every
+        provider on the other side of the boundary.
+
+        Editing the two leaf consumers leaves two components stale that do not reach each other, so
+        the coordinator compiles both in one partial parse and preloads the three providers.
+    */
+    testSubsetParseInitializerCallsPreloadedBody() {
+        TmpDir tmp("qore-cmake-qcc-subset-body-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        # the constructed class: named by the context only as a type and in a `new` expression
+        write(snippets_dir + "/omqmap.qc", "%new-style
+public class OmqMap {
+    public {
+        int n = 42;
+    }
+}
+");
+        write(snippets_dir + "/context.qc", "%new-style
+public class GroupRuntimeContext {
+    private {
+        static *OmqMap host_map;
+    }
+    public static OmqMap hostOmqMap() {
+        # the partial parse's output shows each time a preloaded copy of this body runs
+        stderr.print(\"HOSTMAP-BODY-RAN\\n\");
+        if (!host_map) {
+            host_map = new OmqMap();
+        }
+        return host_map;
+    }
+}
+");
+        # a static variable whose initializer runs the context's code whenever this object is loaded
+        write(snippets_dir + "/manager.qc", "%new-style
+public OmqMap sub managerHostOmqMap() {
+    return GroupRuntimeContext::hostOmqMap();
+}
+public class MapManager {
+    public {
+        static int groups = managerHostOmqMap().n;
+    }
+}
+");
+        # the consumers: constant initializers that reach the providers' bodies at parse commit, and
+        # raise if what they get back is not what the providers compute
+        write(snippets_dir + "/action.qc", "%new-style
+public int sub actionCheckHostMap(int v) {
+    if (v != 42) {
+        throw \"WRONG-HOST-MAP\", sprintf(\"expected 42, got %y\", v);
+    }
+    return v;
+}
+public class ActionContext {
+    public {
+        const TypeMap = {
+            \"group\": actionCheckHostMap(MapManager::groups),
+            \"host\": actionCheckHostMap(GroupRuntimeContext::hostOmqMap().n),
+        };
+    }
+}
+");
+        write(snippets_dir + "/report.qc", "%new-style
+public int sub reportCheckHostMap(int v) {
+    if (v != 42) {
+        throw \"WRONG-HOST-MAP\", sprintf(\"expected 42, got %y\", v);
+    }
+    return v;
+}
+public class Report {
+    public {
+        const Size = reportCheckHostMap(GroupRuntimeContext::hostOmqMap().n) + 1;
+    }
+}
+");
+
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoSubsetBody NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP subsetbody
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/omqmap.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/context.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/manager.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/action.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/report.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/qo-scripts/qcc-subset.sh"),
+            "configured a group that can be parsed in part: " + configure);
+
+        string build = sprintf("QORE_QCC_SUBSET_PARSE=1 cmake --build %s -- -j9", build_dir);
+        string clean = run(build);
+        assertEq(5, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles every member: " + clean);
+
+        foreach string name in (("action", "report")) {
+            string member = snippets_dir + "/" + name + ".qc";
+            write(member, read(member) + "# documentation-only correction\n");
+        }
+        string edited = run(build);
+        assertEq(1, occurrences(edited, "compiling 2 of 5 sources in one shared parse"),
+            "both edited consumers are compiled in one partial parse: " + edited);
+        assertEq(-1, edited.find("leaving"),
+            "the two consumers do not reach each other, so neither is deferred: " + edited);
+        assertEq(2, occurrences(edited, "qcc: script-context .qo"),
+            "only the edited consumers are compiled; the providers are preloaded: " + edited);
+        # manager's static initializer, action's `TypeMap` and report's `Size`, each in the partial parse;
+        # an initializer whose provider was not preloaded would instead be deferred to link time silently
+        assertEq(3, occurrences(edited, "HOSTMAP-BODY-RAN"),
+            "parse commit runs the preloaded provider's body for every initializer that calls it: " + edited);
+        assertEq(-1, edited.find("no value instead"),
+            "a construction in a preloaded body yields its object: " + edited);
+        assertEq(-1, edited.find("WRONG-HOST-MAP"),
+            "each initializer gets back what the preloaded bodies compute: " + edited);
+        assertEq(-1, edited.find("parse commit failed"),
+            "the partial parse commits: " + edited);
+        assertEq(-1, edited.find("falling back"),
+            "the partial parse is not replaced by the group's own parse: " + edited);
+
+        string converged = run(build);
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            "the build after the partial parse converges: " + converged);
     }
 
     #! A group's object recipes carry no depfile; one depfile watches what the group reads from outside.

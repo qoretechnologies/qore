@@ -35256,6 +35256,108 @@ static std::string getGlobalSlotQualifiedName(QoreProgram* pgm, const Var* var) 
     return var ? var->getName() : std::string();
 }
 
+//! Records a static class variable \a func reaches by name, once per class and variable
+static void addAOTStaticVarRef(std::vector<AOTStaticVarRefId>& refs, std::set<std::string>& seen,
+        std::string class_ref, std::string var_name, const QoreProgramLocation* provider_loc) {
+    if (class_ref.empty() || var_name.empty()) {
+        return;
+    }
+    std::string key = class_ref;
+    key += '\n';
+    key += var_name;
+    if (!seen.insert(std::move(key)).second) {
+        return;
+    }
+    AOTStaticVarRefId ref;
+    ref.class_ref = std::move(class_ref);
+    ref.var_name = std::move(var_name);
+    // a pseudo-location such as "<builtin>" (what a variable loaded from a preloaded object carries) names no
+    // source; the record is then attributed by path, as a deferred reference is
+    const char* provider_file = provider_loc ? provider_loc->getFile() : nullptr;
+    if (provider_file && *provider_file && *provider_file != '<') {
+        ref.provider_source_file = provider_file;
+    }
+    refs.push_back(std::move(ref));
+}
+
+//! Records a resolved static class variable reference; a builtin class's variable is no other source's
+static void addAOTStaticVarRef(std::vector<AOTStaticVarRefId>& refs, std::set<std::string>& seen,
+        const StaticClassVarRefNode& sv) {
+    if (sv.qc.isSystem()) {
+        return;
+    }
+    addAOTStaticVarRef(refs, seen, qore_aot_encode_class_ref(&sv.qc), sv.str, sv.vi.loc);
+}
+
+//! Collects the static class variables \a func reads or writes by name, for the symbol index
+/** An expression slot records a static variable only when the read was deferred to link time
+    (DeferredStaticClassMemberRefNode).  A read the parse resolved is a LoadStaticVar that serializes its
+    variable by name and takes no slot, and a write of either kind is a LValuePath rooted at the variable, so
+    without this the object would name the variable's class nowhere -- and whether it did would depend on
+    whether the compile happened to have that class declared.  A constant initializer folded at parse commit
+    is exactly that case: the whole-group parse and a parse preloading the provider resolve the read, a parse
+    that does not preload it defers it, and so the provider dropped out of the object's load requirements
+    every other build.
+*/
+static void collectAOTStaticVarRefs(const QoreIRFunction& func, std::vector<AOTStaticVarRefId>& refs) {
+    std::set<std::string> seen;
+    // a cancelled compile fails at its next cancellation check, so what was collected before it is moot
+    size_t inst_i = 0;
+    bool cancelled = false;
+    std::function<void(const QoreIRFunction&)> walk = [&](const QoreIRFunction& f) {
+        for (const auto& block : f.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (cancelled || (!(++inst_i % 100)
+                        && (cancelled = qore_check_cancel(nullptr, "AOT static-variable reference collection")))) {
+                    return;
+                }
+                switch (inst->opcode) {
+                    case QoreIROpcode::LoadStaticVar: {
+                        const auto* svi = static_cast<const QoreIRStaticVarInstruction*>(inst.get());
+                        if (const auto* sv = dynamic_cast<const StaticClassVarRefNode*>(
+                                svi->expr.getInternalNode())) {
+                            addAOTStaticVarRef(refs, seen, *sv);
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::LValuePathAssign:
+                    case QoreIROpcode::LValuePathCompound:
+                    case QoreIROpcode::LValuePathUnary:
+                    case QoreIROpcode::LValuePathBinaryMut:
+                    case QoreIROpcode::LValuePathTernary: {
+                        const auto* lvp = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                        if (lvp->path.empty() || lvp->path.front().kind != LVPathStepKind::StaticVar) {
+                            break;
+                        }
+                        const LVPathStep& root = lvp->path.front();
+                        if (const auto* sv = static_cast<const StaticClassVarRefNode*>(root.ref_ptr)) {
+                            addAOTStaticVarRef(refs, seen, *sv);
+                            break;
+                        }
+                        // deferred to link time: the step names the variable as "Class::var"
+                        size_t pos = root.name.rfind("::");
+                        if (pos != std::string::npos && pos) {
+                            addAOTStaticVarRef(refs, seen, root.name.substr(0, pos), root.name.substr(pos + 2),
+                                nullptr);
+                        }
+                        break;
+                    }
+                    case QoreIROpcode::OnBlockExit: {
+                        const auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                        if (obei->handler_ir) {
+                            walk(*obei->handler_ir);
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            }
+        }
+    };
+    walk(func);
+}
+
 void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slots,
         UserVariantBase* uvb, AOTSlotIdentities& out,
         const AOTConstantReverseMap* const_reverse_map, QoreProgram* pgm) {
@@ -35603,6 +35705,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             lvid.steps.push_back(std::move(sid));
         }
     }
+
+    collectAOTStaticVarRefs(func, out.static_var_refs);
 
     // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
     // runtime in buildContextFromSlotMap(), so they no longer require source fallback.

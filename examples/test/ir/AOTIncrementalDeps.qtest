@@ -7,6 +7,7 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
+%requires json
 
 %exec-class AOTIncrementalDepsTest
 
@@ -57,6 +58,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
         addTestCase("a batch attributes a folded scoped constant to its consumer",
             \testBatchScopedConstantDeps());
+        addTestCase("a static class variable reached by name is imported in either compile mode",
+            \testStaticVarImportBothModes());
         addTestCase("module depfiles use deterministic dependency forms",
             \testModuleDependencyForms());
         addTestCase("cross-file fast entry is a build dependency", \testCrossFileFastEntryDep());
@@ -479,6 +482,83 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         string single = File::readTextFile(single_dep);
         assertTrue(single.find("scope_cat.qc") != -1 && single.find("scope_ns.qc") != -1,
             "the standalone compile records both scoped owners: " + single);
+    }
+
+    #! The static_var import records in \a object's symbol index, as "path flags=N provider=P" rows
+    private list<string> staticVarImports(string object) {
+        string out = run(sprintf("%s %s --dump-index-json %s", env, qcc_bin, object));
+        auto index = parse_json(out);
+        list<string> rv = ();
+        foreach hash<auto> rec in (index.requires ?? ()) {
+            if (rec.kind == "static_var") {
+                push rv, sprintf("%s flags=%d provider=%s", rec.qore_path, rec.flags,
+                    rec.provider_source_file ?? "");
+            }
+        }
+        return sort(rv);
+    }
+
+    #! A static class variable another source declares is imported whether the compile resolved it or not.
+    /** A read the parse resolves is a LoadStaticVar that names the variable itself and takes no expression
+        slot, and every write is a LValuePath rooted at the variable, so only a read deferred to link time used
+        to reach the symbol index.  The whole-group parse resolves such a read, so its object named the
+        variable's class nowhere, while a compile that did not have the class declared deferred the read and
+        named it -- and the load requirements a preload set closes over are read from those imports.  A
+        constant initializer that folded a static variable therefore lost its provider from the next partial
+        parse's preloads, was deferred instead of run, recorded the provider again, and alternated between the
+        two forms every build (issue #5466).
+
+        Each consumer reaches the variable a different way: a folded constant initializer, a function body,
+        and a write.  The record must be the same in the batch and in a standalone compile against the
+        provider's object, and carry no provider: only the compile that resolved the variable would know one,
+        and an import's provider widens a dependency on that source to its compile contract.
+    */
+    testStaticVarImportBothModes() {
+        TmpDir tmp = initDirs();
+        string holder = tmp_dir + "/sv_holder.qc";
+        string folded = tmp_dir + "/sv_folded.qc";
+        string reader = tmp_dir + "/sv_reader.qc";
+        string writer = tmp_dir + "/sv_writer.qc";
+        write(holder, "%new-style\npublic class SvHolder {\n"
+            + "    public {\n        static int count = 5;\n    }\n}\n");
+        write(folded, "%new-style\npublic class SvFolded {\n"
+            + "    public {\n        const Read = SvHolder::count + 1;\n"
+            + "        static int own = 2;\n    }\n"
+            + "    static int ownRead() {\n        return SvFolded::own;\n    }\n}\n");
+        write(reader, "%new-style\npublic int sub svRead() {\n    return SvHolder::count;\n}\n");
+        write(writer, "%new-style\npublic sub svWrite(int v) {\n    SvHolder::count = v;\n}\n");
+
+        string out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s %s %s %s",
+            env, qcc_bin, lib_dir, lib_dir, holder, folded, reader, writer));
+        hash<string, list<string>> batch;
+        foreach string name in (("sv_holder", "sv_folded", "sv_reader", "sv_writer")) {
+            list<string> objects = glob(sprintf("%s/*%s_qc.qo", lib_dir, name)) ?? ();
+            assertEq(1, objects.size(), "the batch emitted " + name + ": " + out);
+            batch{name} = staticVarImports(objects[0]);
+        }
+        list<string> expected = ("SvHolder::count flags=2 provider=",);
+        assertEq(expected, batch.sv_folded,
+            "a constant initializer folding another source's static variable imports it, "
+            "and a class's own static variable is not an import");
+        assertEq(expected, batch.sv_reader, "a resolved read in a function body imports the variable");
+        assertEq(expected, batch.sv_writer, "a write imports the variable");
+        assertEq((), batch.sv_holder, "the declaring source imports nothing of its own");
+
+        # a standalone compile of each consumer against the provider's object records the same thing
+        string single_lib = tmp_dir + "/single";
+        mkdir(single_lib);
+        out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/sv_holder.qo %s",
+            env, qcc_bin, single_lib, single_lib, holder));
+        assertTrue(is_file(single_lib + "/sv_holder.qo"), "compiled the provider standalone: " + out);
+        foreach string name in (("sv_folded", "sv_reader", "sv_writer")) {
+            string object = sprintf("%s/%s.qo", single_lib, name);
+            out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s %s/%s.qc",
+                env, qcc_bin, single_lib, object, tmp_dir, name));
+            assertTrue(is_file(object), "compiled " + name + " standalone: " + out);
+            assertEq(batch{name}, staticVarImports(object),
+                name + ": a standalone compile against the provider's object records what the batch did");
+        }
     }
 
     testModuleDependencyForms() {

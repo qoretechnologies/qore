@@ -2066,6 +2066,16 @@ struct AOTLVPathSlotId {
 };
 
 //! Complete slot identity set for a single compiled function
+//! A static class variable a function reads or writes by name rather than through an expression slot
+/** A resolved read is an IR LoadStaticVar with no expression slot, and every write is a LValuePath rooted at the
+    variable, so neither appears among the function's expression slots.  Compile-time only: never serialized.
+*/
+struct AOTStaticVarRefId {
+    std::string class_ref;             //!< the class, encoded as an expression slot's class reference
+    std::string var_name;              //!< the variable's name in its class
+    std::string provider_source_file;  //!< the source declaring the variable; empty when it was not resolved
+};
+
 struct AOTSlotIdentities {
     std::vector<AOTLocalSlotId> locals;   //!< indexed by local slot index
     std::vector<AOTGlobalSlotId> globals; //!< indexed by global slot index
@@ -2073,6 +2083,8 @@ struct AOTSlotIdentities {
     std::vector<AOTBodyLocalId> body_locals; //!< body locals in order
     std::vector<AOTRegexCaseSlotId> regex_cases; //!< indexed by regex case slot index
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
+    //! static class variables reached by name, for the symbol index only; see AOTStaticVarRefId
+    std::vector<AOTStaticVarRefId> static_var_refs;
     bool has_unsupported_exprs = false;   //!< true if any expression cannot be serialized without fallback
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
     bool has_closure_locals = false;      //!< true if any local uses closure/reference storage
