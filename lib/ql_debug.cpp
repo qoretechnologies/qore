@@ -54,6 +54,7 @@
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
+#include "qore/intern/RSet.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
@@ -5004,6 +5005,53 @@ static QoreValue f_dbg_register_user_module_from_source(const QoreListNode* para
     MM.registerUserModuleFromSource(name->c_str(), src->c_str(), getProgram(), xsink);
     return QoreValue();
 }
+
+//! returns the private data of a Counter argument, or raises an exception
+static Counter* get_counter_arg(const QoreListNode* params, size_t i, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, i).get<QoreObject>();
+    return static_cast<Counter*>(obj->getReferencedPrivateData(CID_COUNTER, xsink));
+}
+
+//! decrements the Counter once, when the next recursive-reference scan starts waiting for another thread
+/** Tests use this to know, without polling, that a scan is waiting.
+
+    @param c the Counter to decrement
+*/
+static QoreValue f_dbg_scan_wait_notify(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<Counter> c(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    q_set_scan_wait_notify(*c);
+    return QoreValue();
+}
+
+//! holds an object's write lock until a Counter reaches zero
+/** A recursive-reference scan that reaches the object meanwhile cannot take its rsection, so it waits for this
+    thread; tests use this to create such a wait deterministically.
+
+    @param obj the object to lock
+    @param held decremented once the lock is held
+    @param release the lock is released when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_object_lock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreAutoVarRWWriteLocker al(qore_object_private::get(*obj)->rml);
+    held->dec(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    release->waitForZero(xsink);
+    return QoreValue();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -5052,6 +5100,11 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_deref_locked_count", f_dbg_get_deref_locked_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
+    qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");

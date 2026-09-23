@@ -38,6 +38,7 @@
 #include "qore/vector_map"
 
 #include <atomic>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -725,6 +726,16 @@ private:
 
     ExceptionSink* xsink;
 
+    //! true if this scan is accounted; see qore_scan_accounting_enabled()
+    bool acct = false;
+    //! the graph nodes this scan entered, when accounted
+    uint64_t acct_nodes = 0;
+    //! the name of the object whose rsection the last abandoned pass could not take
+    /** Copied when the pass abandons, while the edge that reached the object still keeps it alive: the object can
+        be freed while this scan waits for its rsection.
+    */
+    std::string wait_on;
+
 #ifdef DEBUG
     int lcnt = 0;
     DLLLOCAL void inccnt() { ++lcnt; }
@@ -885,5 +896,61 @@ public:
         del = true;
     }
 };
+
+//! runtime scan accounting and scan waits; see design/dgc.md "Diagnosing scan contention"
+/** Accounting is enabled for the life of the process when the \c QORE_SCAN_STATS environment variable is set at
+    startup; its value is the path the table is written to at exit, with the process id appended.
+*/
+DLLLOCAL bool qore_scan_accounting_enabled();
+
+//! scan accounting for one scan root, as returned by qore_scan_accounting_snapshot()
+struct QoreScanAccountingRecord {
+    //! the name of the scan root: an object's class name or a closure-bound variable's name
+    std::string root;
+    //! scans started at the root that ran
+    uint64_t scans = 0;
+    //! scans started at the root that were deferred because it had real references
+    uint64_t deferred = 0;
+    //! scans skipped because another thread had just scanned the root
+    uint64_t already = 0;
+    //! passes abandoned because another thread held an rsection the scan needed
+    uint64_t restarts = 0;
+    //! passes restarted to take the rsections exclusively
+    uint64_t exclusive = 0;
+    //! graph nodes entered
+    uint64_t nodes = 0;
+    //! time spent in the scans, in nanoseconds
+    uint64_t total_ns = 0;
+    //! time spent waiting for other threads' rsections, in nanoseconds
+    uint64_t wait_ns = 0;
+    //! the longest single scan, in nanoseconds
+    uint64_t max_ns = 0;
+};
+
+//! returns the accounting table; empty when accounting is not enabled
+DLLLOCAL std::vector<QoreScanAccountingRecord> qore_scan_accounting_snapshot();
+
+//! a thread waiting in a scan for another thread's rsection, as returned by qore_scan_wait_snapshot()
+struct QoreScanWaitRecord {
+    //! the waiting thread
+    int tid;
+    //! the name of the waiting scan's root
+    std::string root;
+    //! the name of the object whose rsection the scan waits for
+    std::string wait_on;
+    //! the thread holding it, or -1 if it is held by scans in shared mode
+    int owner_tid;
+    //! when the wait started (monotonic clock, microseconds)
+    int64_t since_us;
+};
+
+//! returns the threads currently waiting in a scan for another thread's rsection
+DLLLOCAL std::vector<QoreScanWaitRecord> qore_scan_wait_snapshot();
+
+#ifdef DEBUG
+class Counter;
+//! debug builds: sets a Counter to be decremented (once) when the next scan starts waiting for another thread
+DLLLOCAL void q_set_scan_wait_notify(Counter* c);
+#endif
 
 #endif

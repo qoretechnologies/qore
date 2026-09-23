@@ -260,6 +260,8 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclExceptionInfo,
     * hashdeclStatementInfo,
     * hashdeclNetIfInfo,
+    * hashdeclScanStatsInfo,
+    * hashdeclScanWaitInfo,
     * hashdeclSourceLocationInfo,
     * hashdeclParseDiagnosticSpanInfo,
     * hashdeclParseDiagnosticRelatedLocationInfo,
@@ -1400,6 +1402,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclExceptionInfo = init_hashdecl_ExceptionInfo(qns);
     hashdeclStatementInfo = init_hashdecl_StatementInfo(qns);
     hashdeclNetIfInfo = init_hashdecl_NetIfInfo(qns);
+    hashdeclScanStatsInfo = init_hashdecl_ScanStatsInfo(qns);
+    hashdeclScanWaitInfo = init_hashdecl_ScanWaitInfo(qns);
     hashdeclSourceLocationInfo = init_hashdecl_SourceLocationInfo(qns);
     hashdeclParseDiagnosticSpanInfo = init_hashdecl_ParseDiagnosticSpanInfo(qns);
     hashdeclParseDiagnosticRelatedLocationInfo = init_hashdecl_ParseDiagnosticRelatedLocationInfo(qns);

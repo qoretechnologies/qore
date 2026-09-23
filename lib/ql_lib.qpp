@@ -39,6 +39,7 @@
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/RSet.h"
 
 #include <cerrno>
 #include <csignal>
@@ -397,6 +398,61 @@ hashdecl NetIfInfo {
 
     //! interface family type string
     string familystr;
+}
+
+//! accounting of the recursive-reference scans started at one kind of scan root; see get_scan_stats()
+/** @since %Qore 3.0
+*/
+hashdecl ScanStatsInfo {
+    //! the scan root: the class name of an object, or the name of a closure-bound local variable
+    string root;
+
+    //! scans started at the root that ran
+    int scans;
+
+    //! scans started at the root that were deferred because the root was held by a real reference
+    int deferred;
+
+    //! scans that were not needed because another thread had just scanned the root
+    int already_scanned;
+
+    //! passes abandoned because another thread held an object's lock that the scan needed
+    int restarts;
+
+    //! passes restarted to take the objects' locks exclusively because the scan had to change a recursive set
+    int exclusive_restarts;
+
+    //! graph nodes (objects, closure-bound variables, lists, hashes, closures and references) the scans entered
+    int nodes;
+
+    //! the total time spent in the scans, in milliseconds
+    float total_ms;
+
+    //! the part of \c total_ms spent waiting for locks held by other threads, in milliseconds
+    float wait_ms;
+
+    //! the longest single scan, in milliseconds
+    float max_ms;
+}
+
+//! a thread waiting in a recursive-reference scan for another thread; see get_scan_waits()
+/** @since %Qore 3.0
+*/
+hashdecl ScanWaitInfo {
+    //! the waiting thread
+    int tid;
+
+    //! the scan root of the waiting scan: the class name of an object, or the name of a closure-bound local variable
+    string root;
+
+    //! the class name (or closure-bound variable name) of the object whose lock the scan waits for
+    string wait_on;
+
+    //! the thread holding that lock, or -1 if it is held by other scans that only read the graph
+    int owner_tid;
+
+    //! how long the thread has been waiting, in milliseconds
+    float waiting_ms;
 }
 
 //! exception information hash
@@ -1749,6 +1805,96 @@ list<hash<NetIfInfo>> get_netif_list() [dom=EXTERNAL_INFO] {
 #else
     missing_function_error("getifaddrs", xsink);
 #endif
+}
+
+//! returns the accounting of recursive-reference scans made in this process, one hash per kind of scan root
+/** The garbage collector scans the object graph reachable from an object to find reference cycles.  On a server with
+    large shared object graphs, these scans can become the limit on throughput; this function tells which objects
+    they start at, how much of the graph they walk and how long they wait for other threads.
+
+    Accounting is enabled for the whole process when the \c QORE_SCAN_STATS environment variable is set when the
+    process starts, and costs nothing otherwise; its value is a path to which the table is written when the process
+    exits, with the process id appended (\c "<path>.<pid>").
+
+    @par Example:
+    @code{.py}
+foreach hash<ScanStatsInfo> i in (get_scan_stats()) {
+    printf("%s: %d scans, %d nodes, %.1f ms waiting\n", i.root, i.scans, i.nodes, i.wait_ms);
+}
+    @endcode
+
+    @return a list with one hash for each kind of scan root seen so far, in no particular order; empty if accounting
+    is not enabled
+
+    @see get_scan_waits()
+
+    @since %Qore 3.0
+*/
+list<hash<ScanStatsInfo>> get_scan_stats() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclScanStatsInfo->getTypeInfo()), xsink);
+    int iter = 0;
+    for (const QoreScanAccountingRecord& r : qore_scan_accounting_snapshot()) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "building the scan accounting list")) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclScanStatsInfo, xsink), xsink);
+        qore_hash_private* hh = qore_hash_private::get(**h);
+        hh->setKeyValueIntern("root", new QoreStringNode(r.root));
+        hh->setKeyValueIntern("scans", static_cast<int64>(r.scans));
+        hh->setKeyValueIntern("deferred", static_cast<int64>(r.deferred));
+        hh->setKeyValueIntern("already_scanned", static_cast<int64>(r.already));
+        hh->setKeyValueIntern("restarts", static_cast<int64>(r.restarts));
+        hh->setKeyValueIntern("exclusive_restarts", static_cast<int64>(r.exclusive));
+        hh->setKeyValueIntern("nodes", static_cast<int64>(r.nodes));
+        hh->setKeyValueIntern("total_ms", r.total_ns / 1e6);
+        hh->setKeyValueIntern("wait_ms", r.wait_ns / 1e6);
+        hh->setKeyValueIntern("max_ms", r.max_ns / 1e6);
+        rv->push(h.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! returns the threads currently waiting in a recursive-reference scan for a lock held by another thread
+/** A scan that needs an object's lock held by another thread abandons its pass, waits for that thread and starts
+    over.  Many threads doing this at once on the same objects shows up as threads parked in the collector; this
+    function names the object each one waits for and the thread holding it.  It is always available and costs
+    nothing unless a scan waits.
+
+    A debugger attached to the process can print the same information without running %Qore code by calling the
+    exported C function \c qore_dump_scan_waits() (for example <tt>call qore_dump_scan_waits()</tt> in gdb), which
+    writes it to standard error.
+
+    @par Example:
+    @code{.py}
+foreach hash<ScanWaitInfo> i in (get_scan_waits()) {
+    printf("TID %d: scan of %s waits for %s held by TID %d\n", i.tid, i.root, i.wait_on, i.owner_tid);
+}
+    @endcode
+
+    @return a list with one hash for each thread waiting in a scan, in no particular order
+
+    @see get_scan_stats()
+
+    @since %Qore 3.0
+*/
+list<hash<ScanWaitInfo>> get_scan_waits() [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(hashdeclScanWaitInfo->getTypeInfo()), xsink);
+    int64 now_us = q_clock_getmicros_monotonic();
+    int iter = 0;
+    for (const QoreScanWaitRecord& r : qore_scan_wait_snapshot()) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "building the scan wait list")) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclScanWaitInfo, xsink), xsink);
+        qore_hash_private* hh = qore_hash_private::get(**h);
+        hh->setKeyValueIntern("tid", static_cast<int64>(r.tid));
+        hh->setKeyValueIntern("root", new QoreStringNode(r.root));
+        hh->setKeyValueIntern("wait_on", new QoreStringNode(r.wait_on));
+        hh->setKeyValueIntern("owner_tid", static_cast<int64>(r.owner_tid));
+        hh->setKeyValueIntern("waiting_ms", (now_us - r.since_us) / 1000.0);
+        rv->push(h.release(), xsink);
+    }
+    return rv.release();
 }
 
 //! sets %Qore runtime library options

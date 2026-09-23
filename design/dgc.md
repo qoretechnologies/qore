@@ -774,6 +774,35 @@ eight threads, including while the owning Program is torn down.
 3. **Trace the ref.** Grep the C++ code that interacts with the leaked class for `->ref()` / `->deref()` pairs. A ref taken on a `QoreObject*` stored as a raw pointer with no corresponding internal-member slot is the bug.
 4. **Fix at the C++ layer.** Either move the ref into a `private:internal` member (Pattern A) or provide a `scanMembers` (Pattern B). Never push cycle-breaking responsibility into `.qc` / `.qm` code — that violates the platform guarantee.
 
+## Diagnosing scan contention
+
+Under load, threads parked in `RSetHelper::RSetHelper()` say only that scans are waiting. Two diagnostics say for
+which objects, how much of the graph they walk and whom they wait for.
+
+**Scan accounting** (`QORE_SCAN_STATS=<path>`, read once at startup, so it is enabled for the whole process or not
+at all; when off, a scan costs one branch on a constant and a node one more). Each scan is accounted by the name of
+its root — an object's class name or a closure-bound variable's name — in a fixed table of 1,024 rows claimed
+without a lock (the last row, `<other>`, collects every root that does not fit). A scan accumulates its counts
+locally and adds them with relaxed atomic operations when it ends, so accounting adds no lock and no shared write
+per node. The columns: scans that ran; scans deferred because the root had real references; scans skipped because
+another thread had just scanned the root; passes abandoned on a lock conflict (`restarts`); passes restarted to
+take the r-sections exclusively; graph nodes entered (objects, closure-bound variables and containers); total time,
+time blocked waiting for another thread, and the longest single scan. The table is written to `<path>.<pid>` at
+exit — every process of a cluster inherits the variable, and each writes its own file — and read at any time with
+`get_scan_stats()`. Root names are copied when a row is claimed and never freed, because a class name is freed with
+its Program while the table lives as long as the process.
+
+**Scan waits** are always recorded, because they are only written where a scan already blocks: when a pass
+abandons on a lock held by another thread, `setNotificationIntern()` records that thread on the notifier, the scan
+records the name of the object it could not lock (copied then, since the object can be freed while the scan waits),
+and the constructor registers the wait in a small registry for as long as it lasts. `get_scan_waits()` returns the
+waiting threads with their scan root, the object each waits for and the thread holding it; a debugger attached to a
+process calls `qore_dump_scan_waits()` (exported C function, no debug information needed), which only tries the
+registry lock, so it cannot hang a process stopped while another thread updates the registry.
+
+Debug builds add `dbg_hold_object_lock()` and `dbg_scan_wait_notify()`, which make a wait deterministic for
+`examples/test/qore/misc/dgc-scan-accounting/dgc-scan-accounting.qtest`.
+
 ## Related files
 
 - `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, `rclosed`, `rset` and

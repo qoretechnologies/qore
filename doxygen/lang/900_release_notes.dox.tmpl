@@ -1004,6 +1004,12 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       collected; such a cycle is released only when the holder releases the reference or when the
       @ref Qore::Program "Program" that created it is destroyed.  Use it only where the value assigned can
       be shown not to reference its holder back
+    - new garbage collection diagnostics: with the \c QORE_SCAN_STATS environment variable set, the recursive
+      reference scans a process makes are accounted by the class of the object they start at (scans, deferred
+      scans, restarts, graph nodes walked, time spent and time spent waiting for other threads), read with
+      @ref Qore::get_scan_stats() "get_scan_stats()" and written to a file when the process exits; and
+      @ref Qore::get_scan_waits() "get_scan_waits()" (or the C function \c qore_dump_scan_waits() from a
+      debugger) names, for each thread waiting in a scan, the object it waits for and the thread holding it
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
       - new @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to
