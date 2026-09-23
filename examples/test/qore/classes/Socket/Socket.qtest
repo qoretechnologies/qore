@@ -3112,11 +3112,13 @@ class SocketTest inherits QUnit::Test {
         on_exit server.close();
         int port = server.getSocketInfo().port;
 
+        # the probes do not reuse the address: with SO_REUSEADDR, whether an overlapping bind is refused depends
+        # on the system (BSD allows more than Linux does)
         Socket v6();
-        assertThrows("SOCKET-BIND-ERROR", \v6.bindINET(), ("::1", port, True, AF_INET6),
+        assertThrows("SOCKET-BIND-ERROR", \v6.bindINET(), ("::1", port, False, AF_INET6),
             "no IPv6 socket can take the port of a listener on all interfaces");
         Socket v4();
-        assertThrows("SOCKET-BIND-ERROR", \v4.bindINET(), ("127.0.0.1", port, True, AF_INET),
+        assertThrows("SOCKET-BIND-ERROR", \v4.bindINET(), ("127.0.0.1", port, False, AF_INET),
             "no IPv4 socket can take the port of a listener on all interfaces");
     }
 
@@ -3135,11 +3137,22 @@ class SocketTest inherits QUnit::Test {
         on_exit v6.close();
         int port = v6.getSocketInfo().port;
 
+        # the bind does not reuse the address: with SO_REUSEADDR, whether an overlapping bind is refused depends on
+        # the system (BSD allows more than Linux does).
+        # the C library decides the message for EADDRINUSE ("Address already in use" with glibc, "Address in use"
+        # with musl), so the error is identified by its errno
         Socket server();
-        assertThrows("SOCKET-BIND-ERROR", "Address already in use", \server.bindINET(), (NOTHING, port, True),
+        *hash<ExceptionInfo> bind_ex;
+        try {
+            server.bindINET(NOTHING, port, False);
+        } catch (hash<ExceptionInfo> ex) {
+            bind_ex = ex;
+        }
+        assertEq("SOCKET-BIND-ERROR", bind_ex.err ?? "no exception was thrown",
             "the port cannot be bound on all interfaces");
+        assertEq(EADDRINUSE, bind_ex.arg, "the bind failed because the port is in use: " + (bind_ex.desc ?? ""));
         assertFalse(server.isOpen(), "no partial listener is left open");
-        assertEq(-1, server.bind(port, True), "Socket::bind() reports the same error");
+        assertEq(-1, server.bind(port, False), "Socket::bind() reports the same error");
         assertFalse(server.isOpen());
     }
 
