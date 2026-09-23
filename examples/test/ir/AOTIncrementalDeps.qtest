@@ -79,6 +79,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         # ConstantList entries carrying the enum's declaration location, whether the enum is parsed or preloaded
         addTestCase("an unqualified static call to a preloaded group class is resolved at link time",
             \testUnqualifiedStaticCallToPreloadedGroupClass());
+        addTestCase("a deferred import keeps the namespace its reference was written with",
+            \testDeferredImportKeepsWrittenNamespace());
         addTestCase("a folded enum member is a build dependency", \testEnumMemberDep());
         addTestCase("a folded enum member depends on the provider's declaration contract",
             \testEnumMemberDeclarationContractDep());
@@ -1179,6 +1181,42 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         assertEq("UQX::Other", linkAndRun("uq_user", (outside_dir + "/uqx_other.qo", lib_dir + "/uq_other.qo",
             lib_dir + "/uq_user.qo"), "UQX::User::g()"),
             "the loaded class the call names is resolved, not the group member of the same short name");
+    }
+
+    # A source-symbol manifest names a symbol the way its source declares it, so a class declared inside a
+    # namespace block may be listed by its bare name (`MapperProgram`) and matched by the last segment of a
+    # reference written `OMQ::MapperProgram`.  The deferred import took the manifest's spelling and dropped the
+    # namespace the source wrote -- it linked only because the bare name happened to be unique.  The written
+    # path is kept; a reference written LESS qualified than its key still takes the key's namespace.
+    testDeferredImportKeepsWrittenNamespace() {
+        TmpDir tmp = initDirs();
+        string manifest = tmp_dir + "/symbols.manifest";
+        write(manifest, sprintf("format=1\nclass\tMapperProgram\t%s/wn_provider.qc\n"
+            + "class\tWN::Scoped\t%s/wn_provider.qc\nclass\tWN::User\t%s/wn_user.qc\n", tmp_dir, tmp_dir, tmp_dir));
+        write(tmp_dir + "/wn_provider.qc", "%new-style\npublic namespace OMQ {\npublic class MapperProgram {\n"
+            + "    public static string sanitize(string name) { return \"sanitized:\" + name; }\n"
+            + "}\n}\n"
+            + "public namespace WN {\npublic class Scoped {\n"
+            + "    public static string tag() { return \"scoped\"; }\n"
+            + "}\n}\n");
+        write(tmp_dir + "/wn_user.qc", "%new-style\npublic namespace WN {\npublic class User {\n"
+            + "    public static string run() { return OMQ::MapperProgram::sanitize(\"id\") + \"|\" + Scoped::tag(); }\n"
+            + "}\n}\n");
+        hash<auto> result = runStatus(sprintf("%s %s -c --parse-option=PO_MODERN --source-symbol-manifest=%s "
+            "-o %s/wn_user.qo %s/wn_user.qc", env, qcc_bin, manifest, lib_dir, tmp_dir));
+        assertEq(0, result.rc, "compiled the consumer with its providers deferred: " + result.out);
+        list<string> names = map trim($1), run(sprintf("strings %s/wn_user.qo", lib_dir)).split("\n");
+        assertTrue(inlist("OMQ::MapperProgram::sanitize", names),
+            "the import keeps the namespace the reference was written with: " + join(", ", names));
+        assertFalse(inlist("MapperProgram::sanitize", names), "and not the manifest's bare spelling");
+        assertTrue(inlist("WN::Scoped::tag", names),
+            "a reference written relative to its namespace takes the manifest key's namespace");
+
+        result = runStatus(sprintf("%s %s -c --parse-option=PO_MODERN -o %s/wn_provider.qo %s/wn_provider.qc", env,
+            qcc_bin, lib_dir, tmp_dir));
+        assertEq(0, result.rc, "compiled the provider: " + result.out);
+        assertEq("sanitized:id|scoped", linkAndRun("wn_user", (lib_dir + "/wn_provider.qo", lib_dir + "/wn_user.qo"),
+            "WN::User::run()"), "both imports bind at link time");
     }
 
     # A folded `Enum::Member` leaves no trace in the emitted object, exactly like a folded constant, so the compile

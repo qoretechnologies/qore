@@ -1,8 +1,9 @@
 #!/bin/bash
 # Regression: a source-symbol-deferred typed object construction such as
 # `Tx trans(args)` serializes a deferred NEW_OBJECT slot.  Runtime slot
-# reconstruction must resolve encoded AOT class refs such as `::Tx` instead of
-# treating them as unresolved pending source links.
+# reconstruction must resolve the encoded AOT class ref (`object<Tx>`, rendered
+# unrooted like a resolved class type) instead of treating it as an unresolved
+# pending source link.
 
 set -euo pipefail
 
@@ -69,7 +70,7 @@ echo "=== Step 2: compile consumer with deferred source class ==="
 echo ""
 echo "=== Step 3: verify deferred constructor metadata ==="
 strings "${TMP}/qo/consumer.qo" | grep -q 'deferred-create-object'
-strings "${TMP}/qo/consumer.qo" | grep -q 'object<::Tx>'
+strings "${TMP}/qo/consumer.qo" | grep -qx 'object<Tx>'
 
 echo ""
 echo "=== Step 4: link separate .qo files and run ==="

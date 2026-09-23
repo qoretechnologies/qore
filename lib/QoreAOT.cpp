@@ -478,7 +478,17 @@ static bool qore_aot_get_deferred_source_symbol_match(const QoreProgramLocation*
         return false;
     }
     if (matched_path) {
-        *matched_path = match.empty() ? path : match;
+        // The manifest key names the symbol the way its source declares it, and replaces a reference written
+        // relative to a namespace so the import keeps that context.  A key matched by the last segment of a
+        // reference written MORE qualified than it (`OMQ::X` against a key `X`) would drop the context the
+        // source wrote instead, so the written path is kept.
+        if (match.empty() || (path.size() > match.size() + 2
+                && !path.compare(path.size() - match.size(), match.size(), match)
+                && !path.compare(path.size() - match.size() - 2, 2, "::"))) {
+            *matched_path = path;
+        } else {
+            *matched_path = match;
+        }
     }
     return true;
 }
