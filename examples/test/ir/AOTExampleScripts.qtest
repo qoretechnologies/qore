@@ -1,0 +1,95 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Runs the end-to-end qcc harnesses in examples/aot, one test case per script.
+#
+# Each script writes small sources, drives qcc through one compile, preload and
+# link sequence -- most of them the exact shape of a qcc defect found building
+# Qorus -- and runs the linked program.  Nothing ran them before this test, and
+# eleven of the thirty-nine had stopped passing unnoticed: eight on macOS
+# portability alone, two on implementation details changed on purpose, and one
+# on a real defect (a deferred import dropping the namespace its reference was
+# written with).
+#
+# The scripts address the build as `<source root>/build` in several spellings
+# (`./build/qcc`, `-Lbuild`, `-Wl,-rpath,build`, `LD_LIBRARY_PATH=build`), so they
+# run only when that is the build under test; against any other build they
+# would test the wrong compiler, and each case is skipped with that reason.
+#
+# 39 scripts took 29 s against a release build; CI tests a debug build, whose qcc
+# is several times slower, so the default 300 s budget is not enough.
+# test-timeout: 1200
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+
+%exec-class AOTExampleScriptsTest
+
+class AOTExampleScriptsTest inherits QUnit::Test {
+    private {
+        string source_root;
+        string script_dir;
+        #! why every case is skipped, when the build under test is not the one the scripts address
+        *string skip_reason;
+        #! the C++ compiler scripts that build a host program invoke, if there is one
+        bool have_cxx;
+    }
+
+    constructor() : QUnit::Test("AOTExampleScriptsTest", "1.0", \ARGV) {
+        source_root = realpath(get_script_dir() + "/../../..");
+        script_dir = source_root + "/examples/aot";
+
+        string qore_bin = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        *string build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
+            ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
+        *string expected = realpath(source_root + "/build");
+        if (!exists expected || !is_dir(expected)) {
+            skip_reason = sprintf("the examples/aot scripts use %s/build, which does not exist", source_root);
+        } else if (build_dir != expected) {
+            skip_reason = sprintf("the examples/aot scripts test %s, not the build under test %y", expected,
+                build_dir);
+        } else if (!is_file(expected + "/qcc")) {
+            skip_reason = sprintf("%s/qcc has not been built", expected);
+        }
+        have_cxx = !system("command -v g++ > /dev/null 2>&1");
+
+        list<string> scripts = sort(map basename($1), glob(script_dir + "/*.sh") ?? ());
+        foreach string script in (scripts) {
+            addTestCase(script, \runScript(), (script,));
+        }
+        # the glob is the whole point of this test: an empty one would pass while testing nothing
+        addTestCase("the example scripts are found", sub () {
+            assertTrue(scripts.size() >= 39, sprintf("found %d scripts in %s", scripts.size(), script_dir));
+        });
+
+        set_return_value(main());
+    }
+
+    runScript(string script) {
+        if (skip_reason) {
+            testSkip(skip_reason);
+        }
+        string path = script_dir + "/" + script;
+        if (!have_cxx && ReadOnlyFile::readTextFile(path) =~ /\bg\+\+\s/) {
+            testSkip("the script builds a C++ host program and no g++ is available");
+        }
+        string build = source_root + "/build";
+        # The scripts set the library path for what they run themselves; this covers qcc and the linked
+        # programs they start without it.  QCC is honoured by most of them, and the rest use the same path.
+        string command = sprintf("cd %y && QCC=%y LD_LIBRARY_PATH=%y DYLD_LIBRARY_PATH=%y bash %y",
+            source_root, build + "/qcc", build + (ENV.LD_LIBRARY_PATH ? ":" + ENV.LD_LIBRARY_PATH : ""),
+            build + (ENV.DYLD_LIBRARY_PATH ? ":" + ENV.DYLD_LIBRARY_PATH : ""), path);
+        string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        int rc = output.substr(marker + 3).toInt();
+        output = output.substr(0, marker);
+        # a failing script's own diagnostic is at the end; the whole log can be thousands of lines of qcc output
+        list<string> lines = output.split("\n");
+        string tail = join("\n", lines.size() > 40 ? lines[(lines.size() - 40)..] : lines);
+        assertEq(0, rc, script + " exits with status 0; last lines:\n" + tail);
+    }
+}
