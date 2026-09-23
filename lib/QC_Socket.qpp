@@ -3362,7 +3362,7 @@ AbstractPollOperation<auto> Socket::startPollSendTo(
       - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
       - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
       - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this
-        key
+        key; a quoted-string value is unquoted
       - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed
         after responding, @ref False "False" if not; see notes below about how this value is calculated
       - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of
@@ -5454,7 +5454,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - \c request-uri: (only set when parsing a request header) gives the request URI in an HTTP request
     - \c response-uri: (only set when parsing a response header) gives the response URI in an HTTP response
     - \c body-content-type: this is the  \c "Content-Type" header without any charset declaration
-    - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this key
+    - \c charset: if there is a charset declaration in the \c "Content-Type" header, the value is returned in this key; a quoted-string value is unquoted
     - \c close: (only set when parsing a request header) set to @ref True "True" if the connection should be closed after responding, @ref False "False" if not; see notes below about how this value is calculated
     - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
     - \c accept-encoding: this key will be set to a list of values from any \c "Accept-Encoding" header

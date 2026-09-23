@@ -3163,47 +3163,20 @@ struct qore_socket_private : public QoreReferenceCounter {
                             close = false;
                     }
                 } else if (!strcmp(buf, "content-type")) {
-                    char* a = strcasestr(t, "charset=");
-                    if (a) {
-                        // find end
-                        char* e = strchr(a + 8, ';');
-
-                        QoreString cs;
-                        if (e) {
-                            cs.concat(a + 8, e - a - 8);
-                        } else {
-                            cs.concat(a + 8);
-                        }
-                        cs.trim();
-                        senc = cs.c_str();
+                    qore_http_media_type_param charset;
+                    if (qore_find_http_media_type_param(t, "charset", charset) && !charset.value.empty()) {
+                        enc = QEM.findCreate(charset.value.c_str());
+                        senc = enc->getCode();
                         //printd(5, "got encoding '%s' from request\n", senc);
-                        enc = QEM.findCreate(senc);
 
                         if (info) {
-                            size_t len = cs.size();
-                            info->setKeyValue("charset", new QoreStringNode(cs.giveBuffer(), len, len + 1,
-                                QCS_DEFAULT), nullptr);
-                        }
+                            info->setKeyValue("charset", new QoreStringNode(charset.value.c_str(),
+                                charset.value.size(), QCS_DEFAULT), nullptr);
 
-                        if (info) {
-                            SimpleRefHolder<QoreStringNode> ct(new QoreStringNode);
-                            // remove any whitespace and ';' before charset=
-                            if (a != t) {
-                                do {
-                                    --a;
-                                } while (a > t && (*a == ' ' || *a == ';'));
-                            }
-
-                            if (a == t) {
-                                if (e) {
-                                    ct->concat(e + 1);
-                                }
-                            } else {
-                                ct->concat(t, a - t + 1);
-                                if (e) {
-                                    ct->concat(e);
-                                }
-                            }
+                            // the content type without the charset parameter
+                            SimpleRefHolder<QoreStringNode> ct(new QoreStringNode(t, charset.begin, QCS_DEFAULT));
+                            ct->trim_trailing();
+                            ct->concat(t + charset.end);
                             ct->trim();
                             if (!ct->empty()) {
                                 info->setKeyValue("body-content-type", ct.release(), nullptr);

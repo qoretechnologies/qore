@@ -692,6 +692,11 @@ val = "string";      # OK
     @parblock
     - HTTP/1 protocol version and request-target fields retain their header encoding after a UTF-16
       body; persistent connections can receive the next request without inheriting the prior body charset
+    - HTTP requests and responses read the \c charset parameter of \c Content-Type per RFC 9110: a quoted value
+      such as <tt>charset="UTF-8"</tt> is unquoted instead of naming an encoding that includes the quotes, which
+      broke every conversion of the body on musl; a <tt>;</tt> in a quoted value no longer ends it, parameter names
+      match case-insensitively and only as whole names, the \c charset info key is set for every client request,
+      and the client no longer adds a second charset to a \c Content-Type that declares one as \c Charset
     - already encoded HTTP request paths accept the URI unreserved character <tt>~</tt>,
       for example <tt>/~user/catalog.xsd</tt>, while retaining existing percent escapes
     - HTTP/1.0 client connections require explicit keep-alive before reuse; redirects reconnect after

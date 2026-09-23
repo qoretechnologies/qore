@@ -1471,7 +1471,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
     - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
-      this key
+      this key; a quoted-string value is unquoted
     - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -1550,7 +1550,7 @@ hash<auto> msg = httpclient.send(body, "POST", "/path", {"Content-Type": "applic
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
     - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
-      this key
+      this key; a quoted-string value is unquoted
     - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -1978,7 +1978,7 @@ hash<auto> msg = httpclient.sendWithSendCallback(callback, "POST", "/path", {"Co
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
     - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
-      this key
+      this key; a quoted-string value is unquoted
     - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2074,7 +2074,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
     - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
-      this key
+      this key; a quoted-string value is unquoted
     - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2163,7 +2163,7 @@ httpclient.sendWithRecvCallback(rcv_callback, data, "POST", "/path", {"Content-T
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
     - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
-      this key
+      this key; a quoted-string value is unquoted
     - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2406,7 +2406,7 @@ httpclient.sendWithCallbacks(send_callback, rcv_callback, "POST", "/path", {"Con
       \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to
       the first requested character encoding in the list
     - \c [charset]: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in
-      this key
+      this key; a quoted-string value is unquoted
     - \c [body-content-type]: the MIME \c Content-Type for the response body (if any)
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2477,7 +2477,8 @@ nothing HTTPClient::sendWithCallbacks(code send_callback, code receive_callback,
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
-    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this key
+    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
+      key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2545,7 +2546,8 @@ hash<auto> msg = httpclient.head("/path");
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
-    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this key
+    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
+      key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2611,7 +2613,8 @@ httpclient.post("/path", body);
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
-    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this key
+    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
+      key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")
@@ -2682,7 +2685,8 @@ httpclient.post("/path", body);
     @param headers An optional hash of headers to include in the message; values are converted to strings; a list is converted to a string of comma-separated values; headers that differ only in case will be overwritten by the last header in the hash with a matching name with a case-insensitive search
     @param info an optional reference to an lvalue that will be used as an output variable giving a hash of request headers and other information about the HTTP request; this hash contains the following keys:
     - \c accept-charset: this key will be set to an appropriate value from any \c "Accept-Charset" header; if any of \c "*", \c "utf8", or \c "utf-8" are present, then this will be set to \c "utf8", otherwise it will be set to the first requested character encoding in the list
-    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this key
+    - \c charset: if there is a \c "charset" declaration in the \c "Content-Type" header, the value is returned in this
+      key; a quoted-string value is unquoted
     - \c body-content-type: the outgoing message body MIME \c Content-Type value
     - \c headers: a hash of outgoing HTTP request headers (returned as sent, without any case conversions)
     - \c request-uri: the request URI string sent (ex: \c "GET /services/async/38.0/job HTTP/1.1")

@@ -267,6 +267,22 @@ static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers,
     info.setKeyValue("response-uri", response_uri, xsink);
 }
 
+// returns true if a Content-Type value declares its own charset or is a multipart type with a boundary, so no
+// charset parameter may be added to it
+static bool qore_http_content_type_has_charset(const char* content_type) {
+    qore_http_media_type_param param;
+    return qore_find_http_media_type_param(content_type, "charset", param)
+        || qore_find_http_media_type_param(content_type, "boundary", param);
+}
+
+// sets the "charset" info key from the charset parameter of a Content-Type value, if it has one
+static void set_charset_info(ExceptionSink* xsink, const char* content_type, QoreHashNode& info) {
+    qore_http_media_type_param charset;
+    if (qore_find_http_media_type_param(content_type, "charset", charset) && !charset.value.empty()) {
+        info.setKeyValue("charset", new QoreStringNode(charset.value.c_str()), xsink);
+    }
+}
+
 static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info) {
     SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink, headers, "content-type", true));
     if (*xsink || !ct || ct->empty()) {
@@ -292,31 +308,18 @@ static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& heade
         base_ct->deref(xsink);
     }
 
+    // processContentType() saves the value before it strips the charset parameter; before it runs, the
+    // header still has it
     QoreValue orig = headers.getKeyValue("_qore_orig_content_type");
     if (orig.getType() != NT_STRING) {
-        return;
+        orig = headers.getKeyValue("content-type");
+        if (orig.getType() != NT_STRING) {
+            return;
+        }
     }
 
     QoreStringValueHelper orig_str_helper(orig);
-    const char* orig_str = orig_str_helper->c_str();
-    const char* p = strstr(orig_str, "charset=");
-    if (!p || (p != orig_str && *(p - 1) != ';' && *(p - 1) != ' ')) {
-        return;
-    }
-
-    const char* c = p + 8;
-    char quote = '\0';
-    if (*c == '\'' || *c == '"') {
-        quote = *c;
-        ++c;
-    }
-    QoreString enc;
-    while (*c && *c != ';' && *c != ' ' && *c != quote) {
-        enc.concat(*(c++));
-    }
-    if (!enc.empty()) {
-        info.setKeyValue("charset", new QoreStringNode(enc.c_str()), xsink);
-    }
+    set_charset_info(xsink, orig_str_helper->c_str(), info);
 }
 
 static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* content_encoding,
@@ -880,6 +883,7 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const S
                             base.release(), xsink);
                     }
                 }
+                set_charset_info(xsink, cts->c_str(), **info_hash);
             }
         }
     }
@@ -2513,7 +2517,7 @@ struct qore_httpclient_priv {
                             disconnect_unlocked();
                             return nullptr;
                         }
-                        if (ct_value && !strstr(ct_value, "charset=") && !strstr(ct_value, "boundary=")) {
+                        if (ct_value && !qore_http_content_type_has_charset(ct_value)) {
                             ct = hi.getKey();
                         }
                     }
@@ -2547,7 +2551,7 @@ struct qore_httpclient_priv {
                 if (!msg_body) {
                     continue;
                 }
-                if (!strstr(hdr_value, "charset=") && !strstr(hdr_value, "boundary=")) {
+                if (!qore_http_content_type_has_charset(hdr_value)) {
                     ct = hdri.first.c_str();
                 }
             }
@@ -2644,46 +2648,22 @@ struct qore_httpclient_priv {
         ans.setKeyValue("_qore_orig_content_type", v->refSelf(), xsink);
 
         const char* str = v->c_str();
-        const char* p = strstr(str, "charset=");
-        if (p && (p == str || *(p - 1) == ';' || *(p - 1) == ' ')) {
-            // move p to start of encoding
-            const char* c = p + 8;
-            char quote = '\0';
-            if (*c == '\'' || *c == '"') {
-                quote = *c;
-                ++c;
-            }
-            QoreString enc;
-            while (*c && *c != ';' && *c != ' ' && *c != quote) {
-                enc.concat(*(c++));
-            }
-
-            if (quote && *c == quote) {
-                ++c;
-            }
-
+        qore_http_media_type_param charset;
+        if (qore_find_http_media_type_param(str, "charset", charset) && !charset.value.empty()) {
             printd(5, "qore_httpclient_priv::processContentType() setting encoding to '%s' from content-type "
-                "header: '%s' (cs: %p c: %p %d)\n", enc.c_str(), str, p + 8, c);
+                "header: '%s'\n", charset.value.c_str(), str);
 
             // set new encoding
-            msock->socket->setEncoding(QEM.findCreate(&enc));
-            // strip from content-type
-            QoreStringNode* nc = new QoreStringNode;
-            // skip any spaces before the charset=
-            while (p != str && (*(p - 1) == ' ' || *(p - 1) == ';')) {
-                p--;
-            }
-            if (p != str) {
-                nc->concat(str, p - str);
-            }
-            if (*c) {
-                nc->concat(c);
-            }
+            msock->socket->setEncoding(QEM.findCreate(charset.value.c_str()));
+            // strip the charset parameter from the content-type
+            QoreStringNode* nc = new QoreStringNode(str, charset.begin, v->getEncoding());
+            nc->trim_trailing();
+            nc->concat(str + charset.end);
             ans.setKeyValue("content-type", nc, xsink);
             str = nc->c_str();
         }
         // split into a list if ";" characters are present
-        p = strchr(str, ';');
+        const char* p = strchr(str, ';');
         if (p) {
             bool multipart = false;
             QoreListNode* l = new QoreListNode(stringTypeInfo);
