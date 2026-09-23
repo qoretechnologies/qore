@@ -985,6 +985,7 @@ static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_mo
 #include <llvm/Object/Binary.h>
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/Object/ELFObjectFile.h>
+#include <llvm/Support/Endian.h>
 #include <llvm/Object/SymbolSize.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Mangler.h>
@@ -21679,6 +21680,89 @@ static void collectPcLocMapsFromObjectDwarf(const std::string& path,
     }
 }
 
+// Mach-O header values; named here, since <mach-o/loader.h> defines the same names as macros on macOS, which
+// break llvm/BinaryFormat/MachO.h
+static constexpr uint32_t QORE_MACHO_MAGIC_64 = 0xfeedfacfu;
+static constexpr uint32_t QORE_MACHO_OBJECT = 0x1u;
+static constexpr uint32_t QORE_MACHO_LC_SEGMENT_64 = 0x19u;
+
+//! Returns true if the buffer holds a 64-bit Mach-O relocatable object (MH_OBJECT)
+static bool isMachoObject64(llvm::StringRef buf) {
+    // mach_header_64: magic@0, filetype@12
+    return buf.size() >= 32
+        && llvm::support::endian::read32le(buf.data()) == QORE_MACHO_MAGIC_64
+        && llvm::support::endian::read32le(buf.data() + 12) == QORE_MACHO_OBJECT;
+}
+
+//! Names the segment of the `__pcloc` section that llvm-objcopy added to a Mach-O relocatable object
+/** A relocatable object (MH_OBJECT) has a single unnamed segment load command holding every section, each of
+    which carries its own segment name; the linker places sections by that name.  llvm-objcopy adds a section
+    with a named segment as a second segment load command, which ld-classic (Xcode's linker for `ld -r` before
+    ld-prime handled it) rejects: "more than one LC_SEGMENT found in object file".  So the section is added to
+    the unnamed segment with an empty segment name, and this writes `__QORE` into its section header in place.
+
+    @return true if exactly one unnamed-segment `__pcloc` section was found and renamed
+*/
+static bool setMachoObjectPcLocSegment(const std::string& path) {
+    std::unique_ptr<FILE, int (*)(FILE*)> f(fopen(path.c_str(), "r+b"), fclose);
+    if (!f) {
+        return false;
+    }
+    // mach_header_64: magic@0, filetype@12, ncmds@16, sizeofcmds@20; 32 bytes
+    unsigned char mh[32];
+    if (fread(mh, 1, sizeof mh, f.get()) != sizeof mh
+            || !isMachoObject64(llvm::StringRef(reinterpret_cast<const char*>(mh), sizeof mh))) {
+        return false;
+    }
+    uint32_t ncmds = llvm::support::endian::read32le(mh + 16);
+    uint32_t sizeofcmds = llvm::support::endian::read32le(mh + 20);
+    if (!ncmds || !sizeofcmds || sizeofcmds > (64u << 20)) {
+        return false;
+    }
+    std::vector<unsigned char> cmds(sizeofcmds);
+    if (fread(cmds.data(), 1, sizeofcmds, f.get()) != sizeofcmds) {
+        return false;
+    }
+    static const char unnamed[16] = {};
+    long target = -1;
+    size_t p = 0;
+    for (uint32_t i = 0; i < ncmds && p + 8 <= sizeofcmds; ++i) {
+        uint32_t cmd = llvm::support::endian::read32le(cmds.data() + p);
+        uint32_t cmdsize = llvm::support::endian::read32le(cmds.data() + p + 4);
+        if (cmdsize < 8 || p + cmdsize > sizeofcmds) {
+            return false;
+        }
+        // segment_command_64 is 72 bytes, followed by nsects 80-byte section_64 records:
+        // sectname@0 (16), segname@16 (16)
+        if (cmd == QORE_MACHO_LC_SEGMENT_64 && cmdsize >= 72) {
+            uint32_t nsects = llvm::support::endian::read32le(cmds.data() + p + 64);
+            if (static_cast<uint64_t>(nsects) * 80 + 72 > cmdsize) {
+                return false;
+            }
+            for (uint32_t n = 0; n < nsects; ++n) {
+                size_t sp = p + 72 + static_cast<size_t>(n) * 80;
+                const char* sc = reinterpret_cast<const char*>(cmds.data() + sp);
+                if (!strncmp(sc, QORE_AOT_PCLOC_MACHO_SECT, 16) && !memcmp(sc + 16, unnamed, 16)) {
+                    if (target != -1) {
+                        return false;
+                    }
+                    target = static_cast<long>(sizeof mh + sp + 16);
+                }
+            }
+        }
+        p += cmdsize;
+    }
+    if (target == -1) {
+        return false;
+    }
+    char segname[16] = {};
+    strncpy(segname, QORE_AOT_PCLOC_MACHO_SEG, sizeof segname);
+    if (fseek(f.get(), target, SEEK_SET) || fwrite(segname, 1, sizeof segname, f.get()) != sizeof segname) {
+        return false;
+    }
+    return !fclose(f.release());
+}
+
 //! Add (or replace) the `qore_aot_pcloc` ELF section on the just-emitted object at
 //! `path`, carrying the framed PC->loc payload derived from the object's own DWARF.
 //! Unlike the EOF trailer, this SECTION survives arbitrary downstream linking (the
@@ -21697,6 +21781,8 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path,
     // Mach-O ("slice is not valid mach-o file") whereas LLVM's objcopy handles it. Any
     // other format has no supported reader, so skip it.
     bool is_macho = false;
+    // a relocatable Mach-O object, as opposed to a linked image such as an aggregated .qmod
+    bool is_macho_object = false;
     {
         auto buf_or = llvm::MemoryBuffer::getFile(path);
         if (!buf_or) {
@@ -21709,6 +21795,7 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path,
         }
         if ((*obj_or)->isMachO()) {
             is_macho = true;
+            is_macho_object = isMachoObject64((*buf_or)->getBuffer());
         } else if (!(*obj_or)->isELF()) {
             if (dbg) {
                 fprintf(stderr, "AOT-LOC: skipping qore_aot_pcloc section for unsupported "
@@ -21768,12 +21855,20 @@ static bool addPcLocSectionFromObjectDwarf(const std::string& path,
         // llvm-objcopy needs distinct in/out for Mach-O; emit to a temp then rename over
         // the original. Freshly emitted objects carry no prior section, so no remove is
         // needed (and the runtime reader accumulates every matching section regardless).
+        // A relocatable object gets the section in its single unnamed segment, and the
+        // section's segment name is set afterwards (see setMachoObjectPcLocSegment()); a
+        // linked image gets a __QORE segment.
         std::string outp = path + ".objcopy." + std::to_string(getpid());
         cmd = std::string("'") + llvm_objcopy + "' --add-section "
-            QORE_AOT_PCLOC_MACHO_SEG "," QORE_AOT_PCLOC_MACHO_SECT "='" + tmp + "' '"
-            + path + "' '" + outp + "'";
+            + (is_macho_object ? std::string() : std::string(QORE_AOT_PCLOC_MACHO_SEG))
+            + "," QORE_AOT_PCLOC_MACHO_SECT "='" + tmp + "' '" + path + "' '" + outp + "'";
         int rc = system(cmd.c_str());
         remove(tmp.c_str());
+        if (rc == 0 && is_macho_object && !setMachoObjectPcLocSegment(outp)) {
+            remove(outp.c_str());
+            printd(0, "AOT: cannot name the pcloc section's segment in '%s' (continuing)\n", path.c_str());
+            return true;
+        }
         if (rc != 0 || rename(outp.c_str(), path.c_str()) != 0) {
             remove(outp.c_str());
             printd(0, "AOT: llvm-objcopy add pcloc section failed (rc=%d) for '%s' "

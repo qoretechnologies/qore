@@ -45,6 +45,21 @@ nm "${TMP}/lib.qo" | grep -E "T (Helper::|qore_lib_lib_script_register)" || true
 echo "--- main.qo ---"
 nm "${TMP}/main.qo" | grep -E "T (compute\\(\\)|qore_main_main_script_register)" || true
 
+if [ "$(uname -s)" = "Darwin" ]; then
+    echo ""
+    echo "=== Step 3b: Mach-O relocatable layout ==="
+    # a relocatable object has one unnamed segment holding every section; ld-classic rejects a second
+    # one ("more than one LC_SEGMENT found in object file"), and newer linkers accept it, so the layout
+    # is checked directly rather than through whichever linker is installed
+    for qo in "${TMP}/lib.qo" "${TMP}/main.qo"; do
+        SEGS=$(otool -l "${qo}" | grep -c "cmd LC_SEGMENT_64" || true)
+        echo "  $(basename "${qo}"): ${SEGS} LC_SEGMENT_64 (expect 1)"
+        [ "${SEGS}" -eq 1 ] || { echo "FAIL: ${qo} has ${SEGS} segment load commands"; exit 1; }
+        otool -s __QORE __pcloc "${qo}" | grep -q "Contents of (__QORE,__pcloc) section" \
+            || { echo "FAIL: ${qo} has no (__QORE,__pcloc) section"; exit 1; }
+    done
+fi
+
 echo ""
 echo "=== Step 4: ld -r cleanliness ==="
 ld -r "${TMP}/lib.qo" "${TMP}/main.qo" -o "${TMP}/combined.o"
