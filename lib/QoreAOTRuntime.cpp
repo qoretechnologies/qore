@@ -10866,11 +10866,11 @@ static void transplantClassClosureValues(
             ExceptionSink txs;
             QoreValue fb_val = fb_ce->getReferencedValue();
             retargetFallbackValueTypes(fb_val, type_resolver, hashdecl_map);
+            // setRuntimeValue() also marks the entry initialized, under the lock that orders it with copies
             writable_ce->setRuntimeValue(fb_val, &txs);
             if (txs.isException()) {
                 txs.clear();
             }
-            writable_ce->init = true;
             printd(5, "AOT: transplanted constant '%s::%s' from fallback\n",
                 main_qc->getName(), main_ce->getName());
         }

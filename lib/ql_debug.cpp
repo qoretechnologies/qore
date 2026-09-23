@@ -5091,6 +5091,80 @@ static QoreValue f_dbg_hold_object_lock(const QoreListNode* params, RuntimeConfi
     release->waitForZero(xsink);
     return QoreValue();
 }
+
+namespace {
+//! the armed hold of dbg_hold_constant_store(); one at a time
+struct ConstantStoreHold {
+    std::mutex m;
+    std::string name;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+ConstantStoreHold constant_store_hold;
+
+//! runs in the thread storing the constant's value; disarms itself, so it holds that thread once
+void dbg_hold_constant_store_hook(const char* name) {
+    ConstantStoreHold& h = constant_store_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.name != name) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_constant_store_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    // the thread is initializing a constant; a Counter deleted meanwhile is the test's error, not the store's
+    if (xsink) {
+        printd(0, "dbg_hold_constant_store(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+}
+
+//! holds the next thread that stores a runtime value in a constant of the given name
+/** The hold is taken once, in ConstantEntry::setRuntimeValue(), at the point where another thread copying the
+    entry - an import of the module whose Program holds it - can run concurrently with the store; tests use it to
+    make such a copy deterministically.
+
+    @param name the name of the constant, without its namespace
+    @param held decremented once the storing thread is held
+    @param release the storing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_constant_store(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ConstantStoreHold& h = constant_store_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a hold is already armed for constant '%s'", h.name.c_str());
+        return QoreValue();
+    }
+    h.name = name->c_str();
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_constant_store_hook.store(dbg_hold_constant_store_hook);
+    return QoreValue();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -5144,6 +5218,10 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
         "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_constant_store", f_dbg_hold_constant_store,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
     qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");

@@ -1,0 +1,182 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTConstantValuePublicationTest
+
+#! A constant value stored by a deferred AOT initializer must not be copied half-stored
+/** Loading an AOT module runs its deferred constant initializers and stores each result
+    (ConstantEntry::setRuntimeValue()) in the Program the module is loaded into.  When that Program is itself a
+    module's Program - a class method of a module calling load_module(), as ProviderIndexUtil::tryLoadModule()
+    does - every import of that module copies the entries while they are being stored, and the store excluded
+    no copy.  A copy could take the value from after the store and the flags describing it from before, so it
+    held a value it never released; a debug build aborted when the importing Program was destroyed (CI job
+    203834, concurrent-module-program-merge.qtest):
+
+    @verbatim
+ConstantEntry::~ConstantEntry(): Assertion `saved_val.isNothing()' failed
+ConstantEntry::deref(QoreListNode&)
+ConstantList::clear(QoreListNode&)
+qore_ns_private::clearConstants(QoreListNode&)
+qore_program_private::waitForTerminationAndClear(ExceptionSink*)
+    @endverbatim
+
+    A debug hook holds the loading thread inside the store (dbg_hold_constant_store()), where a copy can run
+    concurrently with it, so the test only runs against a debug build.  One copy made meanwhile is released
+    without being read - a read would initialize the copy itself and hide the defect - and another is read once
+    the load is done.
+*/
+class AOTConstantValuePublicationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! the values every read must return
+        const Expected = {
+            "leaf": {"a": 1, "b": (1, 2)},
+            "tree": {
+                "leaf": {"a": 1, "b": (1, 2)},
+                "list": ({"a": 1, "b": (1, 2)}, {"a": 1, "b": (1, 2)}),
+            },
+        };
+
+        #! a module whose constants are initialized when it is loaded, one holding references to the other
+        const InnerSource = "%modern
+module Inner {
+    version = \"1.0\";
+    desc = \"deferred constants referring to other constants\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace Inner {
+    public hash<auto> sub make_leaf() {
+        return {\"a\": 1, \"b\": (1, 2)};
+    }
+
+    public const Leaf = make_leaf();
+    public const Tree = {\"leaf\": Leaf, \"list\": (Leaf, Leaf)};
+}
+";
+
+        #! a module whose code loads Inner into the module's own Program
+        /** A class method runs in the Program of the module that declares it, so Inner's constants are stored in
+            Outer's Program, which every import of Outer copies; ProviderIndexUtil::tryLoadModule() has the same
+            shape.
+        */
+        const OuterSource = "%modern
+module Outer {
+    version = \"1.0\";
+    desc = \"loads a module into its own Program\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace Outer {
+    public class Loader {
+        static loadInner() {
+            load_module(\"Inner\");
+        }
+    }
+}
+";
+
+        #! run in a child process, so a failed assertion in the library aborts the child and not the test
+        const RaceScript = "%modern
+%requires Outer
+
+Program sub import_outer() {
+    Program p(PO_NEW_STYLE);
+    p.loadModule(\"Outer\");
+    return p;
+}
+
+hash<auto> sub read(Program p) {
+    p.parse(\"hash<auto> sub get() { return {\\\"leaf\\\": Inner::Leaf, \\\"tree\\\": Inner::Tree}; }\", \"get\");
+    return p.callFunction(\"get\");
+}
+
+Counter held(1);
+Counter release(1);
+Counter done(1);
+call_function(\"dbg_hold_constant_store\", \"Leaf\", held, release);
+background sub () {
+    on_exit done.dec();
+    Outer::Loader::loadInner();
+}();
+held.waitForZero();
+
+# the loading thread is storing Leaf's value in Outer's Program; importing Outer copies that entry.  A read
+# would initialize the copy itself, so one copy is only released and the other is read once the load is done.
+Program released = import_outer();
+Program during = import_outer();
+
+release.dec();
+done.waitForZero();
+
+# a copy that took the value without the flags describing it fails ConstantEntry's destructor assertion here
+delete released;
+printf(\"released\\n\");
+printf(\"during: %y\\n\", read(during));
+printf(\"after: %y\\n\", read(import_outer()));
+";
+    }
+
+    constructor() : QUnit::Test("AOTConstantValuePublicationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("a constant copied while its value is stored", \testCopyDuringStore());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Compiles a module source to a .qmod in \a dir
+    private compileModule(string dir, string module_name, string body) {
+        string qm_path = sprintf("%s/%s.qm", dir, module_name);
+        string qmod_path = sprintf("%s/%s.qmod", dir, module_name);
+        write(qm_path, body);
+        string out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled module %s: %s", module_name, out));
+        # the source must not shadow the compiled module
+        unlink(qm_path);
+    }
+
+    testCopyDuringStore() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hook that holds the storing thread is only in debug builds");
+        }
+        TmpDir tmp("qore-aot-constant-publication-");
+        compileModule(tmp.path, "Inner", InnerSource);
+        compileModule(tmp.path, "Outer", OuterSource);
+        string script = tmp.path + "/race.q";
+        write(script, RaceScript);
+
+        string output = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s 2>&1; echo \"rc=$?\"",
+            libqore_dir, tmp.path, qore_bin, script));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertEq("0", rc[0], "the child exits normally: " + output);
+
+        string expected = sprintf("%y", Expected);
+        *list<*string> during = (output =~ x/during: ([^\n]*)/);
+        assertEq(expected, during[0], "the values read from a copy made during the store: " + output);
+        *list<*string> after = (output =~ x/after: ([^\n]*)/);
+        assertEq(expected, after[0], "the values read from a copy made after the load: " + output);
+        assertTrue(output =~ /^released\n/m, "a copy made during the store is released: " + output);
+    }
+}

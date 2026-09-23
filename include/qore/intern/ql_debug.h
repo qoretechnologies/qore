@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -33,6 +33,8 @@
 
 #define QORE_LIB_DEBUG_H
 
+#include <atomic>
+
 DLLLOCAL void init_debug_functions(QoreNamespace& qns);
 
 #ifdef DEBUG
@@ -56,6 +58,11 @@ DLLLOCAL void qore_set_flag_violation_mode(int mode);
 
 //! returns the number of code flag violations detected since process start
 DLLLOCAL int64 qore_get_flag_violations();
+
+//! called by ConstantEntry::setRuntimeValue() at the point where a thread copying the entry can run
+//! concurrently with the store; set by dbg_hold_constant_store()
+typedef void (*qore_dbg_constant_store_hook_t)(const char* name);
+DLLLOCAL extern std::atomic<qore_dbg_constant_store_hook_t> qore_dbg_constant_store_hook;
 #endif
 
 #endif

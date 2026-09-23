@@ -16,6 +16,11 @@ Relevant code:
 - `examples/test/ir/AOTPendingConstantRecovery.qtest` — the tests for a module load
 - `examples/test/ir/AOTScriptPendingConstantRecovery.qtest` — the tests for a
   script load (a compiled executable)
+- `examples/test/ir/AOTConstantValuePublication.qtest` — an import copying a
+  constant while its value is stored (see "Publishing a stored value")
+- `include/qore/intern/ConstantList.h` / `lib/ConstantList.cpp` —
+  `ConstantEntry::setRuntimeValue()`, `materializeRuntimeRefs()`,
+  `runtimeValueLock()`, `retireValue()`, the copy constructor
 
 ## The state that exists
 
@@ -64,6 +69,58 @@ Only an initializer that did not run at load is kept executable. Retaining the
 compiled context of every constant of every loaded module would cost real
 memory for nothing, since a constant that initialized normally can only ever
 need path 1.
+
+## Publishing a stored value
+
+An initializer's result is stored in two steps, and other threads can see the
+entry during both.
+
+1. `ConstantEntry::setRuntimeValue()` stores the result and the flags that
+   describe it (`saved_val_set`, `aot_shell_pending`, `init`).
+2. `ConstantEntry::materializeRuntimeRefs()` replaces the stored value with one
+   whose serialized constant references are resolved, once every initializer
+   of the round has stored its value (a value may refer to a constant a later
+   initializer produces).
+
+The entries are not private to the loading thread. A class method of a module
+runs in the module's Program, so a `load_module()` call there stores the loaded
+module's constants in the module's Program, and every import of that module
+copies the module Program's entries (`ConstantList::mergeUserPublic()`). The
+namespace locks do not cover the store: the merge lock
+(`RuntimeNamespaceMergeLocker`) is released before the deferred initialization
+runs, because that initialization waits for threads that read the same
+namespace.
+
+A copy made during a store could take the value from after it and the flags
+from before it — `saved_val` set with `saved_val_set` clear. The copy never
+released that value: a leak in a release build, and a failed destructor
+assertion in a debug build, when the importing Program was destroyed.
+
+The rules:
+
+- **One lock orders a value with its copies.** A store, the replacement at the
+  end of a materialization, and the copy constructor's snapshot of the value
+  and its flags hold the entry's value lock (`ConstantEntry::runtimeValueLock()`,
+  one of a fixed set of locks shared by address). It is a leaf lock: nothing
+  else is acquired under it, and no Qore code runs under it. Resolution itself
+  runs with no lock held, because it evaluates other constants and can run
+  their initializers; its result is only installed if the stored value is still
+  the one that was resolved.
+- **A value other threads can see is retired, not freed.** Readers that follow
+  a constant reference to its stored value (`RuntimeConstantRefNode`,
+  `resolveRtConstRef()`, `getValue()`, `ConstantList::getInfo()`) take no lock
+  and no reference of their own before reading it, so a value replaced by a
+  store or a materialization is kept until the entry is deleted
+  (`ConstantEntry::retireValue()`). That happens at most twice per entry.
+- **The flags are published after the value.** A store writes the value, then
+  a release fence, then the flags; a reader tests `saved_val_set` and passes an
+  acquire fence (`ConstantEntry::acquireRuntimeValue()`) before it reads
+  `saved_val`.
+
+A read made between the two steps is correct without them: a stored container
+that still holds reference nodes is not a committed value, so evaluating it
+evaluates the nodes. Materialization only replaces it with an equal value that
+no longer needs that evaluation.
 
 ## A script load is a load
 
