@@ -77,6 +77,8 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             \testByteReproducibleObject());
         # enum members route through the SAME constant hook as a folded constant: they are registered as
         # ConstantList entries carrying the enum's declaration location, whether the enum is parsed or preloaded
+        addTestCase("an unqualified static call to a preloaded group class is resolved at link time",
+            \testUnqualifiedStaticCallToPreloadedGroupClass());
         addTestCase("a folded enum member is a build dependency", \testEnumMemberDep());
         addTestCase("a folded enum member depends on the provider's declaration contract",
             \testEnumMemberDeclarationContractDep());
@@ -1074,6 +1076,109 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             env, qcc_bin, app, lib_dir, partial_dir, lib_dir));
         assertTrue(is_file(app), "linked the program: " + link);
         assertEq("41", trim(run(sprintf("%s %s", env, app))), "the deferred initializer runs in the linked program");
+    }
+
+    #! Compiles \a names in order against \a preload_dir with \a manifest, into \a out_dir.
+    private compileWithManifest(string manifest, string preload_dir, string out_dir, list<string> names) {
+        foreach string name in (names) {
+            hash<auto> result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN "
+                "--source-symbol-manifest=%s -o %s/%s.qo %s/%s.qc", env, qcc_bin, preload_dir, manifest, out_dir,
+                name, tmp_dir, name));
+            assertEq(0, result.rc, "compiled " + name + ": " + result.out);
+        }
+    }
+
+    #! Links \a objects with a main() calling \a expr and returns what the program prints.
+    private string linkAndRun(string name, list<string> objects, string expr) {
+        write(tmp_dir + "/" + name + "_main.qc", sprintf("%%new-style\nint sub main() {\n"
+            + "    printf(\"%%s\\n\", %s);\n    return 0;\n}\n", expr));
+        hash<auto> result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/%s_main.qo "
+            "%s/%s_main.qc", env, qcc_bin, lib_dir, tmp_dir, name, tmp_dir, name));
+        assertEq(0, result.rc, "compiled " + name + "'s main: " + result.out);
+        string app = tmp_dir + "/" + name + "-app";
+        string link = run(sprintf("%s %s -o %s %s %s/%s_main.qo", env, qcc_bin, app, join(" ", objects), tmp_dir,
+            name));
+        assertTrue(is_file(app), "linked " + name + ": " + link);
+        return trim(run(sprintf("%s %s", env, app)));
+    }
+
+    # The shape of a Qorus incremental build: one edit gave `OMQ::QonsoleReferenceScope::runAuxiliary()` a third
+    # parameter and made `QorusQonsoleCore.qc` pass one, and the consumer was compiled standalone while the
+    # provider's object still held the previous generation.  The manifest matches an unqualified receiver by its
+    # last segment only, so a loaded class of that name is checked first -- it may be a different class the call
+    # really names -- and when it was the group member's own preloaded shell, its variants decided the call:
+    #
+    #   PARSE-TYPE-ERROR: no variant matching 'QonsoleReferenceScope::runAuxiliary(string, code<auto()>, string)'
+    #
+    # The qualified spelling of the same call was always deferred to link time; the unqualified one now is too
+    # when it names the member, and still resolves a different loaded class of the same short name.
+    testUnqualifiedStaticCallToPreloadedGroupClass() {
+        TmpDir tmp = initDirs();
+        string manifest = tmp_dir + "/symbols.manifest";
+        write(manifest, sprintf("format=1\nclass\tUQ::Scope\t%s/uq_scope.qc\nclass\tUQ::Core\t%s/uq_core.qc\n"
+            + "class\tUQ::Base\t%s/uq_base.qc\nclass\tUQ::Derived\t%s/uq_derived.qc\n"
+            + "class\tUQ::Other\t%s/uq_other.qc\nclass\tUQX::User\t%s/uq_user.qc\n",
+            tmp_dir, tmp_dir, tmp_dir, tmp_dir, tmp_dir, tmp_dir));
+
+        # the provider's previous generation, preloaded by the consumer's compile
+        string stale_dir = tmp_dir + "/stale";
+        mkdir(stale_dir);
+        string scope_prev = "%new-style\n%strict-args\npublic namespace UQ {\npublic class Scope {\n"
+            + "    public { const K = 1; }\n"
+            + "    public static string run(string purpose) { return purpose; }\n"
+            + "}\n}\n";
+        write(tmp_dir + "/uq_scope.qc", scope_prev);
+        compileWithManifest(manifest, stale_dir, stale_dir, ("uq_scope",));
+
+        # the edit: a new parameter, and the consumer passing it through the unqualified class name
+        write(tmp_dir + "/uq_scope.qc", replace(replace(scope_prev, "run(string purpose)",
+            "run(string purpose, *string output)"), "return purpose;", "return purpose + \":\" + output;"));
+        write(tmp_dir + "/uq_core.qc", "%new-style\n%strict-args\npublic namespace UQ {\npublic class Core {\n"
+            + "    public { const K = Scope::K + 1; }\n"
+            + "    public static string go() { return Scope::run(\"extract\", \"fn\"); }\n"
+            + "}\n}\n");
+        hash<auto> result = runStatus(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --source-symbol-manifest=%s "
+            "-o %s/uq_core.qo %s/uq_core.qc", env, qcc_bin, stale_dir, manifest, lib_dir, tmp_dir));
+        assertEq(-1, result.out.find("PARSE-TYPE-ERROR"),
+            "the preloaded shell's variants do not decide the call: " + result.out);
+        assertEq(0, result.rc, "the consumer compiles against the provider's previous object: " + result.out);
+        compileWithManifest(manifest, lib_dir, lib_dir, ("uq_scope",));
+        assertEq("extract:fn 2", linkAndRun("uq_core", (lib_dir + "/uq_scope.qo", lib_dir + "/uq_core.qo"),
+            "UQ::Core::go() + \" \" + UQ::Core::K"),
+            "the deferred call binds the provider's new variant at link time");
+
+        # a subclass calling its base's private static method unqualified keeps its access through the deferral
+        write(tmp_dir + "/uq_base.qc", "%new-style\npublic namespace UQ {\npublic class Base {\n"
+            + "    private static string p(string v) { return \"private:\" + v; }\n"
+            + "}\n}\n");
+        write(tmp_dir + "/uq_derived.qc", "%new-style\npublic namespace UQ {\npublic class Derived inherits Base {\n"
+            + "    public static string r() { return Base::p(\"x\"); }\n"
+            + "}\n}\n");
+        compileWithManifest(manifest, lib_dir, lib_dir, ("uq_base", "uq_derived"));
+        assertEq("private:x", linkAndRun("uq_derived", (lib_dir + "/uq_base.qo", lib_dir + "/uq_derived.qo"),
+            "UQ::Derived::r()"), "a deferred call to a base class's private static method runs");
+
+        # a class outside the group with the member's short name is still what an unqualified call in its
+        # namespace names: deferring it to the manifest's `UQ::Other` would call the wrong class
+        string outside_dir = tmp_dir + "/outside";
+        mkdir(outside_dir);
+        write(tmp_dir + "/uqx_other.qc", "%new-style\npublic namespace UQX {\npublic class Other {\n"
+            + "    public static string f() { return \"UQX::Other\"; }\n"
+            + "}\n}\n");
+        result = runStatus(sprintf("%s %s -c --parse-option=PO_MODERN -o %s/uqx_other.qo %s/uqx_other.qc", env,
+            qcc_bin, outside_dir, tmp_dir));
+        assertEq(0, result.rc, "compiled the class outside the group: " + result.out);
+        write(tmp_dir + "/uq_other.qc", "%new-style\npublic namespace UQ {\npublic class Other {\n"
+            + "    public static string f() { return \"UQ::Other\"; }\n"
+            + "}\n}\n");
+        write(tmp_dir + "/uq_user.qc", "%new-style\npublic namespace UQX {\npublic class User {\n"
+            + "    public static string g() { return Other::f(); }\n"
+            + "}\n}\n");
+        compileWithManifest(manifest, lib_dir, lib_dir, ("uq_other",));
+        compileWithManifest(manifest, outside_dir, lib_dir, ("uq_user",));
+        assertEq("UQX::Other", linkAndRun("uq_user", (outside_dir + "/uqx_other.qo", lib_dir + "/uq_other.qo",
+            lib_dir + "/uq_user.qo"), "UQX::User::g()"),
+            "the loaded class the call names is resolved, not the group member of the same short name");
     }
 
     # A folded `Enum::Member` leaves no trace in the emitted object, exactly like a folded constant, so the compile

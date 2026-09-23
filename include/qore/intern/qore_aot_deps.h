@@ -145,6 +145,9 @@ DLLLOCAL bool qore_aot_should_defer_source_symbol(const QoreProgramLocation* loc
 DLLLOCAL std::string qore_aot_get_deferred_source_symbol_path(const QoreProgramLocation* loc,
         const char* qore_path, QoreAOTSourceSymbolKind kind);
 
+//! Returns @p qore_path without the root anchor ("::"), the form manifest keys are compared in.
+DLLLOCAL std::string qore_aot_clean_source_symbol_path(const char* qore_path);
+
 //! Record a deferred source function or method import with exact provider provenance when available.
 DLLLOCAL void qore_aot_record_source_parse_call_import(QoreProgram* pgm,
         const QoreProgramLocation* loc, const char* qore_path, bool method,

@@ -312,7 +312,7 @@ static const QoreAOTSourceSymbolMap& qore_aot_source_symbol_map(QoreAOTSourceSym
     return aot_source_symbol_manifest->classes;
 }
 
-static std::string qore_aot_clean_source_symbol_path(const char* qore_path) {
+std::string qore_aot_clean_source_symbol_path(const char* qore_path) {
     if (!qore_path) {
         return std::string();
     }

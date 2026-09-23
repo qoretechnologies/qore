@@ -564,8 +564,15 @@ PARSE-TYPE-ERROR: no variant matching 'QonsoleReferenceScope::runAuxiliary(strin
 ```
 
 A cross-source static call is normally deferred to link time, which hides this; the call named
-the class without its namespace (the manifest has `OMQ::QonsoleReferenceScope`), and that form
-resolves against the preloaded class so the stale shell's variants decided it.
+the class without its namespace (the manifest has `OMQ::QonsoleReferenceScope`). The manifest
+matches an unqualified receiver by its last segment only, so `StaticMethodCallNode` first
+checks for a *loaded* class of that name — it may be a different class, a module's say, that the
+call really names — and it used to accept the group member's own preloaded shell as well, so
+the stale shell's variants decided the call. *(Fixed.)* It now resolves a loaded class only
+when its namespace path differs from the manifest's match; the member itself is deferred to
+link time exactly as the qualified spelling of the call always was
+(`AOTIncrementalDeps.qtest`, "an unqualified static call to a preloaded group class is resolved
+at link time").
 
 The coordinator now compiles a pass's rows in the order `qore-qo-source-order --scc-order-set`
 gives (`preloadCompileOrder()`): a component is taken only once no other pending component is

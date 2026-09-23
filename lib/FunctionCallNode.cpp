@@ -1650,10 +1650,18 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         if (!method && defer_source_static_receiver && qore_aot_source_parse_active()
                 && !parameterized_receiver && scope->size() == 2
                 && deferred_source_receiver_path != source_receiver_path) {
+            // The manifest matched the unqualified receiver by its last segment alone, so a loaded class of
+            // that name may be a different one -- a module's, say -- which the call really names, and which is
+            // resolved here.  But when the loaded class IS the group member the manifest matched, it is that
+            // source's preloaded shell, which is the previous generation of the source whenever the member is
+            // being rebuilt in the same build: its variants must not decide the call.  The call is deferred to
+            // link time exactly as the qualified spelling of the same call is.
             const QoreMethod* loaded_method = nullptr;
             QoreClass* loaded_qc = qore_root_ns_private::parseFindClassWithStaticMethod(scope->get(0),
                 scope->getIdentifier(), class_ctx, &loaded_method);
-            if (loaded_qc && loaded_method) {
+            if (loaded_qc && loaded_method
+                    && qore_aot_clean_source_symbol_path(loaded_qc->getNamespacePath().c_str())
+                        != qore_aot_clean_source_symbol_path(deferred_source_receiver_path.c_str())) {
                 qc = loaded_qc;
                 method = loaded_method;
                 defer_source_static_receiver = false;
