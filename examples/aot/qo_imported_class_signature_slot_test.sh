@@ -138,7 +138,7 @@ int main() {
 }
 EOF
 
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/harness.cpp" \
     "${AGG_QO}" \
     "${PROVIDER_QO}" \

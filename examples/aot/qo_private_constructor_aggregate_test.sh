@@ -125,7 +125,7 @@ int main() {
 }
 EOF
 
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/harness.cpp" \
     "${AGG_QO}" \
     "${PROVIDER_QO}" \
@@ -173,7 +173,7 @@ int main() {
 }
 EOF
 
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/delayed-harness.cpp" \
     "${MAIN_QO}" \
     "${PROVIDER_QO}" \

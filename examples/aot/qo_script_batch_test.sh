@@ -77,7 +77,7 @@ int main() {
     return rc;
 }
 EOF
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/pos.cpp" "${LIB_QO}" "${MAIN_QO}" \
     -lqore -Wl,-rpath,build \
     -o "${TMP}/qo_script_batch_test"
@@ -107,7 +107,7 @@ int main() {
     return rc;
 }
 EOF
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/compat.cpp" "${LIB_QO}" "${MAIN_QO}" \
     -lqore -Wl,-rpath,build \
     -o "${TMP}/compat"

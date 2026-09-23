@@ -103,7 +103,7 @@ int main() {
 }
 EOF
 
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/runner.cpp" "${LIB_QO}" "${MAIN_QO}" \
     -lqore -Wl,-rpath,build \
     -o "${TMP}/qo_cross_fragment_global_default_test"

@@ -48,7 +48,7 @@ ctl.stop();
 printf("aggregated AsyncSocketIo.qmod: ctl.stop() returned (method from .qc)\n");
 EOF
 
-QORE_MODULE_DIR="${TMP}/mod:build/modules/reflection:qlib:examples/test/qlib" \
+QORE_MODULE_DIR="${TMP}/mod:build/modules/reflection:qlib:examples/test/qlib${QORE_MODULE_DIR:+:${QORE_MODULE_DIR}}" \
     ./build/qore "${TMP}/drive.q"
 
 echo ""

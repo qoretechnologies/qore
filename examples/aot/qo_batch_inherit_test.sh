@@ -95,7 +95,7 @@ int main() {
     return rc;
 }
 EOF
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/pos.cpp" "${BASE_QO}" "${MID_QO}" "${TOP_QO}" "${MAIN_QO}" \
     -lqore -Wl,-rpath,build \
     -o "${TMP}/qo_batch_inherit_test"
@@ -132,7 +132,7 @@ int main() {
     return 0;
 }
 EOF
-g++ -std=c++20 -Iinclude -Lbuild \
+g++ -std=c++20 -Ibuild/include -Iinclude -Lbuild \
     "${TMP}/neg.cpp" "${BASE_QO}" "${MID_QO}" "${TOP_QO}" "${MAIN_QO}" \
     -lqore -Wl,-rpath,build \
     -o "${TMP}/neg"
