@@ -607,17 +607,35 @@ public:
     // assignments (see QoreValue::opaqueRegister()).  A registered target is always alive, because
     // a non-zero count means at least one opaque value still holds a strong reference to it.
     //
-    // opaque_lock is a LEAF lock: nothing else may be acquired while it is held and no user code
-    // runs under it; clearOpaqueTargets() copies what it needs and releases the lock before
-    // deleting anything.  Opaque assignment is a rare, deliberate operation, so one global plain
-    // lock is sufficient.
+    // Every copy and every release of an opaque value updates its target's entry, from any thread, so
+    // the registry is striped: a target's entry lives in the shard its address selects, and each shard
+    // has its own lock.  An entry is only ever in the shard of its target, so the count of one target is
+    // always updated under one lock, and threads working on different targets rarely share a shard.
+    //
+    // Each shard's lock is a LEAF lock: nothing else may be acquired while it is held (including another
+    // shard's lock) and no user code runs under it; clearOpaqueTargets() takes this Program's entries
+    // out of each shard in turn and deletes nothing until it has released the last lock.
     struct OpaqueTargetInfo {
         QoreProgram* pgm;
         unsigned count;
     };
-    typedef std::map<AbstractQoreNode*, OpaqueTargetInfo> opaque_target_map_t;
-    DLLLOCAL static QoreThreadLock opaque_lock;
-    DLLLOCAL static opaque_target_map_t opaque_targets;
+    typedef std::unordered_map<AbstractQoreNode*, OpaqueTargetInfo> opaque_target_map_t;
+    //! one stripe of the registry, on its own cache line
+    struct alignas(64) OpaqueTargetShard {
+        QoreThreadLock lock;
+        opaque_target_map_t targets;
+    };
+    //! the number of stripes; a power of two
+    static constexpr unsigned OpaqueTargetShardBits = 6;
+    DLLLOCAL static OpaqueTargetShard opaque_shards[1u << OpaqueTargetShardBits];
+
+    //! returns the stripe holding the entry of \a n
+    DLLLOCAL static OpaqueTargetShard& getOpaqueTargetShard(const AbstractQoreNode* n) {
+        // Fibonacci hashing: the high bits of the product depend on every bit of the address, including
+        // the low ones that allocator alignment leaves constant
+        uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(n)) * 0x9E3779B97F4A7C15ull;
+        return opaque_shards[h >> (64 - OpaqueTargetShardBits)];
+    }
 
     struct PluginFallbackSiteInfo {
         std::string file;
@@ -660,10 +678,11 @@ public:
     DLLLOCAL static void registerOpaqueTarget(AbstractQoreNode* n, QoreProgram* pgm) {
         assert(n);
         assert(pgm);
-        AutoLocker al(opaque_lock);
-        auto i = opaque_targets.find(n);
-        if (i == opaque_targets.end()) {
-            opaque_targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+        OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+        AutoLocker al(shard.lock);
+        auto i = shard.targets.find(n);
+        if (i == shard.targets.end()) {
+            shard.targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
         } else {
             ++i->second.count;
         }
@@ -674,14 +693,15 @@ public:
     */
     DLLLOCAL static void deregisterOpaqueTarget(AbstractQoreNode* n) {
         assert(n);
-        AutoLocker al(opaque_lock);
-        auto i = opaque_targets.find(n);
-        if (i == opaque_targets.end()) {
+        OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+        AutoLocker al(shard.lock);
+        auto i = shard.targets.find(n);
+        if (i == shard.targets.end()) {
             // the owning Program was torn down first and already dropped its entries
             return;
         }
         if (!--i->second.count) {
-            opaque_targets.erase(i);
+            shard.targets.erase(i);
         }
     }
 

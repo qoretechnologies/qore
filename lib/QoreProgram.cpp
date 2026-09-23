@@ -2177,19 +2177,19 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
         readonly, import_as);
 }
 
-QoreThreadLock qore_program_private_base::opaque_lock;
-qore_program_private_base::opaque_target_map_t qore_program_private_base::opaque_targets;
+qore_program_private_base::OpaqueTargetShard qore_program_private_base::opaque_shards[1u << OpaqueTargetShardBits];
 
 void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
     // take this Program's entries out of the registry under the lock, then do all the work outside
     // it: deleting an object runs its destructor, which is user code
     std::vector<AbstractQoreNode*> roots;
-    {
-        AutoLocker al(opaque_lock);
-        for (auto i = opaque_targets.begin(), e = opaque_targets.end(); i != e;) {
+    for (OpaqueTargetShard& shard : opaque_shards) {
+        // one shard lock at a time: each is a leaf lock
+        AutoLocker al(shard.lock);
+        for (auto i = shard.targets.begin(), e = shard.targets.end(); i != e;) {
             if (i->second.pgm == pgm) {
                 roots.push_back(i->first);
-                i = opaque_targets.erase(i);
+                i = shard.targets.erase(i);
             } else {
                 ++i;
             }

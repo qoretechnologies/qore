@@ -177,8 +177,9 @@ One per process, following the signal thread's precedent:
 - **Park, do not exit.** Starting on the registry's 0→1 transition and exiting on 1→0
   churns a thread per oscillation. Park on a condition variable instead; the observable
   property — no CPU, no scanning when there is nothing to collect — is identical.
-- **`opaque_lock` is a leaf lock.** Nothing may be acquired while it is held. The 0→1
-  transition must be detected under the lock and acted on after releasing it.
+- **The registry's shard locks are leaf locks.** Nothing may be acquired while one is held. The
+  empty→non-empty transition of the registry must be detected under a shard lock and acted on after
+  releasing it; with the registry striped, that needs a registry-wide atomic count of entries.
 - **fork.** `fork()` already stops the signal thread first (`lib/ql_lib.qpp:1068`). The
   collector needs identical treatment, or a child inherits r-sections held by a thread that
   does not exist in it.
@@ -261,20 +262,26 @@ states the premise outright — "Opaque assignment is a rare, deliberate operati
 global plain lock is enough" — and ungating `@=` destroys it. This must be fixed first,
 whatever happens to the collector.
 
+**Resolved 2026-09-23:** the registry is striped into 64 shards, each with its own leaf lock, selected by a hash
+of the target's address (`design/dgc.md`, "Ownership and Program tracking").  The §8 registry benchmark with
+`@=` on eight threads went from 46,206-49,853 to 53,683-61,603 ops/s (one thread: 45,726-46,452 to
+52,848-94,675); it still does not scale with threads because every thread writes the same hub's hash, whose
+lvalue lock serializes them, which no registry change can remove.
+
 **Would not fix:** a separate gap found while auditing this area — `ALLOW_OPAQUE_REFERENCES`
 is extended bit 88, and `PO_POSITIVE_OPTIONS` (`include/qore/Restrictions.h:168`) is a
 legacy 64-bit mask, so the option escapes positive-option discipline. A child Program can
 grant itself `@=` where it is correctly refused `:=`. Verified empirically; unrelated to
 this design, and worth its own issue.
 
-## 8. Cost on the corrected collector
-
-Re-measured on 2026-09-23 against `develop` at `6ba8a893c`, i.e. after `db56d0ecc` (scans that were being
-skipped are made again) and `6aa593e80` (a closure-bound local's frame holds a real reference).
 **Fixed 2026-09-23:** the positive and free options are enforced with the full-width masks
 `QoreParseOptions::POSITIVE_OPTIONS` and `QoreParseOptions::FREE_OPTIONS`; a locked child is refused
 `allow-opaque-references` by every route.
 
+## 8. Cost on the corrected collector
+
+Re-measured on 2026-09-23 against `develop` at `6ba8a893c`, i.e. after `db56d0ecc` (scans that were being
+skipped are made again) and `6aa593e80` (a closure-bound local's frame holds a real reference).
 
 ### Registry register/unregister (release build, wall-clock)
 
