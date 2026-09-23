@@ -1172,6 +1172,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     std::atomic<int64> max_http2_body_size{0};
 
+    //! Maximum size in bytes of an HTTP/2 or HTTP/3 response body received into memory by a client (0 = unlimited)
+    /** Set by the HTTP client connection that owns the socket; client sessions read it when response data arrives,
+        so that it can change after the session was created.  A response body delivered incrementally to a
+        streaming consumer is not limited.
+    */
+    std::atomic<int64> max_response_body_size{0};
+
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
         (RFC 8441), so clients will not attempt WebSocket over HTTP/2 CONNECT.

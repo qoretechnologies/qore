@@ -797,6 +797,14 @@ QoreHashNode* Http2ClientConnection::getReferencedErrorInfo() {
     return poll_op_priv->getErrorInfo();
 }
 
+void Http2ClientConnection::setMaxResponseBodySizeHook(int64_t max_size) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        return;
+    }
+    poll_op_priv->setMaxResponseBodySize(max_size);
+}
+
 void Http2ClientConnection::setIdleTimeoutHook(int64_t timeout_us) {
     MethodGuard g(this);
     if (!g.acquired() || !poll_op_priv) {

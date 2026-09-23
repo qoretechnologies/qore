@@ -817,16 +817,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         }
     }
 
-    // Push the configured idle timeout into the protocol's poll-op
-    // proactive-close machinery.  Mirrors the Qore-side wiring at
-    // qlib/HttpClientIo/HttpClientConnectionManager.qc:1684-1689.
-    // H1/H2 override setIdleTimeoutHook to call their setIdleTimeout;
-    // H3 uses ngtcp2's own idle/keepalive timers and inherits the
-    // base no-op.  Safe to call before or after wait_for_ready — the
-    // hook is idempotent and a no-op while the poll op is unbuilt.
-    if (opts_.idle_timeout_ms > 0) {
-        conn->setIdleTimeoutHook((int64_t)opts_.idle_timeout_ms * 1000LL);
-    }
+    // Push the per-connection options; a negotiating connection gets them again as a concrete connection in
+    // finalizeAsyncConnection()
+    applyConnectionOptions(*conn);
 
     // Transfer ownership of the strong ref to the caller.
     return conn.release();
@@ -869,6 +862,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
 
     HttpClientConnectionBase* concrete_raw = *concrete;
     const std::string key = neg->getPoolKey();
+
+    // the negotiating connection did not keep the per-connection options
+    applyConnectionOptions(concrete_raw);
 
     // Swap the transitional entry for the concrete one under the write lock, so
     // a concurrent acquire never sees both or neither.
@@ -923,6 +919,22 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::finalizeAsyncConnecti
         concrete.release();
     }
     return concrete_raw;
+}
+
+void HttpClientConnectionManagerBase::applyConnectionOptions(HttpClientConnectionBase* conn) {
+    // Push the configured idle timeout into the protocol's poll-op
+    // proactive-close machinery.  Mirrors the Qore-side wiring at
+    // qlib/HttpClientIo/HttpClientConnectionManager.qc:1684-1689.
+    // H1/H2 override setIdleTimeoutHook to call their setIdleTimeout;
+    // H3 uses ngtcp2's own idle/keepalive timers and inherits the
+    // base no-op.  Safe to call before or after wait_for_ready — the
+    // hook is idempotent and a no-op while the poll op is unbuilt.
+    if (opts_.idle_timeout_ms > 0) {
+        conn->setIdleTimeoutHook((int64_t)opts_.idle_timeout_ms * 1000LL);
+    }
+    if (opts_.max_response_body_size > 0) {
+        conn->setMaxResponseBodySizeHook(opts_.max_response_body_size);
+    }
 }
 
 void HttpClientConnectionManagerBase::releaseConnection(HttpClientConnectionBase* conn) {

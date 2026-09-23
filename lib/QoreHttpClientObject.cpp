@@ -397,6 +397,24 @@ static qore_uncompress_to_binary_max_t get_binary_decoder_for_content_encoding(c
     return nullptr;
 }
 
+//! Converts a DECOMPRESSION-LIMIT-EXCEEDED exception into HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE
+/** @param max_size the maximum response body size
+    @param xsink the exception sink to check
+*/
+static void convert_response_body_limit_error(int64 max_size, ExceptionSink* xsink) {
+    if (!*xsink) {
+        return;
+    }
+    QoreValue err = xsink->getExceptionErr();
+    if (err.getType() != NT_STRING
+            || strcmp(err.get<const QoreStringNode>()->c_str(), "DECOMPRESSION-LIMIT-EXCEEDED")) {
+        return;
+    }
+    xsink->clear();
+    xsink->raiseException("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "the decoded response body exceeds the maximum "
+        "response body size of %lld bytes", (long long)max_size);
+}
+
 //! Returns the message body of a response that arrived as binary, decoded according to its content encoding
 /** The connection decides how a body is delivered from its media type: a text type arrives as a string, and
     any other type as binary, whose octets are not text.  A body that carries a content encoding always arrives
@@ -409,13 +427,15 @@ static qore_uncompress_to_binary_max_t get_binary_decoder_for_content_encoding(c
     @param dec the decoder for @p content_encoding, if one was already selected
     @param encoding_passthru true if an encoded body is returned encoded
     @param is_text true if the media type of the body carries text
-    @param xsink exception sink
+    @param max_size the maximum size in bytes of the decoded body; 0 = no limit
+    @param xsink exception sink; a decoded body that exceeds @p max_size raises
+    \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE
 
     @return the body, or no value if there is nothing to change
 */
 static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
         const char* content_encoding, qore_uncompress_to_string_max_t dec, bool encoding_passthru, bool is_text,
-        ExceptionSink* xsink) {
+        int64 max_size, ExceptionSink* xsink) {
     if (!bin || !bin->size()) {
         return QoreValue();
     }
@@ -434,7 +454,9 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
                 // an encoding that is not a compression, such as "identity", leaves the body as it is
                 return QoreValue();
             }
-            return bin_dec(bin, 0, xsink);
+            QoreValue rv = bin_dec(bin, max_size, xsink);
+            convert_response_body_limit_error(max_size, xsink);
+            return rv;
         }
         if (!dec) {
             bool ignore_encoding = false;
@@ -448,7 +470,8 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
                 return QoreValue();
             }
         }
-        QoreStringNode* decoded = dec(bin, body_enc, 0, xsink);
+        QoreStringNode* decoded = dec(bin, body_enc, max_size, xsink);
+        convert_response_body_limit_error(max_size, xsink);
         return decoded;
     }
 
@@ -1218,6 +1241,7 @@ struct qore_httpclient_priv {
                         || opts.proxy_url != proxy_url
                         || opts.connect_timeout_ms != connect_timeout_ms
                         || opts.request_timeout_ms != timeout
+                        || opts.max_response_body_size != max_response_body_size
                         || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                         || opts.client_cert != msock->cert
@@ -1238,6 +1262,7 @@ struct qore_httpclient_priv {
                 opts.connect_timeout_ms = connect_timeout_ms;
                 opts.request_timeout_ms = timeout;
                 opts.idle_timeout_ms = 60000;
+                opts.max_response_body_size = max_response_body_size;
                 // SSL settings from the HTTPClient
                 opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
@@ -1279,6 +1304,9 @@ struct qore_httpclient_priv {
 
     int default_port = HTTPCLIENT_DEFAULT_PORT,
         max_redirects = HTTPCLIENT_DEFAULT_MAX_REDIRECTS;
+
+    //! The maximum size in bytes of a response body received into memory, as received and decoded; 0 = no limit
+    int64 max_response_body_size = 0;
 
     std::string default_path;
     int timeout = HTTPCLIENT_DEFAULT_TIMEOUT;
@@ -1441,6 +1469,9 @@ struct qore_httpclient_priv {
         }
         if (max_redirects != HTTPCLIENT_DEFAULT_MAX_REDIRECTS) {
             h->setKeyValueIntern("max_redirects", max_redirects);
+        }
+        if (max_response_body_size) {
+            h->setKeyValueIntern("max_response_body_size", max_response_body_size);
         }
         if (!connection.password.empty()) {
             h->setKeyValueIntern("password", new QoreStringNode(connection.password));
@@ -3553,6 +3584,17 @@ int QoreHttpClientObject::setOptions(const QoreHashNode* opts, ExceptionSink* xs
     n = opts->getKeyValue("encoding_passthru");
     if (n.getAsBool()) {
         http_priv->encoding_passthru = true;
+    }
+
+    n = opts->getKeyValue("max_response_body_size");
+    if (!n.isNothing()) {
+        int64 max_size = n.getAsBigInt();
+        if (max_size < 0) {
+            xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "the value of the \"max_response_body_size\" option "
+                "must not be negative (value passed: %lld)", (long long)max_size);
+            return -1;
+        }
+        http_priv->max_response_body_size = max_size;
     }
 
     n = opts->getKeyValue("pre_encoded_urls");
@@ -5827,6 +5869,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 QoreStringValueHelper str(body_val);
                                 accumulated_body->append(str->c_str(), str->size());
                             }
+                            // the buffered body is limited like a body that is returned whole
+                            if (max_response_body_size > 0
+                                    && (int64)accumulated_body->size() > max_response_body_size) {
+                                xsink->raiseException("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "the response body "
+                                    "of at least %lld bytes exceeds the maximum response body size of %lld bytes",
+                                    (long long)accumulated_body->size(), (long long)max_response_body_size);
+                                channel->close();
+                                return nullptr;
+                            }
                         } else {
                             // Per-chunk callback.  Convert binary→string
                             // when no content-encoding (matches legacy
@@ -5898,8 +5949,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         QoreValue cb_data;
                         if (dec && !ignore_encoding) {
                             QoreStringNode* decoded = dec(*accumulated_body,
-                                QCS_UTF8, 0, xsink);
+                                QCS_UTF8, max_response_body_size, xsink);
                             if (*xsink) {
+                                convert_response_body_limit_error(max_response_body_size, xsink);
                                 channel->close();
                                 return nullptr;
                             }
@@ -6386,7 +6438,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // Use default encoding from the HTTPClient
             const QoreEncoding* body_enc = enc ? enc : QCS_UTF8;
             QoreValue processed = process_binary_body(bin, body_enc, content_encoding, dec,
-                encoding_passthru, is_text, xsink);
+                encoding_passthru, is_text, max_response_body_size, xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -6874,6 +6926,8 @@ public:
         bool streaming_response = false;
         //! True if the content encoding of the response body is not decoded
         bool encoding_passthru = false;
+        //! The maximum size in bytes of the decoded response body; 0 = no limit
+        int64 max_response_body_size = 0;
 
         //! The character encoding given to a decoded text body, as in the blocking API
         const QoreEncoding* body_enc = QCS_UTF8;
@@ -7168,6 +7222,17 @@ public:
         if (phase != Phase::WAITING_RESPONSE || !future || !future->isDone()) {
             return false;
         }
+        // a failed request is not the goal: continuePoll() raises its error, which getOutput() cannot report
+        if (future->isError()) {
+            return false;
+        }
+        {
+            ExceptionSink err_xsink;
+            if (raiseResponseError(&err_xsink)) {
+                err_xsink.clear();
+                return false;
+            }
+        }
         // a redirect response that will be followed is not the goal
         if (isFollowedRedirectResponse()) {
             return false;
@@ -7197,13 +7262,15 @@ public:
         @param max_redirects the maximum number of redirects to follow
         @param streaming_response true if the operation completes after the response headers
         @param encoding_passthru true if the content encoding of the response body is not decoded
+        @param max_response_body_size the maximum size in bytes of the decoded response body; 0 = no limit
         @param pgm the program of the client
         @param xsink exception sink
     */
     DLLLOCAL void initRequest(std::shared_ptr<HttpClientConnectionManagerBase> mgr, const con_info& origin,
             const char* target, const char* method, const char* http_version, QoreHashNode* headers,
             BinaryNode* body, bool follow, int max_redirects, bool streaming_response,
-            bool encoding_passthru, const QoreEncoding* body_enc, QoreProgram* pgm, ExceptionSink* xsink) {
+            bool encoding_passthru, int64 max_response_body_size, const QoreEncoding* body_enc, QoreProgram* pgm,
+            ExceptionSink* xsink) {
         assert(!request);
         request.reset(new RequestState(origin));
         request->headers = headers;
@@ -7216,6 +7283,7 @@ public:
         request->follow = follow && client_obj;
         request->streaming_response = streaming_response;
         request->encoding_passthru = encoding_passthru;
+        request->max_response_body_size = max_response_body_size;
         request->body_enc = body_enc ? body_enc : QCS_UTF8;
         if (request->follow) {
             request->chain.init(*headers, xsink);
@@ -7403,6 +7471,14 @@ public:
         }
 
         if (future && future->isDone()) {
+            // a stream error reported in the response fails the request
+            if (raiseResponseError(xsink)) {
+                done = true;
+                phase = Phase::DONE;
+                clearPendingUnlocked(xsink);
+                closeSubmittedConnection();
+                return nullptr;
+            }
             // follow a redirect response; a redirect that is followed starts the next request
             int rc = processRedirect(xsink);
             if (rc > 0) {
@@ -7768,6 +7844,43 @@ public:
 
         @return 0 if the body was decoded or needs no decoding, -1 if an exception was raised
     */
+    //! Raises the error of a request whose response reports a stream error
+    /** HTTP/2 and HTTP/3 connections report a stream error, such as a stream reset or a response body that exceeds
+        the maximum response body size, as a response hash with \c err and \c desc keys, which the blocking API
+        raises as an exception; the future itself is not rejected.
+
+        @return true if an exception was raised
+    */
+    DLLLOCAL bool raiseResponseError(ExceptionSink* xsink) const {
+        if (future->isError()) {
+            return false;
+        }
+        ExceptionSink peek_xsink;
+        ValueHolder rv(future->get(0, &peek_xsink), &peek_xsink);
+        if (peek_xsink || rv->getType() != NT_HASH) {
+            peek_xsink.clear();
+            return false;
+        }
+        const QoreHashNode* h = rv->get<const QoreHashNode>();
+        QoreValue err_val = h->getKeyValue("err");
+        if (err_val.isNullOrNothing()) {
+            return false;
+        }
+        std::string err_str = "HTTP-CLIENT-RECEIVE-ERROR";
+        if (err_val.getType() == NT_STRING) {
+            QoreStringValueHelper err(err_val);
+            err_str = err->c_str();
+        }
+        std::string desc_str = "request failed";
+        QoreValue desc_val = h->getKeyValue("desc");
+        if (desc_val.getType() == NT_STRING) {
+            QoreStringValueHelper desc(desc_val);
+            desc_str = desc->c_str();
+        }
+        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+        return true;
+    }
+
     DLLLOCAL int decodeResponseBody(ExceptionSink* xsink) const {
         if (request->decode_state > 0) {
             return 0;
@@ -7836,12 +7949,14 @@ public:
         if (is_text) {
             qore_uncompress_to_string_max_t dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
             assert(dec);
-            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8, 0, xsink) : nullptr;
+            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8,
+                request->max_response_body_size, xsink) : nullptr;
         } else {
             qore_uncompress_to_binary_max_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
             assert(dec);
-            decoded = dec ? dec(bin, 0, xsink) : nullptr;
+            decoded = dec ? dec(bin, request->max_response_body_size, xsink) : nullptr;
         }
+        convert_response_body_limit_error(request->max_response_body_size, xsink);
         if (*xsink) {
             xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",
                 token.c_str(), (long long)bin->size());
@@ -8684,7 +8799,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // request sends the body again
     poller->initRequest(mgr_holder, this_connection, msgpath, method, http11 ? "1.1" : "1.0",
         request_headers.release(), redirect_passthru ? nullptr : body_node_ref(), !redirect_passthru, max_redirects,
-        streaming_response, encoding_passthru, enc ? enc : QCS_UTF8, getProgram(), xsink);
+        streaming_response, encoding_passthru, max_response_body_size, enc ? enc : QCS_UTF8, getProgram(), xsink);
     if (*xsink) {
         release_local_conn_ref();
         return nullptr;
@@ -9403,6 +9518,21 @@ void QoreHttpClientObject::setMaxRedirects(int max) {
 
 int QoreHttpClientObject::getMaxRedirects() const {
     return http_priv->max_redirects;
+}
+
+void QoreHttpClientObject::setMaxResponseBodySize(int64 size, ExceptionSink* xsink) {
+    if (size < 0) {
+        xsink->raiseException("HTTP-CLIENT-OPTION-ERROR", "the maximum response body size must not be negative "
+            "(value passed: %lld)", (long long)size);
+        return;
+    }
+    AutoLocker al(priv->m);
+    http_priv->max_response_body_size = size;
+}
+
+int64 QoreHttpClientObject::getMaxResponseBodySize() const {
+    AutoLocker al(priv->m);
+    return http_priv->max_response_body_size;
 }
 
 void QoreHttpClientObject::setDefaultHeaderValue(const char* header, const char* val) {

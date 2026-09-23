@@ -2004,10 +2004,28 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
         }
     } else {
         stream = h2->getOrCreateStream(stream_id);
+        // the rest of a response body that exceeded the limit is discarded
+        if (stream && stream->body_too_large) {
+            return 0;
+        }
     }
     if (stream) {
         stream->body.insert(stream->body.end(), data, data + len);
         printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
+        // a client response body that is returned whole is limited by the client's maximum response body size;
+        // one delivered incrementally to a streaming consumer and a CONNECT tunnel are not
+        if (!h2->is_server && !stream->streaming && !stream->is_connect) {
+            int64 max_size = h2->sock ? h2->sock->max_response_body_size.load(std::memory_order_relaxed) : 0;
+            if (max_size > 0 && (int64)stream->body.size() > max_size) {
+                printd(1, "onDataChunkRecvCallback: response body too large (%zu > " QLLD ") stream %d\n",
+                    stream->body.size(), max_size, stream_id);
+                stream->max_body_size = max_size;
+                stream->body_too_large = true;
+                std::vector<char>().swap(stream->body);
+                nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_CANCEL);
+                return 0;
+            }
+        }
         // Check body size against limit
         if (stream->max_body_size > 0
                 && (int64)stream->body.size() > stream->max_body_size) {

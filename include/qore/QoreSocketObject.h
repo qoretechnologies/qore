@@ -733,6 +733,11 @@ public:
     //! Returns the maximum body size for chunked HTTP reads
     DLLEXPORT int64 getMaxChunkedBodySize() const;
 
+    //! Sets the maximum size in bytes of an HTTP/2 or HTTP/3 response body received into memory (0 = unlimited)
+    /** Can be called from any thread; client sessions on this socket read the value when response data arrives.
+    */
+    DLLLOCAL void setMaxResponseBodySize(int64 size);
+
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
 

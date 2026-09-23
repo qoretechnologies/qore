@@ -17830,6 +17830,22 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     // the partial body bubble up as a successful short response (observed as
     // FUTURE-TIMEOUT with a Content-Length mismatch, because the H1 body
     // reader would otherwise spin waiting for the declared byte count).
+    // the stream was canceled because its response body exceeded the maximum response body size
+    if (stream->body_too_large) {
+        QoreStringNode* desc = new QoreStringNode;
+        desc->sprintf("the HTTP/2 response body of stream %d exceeds the maximum response body size of %lld bytes",
+            stream_id, (long long)stream->max_body_size);
+        response->setKeyValue("err", new QoreStringNode("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE"), xsink);
+        response->setKeyValue("desc", desc, xsink);
+        response->setKeyValue("stream_id", stream_id, xsink);
+        response->setKeyValue("end_stream", true, xsink);
+        {
+            AutoLocker al(response_lock);
+            completed_responses.push_back(response.release());
+        }
+        return;
+    }
+
     if (stream->reset && stream->error_code != 0) {
         char errbuf[64];
         snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d reset by peer "

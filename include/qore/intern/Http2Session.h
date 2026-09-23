@@ -107,6 +107,11 @@ struct Http2StreamInfo {
     //! Maximum body size in bytes (0 = unlimited)
     int64 max_body_size = 0;
 
+    //! True if the body of a client response exceeded the maximum response body size
+    /** The stream has been canceled, its body discarded, and the rest of its DATA is discarded as it arrives.
+    */
+    bool body_too_large = false;
+
     // Stream priority
     int32_t weight = 16;
     int32_t dependency = 0;

@@ -4276,6 +4276,11 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
                 // Client: allow larger pre-alloc (up to 64MB) for response bodies
                 size_t max_reserve = session->is_server_
                     ? QUIC_MAX_STREAM_BODY : (64 * 1024 * 1024);
+                // a client response body is never reserved beyond the maximum response body size
+                int64_t max_response = session->max_response_body_size_.load(std::memory_order_relaxed);
+                if (!session->is_server_ && max_response > 0 && static_cast<size_t>(max_response) < max_reserve) {
+                    max_reserve = static_cast<size_t>(max_response);
+                }
                 if (cl > 0 && static_cast<size_t>(cl) <= max_reserve) {
                     stream->body.reserve(static_cast<size_t>(cl));
                 }
@@ -4522,6 +4527,30 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             // Mark stream complete with error so callers don't spin until timeout
             session->markStreamComplete(stream_id);
             return 0;
+        }
+        // a client response body that is returned whole is limited by the client's maximum response body size
+        if (!session->is_server_) {
+            int64_t max_size = session->max_response_body_size_.load(std::memory_order_relaxed);
+            if (max_size > 0 && (int64_t)(stream->body.size() + datalen) > max_size) {
+                printd(1, "h3RecvDataCallback: response body too large (%zu + %zu > %lld) stream %lld\n",
+                    stream->body.size(), datalen, (long long)max_size, (long long)stream_id);
+                std::vector<char>().swap(stream->body);
+                stream->body_too_large = true;
+                stream->error_message = "the HTTP/3 response body of stream " + std::to_string(stream_id)
+                    + " exceeds the maximum response body size of " + std::to_string(max_size) + " bytes";
+                // stop reading the stream; nghttp3 before ngtcp2 so both layers stay in sync
+                nghttp3_conn_shutdown_stream_read(session->h3_conn_, stream_id);
+                int rv = ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id,
+                    NGHTTP3_H3_REQUEST_CANCELLED);
+                if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
+                    return NGHTTP3_ERR_CALLBACK_FAILURE;
+                }
+                ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                      static_cast<uint64_t>(datalen));
+                ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+                session->markStreamComplete(stream_id);
+                return 0;
+            }
         }
         stream->body.insert(stream->body.end(), data, data + datalen);
 

@@ -89,6 +89,7 @@ struct QuicStreamInfo {
     bool headers_complete = false;
     bool body_complete = false;
     std::string error_message;  //!< non-empty if stream terminated with error
+    bool body_too_large = false;  //!< true if a client response body exceeded the maximum response body size
     //! true if stream received data in 0-RTT (for server-side logging/auditing)
     bool received_0rtt_data = false;
 
@@ -473,6 +474,13 @@ public:
         Bodies exceeding this limit are rejected with a stream reset.
     */
     DLLLOCAL void setMaxRequestBodySize(int64_t size) { max_request_body_size_ = size; }
+
+    //! Sets the maximum size in bytes of a client response body received into memory; <= 0 means no limit
+    /** A response body delivered incrementally to a streaming consumer and a CONNECT tunnel are not limited.
+    */
+    DLLLOCAL void setMaxResponseBodySize(int64_t size) {
+        max_response_body_size_.store(size, std::memory_order_relaxed);
+    }
 
     //! Atomically find first headers-ready stream, copy it, and mark as dispatched
     /** Finds the first stream with headers_complete && !dispatched, creates a copy
@@ -1394,6 +1402,9 @@ private:
     bool is_server_ = false;                        //!< true if server-side session
     ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
+    //! Maximum size of a client response body received into memory; <= 0 = no limit
+    // atomic: set from the thread that polls the session while it can be read by callbacks
+    std::atomic<int64_t> max_response_body_size_{0};
 
     //! Server CID for this session (used for CID-based routing)
     ngtcp2_cid scid_{};

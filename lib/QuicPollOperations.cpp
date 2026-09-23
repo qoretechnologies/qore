@@ -619,7 +619,9 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
         // Use a more specific error code for peer-reset streams; keep
         // QUIC-BODY-TOO-LARGE for the request-body-exceeded case (legacy).
         const char* err_code = "QUIC-STREAM-ERROR";
-        if (cached_stream->error_message.find("exceeded maximum size")
+        if (cached_stream->body_too_large) {
+            err_code = "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE";
+        } else if (cached_stream->error_message.find("exceeded maximum size")
                 != std::string::npos) {
             err_code = "QUIC-BODY-TOO-LARGE";
         } else if (cached_stream->error_message.find("peer reset")
@@ -914,6 +916,11 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
         xsink->raiseException("QUIC-POLL-ERROR", "QUIC client session has been aborted");
         return nullptr;
     }
+
+    // the maximum response body size of the client can change after the session was created, and the session
+    // does not keep the socket
+    quic_session->setMaxResponseBodySize(
+        sock->priv->socket->priv->max_response_body_size.load(std::memory_order_relaxed));
 
     // Enforce the handshake deadline if one was configured. QUIC runs over UDP,
     // so a stalled handshake gets no OS-level feedback (unlike TCP connect which

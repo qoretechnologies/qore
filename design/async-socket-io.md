@@ -955,8 +955,10 @@ the idle period and does a `recv(MSG_PEEK)` to confirm silence, then closes.  Qo
   H1/H2 poll op via `setIdleTimeout(int idle_timeout_ms)`:
   - **Qore mgr**: `HttpClientConnectionManager::submitConnectionToController()` immediately
     after connection creation
-  - **C++ mgr**: `HttpClientConnectionManagerBase::createConnection()` after `waitForReady`,
-    via the virtual `HttpClientConnectionBase::setIdleTimeoutHook(int64_t timeout_us)`
+  - **C++ mgr**: `HttpClientConnectionManagerBase::applyConnectionOptions()`, called by
+    `createConnection()` and again by `finalizeAsyncConnection()` for the concrete connection that
+    replaces an asynchronously negotiated one, via the virtual
+    `HttpClientConnectionBase::setIdleTimeoutHook(int64_t timeout_us)`
     overridden by `Http{1,2}ClientConnection` to call the poll-op priv's `setIdleTimeout`
     directly (and a no-op on `Http3ClientConnection` — H3 relies on its ngtcp2 idle timer
     described in the section above)

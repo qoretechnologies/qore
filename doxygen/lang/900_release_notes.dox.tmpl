@@ -1139,6 +1139,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       their \c *_to_string() counterparts, and @ref Qore::get_decompressor() "get_decompressor()"; decompression
       stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the output would exceed the limit, so a
       "decompression bomb" (a small input that expands to a huge output) never allocates more than the limit
+    - Added the \c max_response_body_size option and
+      @ref Qore::HTTPClient::setMaxResponseBodySize() "HTTPClient::setMaxResponseBodySize()" limiting the size of a
+      response body that @ref Qore::HTTPClient "HTTPClient" receives into memory, both as received and after its
+      content encoding is decoded, over HTTP/1.x, HTTP/2, and HTTP/3; a larger body raises
+      \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon as the limit is exceeded
 
     - Added the @ref char "char" value type for single Unicode codepoints, including
       \c c'...' and \c c"..." literals, the @ref char_type "char" and

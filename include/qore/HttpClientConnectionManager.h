@@ -184,6 +184,14 @@ public:
 
         //! Client private key for mutual TLS (ref'd; nullptr = no key).
         QoreSSLPrivateKey* client_key = nullptr;
+        //! Maximum size in bytes of a response body received into memory; 0 = no limit
+        /** A response body that is returned whole and exceeds it fails the request with
+            \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; a body delivered incrementally to a streaming consumer is not
+            limited.
+
+            @since %Qore 3.0
+        */
+        int64_t max_response_body_size = 0;
     };
 
     //! Creates a new manager with the given options.
@@ -510,6 +518,12 @@ public:
 
 protected:
     //! Parsed proxy info; @c nullptr if no proxy configured.
+    //! Pushes the per-connection options to a connection
+    /** Called for a new connection and again for the concrete connection that replaces a negotiating one, as a
+        negotiating connection does not keep them.
+    */
+    DLLLOCAL void applyConnectionOptions(HttpClientConnectionBase* conn);
+
     struct ProxyInfo {
         std::string host;
         int port;

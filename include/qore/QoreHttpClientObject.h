@@ -118,6 +118,7 @@ public:
           - port: giving the port number
           - ssl: giving a boolean true or false value
         - max_redirects: sets the max_redirects option
+        - max_response_body_size: sets the maximum size of a response body received into memory
         - default_port: sets the default port number
         - proxy: sets the proxy URL
         - url: sets the default connection URL
@@ -558,6 +559,19 @@ public:
 
     //! returns the value of the max_redirects option
     DLLEXPORT int getMaxRedirects() const;
+
+    //! sets the maximum size in bytes of a response body received into memory; 0 = no limit
+    /** @param size the maximum size in bytes, as received and after decoding its content encoding
+        @param xsink raises \c HTTP-CLIENT-OPTION-ERROR if @p size is negative
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setMaxResponseBodySize(int64 size, ExceptionSink* xsink);
+
+    //! returns the maximum size in bytes of a response body received into memory; 0 = no limit
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT int64 getMaxResponseBodySize() const;
 
     //! opens a connection and returns a code giving the result
     /** @return -1 if an exception was thrown, 0 for OK

@@ -484,6 +484,13 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       unavailable); @ref HTTP3Mode enum values are also accepted
     - \c http_version: The HTTP version to use: \c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0"
     - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+    - \c max_response_body_size: The maximum size in bytes of a response body that is received into memory, both
+      as received and after its content encoding is decoded; a larger response body fails the request with a
+      \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE exception as soon as the limit is exceeded, so a huge or
+      "decompression bomb" response cannot exhaust memory; \c 0 (the default) means no limit.  A response body
+      delivered incrementally to a callback or an output stream is not limited, except when it has to be buffered
+      to decode its content encoding.  Over HTTP/1.x the connection is closed when the limit is exceeded; over HTTP/2
+      and HTTP/3 only the stream is canceled; see HTTPClient::setMaxResponseBodySize()
     - \c password: The password for HTTP basic authentication; only used if no username or password is set in the URL
       and if the \c username option is also used
     - \c pre_encoded_urls: If @ref True "True" then all URI paths in URLs are assumed to be already
@@ -557,8 +564,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 2.0 added the following options:
       - \c username
       - \c password
-    - %Qore 3.0 added the following option:
+    - %Qore 3.0 added the following options:
       - \c http3_mode
+      - \c max_response_body_size
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
@@ -3004,6 +3012,52 @@ int mr = httpclient.getMaxRedirects();
 */
 int HTTPClient::getMaxRedirects() [flags=CONSTANT] {
     return client->getMaxRedirects();
+}
+
+//! Sets the maximum size in bytes of a response body that is received into memory
+/** The limit applies to a response body as received and after its content encoding is decoded; a larger response
+    body fails the request with a \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE exception as soon as the limit is exceeded,
+    so that a huge response or a "decompression bomb" (a small compressed body that expands to a huge one) cannot
+    exhaust the memory of the process.  Over HTTP/1.x the connection is closed when the limit is exceeded, as the
+    rest of the body cannot be skipped; over HTTP/2 and HTTP/3 only the stream of the response is canceled.
+
+    A response body delivered incrementally to a callback or an output stream is not limited, except when it has
+    to be buffered to decode its content encoding.
+
+    @param max_response_body_size the maximum size in bytes; \c 0 means no limit
+
+    @par Example:
+    @code{.py}
+# limit response bodies to 10 MiB
+httpclient.setMaxResponseBodySize(10 * 1024 * 1024);
+    @endcode
+
+    @throw HTTP-CLIENT-OPTION-ERROR \a max_response_body_size is negative
+
+    @see
+    - HTTPClient::getMaxResponseBodySize()
+    - the \c max_response_body_size option of HTTPClient::constructor()
+
+    @since %Qore 3.0
+*/
+nothing HTTPClient::setMaxResponseBodySize(int max_response_body_size) [flags=NAMED_ARGS] {
+    client->setMaxResponseBodySize(max_response_body_size, xsink);
+}
+
+//! Returns the maximum size in bytes of a response body that is received into memory
+/** @return the maximum size in bytes of a response body that is received into memory; \c 0 means no limit
+
+    @par Example:
+    @code{.py}
+int max = httpclient.getMaxResponseBodySize();
+    @endcode
+
+    @see HTTPClient::setMaxResponseBodySize()
+
+    @since %Qore 3.0
+*/
+int HTTPClient::getMaxResponseBodySize() [flags=CONSTANT] {
+    return client->getMaxResponseBodySize();
 }
 
 //! Clears any Queue object that may be set on the HTTPClient object so that @ref event_handling "I/O events" are no longer captured on the object

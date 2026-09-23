@@ -1608,6 +1608,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 sock_obj->ref();
                 current_op = new SocketRecvPollOperation(xsink, read_size, sock_obj, false);
             } else {
+                // the body is read whole, so its declared size is checked before any of it is allocated
+                if (checkResponseBodySize(response_content_length, "declared by Content-Length", xsink)) {
+                    return nullptr;
+                }
                 sock_obj->ref();
                 current_op = new SocketRecvPollOperation(xsink, (ssize_t)response_content_length,
                     sock_obj, false);
@@ -1791,14 +1795,41 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
         const char* semi = (const char*)memchr(str, ';', len);
         size_t hex_len = semi ? (size_t)(semi - str) : len;
 
-        // Parse hex chunk size
-        char hex_buf[32];
-        if (hex_len >= sizeof(hex_buf)) {
-            hex_len = sizeof(hex_buf) - 1;
+        // Parse the hexadecimal chunk size (RFC 9112 section 7.1); whitespace around it is tolerated, but a line
+        // without hexadecimal digits, with other characters, or with a size that overflows is a protocol error
+        size_t i = 0;
+        while (i < hex_len && (str[i] == ' ' || str[i] == '\t')) {
+            ++i;
         }
-        memcpy(hex_buf, str, hex_len);
-        hex_buf[hex_len] = '\0';
-        int64_t chunk_size = strtol(hex_buf, nullptr, 16);
+        size_t digits = 0;
+        int64_t chunk_size = 0;
+        for (; i < hex_len; ++i, ++digits) {
+            char c = str[i];
+            int64_t v;
+            if (c >= '0' && c <= '9') {
+                v = c - '0';
+            } else if (c >= 'a' && c <= 'f') {
+                v = c - 'a' + 10;
+            } else if (c >= 'A' && c <= 'F') {
+                v = c - 'A' + 10;
+            } else {
+                break;
+            }
+            // the chunk is read with its trailing CRLF, so the size plus 2 must not overflow
+            if (chunk_size > ((INT64_MAX - 2) >> 4)) {
+                setError("HTTP1-RECV-ERROR", "chunk size overflow", xsink);
+                return nullptr;
+            }
+            chunk_size = (chunk_size << 4) | v;
+        }
+        while (i < hex_len && (str[i] == ' ' || str[i] == '\t')) {
+            ++i;
+        }
+        if (!digits || i != hex_len) {
+            QoreStringMaker desc("invalid chunk size line: %s", QoreString(str, len).c_str());
+            setError("HTTP1-RECV-ERROR", desc.c_str(), xsink);
+            return nullptr;
+        }
 
         printd(5, "Http1ClientPollOperationPriv::handleRecvChunkSize() chunk_size=%lld\n",
             (long long)chunk_size);
@@ -1824,6 +1855,12 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
             current_op->setSelf(*self);
             req_state = ReqState::RECV_CHUNK_CRLF;
             return handleRecvChunkCrlf(xsink);
+        }
+
+        // a chunk of a body that is read whole is checked before it is allocated
+        if (!streaming_active_io && checkResponseBodySize((response_body ? (int64_t)response_body->size() : 0)
+                + chunk_size, "received with chunked transfer encoding", xsink)) {
+            return nullptr;
         }
 
         // Read chunk data + trailing CRLF (chunk_size + 2 bytes)
@@ -1989,6 +2026,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
                     dispatchStreamingData(data, xsink);
                 } else if (response_body) {
                     response_body->append(data);
+                    if (checkResponseBodySize(response_body->size(), "received before the connection closed",
+                            xsink)) {
+                        return nullptr;
+                    }
                 }
             }
         }
@@ -2453,6 +2494,17 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
     // Note: do NOT close socket or delete current_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
+}
+
+int Http1ClientPollOperationPriv::checkResponseBodySize(int64_t size, const char* desc, ExceptionSink* xsink) {
+    int64_t max_size = max_response_body_size.load(std::memory_order_relaxed);
+    if (max_size <= 0 || size <= max_size) {
+        return 0;
+    }
+    QoreStringMaker msg("the response body of at least %lld bytes %s exceeds the maximum response body size of "
+        "%lld bytes", (long long)size, desc, (long long)max_size);
+    setError("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", msg.c_str(), xsink);
+    return -1;
 }
 
 void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,

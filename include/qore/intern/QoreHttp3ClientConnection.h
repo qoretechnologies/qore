@@ -108,6 +108,11 @@ public:
 
     DLLEXPORT int getActiveStreamCount() const override;
 
+    //! Pushes the maximum size of a response body received into memory down to the sockets of the QUIC sessions
+    /** Applies to every connection attempt and to the attempt that wins the handshake.
+    */
+    DLLEXPORT void setMaxResponseBodySizeHook(int64_t max_size) override;
+
     DLLEXPORT QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink, HttpClientEventSink* event_sink = nullptr) override;
@@ -346,6 +351,9 @@ private:
         @c READY and @c attempts_ has been drained.
     */
     int winner_idx_ = -1;
+
+    //! The maximum size of a response body received into memory; <= 0 = no limit; written under @c attempts_mu_
+    int64_t max_response_body_size_ = 0;
     //! Error details from the most recently failed attempt (for diagnostics
     //! when all attempts fail).  Protected by @c attempts_mu_.
     std::string last_err_, last_desc_;
