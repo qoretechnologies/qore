@@ -23,6 +23,17 @@ class Target {
     }
 }
 
+#! The targets copied by the threads of the concurrent copy check
+/** They are held here, and the threads only reach them through this class, so that no thread holds a reference to
+    them of its own once it has signalled that it is done: a closure keeps what it captured until the thread's
+    function has returned, which is after its on_exit code has signalled.
+*/
+class SharedTargets {
+    public {
+        static *hash<string, auto> holder;
+    }
+}
+
 #! Tests the registry of opaque reference targets under concurrent copies and releases
 /** Every copy and every release of an opaque value registers or deregisters a reference to its target with the
     target's Program, so the registry is written on the hot path of any code that passes opaque values around, from
@@ -47,25 +58,26 @@ class DgcOpaqueRegistryConcurrencyTest inherits QUnit::Test {
     #! threads copy opaque references to shared targets and release them; the targets are released exactly once
     concurrentCopies() {
         int d0 = Target::destroyed;
-        {
-            hash<string, auto> holder = {};
-            for (int i = 0; i < Targets; ++i) {
-                holder{"t" + i} @= new Target();
-            }
-            Counter done(Threads);
-            for (int t = 0; t < Threads; ++t) {
-                background sub () {
-                    on_exit done.dec();
-                    for (int i = 0; i < Copies; ++i) {
-                        # each copy of the hash copies every opaque value in it, and each release releases them
-                        hash<string, auto> copy = holder;
-                        copy{"t" + (i % Targets)} = NOTHING;
-                    }
-                }();
-            }
-            done.waitForZero();
-            assertEq(0, Target::destroyed - d0, "no target released while an opaque reference holds it");
+        SharedTargets::holder = {};
+        for (int i = 0; i < Targets; ++i) {
+            SharedTargets::holder{"t" + i} @= new Target();
         }
+        Counter done(Threads);
+        for (int t = 0; t < Threads; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < Copies; ++i) {
+                    # each copy of the hash copies every opaque value in it, and each release releases them
+                    hash<string, auto> copy = SharedTargets::holder;
+                    copy{"t" + (i % Targets)} = NOTHING;
+                    # released here rather than at the end of the thread, after it has signalled
+                    remove copy;
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(0, Target::destroyed - d0, "no target released while an opaque reference holds it");
+        remove SharedTargets::holder;
         assertEq(Targets, Target::destroyed - d0, "every target released with its last opaque reference");
     }
 

@@ -425,25 +425,38 @@ public hash<string, int> sub concurrent_writes(int threads) {
     return rv;
 }
 
+#! the cycle written by the threads of concurrent_writes()
+/** It is held here, and the threads only reach it through this class, so that a thread holds no reference to it of
+    its own when it signals that it is done: a closure keeps what it captured until the thread's function has
+    returned, which is after its on_exit code has signalled, so a captured cycle could still be held when the
+    destructions are counted.
+*/
+class ConcurrentTarget {
+    public {
+        static *list<Node> l;
+    }
+}
+
 sub concurrent_writes_intern(reference<hash<string, int>> rv, Tally t, int threads) {
-    list<Node> l = (new Node(),);
-    make_cycle(l[0]);
-    l[0].tmp = {};
+    ConcurrentTarget::l = (new Node(),);
+    make_cycle(ConcurrentTarget::l[0]);
+    ConcurrentTarget::l[0].tmp = {};
     Counter done(threads);
     for (int i = 0; i < threads; ++i) {
         background sub (int id) {
             on_exit done.dec();
             Node n();
-            n.peer = l[0];
-            l[0].tmp{id} = n;
+            n.peer = ConcurrentTarget::l[0];
+            ConcurrentTarget::l[0].tmp{id} = n;
             remove n;
             for (int w = 0; w < Writes; ++w) {
-                l[0].x = new Leaf();
+                ConcurrentTarget::l[0].x = new Leaf();
             }
         }(i);
     }
     done.waitForZero();
     rv."held-dtors" = Tally::cycleSince(t);
+    remove ConcurrentTarget::l;
 }
 
 #! Returns the result of every check
