@@ -48,8 +48,11 @@ public class QoreAsyncJobUtilsTest inherits QUnit::Test {
             },
             bool sub (hash<auto> s) { return s.status == "DONE"; },
         );
-        # a real wait, kept to a millisecond a poll so the test costs nothing
-        hash<auto> r = p.poll("job-default-sleeper", 10s, 1ms);
+        # timeout values are milliseconds, but usleep(integer) expects microseconds.
+        # Observe elapsed time to catch a 1000-fold unit error in the default sleeper.
+        date start = now_us();
+        hash<auto> r = p.poll("job-default-sleeper", 10s, 20ms);
+        assertTrue(get_duration_milliseconds(now_us() - start) >= 40);
         assertEq("DONE", r.status);
         assertEq(3, fetch_calls, "the poller waited and polled again rather than throwing");
     }

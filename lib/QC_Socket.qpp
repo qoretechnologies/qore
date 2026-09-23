@@ -3701,7 +3701,13 @@ if (sock.bind(80, True))
     @param port A port number to bind to on all interfaces
     @param reuse_address If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
 
+    @note The socket is bound on all interfaces as described for @ref Qore::Socket::bindINET() "Socket::bindINET()"
+    without an address or an address family: one dual-stack socket on the IPv6 wildcard address serves both IPv4 and
+    IPv6 clients
+
     @see Socket::bindINET() and Socket::bindUNIX()
+
+    @since %Qore 3.0 the socket serves IPv6 clients as well as IPv4 clients
 */
 int Socket::bind(int port, softbool reuse_address = False) [flags=NAMED_ARGS] {
     return s->bind(port, reuse_address);
@@ -3732,7 +3738,9 @@ nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
 //! Opens and binds the socket to the given IPv4 or IPv6 interface (or if no interface is given, then to all interfaces on the local system) and port (the port number will be derived from the service name if a numeric port number is not given)
 /** Opens and binds the socket to a port, interface and port (if the interface string has a format \c "host:port"), or UNIX domain socket file (if no port or service name appears in the bind string). If the second parameter is @ref True, then the socket will set the \c SO_REUSEADDR option, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state).
 
-    Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
+    Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an exception is thrown.
+
+    A stream socket without a bind address and with @ref Qore::AF_UNSPEC "AF_UNSPEC" is bound on all interfaces with one dual-stack socket on the IPv6 wildcard address \c "::", which serves both IPv4 and IPv6 clients (RFC 3493 section 5.3), so a client reaches it through any address of the local host, including the IPv6 loopback address \c ::1 that \c "localhost" resolves to first; when the port is assigned by the system (port \c 0), the port is free in both address families.  If the port is in use in either address family, the bind fails.  Only on a system without IPv6 or without dual-stack sockets is the socket bound on the IPv4 wildcard address \c "0.0.0.0" instead.  A datagram socket without a bind address is bound on the IPv4 wildcard address, and an explicit address family binds the wildcard address of that family only.
 
     If any errors occur, an exception is thrown.
 
@@ -3757,6 +3765,8 @@ sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
     @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known)
 
     @see Socket::bind() and Socket::bindUNIX()
+
+    @since %Qore 3.0 a stream socket bound on all interfaces serves IPv6 clients as well as IPv4 clients
 */
 nothing Socket::bindINET(*string bind_address, *softstring service, softbool reuse_address = False,
         softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {
@@ -6344,7 +6354,11 @@ hash<auto> h = sock.getPeerInfo();
     @throw SOCKET-NOT-OPEN The socket is not open
     @throw SOCKET-GETPEERINFO-ERROR error in getpeername()
 
+    @note On a stream socket, an IPv4 node is reported with its IPv4 address and @ref Qore::AF_INET "AF_INET", also
+    when a dual-stack IPv6 socket carries the connection with the IPv4-mapped IPv6 address \c ::ffff:a.b.c.d
+
     @since %Qore 0.8.8 added the \a host_lookup parameter
+    @since %Qore 3.0 IPv4-mapped IPv6 addresses of stream sockets are reported as IPv4 addresses
 */
 hash<auto> Socket::getPeerInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return s->getPeerInfo(xsink, host_lookup);
@@ -6365,7 +6379,11 @@ hash<auto> h = sock.getSocketInfo();
     @throw SOCKET-NOT-OPEN The socket is not open
     @throw SOCKET-GETSOCKETINFO-ERROR error in getsockname()
 
+    @note On a stream socket, an IPv4 node is reported with its IPv4 address and @ref Qore::AF_INET "AF_INET", also
+    when a dual-stack IPv6 socket carries the connection with the IPv4-mapped IPv6 address \c ::ffff:a.b.c.d
+
     @since %Qore 0.8.8 added the \a host_lookup parameter
+    @since %Qore 3.0 IPv4-mapped IPv6 addresses of stream sockets are reported as IPv4 addresses
 */
 hash<auto> Socket::getSocketInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return s->getSocketInfo(xsink, host_lookup);

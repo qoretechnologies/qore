@@ -1,0 +1,51 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreMediaUtils
+%exec-class MediaContainerTest
+
+const Png = parse_base64_string("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmElEQVR4nO3QMREAIBDAsJeDHPwfXkBGBjpk73XWPvdnowO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAeup0yLMxMyo0AAAAASUVORK5CYII=");
+const Wav = <524946462477010057415645666d74201000000001000100401f0000803e0000020010006461746100770100>
+    + binary(strmul("\0", 96000));
+
+class MediaContainerTest inherits QUnit::Test {
+    constructor() : Test("Media container validation", "1.0") {
+        addTestCase("image dimensions and MIME agreement reject masquerading responses", \imageTest());
+        addTestCase("WAV duration and MP3 frame timing reject truncated input", \audioTest());
+        set_return_value(main());
+    }
+    private imageTest() {
+        assertEq("image/png", validateMediaContentType(Png, "IMAGE/PNG; charset=binary"));
+        assertEq({"width": 64, "height": 64}, getImageDimensions(Png));
+        # Minimal dimension-bearing VP8L header exercises the 25-byte header boundary.
+        binary lossless = <5249464612000000574542505650384c050000002f01000000>;
+        assertEq({"width": 2, "height": 1}, getImageDimensions(lossless));
+        foreach binary invalid in ((binary("<html>error</html>"), binary("{\"error\":true}"), Png[0..15])) {
+            assertThrows("MEDIA-RESPONSE-ERROR", sub () { validateMediaContentType(invalid, "image/png"); });
+        }
+        assertThrows("MEDIA-RESPONSE-ERROR", sub () { validateMediaContentType(Png, "image/jpeg"); });
+        assertThrows("MEDIA-INPUT-ERROR", sub () { getImageDimensions(lossless[0..23]); });
+        assertEq("model/gltf-binary", validateMediaContentType(<676c5446020000000c000000>, "model/gltf-binary"));
+    }
+    private audioTest() {
+        assertEq("audio/wav", validateMediaContentType(Wav, "audio/x-wav"));
+        assertEq(6.0, getAudioDuration(Wav));
+        assertThrows("MEDIA-INPUT-ERROR", sub () { getAudioDuration(Wav[0..100]); });
+        # Two MPEG-1 Layer III frames at 128 kbps, 44.1 kHz. Framing only, not decoded sound quality.
+        binary frame = <fffb9000> + binary(strmul("\0", 413));
+        float duration = getAudioDuration(frame + frame);
+        assertTrue(abs(duration - 2304.0 / 44100) < 0.0000001);
+        assertThrows("MEDIA-INPUT-ERROR", sub () { getAudioDuration(frame + frame[0..10]); });
+        # MPEG-2 and MPEG-2.5 Layer III use 576 samples per frame and lower sample rates.
+        foreach hash<auto> sample in (({"header": <fff38000>, "length": 208, "rate": 22050},
+                {"header": <ffe38000>, "length": 417, "rate": 11025})) {
+            binary low_rate = sample.header + binary(strmul("\0", sample.length - 4));
+            assertEq("audio/mpeg", validateMediaContentType(low_rate, "audio/mp3"));
+            assertTrue(abs(getAudioDuration(low_rate) - 576.0 / sample.rate) < 0.0000001);
+            assertThrows("MEDIA-INPUT-ERROR", sub () { getAudioDuration(low_rate[0..10]); });
+        }
+        assertThrows("MEDIA-INPUT-ERROR", sub () { getAudioDuration(<49443304000000000020>); });
+    }
+}

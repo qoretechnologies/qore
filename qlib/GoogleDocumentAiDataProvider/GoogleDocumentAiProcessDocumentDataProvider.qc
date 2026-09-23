@@ -35,10 +35,21 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static GoogleDocumentAiProcessDocumentRequestDataType RequestType =
-            new GoogleDocumentAiProcessDocumentRequestDataType();
-        static GoogleDocumentAiProcessDocumentResponseDataType ResponseType =
-            new GoogleDocumentAiProcessDocumentResponseDataType();
+        static GoogleDocumentAiProcessDocumentRequestDataType RequestType;
+        static GoogleDocumentAiProcessDocumentResponseDataType ResponseType;
+    }
+
+    private { static Mutex type_lock(); }
+
+    #! Initializes schema-backed helper types after the independent inventory is published
+    static initializeTypes() {
+        AutoLock al(type_lock);
+        if (!RequestType) {
+            GoogleDocumentAiProcessDocumentRequestDataType request();
+            GoogleDocumentAiProcessDocumentResponseDataType response();
+            RequestType = request;
+            ResponseType = response;
+        }
     }
 
     constructor(GoogleDocumentAiRestClient::GoogleDocumentAiRestClientIo rest,
@@ -51,34 +62,82 @@ public class GoogleDocumentAiProcessDocumentDataProvider inherits GoogleDocument
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
+    #! Validates source presence and fundamental types before optional-field coercion
+    /** @param req document request
+        @param request_options transport request options
+        @return the typed process response
+        @throw GOOGLE-DOCUMENTAI-REQUEST-ERROR invalid source combination or content
+    */
+    auto doRequest(auto req, *hash<auto> request_options) {
+        if (req.typeCode() == NT_HASH) {
+            int sources = 0;
+            foreach hash<auto> source in (({"name": "document_bytes", "type": NT_BINARY},
+                    {"name": "document_path", "type": NT_STRING}, {"name": "gcs_uri", "type": NT_STRING},
+                    {"name": "inline_document", "type": NT_HASH})) {
+                if (!req.hasKey(source.name)) { continue; }
+                ++sources;
+                if (req{source.name}.typeCode() != source.type || !req{source.name}.val()) {
+                    throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "document sources must have the declared type and cannot be empty";
+                }
+            }
+            if (sources != 1) {
+                throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "supply exactly one document source";
+            }
+            foreach string field in ("process_options", "labels") {
+                if (req.hasKey(field) && req{field}.typeCode() != NT_HASH) {
+                    throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "process options and labels must be objects when supplied";
+                }
+            }
+            if (req.hasKey("mime_type") && (req.mime_type.typeCode() != NT_STRING || !req.mime_type.val())) {
+                throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "mime_type must be a nonempty string";
+            }
+            if (req.hasKey("imageless_mode") && req.imageless_mode.typeCode() != NT_BOOLEAN) {
+                throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "imageless_mode must be a boolean";
+            }
+        }
+        return AbstractDataProvider::doRequest(req, request_options);
+    }
+
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string path = sprintf("/v1/projects/%s/locations/%s/processors/%s:process",
-            project_id, region, req.processor_id);
-        hash<auto!> body;
+        hash<auto!> body = req{"processor_id", "processor_version_id"};
         string mime = req.mime_type ?? "application/pdf";
-        if (exists req.document_bytes) {
+        if (req.hasKey("document_bytes")) {
             body.rawDocument = {
                 "content":  make_base64_string(req.document_bytes),
                 "mimeType": mime,
             };
-        } else if (req.document_path.val()) {
+        } else if (req.hasKey("document_path")) {
+            binary content = File::readBinaryFile(req.document_path);
+            if (!content.size()) { throw "GOOGLE-DOCUMENTAI-REQUEST-ERROR", "document content cannot be empty"; }
             body.rawDocument = {
-                "content":  make_base64_string(File::readBinaryFile(req.document_path)),
+                "content":  make_base64_string(content),
                 "mimeType": mime,
             };
-        } else if (req.gcs_uri.val()) {
+        } else if (req.hasKey("gcs_uri")) {
+            GoogleDocumentAiResources::validateGcs(req.gcs_uri);
             body.gcsDocument = {
                 "gcsUri":   req.gcs_uri,
                 "mimeType": mime,
             };
         } else {
-            throw "GOOGLE-DOCUMENTAI-CONFIG-ERROR",
-                "one of document_bytes / document_path / gcs_uri is required";
+            body.inlineDocument = req.inline_document;
         }
-        if (req.process_options) {
-            body.processOptions = req.process_options;
+        foreach hash<auto> field in (({"from": "process_options", "to": "processOptions"},
+                {"from": "field_mask", "to": "fieldMask"}, {"from": "imageless_mode", "to": "imagelessMode"},
+                {"from": "labels", "to": "labels"})) {
+            if (req.hasKey(field.from)) { body{field.to} = req{field.from}; }
         }
-        return doDocAiRequest(path, body);
+        RestSchemaActionSet set = GoogleDocumentAiSchema::getActionSets()[0];
+        GoogleDocumentAiActionDataProvider action(set,
+            set.getOperationEx(req.hasKey("processor_version_id") ? "_process-version" : "_process"),
+            rest, project_id, region);
+        return action.doRequest(body, request_options);
+    }
+
+    *hash<string, bool> getSupportedReferenceData() { return {"processors": True, "processor-versions": True}; }
+
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        return GoogleDocumentAiResources::references(rest, project_id, region, type, action_opts);
     }
 }
 }

@@ -1,0 +1,212 @@
+{
+  "attribution": "API schemas and descriptions: Black Forest Labs. No schema-specific license is declared. The official Comfy SDK is MIT licensed; its original 2024 black-forest-labs notice is installed in bfl-vendor-comfy-license.txt.",
+  "terms": "https://bfl.ai/legal/terms-of-service",
+  "retrieved": "2026-09-19",
+  "normalization_version": 1,
+  "packaging": "Vendor text is unchanged except an optional final newline added by apply_patch.",
+  "sources": {
+    "main": {
+      "url": "https://api.bfl.ai/openapi.json",
+      "sha256": "63d11365e56b138a56f3918ba528a7b0240c8957f48d3c0d55ad908b78969ce1",
+      "bytes": 84971
+    },
+    "licenses": {
+      "url": "https://api.bfl.ai/v1/licenses/docs/openapi.json",
+      "sha256": "758553faad00cd9bf697532f82d1ed7d95a37f8f04e3a475d80a74455790012b",
+      "bytes": 1741
+    },
+    "video-edit": {
+      "url": "https://docs.bfl.ai/openapi/video-edit.json",
+      "sha256": "92008ad79d7ced2722be954ed66c437c57746beb9df9821927203320364e413c",
+      "bytes": 3650
+    },
+    "comfy": {
+      "url": "https://raw.githubusercontent.com/black-forest-labs/bfl-comfy-nodes/c9a6011c2452ce103e0676329617f5f0ad6266a4/bfl_api.py",
+      "sha256": "837f9d8e8d0eb4928ebe4776544d7ebf53ab058c088489b1fb0b91fa18b9e0dd",
+      "bytes": 21143
+    },
+    "lora": {
+      "url": "https://docs.bfl.ai/flux_2/flux2_lora_inference.md",
+      "sha256": "8e5b1069719fa43a79cb423109290b21cf741572289b2e471ab1e2b80b1da3d6",
+      "bytes": 12757
+    },
+    "comfy-license": {
+      "url": "https://raw.githubusercontent.com/black-forest-labs/bfl-comfy-nodes/c9a6011c2452ce103e0676329617f5f0ad6266a4/LICENSE",
+      "sha256": "514e3da4e34aeb127898a436d94a054ace1470b518e018cf26a870fbf978fe74",
+      "bytes": 1074
+    }
+  },
+  "lora": {
+    "url": "https://docs.bfl.ai/flux_2/flux2_lora_inference.md",
+    "packaged_sha256": "8e5b1069719fa43a79cb423109290b21cf741572289b2e471ab1e2b80b1da3d6"
+  },
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/v1/finetune_details"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/my_finetunes"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/delete_finetune"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro-1.1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-dev"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro-1.1-ultra"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro-1.0-fill"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro-1.0-expand"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro-1.0-fill-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro-1.1-ultra-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-flex"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-9b"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-9b-preview"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-4b"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-max"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-pro-preview"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-pro"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-3-video"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/video-upscale-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/video-edit-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/outpainting-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/vto-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/vto-v2"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/erase-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-tools/deblur-v1"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-kontext-max"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-kontext-pro"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/credits"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/get_result"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/licenses/models/{model_slug}/usage"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-pro"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-4b-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-9b-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-9b-kv-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-9b-kv-bf16-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-base-4b-finetuned"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/flux-2-klein-base-9b-finetuned"
+    }
+  ],
+  "review": {
+    "version": 1,
+    "repairs": [
+      "Remove invalid zero defaults from nullable FLUX.2 dimensions; preserve minimum 64 and absence/null.",
+      "Describe the licensing confirmation message from the official 200 example; retain extension fields."
+    ],
+    "duplicates": [
+      "POST /v1/flux-tools/video-edit-v1 (dedicated video-edit schema)"
+    ],
+    "supplements": [
+      "FLUX Pro from official SDK",
+      "Six FLUX.2 Klein LoRA public beta endpoints from official guide"
+    ],
+    "limits": [
+      "Public base Klein schemas are absent; base LoRA variants expose the explicitly documented common fields.",
+      "Legacy finetune operations remain in the current schema despite the October 2025 retirement notice. Availability is unverified.",
+      "FLUX Pro remains documented but live generation has not been verified."
+    ]
+  }
+}

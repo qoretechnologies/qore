@@ -1,0 +1,338 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires GoogleDocumentAiDataProvider
+%requires HttpServer
+%requires HttpServerUtil
+%requires json
+
+%exec-class DocumentAiWireTest
+
+class DocumentAiWireHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex mutex();
+        list<hash<auto>> calls = ();
+        list<hash<auto>> responses = ();
+        hash<auto> response = {};
+        *hash<auto> location_response;
+        int location_delay_ms = 0;
+        *Counter location_entered;
+        *Counter location_release;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        AutoLock lock(mutex);
+        if (cx.raw_path == "/token") {
+            return makeResponse({"Content-Type": "application/json"}, 200,
+                make_json({"access_token": "document-ai-wire-fixture", "expires_in": 3600, "token_type": "Bearer"}));
+        }
+        push calls, {"path": cx.raw_path, "method": cx.method, "headers": hdr,
+            "body": body.val() ? parse_json(body.toString()) : NOTHING};
+        if (hdr.authorization != "Bearer document-ai-wire-fixture" || hdr."x-goog-user-project" != "fixture-quota") {
+            return makeResponse({"Content-Type": "application/json"}, 401, make_json({"error": {"code": 401}}));
+        }
+        if (cx.raw_path == "/v1/projects/fixture-project/locations/us" && location_response) {
+            if (location_entered) { location_entered.dec(); remove location_entered; }
+            if (location_release) { location_release.waitForZero(2s); }
+            if (location_delay_ms) { usleep(location_delay_ms * 1000); }
+            return makeResponse({"Content-Type": "application/json"}, 200, make_json(location_response));
+        }
+        return makeResponse({"Content-Type": "application/json"}, 200,
+            make_json(responses.size() ? shift responses : response));
+    }
+}
+
+class DocumentAiWireTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        DocumentAiWireHandler handler();
+        string endpoint;
+        string credentials;
+        GoogleDocumentAiRestConnection connection;
+        AbstractDataProvider root;
+        const Base = "projects/fixture-project/locations/us";
+        const Processor = Base + "/processors/processor-1";
+        const Operation = Base + "/operations/job-1";
+    }
+
+    constructor() : Test("Document AI wire contracts", "1.0") {
+        addTestCase("online bytes options version and complete response types", \processTest());
+        addTestCase("source boundaries reject conflicts null and empty before transport", \sourcesTest());
+        addTestCase("resource names are scoped and path segments cannot inject", \identityTest());
+        addTestCase("canonical project numbers are verified lazily without weakening scope", \projectAliasTest());
+        addTestCase("schema and beta requests preserve empty false zero and value fields", \schemaTest());
+        addTestCase("batch source validation and typed operation results", \batchTest());
+        addTestCase("dependent references paginate with encoded and repeated tokens", \referencesTest());
+        addTestCase("operation completion service errors and timeout identity", \operationsTest());
+        addTestCase("generic calls use the same authenticated transport", \genericTest());
+        addTestCase("typed contracts survive repeated serialization", \serializationTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5426-wire", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        credentials = tmp_location() + "/qore-5426-wire-" + get_random_string(16) + ".json";
+        File file();
+        file.open2(credentials, O_CREAT | O_EXCL | O_WRONLY, 0600);
+        file.write(make_json({"type": "authorized_user", "client_id": "fixture-client",
+            "client_secret": "fixture-secret", "refresh_token": "fixture-refresh",
+            "token_uri": endpoint + "/token", "quota_project_id": "fixture-quota"}));
+        file.close();
+        connection = new GoogleDocumentAiRestConnection({"name": "wire", "url": endpoint,
+            "opts": {"gcp_project_id": "fixture-project", "gcp_region": "us", "gcp_sa_json_path": credentials}});
+        root = connection.getDataProvider();
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        delete server;
+        if (is_file(credentials)) { unlink(credentials); }
+        GcpAuth::clearTokenCache();
+    }
+
+    private AbstractDataProvider action(string name) { return root.getChildProvider(name); }
+    private hash<auto> last() { return handler.calls[-1]; }
+
+    private processTest() {
+        handler.response = {"document": {"text": "QORE INVOICE 12.34", "mimeType": "application/pdf",
+            "pages": ({"pageNumber": 1, "dimension": {"width": 100.0, "height": 200.0, "unit": "points"},
+                "tables": ({"headerRows": ({"cells": ({"rowSpan": 1, "colSpan": 1,
+                    "layout": {"confidence": 0.99, "textAnchor": {"textSegments": ({"startIndex": "0", "endIndex": "4"},)}}},)},)},)},),
+            "entities": ({"type": "total", "mentionText": "12.34", "confidence": 0.9,
+                "normalizedValue": {"moneyValue": {"currencyCode": "USD", "units": "12", "nanos": 340000000}}},)}};
+        hash<auto> req = {"processor_id": Processor, "processor_version_id": "version-1",
+            "document_bytes": binary("synthetic PDF bytes"), "mime_type": "application/pdf",
+            "process_options": {}, "imageless_mode": False, "labels": {"value": "literal"}};
+        auto response = action("process-document").doRequest(req);
+        assertEq("/v1/" + Processor + "/processorVersions/version-1:process", last().path);
+        assertEq(binary("synthetic PDF bytes"), parse_base64_string(last().body.rawDocument.content));
+        assertEq({}, last().body.processOptions);
+        assertEq(False, last().body.imagelessMode);
+        assertEq({"value": "literal"}, last().body.labels);
+        assertEq("QORE INVOICE 12.34", response.document.text);
+        assertEq("12", response.document.entities[0].normalizedValue.moneyValue.units);
+        assertEq("0", response.document.pages[0].tables[0].headerRows[0].cells[0].layout.textAnchor.textSegments[0].startIndex);
+        assertTrue(action("process-document").getResponseType().getFields().document.getType().getFields()
+            .pages.getType().getElementType().getFields().tables.val().toBool());
+    }
+
+    private sourcesTest() {
+        int count = handler.calls.size();
+        foreach hash<auto> source in (({}, {"document_bytes": NULL}, {"document_bytes": "wrong type"},
+                {"document_bytes": binary("")}, {"document_path": ""}, {"gcs_uri": ""},
+                {"inline_document": {}}, {"document_bytes": binary("x"), "gcs_uri": "gs://bucket/file"},
+                {"document_bytes": binary("x"), "process_options": NULL},
+                {"document_bytes": binary("x"), "imageless_mode": 0},
+                {"document_bytes": binary("x"), "mime_type": ""})) {
+            assertThrows("GOOGLE-DOCUMENTAI-REQUEST-ERROR", sub () {
+                action("process-document").doRequest({"processor_id": "p"} + source);
+            });
+        }
+        assertEq(count, handler.calls.size());
+        handler.response = {"document": {"text": "inline"}};
+        action("process-document").doRequest({"processor_id": "p", "inline_document": {"text": "existing text"}});
+        assertEq({"text": "existing text"}, last().body.inlineDocument);
+    }
+
+    private identityTest() {
+        handler.response = {"name": Processor};
+        action("get-processor").doRequest({"processor_id": Processor});
+        assertEq("/v1/" + Processor, last().path);
+        int count = handler.calls.size();
+        foreach string id in (("../other", "p?admin=1", "p%2Fother", "p#fragment", "",
+                "projects/other/locations/us/processors/p", "projects/fixture-project/locations/eu/processors/p")) {
+            assertThrows("GOOGLE-DOCUMENTAI-REQUEST-ERROR", sub () {
+                action("get-processor").doRequest({"processor_id": id});
+            });
+        }
+        assertEq(count, handler.calls.size());
+    }
+
+    private projectAliasTest() {
+        string canonical = "projects/123456789012/locations/us";
+        string processor = canonical + "/processors/processor-1";
+        handler.location_response = {"name": canonical};
+        handler.response = {"name": processor};
+        int count = handler.calls.size();
+        AbstractDataProvider get_processor = action("get-processor");
+        get_processor.getRequestType();
+        assertEq(count, handler.calls.size(), "static metadata does not resolve the project");
+        assertEq(processor, get_processor.doRequest({"processor_id": processor}).name);
+        assertEq(count + 2, handler.calls.size(), "one authenticated lookup and one action request");
+        assertEq("/v1/" + Base, handler.calls[count].path);
+        assertEq("/v1/" + Processor, last().path, "transport keeps the configured project ID");
+        string version = processor + "/processorVersions/v1";
+        handler.response = {"name": version};
+        action("get-processor-version").doRequest({"processor_id": processor, "processor_version_id": version});
+        assertEq(count + 3, handler.calls.size(), "dependent full names reuse the verified alias");
+        assertEq("/v1/" + Processor + "/processorVersions/v1", last().path);
+        handler.response = {"processors": ({"name": processor, "displayName": "Canonical processor"},)};
+        auto choices = get_processor.getReferenceData("processors");
+        assertEq(processor, choices[0].value);
+        assertEq("Canonical processor", choices[0].display_name);
+        string operation = canonical + "/operations/job-1";
+        handler.response = {"name": operation, "done": True, "response": {}};
+        assertEq(operation, action("wait-for-operation").doRequest({"operation_id": operation}).name);
+        assertEq(operation, action("wait-for-operation").doRequest({"operation_id": "job-1"}).name);
+        count = handler.calls.size();
+        foreach string invalid in (("projects/999999999999/locations/us/processors/processor-1",
+                canonical + "/processors/processor-2/processorVersions/v1",
+                "projects/123456789012/locations/eu/processors/processor-1")) {
+            assertThrows("GOOGLE-DOCUMENTAI-REQUEST-ERROR", sub () {
+                get_processor.doRequest({"processor_id": invalid});
+            });
+        }
+        assertEq(count, handler.calls.size(), "unrelated numeric projects and parent scopes are rejected");
+
+        GoogleDocumentAiRestClientIo fresh({"url": endpoint, "gcp_sa_json_path": credentials});
+        handler.location_response = {"name": "projects/unrelated-name/locations/us"};
+        assertThrows("GOOGLE-DOCUMENTAI-CONFIG-ERROR", sub () {
+            fresh.getCanonicalProject("fixture-project", "us");
+        });
+        handler.location_response = {"name": canonical};
+        assertEq("123456789012", fresh.getCanonicalProject("fixture-project", "us"),
+            "a rejected response does not poison the cache");
+        count = handler.calls.size();
+        GoogleDocumentAiRestClientIo copied = cast<GoogleDocumentAiRestClientIo>(fresh.copyWithUrl(endpoint));
+        assertEq("123456789012", copied.getCanonicalProject("fixture-project", "us"));
+        assertEq(count + 1, handler.calls.size(), "same-origin copies establish their own verified alias cache");
+
+        GoogleDocumentAiDataProvider timeout_root({"gcp_project_id": "fixture-project", "url": endpoint,
+            "gcp_sa_json_path": credentials});
+        handler.location_delay_ms = 200;
+        try {
+            timeout_root.getChildProvider("wait-for-operation").doRequest({"operation_id": operation,
+                "operation_timeout": 30ms, "poll_interval": 1ms});
+            assertTrue(False, "expected project-resolution timeout");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", ex.err);
+            assertEq(operation, ex.arg.job_id);
+        }
+        handler.location_delay_ms = 0;
+
+        # A slow first lookup must not hold a cache lock over a caller with a
+        # shorter deadline. Gate the server response until the short caller returns.
+        GoogleDocumentAiRestClientIo concurrent({"url": endpoint, "gcp_sa_json_path": credentials});
+        Counter entered(1);
+        Counter release(1);
+        Counter finished(1);
+        handler.location_entered = entered;
+        handler.location_release = release;
+        string primary;
+        background sub () {
+            try { primary = concurrent.getCanonicalProject("fixture-project", "us", 3000); }
+            catch (hash<ExceptionInfo> ex) { primary = ex.err; }
+            finished.dec();
+        }();
+        int arrived = entered.waitForZero(2s);
+        bool timed_out = False;
+        if (!arrived) {
+            try { concurrent.getCanonicalProject("fixture-project", "us", 30); }
+            catch (hash<ExceptionInfo> ex) { timed_out = ex.err =~ /TIMEOUT/; }
+        }
+        release.dec();
+        int completed = finished.waitForZero(4s);
+        handler.location_entered = NOTHING;
+        handler.location_release = NOTHING;
+        assertEq(0, arrived);
+        assertTrue(timed_out, "a concurrent lookup honors its own deadline");
+        assertEq(0, completed);
+        assertEq("123456789012", primary);
+    }
+
+    private schemaTest() {
+        handler.response = {"name": Base + "/schemas/s", "displayName": "Schema"};
+        action("update-schema").doRequest({"schema_id": "s", "labels": {}, "updateMask": "labels"});
+        assertEq({}, last().body.labels);
+        assertFalse(last().body.hasKey("displayName"));
+        assertEq(Base + "/schemas/s", last().body.name);
+        assertTrue(last().path.find("updateMask=labels") >= 0);
+        handler.response = {};
+        action("beta-list-dataset-documents").doRequest({"processor_id": "p", "pageSize": 0});
+        assertEq("/v1beta3/" + Base + "/processors/p/dataset:listDocuments", last().path);
+        assertEq(0, last().body.pageSize);
+    }
+
+    private batchTest() {
+        handler.response = {"name": Operation, "done": False, "metadata": {
+            "@type": "type.googleapis.com/google.cloud.documentai.v1.BatchProcessMetadata", "state": "RUNNING",
+            "individualProcessStatuses": ({"inputGcsSource": "gs://bucket/in.pdf", "outputGcsDestination": "gs://bucket/out/",
+                "status": {"code": 0}},)}};
+        hash<auto> input = {"processor_id": "p", "inputDocuments": {"gcsDocuments": {"documents": (
+            {"gcsUri": "gs://bucket/in.pdf", "mimeType": "application/pdf"},)}},
+            "documentOutputConfig": {"gcsOutputConfig": {"gcsUri": "gs://bucket/out/"}}, "processOptions": {}};
+        auto result = action("start-batch-processing").doRequest(input);
+        assertEq(Operation, result.name);
+        assertEq(0, result.metadata.individualProcessStatuses[0].status.code);
+        assertEq({}, last().body.processOptions);
+        int count = handler.calls.size();
+        input.inputDocuments = input.inputDocuments + {"gcsPrefix": {"gcsUriPrefix": "gs://bucket/"}};
+        assertThrows("GOOGLE-DOCUMENTAI-REQUEST-ERROR", sub () { action("start-batch-processing").doRequest(input); });
+        assertEq(count, handler.calls.size());
+    }
+
+    private referencesTest() {
+        int count = handler.calls.size();
+        assertFalse(action("get-processor-version").getReferenceData("processor-versions", {}).val().toBool());
+        assertEq(count, handler.calls.size());
+        handler.responses = ({"processorVersions": ({"name": Processor + "/processorVersions/v1", "displayName": "First"},),
+            "nextPageToken": "a+/&?="}, {"processorVersions": (
+                {"name": Processor + "/processorVersions/v1", "displayName": "Duplicate"},
+                {"name": Processor + "/processorVersions/v2", "displayName": "Second"})});
+        auto choices = action("get-processor-version").getReferenceData("processor-versions", {"processor_id": Processor});
+        assertEq(2, choices.size());
+        assertEq("First", choices[0].display_name);
+        assertEq(Processor + "/processorVersions/v2", choices[1].value);
+        assertTrue(last().path.find("pageToken=a%2B%2F%26%3F%3D") >= 0);
+        handler.responses = ({"nextPageToken": "repeat"}, {"nextPageToken": "repeat"});
+        assertThrows("REFERENCE-DATA-ERROR", sub () {
+            action("get-processor").getReferenceData("processors");
+        });
+    }
+
+    private operationsTest() {
+        handler.responses = ({"name": Operation, "done": False},
+            {"name": Operation, "done": True, "error": {"code": 7, "message": "Fixture permission failure"}});
+        auto result = action("wait-for-operation").doRequest({"operation_id": Operation, "poll_interval": 1ms});
+        assertEq(7, result.error.code);
+        handler.response = {"name": "job-1", "done": True, "response": {}};
+        assertThrows("GOOGLE-DOCUMENTAI-OPERATION-ERROR", sub () {
+            action("wait-for-operation").doRequest({"operation_id": Operation});
+        });
+        handler.response = {"name": Operation, "done": False};
+        try {
+            action("wait-for-operation").doRequest({"operation_id": "job-1", "operation_timeout": 150ms, "poll_interval": 40ms});
+            assertTrue(False, "expected timeout");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("GOOGLE-DOCUMENTAI-OPERATION-TIMEOUT", ex.err);
+            assertEq(Operation, ex.arg.job_id);
+            assertEq(Operation, ex.arg.last_status.name);
+        }
+    }
+
+    private genericTest() {
+        handler.response = {"processors": ()};
+        auto result = root.getChildProvider("__call__").doRequest({"method": "GET", "path": "/v1/" + Base + "/processors",
+            "include_debug": True});
+        assertEq("Bearer document-ai-wire-fixture", last().headers.authorization);
+        assertTrue(result.val());
+        assertEq(-1, make_json(result.debug).find("document-ai-wire-fixture"));
+    }
+
+    private serializationTest() {
+        AbstractDataProviderType type = action("process-document").getResponseType();
+        hash<auto> response = {"document": {"text": "literal", "entities": ({"type": "field", "normalizedValue": {
+            "moneyValue": {"currencyCode": "USD", "units": "0", "nanos": 0}}},)}};
+        for (int pass = 0; pass < 3; ++pass) {
+            assertEq("0", type.acceptsValue(response).document.entities[0].normalizedValue.moneyValue.units);
+            type = Serializable::deserialize(type.serialize());
+        }
+        AbstractDataField mime = action("process-document").getRequestType().getFields().mime_type;
+        auto choices = mime.getAllowedValues();
+        choices[0].display_name = "Changed presentation only";
+        mime.setAllowedValues(choices);
+        assertEq("application/pdf", mime.acceptsValue("application/pdf"));
+    }
+}

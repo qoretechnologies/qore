@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
 
 %modern
 %allow-injection
@@ -23,10 +24,22 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
 
         const OptionColumn = 22;
 
-        #! Tiny inline PNG (1x1 transparent pixel) — minimum-cost input
-        const TinyPng = parse_base64_string(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAj"
-            "CB0C8AAAAASUVORK5CYII=");
+        # Independent expected inventory: never derived from the implementation manifest.
+        const ExpectedActions = (
+            "process-document", "wait-for-operation", "make-api-call",
+            "list-locations", "get-location", "list-processor-types", "get-processor-type",
+            "list-processors", "get-processor", "create-processor", "delete-processor",
+            "enable-processor", "disable-processor", "set-default-version",
+            "start-batch-processing", "start-version-batch-processing", "list-processor-versions",
+            "get-processor-version", "delete-processor-version", "train-processor-version",
+            "deploy-processor-version", "undeploy-processor-version", "evaluate-processor-version",
+            "list-evaluations", "get-evaluation", "list-operations", "get-operation", "cancel-operation",
+            "list-schemas", "get-schema", "create-schema", "update-schema", "delete-schema",
+            "list-schema-versions", "get-schema-version", "create-schema-version", "update-schema-version",
+            "delete-schema-version", "generate-schema-version", "beta-update-dataset", "beta-get-dataset-schema",
+            "beta-update-dataset-schema", "beta-get-dataset-document", "beta-list-dataset-documents",
+            "beta-import-dataset-documents", "beta-delete-dataset-documents", "beta-import-processor-version",
+        );
     }
 
     private {
@@ -37,7 +50,7 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
             \ARGV, MyOpts) {
         conn_name = m_options.conn ?? ENV.GOOGLE_DOCUMENTAI_CONNECTION;
 
-        addTestCase("factory + app + process-document registered",
+        addTestCase("independent complete factory, app, and action inventory",
             \registrationTest());
         addTestCase("app declares Documents AppGroup",
             \documentsAppGroupTest());
@@ -48,11 +61,9 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         addTestCase("constructor rejects missing gcp_project_id",
             \missingProjectTest());
 
-        # Live tests require a real Google Document AI connection + a
-        # `processor_id` env var (Google Doc AI processors are account-
-        # specific and must be created in the GCP console).
-        # Cost: 1 page on the OCR processor (free-tier eligible).
-        if (conn_name) {
+        # Opt in with a named connection or ADC project plus an existing processor.
+        # Cost: three synthetic pages; never provisions resources or assumes free-tier eligibility.
+        if (conn_name || (ENV.QORE_DOCUMENTAI_LIVE_PROJECT && ENV.GOOGLE_DOCUMENTAI_PROCESSOR_ID)) {
             addTestCase("live: ping + process-document",
                 \liveGoogleDocAiTest());
         }
@@ -65,7 +76,8 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
             "set the Google Document AI connection name; without it (and "
             "without the GOOGLE_DOCUMENTAI_CONNECTION env var) the live "
             "test is skipped.  Also requires GOOGLE_DOCUMENTAI_PROCESSOR_ID "
-            "naming a processor in the project.",
+            "naming a processor in the project. Alternatively set QORE_DOCUMENTAI_LIVE_PROJECT "
+            "to use ADC directly. Processing submits three synthetic pages.",
             OptionColumn);
     }
 
@@ -79,13 +91,14 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
         assertEq("GoogleDocumentAi", app.name);
         assertEq("google-documentai", app.scheme);
 
-        # filter out the framework-injected make-api-call action (covered by
-        # GenericApiCallAutoInjection.qtest in RestClientDataProvider)
-        list<hash<DataProviderActionInfo>> actions = select
-            DataProvider::DataProviderActionCatalog::getActions("GoogleDocumentAi"),
-            $1.action != AbstractDataProvider::GenericApiCallActionName;
-        assertEq(1, actions.size());
-        assertEq("process-document", actions[0].action);
+        list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("GoogleDocumentAi");
+        assertEq(sort(ExpectedActions), sort(map $1.action, actions));
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            assertTrue(action.display_name.val());
+            assertTrue(action.short_desc.size() < 80);
+            assertFalse(action.options.hasKey("project_id"));
+            assertFalse(action.options.hasKey("location"));
+        }
     }
 
     private documentsAppGroupTest() {
@@ -126,34 +139,72 @@ public class GoogleDocumentAiDataProviderTest inherits QUnit::Test {
     /** Verifies the actual wire format against Google Cloud's Document
         AI service.  Requires both a connection name AND a
         `GOOGLE_DOCUMENTAI_PROCESSOR_ID` env var naming a processor in
-        the connection's project.  Cost: 1 page on the OCR processor
-        (free-tier eligible).
+        the connection's project, or an ADC project in QORE_DOCUMENTAI_LIVE_PROJECT.
+        Cost: three synthetic pages on the selected processor.
     */
     private liveGoogleDocAiTest() {
         *string processor_id = ENV.GOOGLE_DOCUMENTAI_PROCESSOR_ID;
         if (!processor_id.val()) {
-            testSkip("GOOGLE_DOCUMENTAI_PROCESSOR_ID env var is required "
-                "for the live test (create a processor in the GCP console "
-                "and set this env var to its UUID)");
+            testSkip("GOOGLE_DOCUMENTAI_PROCESSOR_ID must identify an existing processor for the live test");
         }
 
-        AbstractConnection conn = get_connection(conn_name);
+        AbstractConnection conn = conn_name ? get_connection(conn_name) : new GoogleDocumentAiRestConnection({
+            "name": "document-ai-live-verification", "opts": {"gcp_project_id": ENV.QORE_DOCUMENTAI_LIVE_PROJECT,
+                "gcp_region": ENV.QORE_DOCUMENTAI_LIVE_REGION ?? "us"}});
         hash<auto> ping = conn.ping(True);
         assertTrue(ping.ok, sprintf("Google Document AI connection ping "
             "failed: %s", ping.info ?? "no info"));
 
         AbstractDataProvider prov = conn.getDataProvider();
         AbstractDataProvider pd = prov.getChildProvider("process-document");
-        auto result = pd.doRequest({
-            "processor_id":   processor_id,
-            "document_bytes": TinyPng,
-            "mime_type":      "image/png",
-        });
-        # Document AI returns a Document object with mimeType + (often
-        # empty) text on a blank pixel
-        assertTrue(exists result.document,
-            "Google Document AI returned a document object");
-        assertTrue(result.document.mimeType.val(),
-            "document.mimeType is set");
+        auto processor = prov.getChildProvider("get-processor").doRequest({"processor_id": processor_id});
+        assertTrue(processor.defaultProcessorVersion.val());
+        auto versions = prov.getChildProvider("list-processor-versions").doRequest({
+            "processor_id": processor_id, "pageSize": 10});
+        assertTrue(versions.processorVersions.size() > 0);
+        auto version = prov.getChildProvider("get-processor-version").doRequest({
+            "processor_id": processor_id, "processor_version_id": processor.defaultProcessorVersion});
+        assertEq(processor.defaultProcessorVersion, version.name);
+        auto processors = pd.getReferenceData("processors");
+        assertTrue(inlist(processor.name, (map $1.value, processors)), "processor choices retain canonical names");
+        auto version_choices = pd.getReferenceData("processor-versions", {"processor_id": processor.name});
+        assertTrue(inlist(processor.defaultProcessorVersion, (map $1.value, version_choices)),
+            "dependent version choices accept the canonical processor name");
+        AbstractDataProviderType restored = Serializable::deserialize(pd.getResponseType().serialize());
+        string fixture = get_script_dir() + "/../AwsTextractDataProvider/synthetic-invoice.pdf";
+        int input_index = 0;
+        foreach hash<auto> input in ((
+                {"document_bytes": File::readBinaryFile(fixture)},
+                {"document_path": fixture, "imageless_mode": True,
+                    "process_options": {"individualPageSelector": {"pages": (1,)}}},
+                {"document_bytes": File::readBinaryFile(fixture),
+                    "processor_version_id": processor.defaultProcessorVersion,
+                    "field_mask": "text,pages.pageNumber"})) {
+            auto result = pd.doRequest(input + {"processor_id": processor_id, "mime_type": "application/pdf"});
+            assertTrue(result.document.pages.size() > 0);
+            foreach string expected in (("QORE TEXTRACT TEST INVOICE", "TEST-5420", "Synthetic Office Supplies", "12.34")) {
+                assertTrue(result.document.text.find(expected) >= 0, "expected synthetic content: " + expected);
+            }
+            assertEq(1, result.document.pages[0].pageNumber);
+            assertEq(result.document.text, restored.acceptsValue(result).document.text,
+                "the complete live response satisfies the serialized output contract");
+            if (input_index == 0) {
+                auto page = result.document.pages[0];
+                assertTrue(page.dimension.width > 0 && page.dimension.height > 0);
+                assertTrue(page.tokens.size() > 0);
+                auto layout = page.tokens[0].layout;
+                assertEq(NT_STRING, layout.textAnchor.textSegments[0].endIndex.typeCode(),
+                    "live protobuf int64 offsets remain strings");
+                assertTrue(layout.confidence >= 0 && layout.confidence <= 1);
+                assertTrue(layout.boundingPoly.normalizedVertices.size() > 0);
+            } else if (input_index == 1) {
+                assertFalse(result.document.pages[0].hasKey("image"), "imageless mode omits page images");
+                assertEq(1, result.document.pages.size(), "the selected page is returned");
+            } else {
+                assertEq(("pages", "text"), sort(keys result.document), "the output field mask is honored");
+                assertEq(("pageNumber",), keys result.document.pages[0]);
+            }
+            ++input_index;
+        }
     }
 }

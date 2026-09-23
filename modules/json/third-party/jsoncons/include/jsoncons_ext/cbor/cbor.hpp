@@ -15,4 +15,3 @@
 #include <jsoncons_ext/cbor/encode_cbor.hpp>
 
 #endif // JSONCONS_EXT_CBOR_CBOR_HPP
-

@@ -161,6 +161,23 @@ public:
     DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
             QoreSocketObject* sock, bool defer_init);
 
+    //! Creates a connect poll operation governed by the sandbox of the thread that requested the connection
+    /** Use this constructor for an operation created on another thread than the one that requested the connection,
+        such as an async I/O thread, which has no Program and therefore no sandbox of its own.
+
+        @param xsink exception sink
+        @param ssl if true, perform TLS handshake after TCP connect
+        @param target connection target (host:port or path)
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+        @param sandbox_manager the sandbox manager resolved for network policy checks on the requesting thread
+        (will be ref'd), or nullptr if no sandbox governs the connection
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
+            QoreSocketObject* sock, bool defer_init, QoreSandboxManager* sandbox_manager);
+
     //! Creates the INET connect poll operation
     /** @param xsink exception sink
         @param ssl if true, perform TLS handshake after TCP connect

@@ -47,12 +47,14 @@ namespace jsoncons {
     {
         success = 0,
         conversion_failed,
+        match_failed,
         not_utf8,
         not_wide_char,
         not_vector,
         not_array,
         invalid_mdarray,
         not_map,
+        not_key,
         not_pair,
         not_string,
         not_string_view,
@@ -102,6 +104,8 @@ namespace detail {
             {
                 case conv_errc::conversion_failed:
                     return "Unable to convert into the provided type";
+                case conv_errc::match_failed:
+                    return "Unable to match expected value";
                 case conv_errc::not_utf8:
                     return "Cannot convert string to UTF-8";
                 case conv_errc::not_wide_char:
@@ -114,6 +118,8 @@ namespace detail {
                     return "Invalid multi-dimensional array";
                 case conv_errc::not_map:
                     return "Cannot convert to map";
+                case conv_errc::not_key:
+                    return "Not a key";
                 case conv_errc::not_pair:
                     return "Cannot convert to std::pair";
                 case conv_errc::not_string:

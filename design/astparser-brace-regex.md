@@ -26,7 +26,7 @@ scanner state behind for another tree.
 CMake compiles and installs both the generated parser and its external scanner;
 other consumers of the installed grammar must compile both sources. Regenerate
 `parser.c`, `grammar.json` and `node-types.json` with Node 24 and the pinned
-`npx tree-sitter-cli@0.26.8 generate` after grammar changes. Normal builds use the
+`npx tree-sitter-cli@0.26.13 generate` after grammar changes. Normal builds use the
 committed generated sources.
 
 `modules/astparser/test/brace-regex.qtest` compares valid expressions with actual

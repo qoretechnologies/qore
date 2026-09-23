@@ -1,0 +1,1877 @@
+{
+  "v1": [
+    {
+      "action": "list-locations",
+      "desc": "List locations available to this project.\n\nLists information about the supported locations for this service.\n\n**Details**\n\n- This method lists locations based on the resource scope provided in the ListLocationsRequest.name field:\n- **Global locations**: If `name` is empty, the method lists the public locations available to all projects.\n- **Project-specific locations**: If `name` follows the format `projects/{project}`, the method lists locations visible to that specific project. This includes public, private, or other project-specific locations enabled for the project. For gRPC and client library implementations, the resource name is passed as the `name` field. For direct service calls, the resource name is incorporated into the request path based on the specific service implementation and version.",
+      "display_name": "List Locations",
+      "fields": {
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Locations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.list",
+      "path": "/v1/projects/{projectsId}/locations",
+      "short_desc": "List locations available to this project"
+    },
+    {
+      "action": "get-location",
+      "desc": "Read information about the connection's location.\n\nGets information about a location.",
+      "display_name": "Get Location",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Locations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}",
+      "short_desc": "Read information about the connection's location"
+    },
+    {
+      "action": "list-processor-types",
+      "desc": "List processor types available in this location.\n\nLists the processor types that exist.",
+      "display_name": "List Processor Types",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processorTypes.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processorTypes",
+      "short_desc": "List processor types available in this location"
+    },
+    {
+      "action": "get-processor-type",
+      "desc": "Read a processor type and its supported capabilities.\n\nGets a processor type detail.",
+      "display_name": "Get Processor Type",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorTypesId": {
+          "desc": "Identifier or full resource name for the selected processor type.",
+          "display_name": "Processor Type",
+          "name": "processor_type",
+          "preselected": true,
+          "ref_data": "processor-types",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processorTypes.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processorTypes/{processorTypesId}",
+      "short_desc": "Read a processor type and its supported capabilities"
+    },
+    {
+      "action": "list-processors",
+      "desc": "List processors in this project and location.\n\nLists all processors which belong to this project.",
+      "display_name": "List Processors",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors",
+      "short_desc": "List processors in this project and location"
+    },
+    {
+      "action": "get-processor",
+      "desc": "Read a processor's configuration and state.\n\nGets a processor detail.",
+      "display_name": "Get Processor",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}",
+      "short_desc": "Read a processor's configuration and state"
+    },
+    {
+      "action": "create-processor",
+      "desc": "Create a processor of an available type.\n\nCreates a processor from the ProcessorType provided. The processor will be at `ENABLED` state by default after its creation. Note that this method requires the `documentai.processors.create` permission on the project, which is highly privileged. A user or service account with this permission can create new processors that can interact with any gcs bucket in your project.",
+      "display_name": "Create Processor",
+      "fields": {
+        "displayName": {
+          "display_name": "Display Name",
+          "required": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "type": {
+          "display_name": "Processor Type",
+          "ref_data": "processor-types",
+          "required": true,
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.create",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors",
+      "short_desc": "Create a processor of an available type"
+    },
+    {
+      "action": "delete-processor",
+      "desc": "Start deleting a processor and all its versions.\n\nDeletes the processor, unloads all deployed model artifacts if it was enabled and then deletes all artifacts associated with this processor.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Delete Processor",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "DELETE",
+      "operation_id": "documentai.projects.locations.processors.delete",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}",
+      "short_desc": "Start deleting a processor and all its versions"
+    },
+    {
+      "action": "enable-processor",
+      "desc": "Start enabling a processor for document processing.\n\nEnables a processor\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Enable Processor",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.enable",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:enable",
+      "short_desc": "Start enabling a processor for document processing"
+    },
+    {
+      "action": "disable-processor",
+      "desc": "Start disabling a processor.\n\nDisables a processor\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Disable Processor",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processors"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.disable",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:disable",
+      "short_desc": "Start disabling a processor"
+    },
+    {
+      "action": "set-default-version",
+      "desc": "Select the version used when processing without a version ID.\n\nSet the default (active) version of a Processor that will be used in ProcessDocument and BatchProcessDocuments.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Set Default Version",
+      "fields": {
+        "defaultProcessorVersion": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "display_name": "Default Processor Version",
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.setDefaultProcessorVersion",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:setDefaultProcessorVersion",
+      "short_desc": "Select the version used when processing without a version ID"
+    },
+    {
+      "action": "_process",
+      "desc": "Process a document with the default processor version.\n\nProcesses a single document.",
+      "display_name": "Process Document Contract",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "skipHumanReview": {
+          "ignore": true
+        }
+      },
+      "groups": [
+        "Document Extraction"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": true
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.process",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:process",
+      "short_desc": "Process a document with the default processor version"
+    },
+    {
+      "action": "_process-version",
+      "desc": "Process a document with a selected processor version.\n\nProcesses a single document.",
+      "display_name": "Process Version Contract",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "skipHumanReview": {
+          "ignore": true
+        }
+      },
+      "groups": [
+        "Document Extraction"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": true
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.process",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:process",
+      "short_desc": "Process a document with a selected processor version"
+    },
+    {
+      "action": "start-batch-processing",
+      "desc": "Submit documents in Cloud Storage for batch processing.\n\nLRO endpoint to batch process many documents. The output is written to Cloud Storage as JSON in the [Document] format.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Start Batch Processing",
+      "fields": {
+        "documentOutputConfig": {
+          "required": true
+        },
+        "inputDocuments": {
+          "required": true,
+          "sensitive": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "skipHumanReview": {
+          "ignore": true
+        }
+      },
+      "groups": [
+        "Document Extraction"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.batchProcess",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:batchProcess",
+      "short_desc": "Submit documents in Cloud Storage for batch processing"
+    },
+    {
+      "action": "start-version-batch-processing",
+      "desc": "Submit a batch using a selected processor version.\n\nLRO endpoint to batch process many documents. The output is written to Cloud Storage as JSON in the [Document] format.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Start Version Batch Processing",
+      "fields": {
+        "documentOutputConfig": {
+          "required": true
+        },
+        "inputDocuments": {
+          "required": true,
+          "sensitive": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "skipHumanReview": {
+          "ignore": true
+        }
+      },
+      "groups": [
+        "Document Extraction"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.batchProcess",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:batchProcess",
+      "short_desc": "Submit a batch using a selected processor version"
+    },
+    {
+      "action": "list-processor-versions",
+      "desc": "List the versions belonging to a processor.\n\nLists all versions of a processor.",
+      "display_name": "List Processor Versions",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions",
+      "short_desc": "List the versions belonging to a processor"
+    },
+    {
+      "action": "get-processor-version",
+      "desc": "Read a processor version and its document schema.\n\nGets a processor version detail.",
+      "display_name": "Get Processor Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}",
+      "short_desc": "Read a processor version and its document schema"
+    },
+    {
+      "action": "delete-processor-version",
+      "desc": "Start deleting a processor version.\n\nDeletes the processor version, all artifacts under the processor version will be deleted.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Delete Processor Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "DELETE",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.delete",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}",
+      "short_desc": "Start deleting a processor version"
+    },
+    {
+      "action": "train-processor-version",
+      "desc": "Start training a version from a processor's training dataset.\n\nTrains a new processor version. Operation metadata is returned as TrainProcessorVersionMetadata.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Train Processor Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.train",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions:train",
+      "short_desc": "Start training a version from a processor's training dataset"
+    },
+    {
+      "action": "deploy-processor-version",
+      "desc": "Start deploying a version for document processing.\n\nDeploys the processor version.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Deploy Processor Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.deploy",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:deploy",
+      "short_desc": "Start deploying a version for document processing"
+    },
+    {
+      "action": "undeploy-processor-version",
+      "desc": "Start removing a processor version from serving.\n\nUndeploys the processor version.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Undeploy Processor Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.undeploy",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:undeploy",
+      "short_desc": "Start removing a processor version from serving"
+    },
+    {
+      "action": "evaluate-processor-version",
+      "desc": "Start an evaluation using labeled documents.\n\nEvaluates a ProcessorVersion against annotated documents, producing an Evaluation.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Evaluate Processor Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Evaluations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.evaluateProcessorVersion",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:evaluateProcessorVersion",
+      "short_desc": "Start an evaluation using labeled documents"
+    },
+    {
+      "action": "list-evaluations",
+      "desc": "List evaluation results for a processor version.\n\nRetrieves a set of evaluations for a given processor version.",
+      "display_name": "List Evaluations",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Evaluations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.evaluations.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}/evaluations",
+      "short_desc": "List evaluation results for a processor version"
+    },
+    {
+      "action": "get-evaluation",
+      "desc": "Read extraction quality metrics from an evaluation.\n\nRetrieves a specific evaluation.",
+      "display_name": "Get Evaluation",
+      "fields": {
+        "evaluationsId": {
+          "depends_on": [
+            "processor_id",
+            "processor_version_id"
+          ],
+          "desc": "Identifier or full resource name for the selected evaluation id.",
+          "display_name": "Evaluation ID",
+          "name": "evaluation_id",
+          "preselected": true,
+          "ref_data": "evaluations",
+          "supports_custom_values": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorVersionsId": {
+          "depends_on": [
+            "processor_id"
+          ],
+          "desc": "Identifier or full resource name for the selected processor version id.",
+          "display_name": "Processor Version ID",
+          "name": "processor_version_id",
+          "preselected": true,
+          "ref_data": "processor-versions",
+          "supports_custom_values": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Evaluations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.evaluations.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}/evaluations/{evaluationsId}",
+      "short_desc": "Read extraction quality metrics from an evaluation"
+    },
+    {
+      "action": "list-operations",
+      "desc": "List processing and management jobs using an operation filter.\n\nLists operations that match the specified filter in the request. If the server doesn't support this method, it returns `UNIMPLEMENTED`.",
+      "display_name": "List Operations",
+      "fields": {
+        "filter": {
+          "desc": "Operation filter. A `Type` equality is required; for example `Type=\"BATCH_PROCESS_DOCUMENTS\"`.",
+          "example_value": "Type=\"BATCH_PROCESS_DOCUMENTS\"",
+          "preselected": true,
+          "required": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Operations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.operations.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/operations",
+      "short_desc": "List processing and management jobs using an operation filter"
+    },
+    {
+      "action": "get-operation",
+      "desc": "Read a job's status, metadata, result, and error.\n\nGets the latest state of a long-running operation. Clients can use this method to poll the operation result at intervals as recommended by the API service.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Get Operation",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "operationsId": {
+          "desc": "Identifier or full resource name for the selected operation id.",
+          "display_name": "Operation ID",
+          "name": "operation_id",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Operations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.operations.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/operations/{operationsId}",
+      "short_desc": "Read a job's status, metadata, result, and error"
+    },
+    {
+      "action": "cancel-operation",
+      "desc": "Request cancellation of a running job.\n\nStarts asynchronous cancellation on a long-running operation.\n\n**Details**\n\n- The server makes a best effort to cancel the operation, but success is not guaranteed. If the server doesn't support this method, it returns `google.rpc.Code.UNIMPLEMENTED`. Clients can use Operations.GetOperation or other methods to check whether the cancellation succeeded or whether the operation completed despite cancellation. On successful cancellation, the operation is not deleted; instead, it becomes an operation with an Operation.error value with a google.rpc.Status.code of `1`, corresponding to `Code.CANCELLED`.\n\nCancellation is asynchronous and may not be supported. The operation is retained; inspect its final status.",
+      "display_name": "Cancel Operation",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "operationsId": {
+          "desc": "Identifier or full resource name for the selected operation id.",
+          "display_name": "Operation ID",
+          "name": "operation_id",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Operations"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.operations.cancel",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/operations/{operationsId}:cancel",
+      "short_desc": "Request cancellation of a running job"
+    },
+    {
+      "action": "list-schemas",
+      "desc": "List document schemas in this project and location.\n\nLists Schemas.",
+      "display_name": "List Schemas",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Document Schemas"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.schemas.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas",
+      "short_desc": "List document schemas in this project and location"
+    },
+    {
+      "action": "get-schema",
+      "desc": "Read a document schema's configuration.\n\nGets a schema.",
+      "display_name": "Get Schema",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Document Schemas"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.schemas.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "short_desc": "Read a document schema's configuration"
+    },
+    {
+      "action": "create-schema",
+      "desc": "Create a named collection of document schema versions.\n\nCreates a schema.",
+      "display_name": "Create Schema",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Document Schemas"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.schemas.create",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas",
+      "short_desc": "Create a named collection of document schema versions"
+    },
+    {
+      "action": "update-schema",
+      "desc": "Update selected fields of a document schema.\n\nUpdates a schema. Editable fields are: - `display_name` - `labels`",
+      "display_name": "Update Schema",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Document Schemas"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "PATCH",
+      "operation_id": "documentai.projects.locations.schemas.patch",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "short_desc": "Update selected fields of a document schema"
+    },
+    {
+      "action": "delete-schema",
+      "desc": "Delete a document schema.\n\nDeletes a schema.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Delete Schema",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Document Schemas"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "DELETE",
+      "operation_id": "documentai.projects.locations.schemas.delete",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "short_desc": "Delete a document schema"
+    },
+    {
+      "action": "list-schema-versions",
+      "desc": "List versions belonging to a document schema.\n\nLists SchemaVersions.",
+      "display_name": "List Schema Versions",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Schema Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.schemas.schemaVersions.list",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions",
+      "short_desc": "List versions belonging to a document schema"
+    },
+    {
+      "action": "get-schema-version",
+      "desc": "Read a schema version and its extraction fields.\n\nGets a schema version.",
+      "display_name": "Get Schema Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemaVersionsId": {
+          "depends_on": [
+            "schema_id"
+          ],
+          "desc": "Identifier or full resource name for the selected schema version id.",
+          "display_name": "Schema Version ID",
+          "name": "schema_version_id",
+          "preselected": true,
+          "ref_data": "schema-versions",
+          "supports_custom_values": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Schema Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.schemas.schemaVersions.get",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "short_desc": "Read a schema version and its extraction fields"
+    },
+    {
+      "action": "create-schema-version",
+      "desc": "Create a version of a document schema.\n\nCreates a schema version.",
+      "display_name": "Create Schema Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Schema Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.schemas.schemaVersions.create",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions",
+      "short_desc": "Create a version of a document schema"
+    },
+    {
+      "action": "update-schema-version",
+      "desc": "Update selected fields of a schema version.\n\nUpdates a schema version. Editable fields are: - `display_name` - `labels`",
+      "display_name": "Update Schema Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemaVersionsId": {
+          "depends_on": [
+            "schema_id"
+          ],
+          "desc": "Identifier or full resource name for the selected schema version id.",
+          "display_name": "Schema Version ID",
+          "name": "schema_version_id",
+          "preselected": true,
+          "ref_data": "schema-versions",
+          "supports_custom_values": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Schema Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "PATCH",
+      "operation_id": "documentai.projects.locations.schemas.schemaVersions.patch",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "short_desc": "Update selected fields of a schema version"
+    },
+    {
+      "action": "delete-schema-version",
+      "desc": "Delete a document schema version.\n\nDeletes a schema version.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Delete Schema Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemaVersionsId": {
+          "depends_on": [
+            "schema_id"
+          ],
+          "desc": "Identifier or full resource name for the selected schema version id.",
+          "display_name": "Schema Version ID",
+          "name": "schema_version_id",
+          "preselected": true,
+          "ref_data": "schema-versions",
+          "supports_custom_values": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Schema Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "DELETE",
+      "operation_id": "documentai.projects.locations.schemas.schemaVersions.delete",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "short_desc": "Delete a document schema version"
+    },
+    {
+      "action": "generate-schema-version",
+      "desc": "Generate a schema version from example documents.\n\nGenerates a schema version.",
+      "display_name": "Generate Schema Version",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        },
+        "schemasId": {
+          "desc": "Identifier or full resource name for the selected schema id.",
+          "display_name": "Schema ID",
+          "name": "schema_id",
+          "preselected": true,
+          "ref_data": "schemas",
+          "supports_custom_values": true
+        }
+      },
+      "groups": [
+        "Schema Versions"
+      ],
+      "metadata": {
+        "api_version": "v1",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.schemas.schemaVersions.generate",
+      "path": "/v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions:generate",
+      "short_desc": "Generate a schema version from example documents"
+    }
+  ],
+  "v1beta3": [
+    {
+      "action": "beta-update-dataset",
+      "desc": "Update a processor's dataset storage configuration.\n\nUpdates metadata associated with a dataset.\n\n**Details**\n\n- Note that this method requires the `documentai.googleapis.com/datasets.update` permission on the project, which is highly privileged. A user or service account with this permission can create new processors that can interact with any gcs bucket in your project.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Update Dataset (Beta)",
+      "fields": {
+        "documentWarehouseConfig": {
+          "ignore": true
+        },
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "PATCH",
+      "operation_id": "documentai.projects.locations.processors.updateDataset",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset",
+      "short_desc": "Update a processor's dataset storage configuration"
+    },
+    {
+      "action": "beta-get-dataset-schema",
+      "desc": "Read the labeling schema of a processor's dataset.\n\nGets the `DatasetSchema` of a `Dataset`.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
+      "display_name": "Get Dataset Schema (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.dataset.getDatasetSchema",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset/datasetSchema",
+      "short_desc": "Read the labeling schema of a processor's dataset"
+    },
+    {
+      "action": "beta-update-dataset-schema",
+      "desc": "Update the labeling schema of a processor's dataset.\n\nUpdates a `DatasetSchema`.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
+      "display_name": "Update Dataset Schema (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "PATCH",
+      "operation_id": "documentai.projects.locations.processors.dataset.updateDatasetSchema",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset/datasetSchema",
+      "short_desc": "Update the labeling schema of a processor's dataset"
+    },
+    {
+      "action": "beta-get-dataset-document",
+      "desc": "Read a selected dataset document and its annotations.\n\nReturns relevant fields present in the requested document.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
+      "display_name": "Get Dataset Document (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "GET",
+      "operation_id": "documentai.projects.locations.processors.dataset.getDocument",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:getDocument",
+      "short_desc": "Read a selected dataset document and its annotations"
+    },
+    {
+      "action": "beta-list-dataset-documents",
+      "desc": "List documents in a selected processor's dataset.\n\nReturns a list of documents present in the dataset.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.",
+      "display_name": "List Dataset Documents (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.dataset.listDocuments",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:listDocuments",
+      "short_desc": "List documents in a selected processor's dataset"
+    },
+    {
+      "action": "beta-import-dataset-documents",
+      "desc": "Start importing labeled documents from Cloud Storage.\n\nImport documents into a dataset.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Import Dataset Documents (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.dataset.importDocuments",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:importDocuments",
+      "short_desc": "Start importing labeled documents from Cloud Storage"
+    },
+    {
+      "action": "beta-delete-dataset-documents",
+      "desc": "Start deleting explicitly selected dataset documents.\n\nDeletes a set of documents.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Delete Dataset Documents (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Dataset (Beta)"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.dataset.batchDeleteDocuments",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:batchDeleteDocuments",
+      "short_desc": "Start deleting explicitly selected dataset documents"
+    },
+    {
+      "action": "beta-import-processor-version",
+      "desc": "Start importing a processor version from another processor.\n\nImports a processor version from source processor version.\n\nUses the **v1beta3** API. Availability and permissions depend on the processor and location.\n\nReturns an operation immediately. Use **Get Operation** or **Wait for Operation** to observe completion.",
+      "display_name": "Import Processor Version (Beta)",
+      "fields": {
+        "locationsId": {
+          "desc": "Identifier or full resource name for the selected location.",
+          "display_name": "Location",
+          "name": "location",
+          "preselected": true
+        },
+        "processorsId": {
+          "desc": "Identifier or full resource name for the selected processor id.",
+          "display_name": "Processor ID",
+          "name": "processor_id",
+          "preselected": true,
+          "ref_data": "processors",
+          "supports_custom_values": true
+        },
+        "projectsId": {
+          "desc": "Identifier or full resource name for the selected project id.",
+          "display_name": "Project ID",
+          "name": "project_id",
+          "preselected": true
+        }
+      },
+      "groups": [
+        "Processor Versions"
+      ],
+      "metadata": {
+        "api_version": "v1beta3",
+        "internal": false
+      },
+      "method": "POST",
+      "operation_id": "documentai.projects.locations.processors.processorVersions.importProcessorVersion",
+      "path": "/v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions:importProcessorVersion",
+      "short_desc": "Start importing a processor version from another processor"
+    }
+  ]
+}

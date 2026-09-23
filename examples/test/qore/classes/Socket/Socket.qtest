@@ -199,6 +199,11 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
         addTestCase("fd_generation re-verification", \fdGenerationTest());
         addTestCase("recoverable recv timeout", \recoverableRecvTimeoutTest());
+        addTestCase("wildcard bind serves all address families", \wildcardBindAllFamiliesTest());
+        addTestCase("wildcard bind reserves the port in all address families", \wildcardBindReservesPortTest());
+        addTestCase("wildcard bind port conflict", \wildcardBindPortConflictTest());
+        addTestCase("single-family and datagram wildcard binds", \wildcardBindSingleFamilyTest());
+        addTestCase("IPv4-mapped peer addresses", \ipv4MappedPeerAddressTest());
         set_return_value(main());
     }
 
@@ -3034,5 +3039,218 @@ class SocketTest inherits QUnit::Test {
         client.send("GET /path HTTP/1.1\r\nHost: localhost\r\n\r\n");
         assertRegex("^GET /path HTTP/1.1", accepted.readHTTPHeaderString(5s),
             "the socket must still be usable after a header-read timeout");
+    }
+
+    #! Tests that a bind on all interfaces can be reached over both IPv4 and IPv6
+    /** Regression test: a bind with no address and no address family bound only the IPv4 wildcard address.  The
+        listener could not be reached over IPv6, and a client of \c "localhost", which resolves to \c ::1 first
+        (RFC 6724), connected to whatever unrelated IPv6 socket held the same port number and had its request reset
+        by it.
+    */
+    wildcardBindAllFamiliesTest() {
+        if (!hasIpv6Loopback()) {
+            testSkip("host has no IPv6 loopback address");
+        }
+
+        # Socket::bindINET() and Socket::bind() both bind all interfaces
+        foreach string api in ("bindINET", "bind") {
+            Socket server();
+            on_exit server.close();
+            if (api == "bindINET") {
+                server.bindINET(NOTHING, 0, True);
+            } else {
+                assertEq(0, server.bind(0, True));
+            }
+            server.listen();
+            hash<auto> info = server.getSocketInfo();
+            assertEq(AF_INET6, info.family, api + ": all interfaces are bound with one dual-stack socket");
+            assertEq("::", info.address, api);
+
+            foreach hash<auto> target in (
+                    {"connect": "127.0.0.1", "peer": "127.0.0.1", "family": AF_INET},
+                    {"connect": "[::1]", "peer": "::1", "family": AF_INET6},
+                    {"connect": "localhost"},
+                ) {
+                Socket client();
+                on_exit client.close();
+                client.connect(sprintf("%s:%d", target.connect, info.port), 5s);
+                Socket accepted = server.accept(5s);
+                on_exit accepted.close();
+
+                string desc = sprintf("%s: client of %s", api, target.connect);
+                # the connection reached this listener: both ends see the same pair of addresses
+                hash<auto> cpeer = client.getPeerInfo();
+                hash<auto> clocal = client.getSocketInfo();
+                hash<auto> apeer = accepted.getPeerInfo();
+                hash<auto> alocal = accepted.getSocketInfo();
+                assertEq(cpeer.address, alocal.address, desc);
+                assertEq(cpeer.port, alocal.port, desc);
+                assertEq(clocal.address, apeer.address, desc);
+                assertEq(clocal.port, apeer.port, desc);
+                assertEq(info.port, alocal.port, desc);
+                if (target.peer) {
+                    assertEq(target.peer, apeer.address, desc);
+                    assertEq(target.family, apeer.family, desc);
+                    assertEq(target.peer, accepted.source, desc + ": the legacy source member");
+                }
+            }
+        }
+    }
+
+    #! Tests that a system-assigned port for all interfaces is free in both address families
+    /** An IPv4-only listener was given a port that was free only for IPv4, so an unrelated IPv6 socket could hold
+        the same port number and receive the connections of clients that resolved the host name to IPv6.
+    */
+    wildcardBindReservesPortTest() {
+        if (!hasIpv6Loopback()) {
+            testSkip("host has no IPv6 loopback address");
+        }
+
+        Socket server();
+        server.bindINET(NOTHING, 0, True);
+        server.listen();
+        on_exit server.close();
+        int port = server.getSocketInfo().port;
+
+        # the probes do not reuse the address: with SO_REUSEADDR, whether an overlapping bind is refused depends
+        # on the system (BSD allows more than Linux does)
+        Socket v6();
+        assertThrows("SOCKET-BIND-ERROR", \v6.bindINET(), ("::1", port, False, AF_INET6),
+            "no IPv6 socket can take the port of a listener on all interfaces");
+        Socket v4();
+        assertThrows("SOCKET-BIND-ERROR", \v4.bindINET(), ("127.0.0.1", port, False, AF_INET),
+            "no IPv4 socket can take the port of a listener on all interfaces");
+    }
+
+    #! Tests that an explicit port in use for IPv6 fails to bind on all interfaces
+    /** Binding only the IPv4 wildcard address instead would leave clients that resolve the host name to IPv6
+        connected to the other socket.
+    */
+    wildcardBindPortConflictTest() {
+        if (!hasIpv6Loopback()) {
+            testSkip("host has no IPv6 loopback address");
+        }
+
+        Socket v6();
+        v6.bindINET("::1", 0, True, AF_INET6);
+        v6.listen();
+        on_exit v6.close();
+        int port = v6.getSocketInfo().port;
+
+        # the bind does not reuse the address: with SO_REUSEADDR, whether an overlapping bind is refused depends on
+        # the system (BSD allows more than Linux does).
+        # the C library decides the message for EADDRINUSE ("Address already in use" with glibc, "Address in use"
+        # with musl), so the error is identified by its errno
+        Socket server();
+        *hash<ExceptionInfo> bind_ex;
+        try {
+            server.bindINET(NOTHING, port, False);
+        } catch (hash<ExceptionInfo> ex) {
+            bind_ex = ex;
+        }
+        assertEq("SOCKET-BIND-ERROR", bind_ex.err ?? "no exception was thrown",
+            "the port cannot be bound on all interfaces");
+        assertEq(EADDRINUSE, bind_ex.arg, "the bind failed because the port is in use: " + (bind_ex.desc ?? ""));
+        assertFalse(server.isOpen(), "no partial listener is left open");
+        assertEq(-1, server.bind(port, False), "Socket::bind() reports the same error");
+        assertFalse(server.isOpen());
+    }
+
+    #! Tests the wildcard binds that must keep their address family
+    wildcardBindSingleFamilyTest() {
+        # an explicit IPv4 bind stays IPv4-only
+        Socket v4();
+        v4.bindINET(NOTHING, 0, True, AF_INET);
+        on_exit v4.close();
+        hash<auto> info = v4.getSocketInfo();
+        assertEq(AF_INET, info.family);
+        assertEq("0.0.0.0", info.address);
+
+        # a datagram socket keeps the resolved IPv4 wildcard address, because each datagram is addressed with the
+        # address family of the socket
+        Socket udp();
+        udp.bindINET(NOTHING, 0, True, AF_UNSPEC, SOCK_DGRAM);
+        on_exit udp.close();
+        info = udp.getSocketInfo();
+        assertEq(AF_INET, info.family);
+        assertEq("0.0.0.0", info.address);
+
+        Socket sender();
+        sender.bindINET("127.0.0.1", 0, True, AF_INET, SOCK_DGRAM);
+        on_exit sender.close();
+        drivePollOperation(sender.startPollSendTo("127.0.0.1", info.port, binary("ping")));
+        hash<auto> dgram = drivePollOperation(udp.startPollRecvFrom());
+        assertEq(binary("ping"), dgram.data);
+        assertEq("127.0.0.1", dgram.address);
+        assertEq(AF_INET, dgram.family);
+        # the reply goes back to the address that was received
+        drivePollOperation(udp.startPollSendTo(dgram.address, dgram.port, binary("pong")));
+        assertEq(binary("pong"), drivePollOperation(sender.startPollRecvFrom()).data);
+    }
+
+    #! Drives a socket poll operation to its goal and returns its output
+    /** Fails the test instead of waiting forever if the goal is not reached in time.
+    */
+    private auto drivePollOperation(AbstractPollOperation op) {
+        date deadline = now_us() + 10s;
+        while (!op.goalReached()) {
+            if (now_us() > deadline) {
+                fail(sprintf("poll operation %y did not reach its goal", op.getState()));
+            }
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (info) {
+                Socket::poll((info,), 5s);
+            }
+        }
+        return op.getOutput();
+    }
+
+    #! Tests that IPv4 nodes are reported with their IPv4 addresses on dual-stack stream sockets
+    /** An explicit IPv6 wildcard listener carries IPv4 connections with IPv4-mapped IPv6 addresses
+        (\c ::ffff:a.b.c.d); the peer is an IPv4 node and is reported as one.
+    */
+    ipv4MappedPeerAddressTest() {
+        if (!hasIpv6Loopback()) {
+            testSkip("host has no IPv6 loopback address");
+        }
+
+        Socket server();
+        server.bindINET("::", 0, True, AF_INET6);
+        server.listen();
+        on_exit server.close();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        try {
+            client.connect("127.0.0.1:" + port, 5s);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the IPv6 wildcard address does not accept IPv4 connections on this host by default");
+        }
+        on_exit client.close();
+        Socket accepted = server.accept(5s);
+        on_exit accepted.close();
+
+        hash<auto> peer = accepted.getPeerInfo();
+        assertEq("127.0.0.1", peer.address);
+        assertEq(AF_INET, peer.family);
+        assertEq("ipv4(127.0.0.1)", peer.address_desc);
+        assertEq(client.getSocketInfo().port, peer.port);
+        hash<auto> local = accepted.getSocketInfo();
+        assertEq("127.0.0.1", local.address);
+        assertEq(AF_INET, local.family);
+        assertEq(port, local.port);
+        assertEq("127.0.0.1", accepted.source);
+    }
+
+    #! Returns True if a socket can be bound on the IPv6 loopback address of this host
+    private bool hasIpv6Loopback() {
+        Socket s();
+        try {
+            s.bindINET("::1", 0, True, AF_INET6);
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
+        s.close();
+        return True;
     }
 }

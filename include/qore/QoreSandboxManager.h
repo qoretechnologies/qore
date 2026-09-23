@@ -366,32 +366,74 @@ public:
 
         @note CRITICAL: This method should be called AFTER DNS resolution to
         prevent SSRF attacks where hostnames resolve to internal IP addresses.
+
+        @see checkConnect(const char*, const struct sockaddr*, socklen_t, int, ExceptionSink*) for the rules
     */
     DLLEXPORT bool checkConnect(const struct sockaddr* addr, socklen_t len,
                                 int proto, ExceptionSink* xsink);
 
-    //! Checks if binding is allowed
+    //! Checks if a connection to a named host is allowed - called AFTER DNS resolution for each resolved address
+    /** @param hostname The host name or address literal that was resolved; may be null
+        @param addr The resolved socket address
+        @param len Length of the address structure
+        @param proto Protocol being used (QSEC_NET_TCP, QSEC_NET_UDP, QSEC_NET_UNIX)
+        @param xsink Exception sink - raises NETWORK-ACCESS-DENIED if denied
+
+        @return true if allowed, false if denied (exception raised)
+
+        The rules are applied in this order:
+        - an IPv4-mapped IPv6 address (\c ::ffff:a.b.c.d) is checked as the IPv4 address it carries, and an
+          unspecified destination address (\c 0.0.0.0 or \c ::), which the system connects to the local host, is
+          checked as the loopback address
+        - a denied IP range containing the address denies the connection, also for an allowed host name, so a host
+          name that resolves to a blocked network (DNS rebinding) is denied
+        - a port outside the allowed ports for the protocol denies the connection
+        - a host name matching an allowed host pattern allows the connection
+        - an allowed IP range containing the address allows the connection; if allowed IP ranges are configured, an
+          address outside all of them denies the connection
+        - otherwise the default policy decides
+    */
+    DLLEXPORT bool checkConnect(const char* hostname, const struct sockaddr* addr, socklen_t len,
+                                int proto, ExceptionSink* xsink);
+
+    //! Checks if binding a local address is allowed
     /** @param addr The address to bind to
         @param len Length of the address structure
         @param proto Protocol being used
-        @param xsink Exception sink
+        @param xsink Exception sink - raises NETWORK-ACCESS-DENIED if denied
 
-        @return true if allowed, false if denied
+        @return true if allowed, false if denied (exception raised)
+
+        Binding is controlled like a connection to the local address, without host names: an IPv4-mapped address is
+        checked as the IPv4 address it carries; a denied IP range containing the address denies the bind; a
+        specific port outside the allowed ports for the protocol denies the bind (a system-assigned port, port 0, is
+        not restricted); an address outside all configured allowed IP ranges denies the bind; otherwise the default
+        policy decides.  A wildcard address (\c 0.0.0.0 or \c ::) binds all interfaces, so it is allowed by an
+        allowed IP range only if the range contains the wildcard address itself (\c 0.0.0.0/0 or \c ::/0).
     */
     DLLEXPORT bool checkBind(const struct sockaddr* addr, socklen_t len,
                              int proto, ExceptionSink* xsink);
 
-    //! Checks if a hostname is in the allowed list (before DNS resolution)
+    //! Checks if a host name can be allowed before it is resolved
     /** @param hostname The hostname to check
         @param port The port number
         @param proto Protocol being used
 
-        @return true if hostname matches an allowed pattern, false otherwise
+        @return false if a connection to @a hostname is denied whatever address it resolves to: the port is not
+        allowed for the protocol, or the host name matches no allowed host pattern while no allowed IP range and no
+        default allow policy could allow its addresses; true otherwise
 
-        @note This is a preliminary check. The final check using checkConnect()
-        MUST still be performed on the resolved IP address.
+        @note This is a preliminary check. The final check using checkConnect(const char*, const struct sockaddr*,
+        socklen_t, int, ExceptionSink*) MUST still be performed on every resolved address.
     */
     DLLEXPORT bool checkHostname(const char* hostname, int port, int proto) const;
+
+    //! Returns true if the host name matches an allowed host pattern
+    /** Host names are compared without regard to case and without a trailing dot; \c "*.example.com" matches
+        \c "example.com" and a name with a single label before it, such as \c "api.example.com", but not
+        \c "api.sub.example.com"; \c "*" matches every host name.
+    */
+    DLLEXPORT bool isHostAllowed(const char* hostname) const;
 
     //! Returns the current configuration as a hash
     DLLEXPORT QoreHashNode* getConfiguration(ExceptionSink* xsink) const;
@@ -603,6 +645,34 @@ public:
     */
     DLLEXPORT bool checkNetworkAccess(const struct sockaddr* addr, socklen_t len,
                                        int proto, ExceptionSink* xsink);
+
+    //! Checks if a connection to a named host is allowed; called for each address the host name resolved to
+    /** @param hostname The host name or address literal that was resolved; may be null
+        @param addr The resolved address
+        @param len Length of the address structure
+        @param proto Protocol (QSEC_NET_TCP, QSEC_NET_UDP, etc.)
+        @param xsink Exception sink for error reporting
+
+        @return true if access is allowed, false if denied (exception raised)
+
+        @see QoreNetworkSecurityManager::checkConnect(const char*, const struct sockaddr*, socklen_t, int,
+        ExceptionSink*)
+    */
+    DLLEXPORT bool checkNetworkAccess(const char* hostname, const struct sockaddr* addr, socklen_t len,
+                                       int proto, ExceptionSink* xsink);
+
+    //! Checks if binding a local address is allowed
+    /** @param addr The address to bind
+        @param len Length of the address structure
+        @param proto Protocol (QSEC_NET_TCP, QSEC_NET_UDP, QSEC_NET_UNIX)
+        @param xsink Exception sink for error reporting
+
+        @return true if the bind is allowed, false if denied (exception raised)
+
+        @see QoreNetworkSecurityManager::checkBind()
+    */
+    DLLEXPORT bool checkNetworkBind(const struct sockaddr* addr, socklen_t len,
+                                     int proto, ExceptionSink* xsink);
 
     //! Creates a copy with the same or stricter restrictions
     /** @return A new QoreSandboxManager with the same configuration

@@ -51,12 +51,20 @@ public class BflDataProvider inherits BflDataProviderCommon {
     string getName() { return ProviderInfo.name; }
 
     *list<hash<DataProviderSummaryInfo>> getChildProviderSummaryInfo() {
-        return map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        list<hash<DataProviderSummaryInfo>> result = map $1.getConstant("ProviderSummaryInfo").getValue(), childMap.iterator();
+        foreach string name in ((keys BflApi::Operations) + (keys BflJobDataProvider::Helpers)) {
+            push result, <DataProviderSummaryInfo>{"name": name, "type": "BflOperation", "supports_request": True};
+        }
+        return result;
     }
-    private *list<string> getChildProviderNamesImpl() { return keys childMap; }
+    private *list<string> getChildProviderNamesImpl() {
+        return (keys childMap) + (keys BflApi::Operations) + (keys BflJobDataProvider::Helpers);
+    }
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = childMap{name};
-        return cls ? cls.newObject(rest) : NOTHING;
+        if (cls) { return cls.newObject(rest); }
+        if (BflJobDataProvider::Helpers.hasKey(name)) { return new BflJobDataProvider(name, rest); }
+        return BflApi::Operations.hasKey(name) ? new BflOperation(name, rest) : NOTHING;
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

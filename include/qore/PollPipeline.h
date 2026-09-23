@@ -471,6 +471,12 @@ private:
     //! The socket (ref'd)
     QoreSocketObject* sock_obj;
 
+    //! The sandbox that governs the pipeline's connections, resolved on the thread that creates the pipeline
+    /** Steps run on whichever thread drives the pipeline, which is an async I/O thread without a sandbox when the
+        pipeline is submitted to an AsyncIoController.
+    */
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
+
     //! Step vector (configured by builder, executed by continuePoll)
     std::vector<Step> steps;
 

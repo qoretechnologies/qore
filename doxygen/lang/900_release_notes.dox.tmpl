@@ -249,6 +249,25 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
+    @parblock
+    A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
+    with @ref Qore::Socket::bindINET() "Socket::bindINET()" without an address or an address family, is now one
+    dual-stack socket on the IPv6 wildcard address \c "::", which serves IPv4 clients as well; this includes
+    @ref HttpServer::HttpServer "HttpServer" listeners added with a service or port only.  Its socket information
+    reports the IPv6 wildcard address, and a port that is in use in either address family can no longer be bound
+    on all interfaces; such a bind raises \c SOCKET-BIND-ERROR, where it bound the IPv4 wildcard address before.
+    Only a system without IPv6 or without dual-stack sockets binds the IPv4 wildcard address instead.
+
+    IPv4 nodes are reported with their IPv4 addresses on all stream sockets:
+    @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()",
+    @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()", and the address of an accepted connection
+    report \c "192.0.2.1" and @ref Qore::AF_INET "AF_INET" where a connection carried by a dual-stack socket
+    reported the IPv4-mapped IPv6 address \c "::ffff:192.0.2.1" and @ref Qore::AF_INET6 "AF_INET6".  This affects
+    listeners bound explicitly on \c "::", such as those added with
+    @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" with a service only.
+    @endparblock
+
     @par The Initial Thread Keeps the Process Name on Linux
     @parblock
     The library no longer names a process's initial thread <tt>qore/1</tt> on Linux.  There, the initial
@@ -613,11 +632,17 @@ val = "string";      # OK
     The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 + \c ngtcp2_crypto_ossl +
     \c nghttp3 (QUIC/HTTP/3), and <a href="https://c-ares.org/"><tt>c-ares</tt></a> (asynchronous DNS
     resolution, so hostname lookups never block async I/O controller threads) &mdash; is now required.
-    %Qore prefers an adequate system installation of each (\c nghttp2 >= 1.68.1, \c c-ares >= 1.19.1,
-    \c nghttp3 >= 1.14.0; \c ngtcp2_crypto_ossl needs OpenSSL 3.5+ for the QUIC TLS API), and otherwise
-    downloads and statically links the latest stable release automatically, so the build always succeeds
-    without manual intervention.  Installing these development packages is therefore recommended for
+    %Qore prefers an adequate system installation of each (\c nghttp2 >= 1.70.0, \c c-ares >= 1.34.8,
+    \c ngtcp2 >= 1.25.0, \c nghttp3 >= 1.18.0; \c ngtcp2_crypto_ossl needs OpenSSL 3.5+ for the QUIC TLS API),
+    and otherwise downloads and statically links the pinned supported release automatically.
+    Installing these development packages is therefore recommended for
     faster builds and distro security updates, but is not required.
+
+    The c-ares minimum includes the fixes for CVE-2026-33630, CVE-2026-69184 and CVE-2026-69186,
+    with callback API compatibility restored in 1.34.8. The source-build dependencies also include
+    Apache Arrow/Parquet 25.0.1, tree-sitter 0.26.13 and jemalloc 5.4.0 (musl targets).
+    The bundled jsoncons headers are updated to 1.9.0 while preserving schema stack/cancellation
+    checks, and xxHash is updated to 0.8.4 with unchanged XXH32/XXH64 cache and AOT checksums.
 
     The following libraries are also required system build dependencies for %Qore and cannot be disabled at build time:
     - <b><a href="https://github.com/google/brotli">Brotli</a>, <a href="https://facebook.github.io/zstd/">Zstd</a>, <a href="https://lz4.org/">LZ4</a>:</b> Compression formats are always available
@@ -2330,9 +2355,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref bfldataproviderintro "BflDataProvider" module
       - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation
+      - expose 37 typed service operations, five generation/job helpers, and generic API access from pinned contracts
+      - include FLUX.2, FLUX 3 video, image/video editing tools, LoRA beta inference, credit reads, and licensed usage reports
 
     - @ref bflrestclientintro "BflRestClient" module
       - new module providing a REST client for <a href="https://bfl.ai">Black Forest Labs</a> with `x-key` header authentication
+      - authenticate credit ping, preserve regional routes, and validate per-job deadlines and credential-free media downloads
+      - retire the unsupported `flux-1.1-pro-video` alias; select the current `flux-3-video` model explicitly
 
     - @ref bgem3fastapidataproviderintro "BgeM3FastApiDataProvider" module
       - new module providing a data provider API for the BGE-M3 FastAPI embedding sidecar
@@ -2529,9 +2558,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM API
 
     - @ref gcpauthintro "GcpAuth" module
-      - new module exchanging GCP credentials for bearer access tokens via the full Application Default \
+      - new module exchanging GCP credentials for bearer access tokens via the supported Application Default \
         Credentials chain: service-account JSON keys (JWT-bearer), user \c "authorized_user" credentials \
         from \c "gcloud auth application-default login" (refresh-token grant), and the GCE/GKE metadata server
+      - adds independent quota-project resolution, validates supported credential and token formats,
+        sanitizes authentication failures, bounds token requests, and isolates metadata caches by endpoint
 
     - @ref geminibodyshapeintro "GeminiBodyShape" module
       - new shared module for the Gemini \c generateContent wire format: request/response shapers plus the \
@@ -2581,9 +2612,17 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref googledocumentaidataproviderintro "GoogleDocumentAiDataProvider" module
       - new module providing a data provider API for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+      - provides 47 actions for online and batch processing, processor/version lifecycle, evaluations,
+        schemas, operations, and explicit beta dataset/import work, using pinned offline Discovery contracts
+      - preserves complete document structures, scoped paginated selectors, source exclusivity, partial
+        updates, and operation identity when bounded waiting times out
 
     - @ref googledocumentairestclientintro "GoogleDocumentAiRestClient" module
       - new module providing a REST client for <a href="https://cloud.google.com/document-ai">Google Document AI</a>
+      - authenticates synchronous, asynchronous, raw, copied, and generic requests through GcpAuth;
+        verifies authentication with processor-list ping and supports separate resource/quota projects
+      - verifies canonical numeric project names through the location API so project-ID connections
+        accept returned processor/version/operation names while preserving resource scope checks
 
     - @ref googledrivedataproviderintro "GoogleDriveDataProvider" module
       - new module providing a data provider API for <a href="https://www.google.com/drive/">Google Drive</a>
@@ -2864,6 +2903,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - preserve positional arrays, boolean item constraints, response direction, and native serialization
+      - retains enumeration labels and descriptions through schema adaptation and serialization,
+        while preserving typed wire values and keeping code-generation symbols out of forms
       - independent response type snapshots retain read-only/write-only direction through nested types and serialization
       - validates declared object properties even when the schema also permits arbitrary additional properties
       - preserves composed field types and supports multipart file-or-URL inputs, including named file arrays
@@ -2935,6 +2977,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - @ref qoreasyncjobutilsintro "QoreAsyncJobUtils" module
       - new module providing a provider-neutral async-job polling helper
       - bounds sleep by the remaining deadline and rejects success arriving after the deadline
+      - fixes the default sleeper's millisecond-to-microsecond conversion to honor polling intervals
 
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
@@ -2962,7 +3005,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         so applications can account for priority requests downgraded to standard processing
 
     - @ref qoremediautilsintro "QoreMediaUtils" module
+      - validate MP4 container metadata including dimensions, duration, sample count, frame rate, and audio presence
       - new module providing a provider-neutral abstraction layer for generative media (image + video)
+      - validates media signatures and MIME types, reads image dimensions and WAV/MP3 duration,
+        and supports Stability AI multipart generation through the media backend
 
     - @ref qoremlutilsintro "QoreMLUtils" module
       - new module providing hyperparameter optimization and model explainability
@@ -3010,6 +3056,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new module providing a REST client API over multiplexed HTTP/2 and HTTP/3 connections
 
     - @ref restschemaactionsintro "RestSchemaActions" module
+      - encode binary/file/base64/URL media inputs as JSON strings while preserving explicit null
       - optional typed response envelopes preserve HTTP status and headers, including bodyless accepted jobs
       - actions can select a declared response media schema and send its Accept header while retaining typed codecs
       - imports partition operations by declared fixed servers and support checked schema value repairs
@@ -3085,9 +3132,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref stabilityaidataproviderintro "StabilityAiDataProvider" module
       - new module providing a data provider API for <a href="https://stability.ai">Stability AI</a> text-to-image generation
+      - exposes 34 typed media/account operations, compatible generation, three bounded wait helpers,
+        and generic API access, with complete offline registration and translated presentation
 
     - @ref stabilityairestclientintro "StabilityAiRestClient" module
       - new module providing a REST client for <a href="https://stability.ai">Stability AI</a> v2beta endpoints
+      - pins attributed service schemas, authenticates balance ping and organization scope, validates
+        multipart media and responses, and rejects credential forwarding across origins
 
     - @ref stripedataproviderintro "StripeDataProvider" module
       - new module providing a data provider API for <a href="https://stripe.com">Stripe</a> payments, billing
@@ -3241,6 +3292,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       without excluding that load and without the target Program's parse lock, so it could crash or fail with a
       spurious \c IMPORT-SYSTEM-API-ERROR conflict with itself.  A binary module being loaded into a Program
       now also excludes threads looking up names in that Program until its declarations are in place
+    - Fixed stream sockets bound on all interfaces binding only the IPv4 wildcard address, so they could not be
+      reached over IPv6; a client of \c "localhost", which resolves to \c ::1 first, could connect to an unrelated
+      IPv6 service holding the same port number instead and have its request reset.  A bind on all interfaces is
+      now one dual-stack socket (see @ref qore_3_0_0_compatibility)
+    - Fixed @ref Qore::Socket::bindINET() "Socket::bindINET()" trying only the first resolved address; a failed
+      bind closed the socket, so the other addresses were tried on a closed socket
     - Fixed Base64 conversion of an empty binary leaving an unterminated string buffer, which could expose
       uninitialized bytes during JSON serialization
     - Fixed @ref Qore::Serializable "Serializable" deserialization losing a reference to a container that is
@@ -3518,6 +3575,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - \c qdp and the @ref providerindexintro "ProviderIndex" and
       @ref providerindexutilintro "ProviderIndexUtil" modules
+      - preserve complete action input and output types in published indexes, including nested fields,
+        structured choices, and media/job results; unserializable types block qualified publication
       - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
         @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
         @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard
@@ -3724,6 +3783,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - unconstrained arrays retain size bounds and compare uniqueness using typed structural values
       - opaque PDF responses retain their original bytes on synchronous and asynchronous transports
       - boolean enumerations reject undeclared values and retain false in generated examples
       - fixed validating a request or response value holding @ref NULL "NULL", which failed to dispatch at

@@ -484,7 +484,11 @@ sm.addNetworkAllowedHost(host_pattern: "*.trusted-domain.org");
     @endcode
 
     @note Wildcards only match single domain components.
-    "*.example.com" matches "api.example.com" but not "api.sub.example.com".
+    "*.example.com" matches "api.example.com" and "example.com" but not "api.sub.example.com".  Host names are
+    compared without regard to case and without a trailing dot.
+
+    @note A connection to a host name matching an allowed pattern is allowed unless an address that the name
+    resolves to is in a denied IP range or the port is not allowed; see @ref sandbox_net_rules
 */
 nothing SandboxManager::addNetworkAllowedHost(string host_pattern) [flags=NAMED_ARGS] {
     sm->network().addAllowedHost(host_pattern->c_str(), xsink);
@@ -588,6 +592,9 @@ nothing SandboxManager::allowHTTPSOnly() {
 
 //! Sets whether unlisted network destinations are allowed or denied by default
 /** @param allow If @ref Qore::True "True", unlisted destinations are allowed; if @ref Qore::False "False" (default), denied
+
+    The default policy applies to local addresses bound as well as to destinations: with the default deny policy
+    and no allowed IP ranges, no socket can be bound; see @ref sandbox_net_rules
 
     @par Example:
     @code{.py}

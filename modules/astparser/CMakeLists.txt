@@ -13,8 +13,9 @@
 # The generated src/ files are committed to source control.
 
 find_package(PkgConfig QUIET)
+set(QORE_TREE_SITTER_VERSION "0.26.13")
 if(PkgConfig_FOUND)
-    pkg_check_modules(TREE_SITTER QUIET IMPORTED_TARGET tree-sitter)
+    pkg_check_modules(TREE_SITTER QUIET IMPORTED_TARGET "tree-sitter>=${QORE_TREE_SITTER_VERSION}")
 endif()
 
 if(TREE_SITTER_FOUND)
@@ -25,11 +26,12 @@ if(TREE_SITTER_FOUND)
 else()
     include(FetchContent)
 
-    # Fetch tree-sitter C runtime library (same version as module-treesitter)
+    # Keep the runtime and grammar generation CLI on the same maintenance release.
     FetchContent_Declare(
         tree-sitter
         GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
-        GIT_TAG v0.26.8
+        GIT_TAG v${QORE_TREE_SITTER_VERSION}
+        GIT_SHALLOW TRUE
     )
     FetchContent_GetProperties(tree-sitter)
     if(NOT tree-sitter_POPULATED)

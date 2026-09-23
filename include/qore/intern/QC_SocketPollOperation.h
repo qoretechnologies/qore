@@ -285,6 +285,8 @@ private:
     bool initialized = false;
     bool bind_inet_resolved = false;
     int controller_deferred_tid = -1;
+    //! The sandbox that governs a bind, resolved on the thread that requests it (the bind runs on an I/O thread)
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
 };
 
 class SocketDataAvailablePollOperation : public SocketPollSocketOperationBase {
@@ -1576,6 +1578,8 @@ private:
     struct sockaddr_storage dest_addr{};
     socklen_t dest_addr_len = 0;
     bool sent = false;
+    //! The sandbox that governs the destination, resolved on the thread that creates the operation
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
         return false;  // UDP is connectionless, no need to close on abort
@@ -1797,6 +1801,9 @@ private:
     //! packet until this deadline elapses, giving the preferred family a
     //! head start on the handshake.
     int64_t not_before_ns_ = 0;
+
+    //! The sandbox that governs the remote address, resolved on the thread that creates the operation
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager_;
 
     //! Coalesced timer + write + send pending QUIC packets via UDP
     /** @param next_expiry output: next timer expiry for poll timeout

@@ -620,7 +620,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             const list<auto> AcceptList = (
 %ifndef NoYaml
-                MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
+                MimeTypeYaml, MimeTypeYamlRpc,
 %endif
 %ifndef NoXml
                 MimeTypeXml, MimeTypeXmlApp,
@@ -2906,14 +2906,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @since RestClientIo 1.1
         */
         static *hash<auto> redactHeaders(*hash<auto> hdr) {
-            if (!hdr) {
-                return hdr;
-            }
-            hash<auto> rv = {};
-            foreach hash<auto> i in (hdr.pairIterator()) {
-                rv{i.key} = SensitiveRequestHeaders{i.key.lwr()} ? "<redacted>" : i.value;
-            }
-            return rv;
+            return RestClient::RestDiagnostics::headers(hdr);
         }
 
         #! Internal: deserializes a raw HTTP response into a RestResponseInfo hash
@@ -2933,6 +2926,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw,
                 bool req_error_passthru, bool req_allow_any_response, string method,
                 string path, *hash<auto> request_headers, *data request_body) {
+            on_error {
+                hash<auto> safe = RestClient::RestDiagnostics::redact($1, request_headers);
+                rethrow safe.err, safe.desc, safe.arg;
+            }
             @assert(raw.hasKey("status_code"));
             @assert(raw.hasKey("headers"));
 

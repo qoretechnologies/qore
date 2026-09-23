@@ -43,6 +43,7 @@ endif()
 # deleted build tree (or one whose generated *Config.cmake declares a pre-3.5
 # cmake_minimum_required) otherwise hijacks detection and aborts configure under
 # CMake >= 4.
+set(QORE_ARROW_INCLUDE_DIRS)
 find_package(Arrow QUIET CONFIG NO_CMAKE_PACKAGE_REGISTRY)
 if (Arrow_FOUND)
     find_package(Parquet QUIET CONFIG NO_CMAKE_PACKAGE_REGISTRY)
@@ -59,7 +60,7 @@ else()
     # dataframe module does not need libarrow.so/dylib at runtime, and bundle
     # Arrow's own dependencies (Snappy/LZ4/ZSTD/Thrift/...) so the build does
     # not require additional system packages.
-    set(QORE_ARROW_FETCH_VERSION "24.0.0")
+    set(QORE_ARROW_FETCH_VERSION "25.0.1")
     message(STATUS "Apache Arrow not installed; building from source via FetchContent (apache-arrow ${QORE_ARROW_FETCH_VERSION})")
     message(STATUS "  This adds ~5-15 minutes to the build.  Install libarrow-dev / apache-arrow to skip.")
 
@@ -81,6 +82,7 @@ else()
 
     set(ARROW_BUILD_SHARED OFF CACHE BOOL "" FORCE)
     set(ARROW_BUILD_STATIC ON CACHE BOOL "" FORCE)
+    set(ARROW_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
     set(ARROW_PARQUET ON CACHE BOOL "" FORCE)
     set(ARROW_IPC ON CACHE BOOL "" FORCE)
     set(ARROW_CSV ON CACHE BOOL "" FORCE)
@@ -92,6 +94,17 @@ else()
     # "target X already exists" errors when Arrow's ThirdpartyToolchain.cmake
     # re-declares them.
     set(ARROW_DEPENDENCY_SOURCE AUTO CACHE STRING "" FORCE)
+    # Arrow does not define its normal option defaults when embedded as a
+    # subproject. Explicitly prefer shared system codecs: distro static
+    # archives (notably Snappy) may lack PIC and cannot link into dataframe.
+    # Missing dependencies still fall back to Arrow's PIC source builds.
+    set(ARROW_SNAPPY_USE_SHARED ON CACHE BOOL "" FORCE)
+    set(ARROW_BROTLI_USE_SHARED ON CACHE BOOL "" FORCE)
+    set(ARROW_LZ4_USE_SHARED ON CACHE BOOL "" FORCE)
+    set(ARROW_ZSTD_USE_SHARED ON CACHE BOOL "" FORCE)
+    if (NOT WIN32)
+        set(ARROW_THRIFT_USE_SHARED ON CACHE BOOL "" FORCE)
+    endif()
     # Common Parquet compression codecs.  Arrow turns these into Snappy/LZ4/
     # ZSTD support; leaving them OFF would produce a parquet writer that
     # cannot read most real-world files.
@@ -110,7 +123,7 @@ else()
 
     FetchContent_Declare(arrow
         URL "https://archive.apache.org/dist/arrow/arrow-${QORE_ARROW_FETCH_VERSION}/apache-arrow-${QORE_ARROW_FETCH_VERSION}.tar.gz"
-        URL_HASH SHA256=9a8094d24fa33b90c672ab77fdda253f29300c8b0dd3f0b8e55a29dbd98b82c9
+        URL_HASH SHA256=43d5de0a581f43cf63a2c06b4dcf13b9ff6fcd800f023324596e5781093bc500
         SOURCE_SUBDIR cpp
         ${QORE_FETCHCONTENT_URL_OPTIONS}
         ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
@@ -137,8 +150,11 @@ else()
     # Arrow's static-build targets are named arrow_static / parquet_static when
     # ARROW_BUILD_STATIC=ON.  Public headers live under
     # ${arrow_SOURCE_DIR}/cpp/src and generated headers under
-    # ${arrow_BINARY_DIR}/src.
+    # ${arrow_BINARY_DIR}/src. The in-tree targets do not export these include
+    # directories to consumers. Without them, an older system installation can
+    # supply incompatible headers while we link the fetched static libraries.
     set(QORE_ARROW_TARGETS arrow_static parquet_static)
+    set(QORE_ARROW_INCLUDE_DIRS ${arrow_SOURCE_DIR}/cpp/src ${arrow_BINARY_DIR}/src)
     message(STATUS "Apache Arrow ${QORE_ARROW_FETCH_VERSION} fetched and configured")
 endif()
 
@@ -202,7 +218,7 @@ set(df_module_name "dataframe")
 add_library(${df_module_name} MODULE ${DF_CPP_SRC} ${DF_QPP_SOURCES})
 target_link_libraries(${df_module_name} Eigen3::Eigen)
 target_link_libraries(${df_module_name} ${QORE_ARROW_TARGETS})
-target_include_directories(${df_module_name} PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(${df_module_name} PRIVATE ${LLVM_INCLUDE_DIRS} ${QORE_ARROW_INCLUDE_DIRS})
 add_dependencies(${df_module_name} libqore DF_QPP_GENERATED_FILES)
 
 # the module mainpage carries @section dataframeintro, which the lang docs reference; without it in

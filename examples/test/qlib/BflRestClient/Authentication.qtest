@@ -1,0 +1,193 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires BflRestClient
+%requires HttpServer
+%requires HttpServerUtil
+%requires json
+%exec-class BflAuthenticationTest
+
+class BflAuthHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex mutex();
+        list<hash<auto>> calls = ();
+        int status = 200;
+        auto response = {"credits": 0};
+        hash<auto> response_headers = {};
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        AutoLock lock(mutex);
+        push calls, {"path": cx.raw_path, "method": hdr.method, "headers": hdr, "body": body};
+        int code = hdr."x-key" == "bfl-fixture-key" ? status : 401;
+        return makeResponse({"Content-Type": "application/json"} + response_headers, code,
+            make_json(code == 200 ? response : {"detail": "Rejected " + hdr."x-key"}));
+    }
+}
+
+class BflAuthenticationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        BflAuthHandler handler();
+        string endpoint;
+        hash<auto> options;
+    }
+    constructor() : Test("BFL authentication", "1.1") {
+        addTestCase("sync async raw future and normalized clients authenticate", \requestsTest());
+        addTestCase("both connection constructors and polling ping validate zero credits", \pingTest());
+        addTestCase("rejected credentials and HTTP failures never authenticate or leak", \failureTest());
+        addTestCase("malformed successful responses never authenticate", \malformedTest());
+        addTestCase("copies retain credentials and enforce regional routing scope", \copyTest());
+        addTestCase("missing null empty credentials and unsafe targets fail locally", \validationTest());
+        addTestCase("saved schemes regions and explicit fixture endpoints survive", \configTest());
+        addTestCase("live read-only connection authentication", \liveTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5423-auth", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        options = {"url": endpoint, "apikey": "bfl-fixture-key", "timeout": 5s, "connect_timeout": 2s};
+        set_return_value(main());
+    }
+    globalTearDown() { delete server; }
+    private hash<auto> last() { return handler.calls[-1]; }
+    private BflRestConnection connection(*hash<auto> extra) {
+        return new BflRestConnection({"name": "fixture", "url": endpoint, "opts": (options - "url") + extra});
+    }
+    private requestsTest() {
+        foreach AbstractRestClient client in ((new BflRestClient::BflRestClient(options, True),
+                new BflRestClientIo(options), new BflRestClientIo(BflRestClientBase::getOptions(options)))) {
+            assertEq(0, client.restGet("/v1/credits").body.credits);
+            assertEq("bfl-fixture-key", last().headers."x-key");
+            assertEq(200, client.restDoRawRequest("POST", "/v1/fixture", "{\"value\":false}",
+                {"Content-Type": "application/json", "X-Key": "ignored", "Authorization": "ignored"}).status_code);
+            assertEq("{\"value\":false}", last().body.toString());
+            assertEq("bfl-fixture-key", last().headers."x-key");
+            assertNothing(last().headers.authorization);
+        }
+        BflRestClientIo async(options + {"headers": {"X-KEY": "ignored", "authorization": "ignored"},
+            "token": "ignored-token", "username": "ignored", "password": "ignored"});
+        assertEq(0, async.restDoRequestAsync("GET", "/v1/credits").get().body.credits);
+        assertNothing(last().headers.authorization);
+    }
+    private pingTest() {
+        foreach BflRestConnection conn in ((connection(),
+                new BflRestConnection("second", "Fixture", endpoint, {}, options - "url"))) {
+            assertTrue(conn.ping(True).ok);
+            assertEq("/v1/credits", last().path);
+            assertEq("GET", last().method);
+            assertEq("BlackForestLabs", conn.getAppName());
+            assertEq(-1, make_json(conn.getInfo()).find("bfl-fixture-key"));
+            assertEq(200, conn.get(False).restGet("/v1/credits").status_code);
+            assertEq(200, conn.getAsync(False).restGet("/v1/credits").status_code);
+        }
+        auto poll = connection().startPollConnect();
+        date deadline = now_us() + 10s;
+        while (auto info = poll.continuePoll()) {
+            assertTrue(now_us() < deadline);
+            Socket::poll((info,), 1s);
+        }
+        assertTrue(poll.goalReached());
+        assertEq("/v1/credits", last().path);
+    }
+    private failureTest() {
+        assertFalse(connection({"apikey": "invalid-fixture-key"}).ping(False).ok);
+        foreach AbstractRestClient client in ((new BflRestClient::BflRestClient(
+                options + {"apikey": "invalid-fixture-key"}, True),
+                new BflRestClientIo(options + {"apikey": "invalid-fixture-key"}))) {
+            bool rejected = False;
+            try { client.restGet("/v1/credits"); }
+            catch (hash<ExceptionInfo> ex) {
+                rejected = True;
+                assertEq(-1, make_json(ex).find("invalid-fixture-key"));
+            }
+            assertTrue(rejected);
+        }
+        on_exit { handler.status = 200; handler.response_headers = {}; }
+        foreach int status in ((401, 402, 403, 429, 500, 302)) {
+            handler.status = status;
+            handler.response_headers = {"Location": endpoint + "/must-not-follow"};
+            int before = handler.calls.size();
+            hash<auto> result = connection().ping(False);
+            assertFalse(result.ok);
+            assertEq(before + 1, handler.calls.size());
+            assertEq(-1, make_json(result).find("bfl-fixture-key"));
+        }
+    }
+    private malformedTest() {
+        on_exit handler.response = {"credits": 0};
+        foreach auto body in ((NULL, (), {}, "ok", {"credits": NULL}, {"credits": "50"},
+                {"credits": False}, {"credits": -1}, {"credits": 0, "error": NULL})) {
+            handler.response = body;
+            assertFalse(connection().ping(False).ok);
+        }
+    }
+    private copyTest() {
+        foreach AbstractRestClient parent in ((new BflRestClient::BflRestClient(options, True), new BflRestClientIo(options))) {
+            AbstractRestClient copy = parent.copyWithUrl(endpoint);
+            assertEq(parent.className(), copy.className());
+            assertEq(0, copy.restGet("/v1/credits").body.credits);
+            assertEq("bfl-fixture-key", last().headers."x-key");
+            assertThrows("BFL-CONFIG-ERROR", sub () { parent.copyWithUrl("https://untrusted.example"); });
+            assertThrows("BFL-CONFIG-ERROR", sub () { parent.copyWithUrl("http://127.0.0.1:1"); });
+        }
+        BflRestClientIo regional({"apikey": "fixture", "url": "https://api.eu.bfl.ai"});
+        assertEq("https://api.us.bfl.ai", regional.copyWithUrl("https://api.us.bfl.ai").getUrl());
+        assertThrows("BFL-CONFIG-ERROR", sub () { regional.copyWithUrl("https://delivery.eu1.bfl.ai"); });
+    }
+    private validationTest() {
+        auto secured = BflRestClientBase::getOptions({"apikey": "fixture", "url": "https://api.bfl.ai",
+            "ssl_verify_cert": False, "ssl_verify_mode": 0, "accept_all_certs": True});
+        assertEq(True, secured.ssl_verify_cert);
+        assertEq(SSL_VERIFY_PEER, secured.ssl_verify_mode);
+        assertEq(False, secured.accept_all_certs);
+        foreach auto key in ((NOTHING, NULL, "", " ", "bad\nkey", 123)) {
+            assertThrows("BFL-CONFIG-ERROR", sub () { new BflRestClientIo(options + {"apikey": key, "token": "valid"}); });
+        }
+        assertThrows("BFL-CONFIG-ERROR", sub () { new BflRestClientIo(options - "apikey"); });
+        assertThrows("BFL-CONFIG-ERROR", sub () { new BflRestClientIo((options - "apikey") + {"token": "valid"}); });
+        foreach string url in (("http://remote.example", "https://user:secret@api.bfl.ai", "https://api.bfl.ai/path",
+                "https://api.bfl.ai?query=1", "https://api.bfl.ai#fragment", "https://api.bfl.ai:444",
+                "https://api.bfl.ai.evil.example", "https://evil-api.bfl.ai", "https://delivery.eu1.bfl.ai")) {
+            assertThrows("BFL-CONFIG-ERROR", sub () { new BflRestClientIo(options + {"url": url}); });
+        }
+        foreach AbstractRestClient client in ((new BflRestClient::BflRestClient(options, True), new BflRestClientIo(options))) {
+            int before = handler.calls.size();
+            foreach string path in (("https://untrusted.example/x", "//untrusted.example/x", "/../x", "/x#fragment")) {
+                assertThrows("BFL-CONFIG-ERROR", sub () { client.restGet(path); });
+            }
+            assertEq(before, handler.calls.size());
+        }
+    }
+    private configTest() {
+        foreach string url in (("bfl://localhost", "bfl://x", "https://api.bfl.ai")) {
+            BflRestConnection conn({"name": "saved", "url": url, "opts": {"apikey": "fixture"}});
+            assertEq("bfl://api.bfl.ai", conn.getUrl());
+            assertEq("BlackForestLabs", conn.getAppName());
+        }
+        BflRestConnection regional({"name": "regional", "url": "bfl://api.eu.bfl.ai", "opts": {"apikey": "fixture"}});
+        assertEq("bfl://api.eu.bfl.ai", regional.getUrl());
+        BflRestConnection conn = connection({"ping_path": "https://untrusted.example", "ping_method": "POST"});
+        assertEq(endpoint, conn.getUrl());
+        assertTrue(conn.ping(True).ok);
+        assertEq("/v1/credits", last().path);
+    }
+    private liveTest() {
+        if (ENV.QORE_BFL_LIVE_AUTH != "1") { testSkip("set QORE_BFL_LIVE_AUTH=1 for read-only BFL authentication"); }
+        assertTrue(ENV.BFL_APIKEY.val().toBool(), "privately source BFL_APIKEY first");
+        hash<auto> opts = {"apikey": ENV.BFL_APIKEY, "timeout": 30s, "connect_timeout": 10s};
+        BflRestConnection conn({"name": "5423-live", "opts": opts});
+        assertTrue(conn.ping(False).ok, "the live Qore connection authenticates");
+        foreach AbstractRestClient client in ((new BflRestClient::BflRestClient(opts, True), new BflRestClientIo(opts))) {
+            hash<auto> result = client.restGet("/v1/credits");
+            conn.validatePingResponse(result.body);
+            printf("LIVE credit observation: %y\n", result.body.credits);
+        }
+        BflRestConnection invalid({"name": "5423-negative", "opts": opts
+            + {"apikey": "00000000-0000-4000-8000-000000000000"}});
+        assertFalse(invalid.ping(False).ok);
+        bool rejected = False;
+        try { invalid.getAsync(False).restGet("/v1/credits"); }
+        catch (hash<ExceptionInfo> ex) { rejected = inlist(ex.arg.status_code, (401, 403)); }
+        assertTrue(rejected, "invalid-key rejection must be an authentication response, not a server failure");
+    }
+}

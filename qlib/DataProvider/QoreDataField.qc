@@ -247,8 +247,26 @@ public class QoreDataField inherits AbstractDataField {
     }
 
     #! Updates the field type
+    /** @param type the final or replacement field type
+        @return this field
+        @throw any type conversion error when finalizing choices from an AutoType placeholder
+        Explicit type replacements leave choice replacement to the caller, such as a wire codec overlay.
+    */
     AbstractDataField updateFieldType(AbstractDataProviderType type) {
+        # Schema adapters initially build fields with AutoType to break recursive graphs.
+        # Convert choices before publishing the final type, including integer/boolean
+        # values represented as strings by schema lookup sets. Labels remain untouched.
+        *Type previous_type = self.type.getValueType();
+        *list<hash<AllowedValueInfo>> converted = previous_type && previous_type.isEqual(AutoType)
+            ? allowed_values : NOTHING;
+        foreach hash<AllowedValueInfo> choice in (converted) {
+            choice.value = type.acceptsValue(choice.value);
+            converted[$#] = choice;
+        }
         self.type = type;
+        if (converted) {
+            setAllowedValues(converted, allowed_values_creatable);
+        }
         return self;
     }
 

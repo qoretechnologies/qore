@@ -655,25 +655,23 @@ else()
     find_package(ICU COMPONENTS uc i18n REQUIRED)
 endif()
 
-# c-ares is required for asynchronous DNS resolution in socket I/O (>= 1.19.1).
+# c-ares is required for asynchronous DNS resolution in socket I/O.
 # Prefer an adequate system install; fall back to building the latest stable
 # release from source via FetchContent (statically linked) when the system
 # package is missing or older than the minimum.
 #
-# Minimum 1.19.1: c-ares <= 1.19.0 (e.g. Debian 12 ships 1.18.1) has an
-# ares_getaddrinfo() bug that rejects the numeric service "0" (ephemeral
-# port, valid per getaddrinfo(3)) with ARES_ESERVICE, which 1.18.1's
-# ares_strerror() additionally renders as the opaque "unknown"; this breaks
-# every listener that binds to an ephemeral port. Fixed in 1.19.1 (verified
-# empirically: 1.18.1 and 1.19.0 fail, 1.19.1+ succeed).
+# Require 1.34.8 for the 1.34.7 DNS security fixes (CVE-2026-33630,
+# CVE-2026-69184, CVE-2026-69186) and the 1.34.8 callback API compatibility
+# fix. Apply the same minimum to system libraries and the source fallback:
+# updating only the fallback leaves older system resolvers in use.
 #
 # IMPORTANT: consume the pkg-config IMPORTED_TARGET (PkgConfig::CARES_PKG),
 # NOT the bare ${CARES_PKG_LIBRARIES} name, so the linker resolves the exact
 # library pkg-config reports (full path + include dirs) rather than a
 # different libcares earlier in its default search path.
-set(CARES_VERSION "1.34.6")  # latest stable; FetchContent fallback pin
+set(CARES_VERSION "1.34.8")  # minimum supported version and FetchContent fallback pin
 set(CARES_FOUND_SYSTEM FALSE)
-pkg_check_modules(CARES_PKG QUIET IMPORTED_TARGET libcares>=1.19.1)
+pkg_check_modules(CARES_PKG QUIET IMPORTED_TARGET "libcares>=${CARES_VERSION}")
 if (CARES_PKG_FOUND)
     message(STATUS "Found system c-ares: ${CARES_PKG_VERSION}")
     list(APPEND LIBQORE_OPTIONAL_LIBS PkgConfig::CARES_PKG)
@@ -689,8 +687,8 @@ else()
              REGEX "^#define ARES_VERSION_STR ")
         if (_cares_ver_str MATCHES "\"([0-9]+\\.[0-9]+\\.[0-9]+)\"")
             set(_cares_ver "${CMAKE_MATCH_1}")
-            if (_cares_ver VERSION_LESS "1.19.1")
-                message(STATUS "system c-ares ${_cares_ver} too old (need >= 1.19.1 for ares_getaddrinfo service \"0\" fix); will build from source")
+            if (_cares_ver VERSION_LESS CARES_VERSION)
+                message(STATUS "system c-ares ${_cares_ver} too old (need >= ${CARES_VERSION}); will build from source")
             else()
                 message(STATUS "Found system c-ares: ${CARES_LIBRARY} (${_cares_ver})")
                 list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIR})
@@ -728,7 +726,7 @@ if (NOT CARES_FOUND_SYSTEM)
 
     FetchContent_Declare(cares
         URL "https://github.com/c-ares/c-ares/releases/download/v${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz"
-        URL_HASH SHA256=912dd7cc3b3e8a79c52fd7fb9c0f4ecf0aaa73e45efda880266a2d6e26b84ef5
+        URL_HASH SHA256=c222b6d681096f9444d2c4863d2c1174019e27cacca0a4a5c114d36dd7d7bf78
         EXCLUDE_FROM_ALL
     )
     FetchContent_MakeAvailable(cares)
@@ -1014,18 +1012,24 @@ if (QORE_MUSL AND NOT QORE_DISABLE_JEMALLOC)
     set(QORE_JEMALLOC_PREFIX ${CMAKE_BINARY_DIR}/jemalloc)
     set(QORE_JEMALLOC_STATIC_LIBRARY ${QORE_JEMALLOC_PREFIX}/lib/libjemalloc_pic.a)
     # The source location may be overridden with a local path (e.g. a tarball vendored into a CI image) to avoid a
-    # network fetch at build time.  It must be jemalloc 5.3.0: the pinned SHA-256 below is verified whether the
+    # network fetch at build time.  It must be jemalloc 5.4.0: the pinned SHA-256 below is verified whether the
     # source is downloaded or taken from a local path, so an override cannot substitute a different tree.
-    set(QORE_JEMALLOC_URL "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2"
-        CACHE STRING "URL or local path to the jemalloc 5.3.0 source tarball linked into libqore on musl targets")
+    # Refresh the previous default in existing build directories, retaining explicit local overrides.
+    if (QORE_JEMALLOC_URL STREQUAL "https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2")
+        unset(QORE_JEMALLOC_URL CACHE)
+    endif()
+    set(QORE_JEMALLOC_URL "https://github.com/jemalloc/jemalloc/releases/download/5.4.0/jemalloc-5.4.0.tar.bz2"
+        CACHE STRING "URL or local path to the jemalloc 5.4.0 source tarball linked into libqore on musl targets")
     ExternalProject_Add(jemalloc_ext
         URL ${QORE_JEMALLOC_URL}
-        URL_HASH SHA256=2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa
+        URL_HASH SHA256=200776fac271093e7c2f21edd6d62657ecd2be578d9328633f2a86bfa6ef4f1d
         PREFIX ${QORE_JEMALLOC_PREFIX}
         CONFIGURE_COMMAND <SOURCE_DIR>/configure
             --prefix=${QORE_JEMALLOC_PREFIX}
             --disable-initial-exec-tls
             --disable-cxx
+            # musl exposes sbrk(), but rejects every nonzero increment; use mmap exclusively.
+            --disable-dss
             --disable-shared
             --enable-static
             "CC=${CMAKE_C_COMPILER}"
@@ -2768,6 +2772,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(qore-json-bigint-test PRIVATE -Werror=maybe-uninitialized)
 endif()
 
+# Stable XXH32/XXH64 results are required by AOT artifacts and cache identities.
+add_executable(qore-xxhash-compat-test EXCLUDE_FROM_ALL
+    examples/test/hash/xxhash_compat.cpp lib/xxhash.cpp)
+target_include_directories(qore-xxhash-compat-test PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
 add_executable(qore-ir-plugin-registry-smoke EXCLUDE_FROM_ALL
     examples/test/ir/plugin_registry_smoke.cpp
     ${QORE_IR_PHASE0_SMOKE_RUNTIME_SRC})
@@ -3031,6 +3040,7 @@ add_custom_command(
     OUTPUT ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     COMMAND ${CMAKE_COMMAND}
         -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
+        -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
         -P ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
     COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_SOURCE_QMOD_CLEAN_STAMP}
     DEPENDS ${QCC_FORMAT_STAMP} ${CMAKE_SOURCE_DIR}/cmake/RemoveSourceQmodSymlinks.cmake
@@ -3667,7 +3677,19 @@ if(QORE_BUILD_AOT_MODULES)
 endif()
 qore_user_module("qlib/GoogleDocumentAiRestClient.qm")
 qore_user_module("qlib/GoogleCloudStorageRestClient.qm")
-qore_user_module("qlib/GoogleDocumentAiDataProvider" "google-document-ai-logo.svg")
+qore_user_module("qlib/GoogleDocumentAiDataProvider" "google-document-ai-logo.svg"
+    "google-document-ai-discovery-v1.json" "google-document-ai-discovery-v1beta3.json"
+    "google-document-ai-openapi-v1.json" "google-document-ai-openapi-v1beta3.json"
+    "google-document-ai-manifest.json" "google-document-ai-inventory.json"
+    "google-discovery-LICENSE" "google-discovery-NOTICE")
+install(FILES qlib/GoogleDocumentAiDataProvider/google-discovery-LICENSE
+    qlib/GoogleDocumentAiDataProvider/google-discovery-NOTICE
+    DESTINATION ${QORE_USER_MODULES_DIR}/GoogleDocumentAiDataProvider COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if (QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/GoogleDocumentAiDataProvider/google-discovery-LICENSE
+        qlib/GoogleDocumentAiDataProvider/google-discovery-NOTICE
+        DESTINATION ${QORE_AOT_MODULES_DIR}/GoogleDocumentAiDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/AzureDocumentIntelligenceRestClient.qm")
 qore_user_module("qlib/AzureDocumentIntelligenceDataProvider"
     "azure-document-intelligence-logo.svg;azure-document-intelligence-openapi.json;azure-document-intelligence-streams.json;azure-document-intelligence-inventory.json;azure-document-intelligence-swagger.json;microsoft-LICENSE.txt;microsoft-NOTICE.txt")
@@ -3679,9 +3701,18 @@ if(QORE_BUILD_AOT_MODULES)
         qlib/AzureDocumentIntelligenceDataProvider/microsoft-NOTICE.txt
         DESTINATION ${QORE_AOT_MODULES_DIR}/AzureDocumentIntelligenceDataProvider COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
 endif()
-qore_user_module("qlib/StabilityAiRestClient.qm")
+qore_user_module("qlib/StabilityAiRestClient" "stability-openapi.json;stability-provenance.json;stability-presentation.json")
 qore_user_module("qlib/StabilityAiDataProvider" "stability-ai-logo.svg")
-qore_user_module("qlib/BflRestClient.qm")
+qore_user_module("qlib/BflRestClient" "bfl-openapi.json;bfl-provenance.json;bfl-vendor-main.json;bfl-vendor-licenses.json;bfl-vendor-video-edit.json;bfl-vendor-lora.txt;bfl-vendor-comfy.txt;bfl-vendor-comfy-license.txt")
+# Preserve companion contract sources and their legal notice beside both installed representations.
+install(FILES qlib/BflRestClient/bfl-vendor-lora.txt qlib/BflRestClient/bfl-vendor-comfy.txt
+    qlib/BflRestClient/bfl-vendor-comfy-license.txt
+    DESTINATION ${QORE_USER_MODULES_DIR}/BflRestClient COMPONENT ${QORE_QM_SOURCE_INSTALL_COMPONENT})
+if(QORE_BUILD_AOT_MODULES)
+    install(FILES qlib/BflRestClient/bfl-vendor-lora.txt qlib/BflRestClient/bfl-vendor-comfy.txt
+        qlib/BflRestClient/bfl-vendor-comfy-license.txt
+        DESTINATION ${QORE_AOT_MODULES_DIR}/BflRestClient COMPONENT ${QORE_QMOD_INSTALL_COMPONENT})
+endif()
 qore_user_module("qlib/BflDataProvider" "bfl-logo.svg")
 qore_user_module("qlib/GroqRestClient.qm")
 qore_user_module("qlib/GroqDataProvider" "groq-logo.svg")
@@ -3895,8 +3926,8 @@ add_custom_target(install-qore-qlib-aot
 
 # Self-healing guarantee for the in-tree source qmod symlinks.  The per-qmod
 # create_symlink command only recreates a symlink when its qmod target rebuilds,
-# but the qcc-format-change cleanup (RemoveSourceQmodSymlinks.cmake) removes the
-# symlinks unconditionally — so a partial build, or up-to-date qmods, after a
+# but the qcc-format-change cleanup (RemoveSourceQmodSymlinks.cmake) removes every
+# symlink into this build tree — so a partial build, or up-to-date qmods, after a
 # format-changing change can leave a module without its symlink and silently fall
 # back to slow source parsing at load.  This idempotent step recreates any
 # missing/incorrect symlink from the already-built qmods, both on (re)configure

@@ -1,0 +1,37 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestSchemaActions
+%requires json
+%exec-class BooleanStringTest
+
+class BooleanStringTest inherits QUnit::Test {
+    constructor() : Test("REST schema boolean string codec", "1.0") {
+        addTestCase("optional false survives wire and repeated type serialization", \roundtripTest());
+        set_return_value(main());
+    }
+    private roundtripTest() {
+        hash<auto> body = {"type": "object", "properties": {"enabled": {"type": "string", "enum": ("true", "false")}}};
+        hash<auto> endpoint = {"requestBody": {"content": {"application/json": {"schema": body}}},
+            "responses": {"200": {"description": "Converted", "content": {"application/json": {"schema": {"type": "object"}}}}}};
+        auto schema = OpenApi3Loader::fromString(make_json({"openapi": "3.0.1", "info": {"title": "Boolean", "version": "1"},
+            "paths": {"/convert": {"post": endpoint}}}), True);
+        RestSchemaActionOperation operation(schema, <RestSchemaActionInfo>{"action": "convert", "method": "POST", "path": "/convert",
+            "display_name": "Convert", "short_desc": "Convert a boolean", "desc": "Convert a boolean to a service string.",
+            "fields": {"enabled": <RestSchemaFieldOverlayInfo>{"codec": RestSchemaActionCodecs::BooleanString}}});
+        auto type = operation.getRequestType();
+        for (int pass = 0; pass < 3; ++pass) {
+            type = Serializable::deserialize(type.serialize());
+            assertEq(False, type.acceptsValue({"enabled": False}).enabled);
+            assertEq("false", operation.unflatten(type.acceptsValue({"enabled": False})).req.body.enabled);
+            assertEq("true", operation.unflatten(type.acceptsValue({"enabled": True})).req.body.enabled);
+            assertEq({}, type.acceptsValue({}));
+        }
+        auto codec = RestSchemaActionCodecs::getCodecEx(RestSchemaActionCodecs::BooleanString);
+        assertEq(False, codec.from_wire("false"));
+        assertNothing(codec.from_wire(NOTHING));
+        assertThrows("REST-SCHEMA-CODEC-ERROR", sub () { codec.from_wire("FALSE"); });
+    }
+}

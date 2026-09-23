@@ -1,0 +1,68 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires OpenApi3
+%requires json
+%exec-class DecimalBoundsTest
+
+class DecimalBoundsTest inherits QUnit::Test {
+    constructor() : Test("REST schema decimal bounds", "1.0") {
+        addTestCase("inclusive fractional bounds accept their endpoints", \inclusiveTest());
+        addTestCase("exclusive fractional bounds reject their endpoints", \exclusiveTest());
+        addTestCase("numeric exclusive bounds and large integers keep precision", \precisionTest());
+        set_return_value(main());
+    }
+    private OpenApi3::SchemaObject schema(hash<auto> limits) {
+        auto root = OpenApi3::OpenApi3Loader::fromString(make_json({"openapi": "3.0.0",
+            "info": {"title": "Bounds", "version": "1"}, "paths": {}}), True);
+        return OpenApi3::SchemaObject::newSchemaObject("value", {"type": "number"} + limits, root);
+    }
+    private inclusiveTest() {
+        auto type = schema({"minimum": 0.2, "maximum": 0.3});
+        foreach auto original in ((0.2, 0.3, number("0.2"), number("0.3"))) {
+            auto value = original;
+            type.check(True, True, "/fixture", "POST", "value", \value);
+            assertEq(original.toFloat(), value.toFloat());
+        }
+        foreach auto original in ((0.199, 0.301, number("0.19999999"), number("0.30000001"))) {
+            assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+                auto value = original;
+                type.check(True, True, "/fixture", "POST", "value", \value);
+            });
+        }
+    }
+    private exclusiveTest() {
+        auto type = schema({"minimum": 0.2, "maximum": 0.3, "exclusiveMinimum": True, "exclusiveMaximum": True});
+        foreach auto original in ((0.2, 0.3, number("0.2"), number("0.3"))) {
+            assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+                auto value = original;
+                type.check(True, True, "/fixture", "POST", "value", \value);
+            });
+        }
+        auto value = 0.25;
+        type.check(True, True, "/fixture", "POST", "value", \value);
+        assertEq(0.25, value);
+    }
+    private precisionTest() {
+        auto type = schema({"exclusiveMinimum": 0.2, "exclusiveMaximum": 0.3});
+        foreach auto original in ((0.2, number("0.3"))) {
+            assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+                auto value = original;
+                type.check(True, True, "/fixture", "POST", "value", \value);
+            });
+        }
+        auto value = number("0.25");
+        type.check(True, True, "/fixture", "POST", "value", \value);
+        assertEq(0.25, value);
+        type = schema({"type": "integer", "minimum": 9007199254740993, "maximum": 9007199254740993});
+        value = 9007199254740993;
+        type.check(True, True, "/fixture", "POST", "value", \value);
+        assertEq(9007199254740993, value);
+        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+            auto too_small = 9007199254740992;
+            type.check(True, True, "/fixture", "POST", "value", \too_small);
+        });
+    }
+}

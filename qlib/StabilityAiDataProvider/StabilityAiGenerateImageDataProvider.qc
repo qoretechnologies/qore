@@ -35,10 +35,20 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
             AbstractDataProvider::DataProviderSummaryInfoKeys
         });
 
-        static StabilityAiGenerateImageRequestDataType RequestType =
-            new StabilityAiGenerateImageRequestDataType();
+        static *StabilityAiGenerateImageRequestDataType RequestType;
         static StabilityAiGenerateImageResponseDataType ResponseType =
             new StabilityAiGenerateImageResponseDataType();
+    }
+
+    private { static Mutex type_mutex(); }
+
+    #! Materializes schema-derived fields once after the independent inventory is registered
+    /** @throw REST-SCHEMA-ACTION-ERROR the pinned input schema is invalid
+        @note RequestType is immutable after initialization; inventory callbacks never call this method.
+    */
+    static initializeTypes() {
+        AutoLock lock(type_mutex);
+        if (!RequestType) { RequestType = new StabilityAiGenerateImageRequestDataType(); }
     }
 
     constructor(StabilityAiRestClient::StabilityAiRestClientIo rest)
@@ -50,38 +60,29 @@ public class StabilityAiGenerateImageDataProvider inherits StabilityAiDataProvid
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
-    private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string model = req.model ?? StabilityAiRestClient::DefaultModel;
-        *string path = StabilityAiRestClient::ModelPathMap{model};
-        if (!path) {
-            throw "STABILITY-AI-CONFIG-ERROR",
-                sprintf("model %y is unknown; known models: %y",
-                    model, keys StabilityAiRestClient::ModelPathMap);
+    #! Rejects explicit null fields before optional type conversion can discard them
+    /** @param req compatible generation options
+        @param request_options provider request options
+        @return verified image result
+        @throw STABILITYAI-INPUT-ERROR an option is null or unknown
+    */
+    auto doRequest(auto req, *hash<auto> request_options) {
+        if (req.typeCode() != NT_HASH) { throw "STABILITYAI-INPUT-ERROR", "action options must be an object"; }
+        foreach hash<auto> item in (req.pairIterator()) {
+            if (!RequestType.getFields().hasKey(item.key) || !exists item.value || item.value.typeCode() == NT_NULL) {
+                throw "STABILITYAI-INPUT-ERROR", sprintf("unknown or null option %y", item.key);
+            }
         }
-        hash<auto!> body;
-        body.prompt = req.prompt;
-        body.output_format = req.output_format ?? "png";
-        if (req.aspect_ratio.val()) {
-            body.aspect_ratio = req.aspect_ratio;
+        if (req.hasKey("seed") && (req.seed.typeCode() == NT_BOOLEAN
+                || (req.seed.typeCode() == NT_STRING && req.seed !~ /^\d+$/)
+                || (inlist(req.seed.typeCode(), (NT_FLOAT, NT_NUMBER)) && req.seed != int(req.seed)))) {
+            throw "STABILITYAI-INPUT-ERROR", "seed must be an integer";
         }
-        if (req.negative_prompt.val()) {
-            body.negative_prompt = req.negative_prompt;
-        }
-        if (exists req.seed) {
-            body.seed = req.seed;
-        }
-        if (req.style_preset.val()) {
-            body.style_preset = req.style_preset;
-        }
+        return StabilityAiDataProviderCommon::doRequest(req, request_options);
+    }
 
-        string accept = sprintf("image/%s", body.output_format);
-        hash<auto> resp = rest.restPost(path, body, {"Accept": accept});
-        return {
-            "image":         resp.body,
-            "content_type":  accept,
-            "finish_reason": resp.headers."finish-reason",
-            "seed":          resp.headers."seed",
-        };
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return StabilityAiApi::generateImage(rest, req);
     }
 }
 }

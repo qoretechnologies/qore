@@ -1,0 +1,48 @@
+Google Document AI Discovery resources
+=====================================
+
+The two google-document-ai-discovery-*.json files are unmodified Google Cloud
+Document AI Discovery responses retrieved on 2026-09-19, revision 20260915.
+Original URLs, byte counts, SHA-256 checksums, and the complete method inventory
+are recorded in google-document-ai-inventory.json.
+
+Google APIs Discovery documents are distributed by Google in
+https://github.com/googleapis/discovery-artifact-manager under Apache License 2.0.
+The upstream license is included as google-discovery-LICENSE (retrieved from
+https://raw.githubusercontent.com/googleapis/discovery-artifact-manager/master/LICENSE).
+Google API use is separately subject to Google's applicable service terms.
+
+The google-document-ai-openapi-*.json files are Qore-generated OpenAPI 3.0.3
+descriptions derived from these documents. They are NOT Google-published
+OpenAPI documents. tools/google-discovery-openapi.py defines normalization
+boundary version 1. tools/google-document-ai-import.py defines reviewed
+Document AI action selection, metadata/result alternatives, and pruning.
+Run `python3 tools/google-document-ai-import.py --check` from the source tree
+to verify exact reproducibility. Neither importer performs network requests.
+
+Qore additions: Copyright 2026 Qore Technologies, s.r.o., MIT license.
+
+Contract notes
+--------------
+* Google's flatPath expands reserved resource templates to individual segments;
+  callers can use IDs or validated project/location/parent-scoped resource names.
+* String-encoded protobuf int64/uint64 values remain strings; bytes remain
+  base64 JSON strings. Timestamp schemas use date-time. Field masks remain strings.
+* Explicit Required. field behavior is retained. readOnly fields are omitted
+  from request forms. Unknown schema constructs fail normalization.
+* Known long-running metadata/results are typed alternatives. protobuf Any
+  retains an open alternative for future service types; other document fields
+  retain their complete declared nested types.
+* process-document consolidates processor and processor-version processing.
+  Processor types use the paginated stable processorTypes.list operation in
+  place of the duplicate fetchProcessorTypes endpoint.
+* Stable operations are preferred; beta-only dataset/import actions are named
+  explicitly and use v1beta3 paths and types.
+* Human review is excluded because HITL is deprecated:
+  https://docs.cloud.google.com/document-ai/docs/deprecation
+* Legacy projects.operations.get and operations.delete are excluded. Current
+  jobs use projects.locations.operations; its supported contract has get, list,
+  and cancel, but no delete. Cancellation is asynchronous, not deletion.
+  https://docs.cloud.google.com/document-ai/docs/access-control/iam-permissions
+
+Every source declaration has a mapping or explicit decision in the inventory.

@@ -5075,8 +5075,8 @@ public class OpenApi3Test inherits QUnit::Test {
             };
             OpenApi3::OpenApi3Schema so = new OpenApi3::OpenApi3Schema("", schema);
             OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
-            assertEq(0.0, bounded.exclusiveMinValue);
-            assertEq(100.0, bounded.exclusiveMaxValue);
+            assertEq(number(0), bounded.exclusiveMinValue);
+            assertEq(number(100), bounded.exclusiveMaxValue);
         }
 
         # Test old-style exclusiveMinimum/Maximum (boolean) still works
@@ -5101,8 +5101,8 @@ public class OpenApi3Test inherits QUnit::Test {
             OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
             assertTrue(bounded.exclusiveMin);
             assertTrue(bounded.exclusiveMax);
-            assertEq(0.0, bounded.minimum);
-            assertEq(100.0, bounded.maximum);
+            assertEq(number(0), bounded.minimum);
+            assertEq(number(100), bounded.maximum);
         }
     }
 
@@ -5649,8 +5649,8 @@ public class OpenApi3Test inherits QUnit::Test {
             OpenApi3::SchemaObject bounded = so.components.schemas.BoundedNumber;
 
             # Verify the numeric exclusive values are set
-            assertEq(0.0, bounded.exclusiveMinValue);
-            assertEq(100.0, bounded.exclusiveMaxValue);
+            assertEq(number(0), bounded.exclusiveMinValue);
+            assertEq(number(100), bounded.exclusiveMaxValue);
             # Boolean exclusive flags should not be set
             assertNothing(bounded.exclusiveMin);
             assertNothing(bounded.exclusiveMax);
@@ -5680,8 +5680,8 @@ public class OpenApi3Test inherits QUnit::Test {
             # Verify the boolean exclusive flags are set
             assertTrue(bounded.exclusiveMin);
             assertTrue(bounded.exclusiveMax);
-            assertEq(0.0, bounded.minimum);
-            assertEq(100.0, bounded.maximum);
+            assertEq(number(0), bounded.minimum);
+            assertEq(number(100), bounded.maximum);
             # Numeric exclusive values should not be set
             assertNothing(bounded.exclusiveMinValue);
             assertNothing(bounded.exclusiveMaxValue);
@@ -5707,7 +5707,7 @@ public class OpenApi3Test inherits QUnit::Test {
 
             assertEq("number", numSchema.type);
             assertTrue(numSchema.nullable);
-            assertEq(0.0, numSchema.minimum);
+            assertEq(number(0), numSchema.minimum);
         }
 
         # Test multiple non-null types in type array (first type used)

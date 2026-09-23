@@ -55,6 +55,10 @@ public class RestSchemaActionCodecs {
 
         #! Codec name: a %Qore date presented for an ISO-8601 UTC timestamp string
         const Iso8601Utc = "iso-8601-utc";
+        #! Codec name: a boolean presented for literal lowercase true/false strings
+        const BooleanString = "boolean-string";
+        #! Codec name: binary, a named file, or an existing base64/URL string sent as a JSON string
+        const Base64OrUrl = "base64-or-url";
     }
 
     private {
@@ -66,6 +70,34 @@ public class RestSchemaActionCodecs {
 
         #! The codecs provided by this module
         const DefaultCodecs = {
+            Base64OrUrl: <RestSchemaWireCodecInfo>{
+                "name": Base64OrUrl,
+                "type": new QoreUnionDataType((AbstractDataProviderType::get(new Type("null")), FileOrNothingDataType,
+                    AbstractDataProviderTypeMap."*binary", AbstractDataProviderTypeMap."*string")),
+                "desc": "sent as base64 media bytes or an unchanged URL string",
+                "to_wire": auto sub (auto v) {
+                    if (!exists v || v.typeCode() == NT_NULL) { return v; }
+                    if (v.typeCode() == NT_HASH) { v = v.content; }
+                    if (v.typeCode() == NT_BINARY) { return make_base64_string(v); }
+                    if (v.typeCode() != NT_STRING) {
+                        throw "REST-SCHEMA-CODEC-ERROR", "expected binary, named file, base64, or URL input";
+                    }
+                    return v;
+                },
+                "from_wire": auto sub (auto v) { return v; },
+            },
+            BooleanString: <RestSchemaWireCodecInfo>{
+                "name": BooleanString, "type": AbstractDataProviderTypeMap."*bool",
+                "desc": "sent as the literal string `true` or `false`",
+                "to_wire": auto sub (auto v) { return exists v ? (v ? "true" : "false") : v; },
+                "from_wire": auto sub (auto v) {
+                    if (!exists v) { return v; }
+                    if (v !== "true" && v !== "false") {
+                        throw "REST-SCHEMA-CODEC-ERROR", "expected the literal string true or false";
+                    }
+                    return v == "true";
+                },
+            },
             UnixSeconds: <RestSchemaWireCodecInfo>{
                 "name": UnixSeconds,
                 "type": AbstractDataProviderTypeMap."*date",

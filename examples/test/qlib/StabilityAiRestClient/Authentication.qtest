@@ -1,0 +1,217 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires StabilityAiRestClient
+%requires HttpServer
+%requires HttpServerUtil
+%requires json
+
+%exec-class StabilityAuthenticationTest
+
+class StabilityAuthHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex mutex();
+        list<hash<auto>> calls = ();
+        int status = 200;
+        auto response = {"credits": 0};
+        hash<auto> response_headers = {};
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        AutoLock lock(mutex);
+        push calls, {"path": cx.raw_path, "method": hdr.method, "headers": hdr, "body": body};
+        int code = hdr.authorization == "Bearer stability-fixture-key" ? status : 401;
+        return makeResponse({"Content-Type": "application/json"} + response_headers, code,
+            make_json(code == 200 ? response : {"name": "fixture_error", "errors": ("Rejected " + hdr.authorization,)}));
+    }
+}
+
+class StabilityAuthenticationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        StabilityAuthHandler handler();
+        string endpoint;
+        hash<auto> options;
+    }
+
+    constructor() : Test("Stability AI authentication", "1.0") {
+        addTestCase("sync async raw and future requests carry the selected credentials", \requestsTest());
+        addTestCase("both constructors and polling ping verify a zero-credit balance", \pingTest());
+        addTestCase("invalid key permissions throttling redirects and failures reject ping", \failureTest());
+        addTestCase("malformed successful responses never authenticate", \malformedTest());
+        addTestCase("copies preserve scope and never cross origins", \copyTest());
+        addTestCase("missing null empty keys and unsafe URLs fail before transport", \validationTest());
+        addTestCase("saved schemes and explicit endpoints survive updates", \configTest());
+        addTestCase("live positive and invalid-key read-only authentication", \liveTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5422-auth", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        options = {"url": endpoint, "apikey": "stability-fixture-key", "organization": "org-fixture",
+            "timeout": 5s, "connect_timeout": 2s};
+        set_return_value(main());
+    }
+
+    globalTearDown() { delete server; }
+
+    private hash<auto> last() { return handler.calls[-1]; }
+    private StabilityAiRestConnection connection(*hash<auto> extra) {
+        return new StabilityAiRestConnection({"name": "fixture", "url": endpoint,
+            "opts": (options - "url") + extra});
+    }
+
+    private requestsTest() {
+        foreach AbstractRestClient client in ((new StabilityAiRestClient::StabilityAiRestClient(options, True),
+                new StabilityAiRestClientIo(options))) {
+            assertEq(0, client.restGet("/v1/user/balance").body.credits);
+            assertEq("Bearer stability-fixture-key", last().headers.authorization);
+            assertEq("org-fixture", last().headers.organization);
+            assertEq(200, client.restDoRawRequest("POST", "/v1/fixture", "{\"value\":false}",
+                {"Content-Type": "application/json", "Authorization": "ignored", "Organization": "ignored"}).status_code);
+            assertEq("{\"value\":false}", last().body.toString());
+            assertEq("Bearer stability-fixture-key", last().headers.authorization);
+            assertEq("org-fixture", last().headers.organization);
+        }
+        StabilityAiRestClientIo async(options);
+        assertEq(0, async.restDoRequestAsync("GET", "/v1/user/balance").get().body.credits);
+        StabilityAiRestClientIo token((options - "apikey") + {"token": "stability-fixture-key"});
+        assertEq(200, token.restGet("/v1/user/balance").status_code);
+        StabilityAiRestClientIo precedence(options + {"token": "ignored-token"});
+        assertEq(200, precedence.restGet("/v1/user/balance").status_code);
+    }
+
+    private pingTest() {
+        foreach StabilityAiRestConnection conn in ((connection(),
+                new StabilityAiRestConnection("second", "Fixture", endpoint, {}, options - "url"))) {
+            assertTrue(conn.ping(True).ok);
+            assertEq("/v1/user/balance", last().path);
+            assertEq("GET", last().method);
+            assertEq("StabilityAi", conn.getAppName());
+            assertEq(-1, make_json(conn.getInfo()).find("stability-fixture-key"));
+            assertEq(200, conn.get(False).restGet("/v1/user/balance").status_code);
+            assertEq(200, conn.getAsync(False).restGet("/v1/user/balance").status_code);
+        }
+        auto poll = connection().startPollConnect();
+        date deadline = now_us() + 10s;
+        while (auto info = poll.continuePoll()) {
+            assertTrue(now_us() < deadline);
+            Socket::poll((info,), 1s);
+        }
+        assertTrue(poll.goalReached());
+        assertEq("/v1/user/balance", last().path);
+    }
+
+    private failureTest() {
+        assertFalse(connection({"apikey": "invalid-fixture-key"}).ping(False).ok);
+        foreach AbstractRestClient client in ((new StabilityAiRestClient::StabilityAiRestClient(
+                options + {"apikey": "invalid-fixture-key"}, True),
+                new StabilityAiRestClientIo(options + {"apikey": "invalid-fixture-key"}))) {
+            bool rejected = False;
+            try { client.restGet("/v1/user/balance"); }
+            catch (hash<ExceptionInfo> ex) {
+                rejected = True;
+                assertEq(-1, make_json(ex).find("invalid-fixture-key"));
+            }
+            assertTrue(rejected);
+        }
+        on_exit { handler.status = 200; handler.response_headers = {}; }
+        StabilityAiRestClient::StabilityAiRestClient sync(options + {"apikey": "invalid-fixture-key"}, True);
+        bool failed = False;
+        try {
+            auto poll = sync.startPollGet("/v1/user/balance");
+            while (auto info = poll.continuePoll()) { Socket::poll((info,), 1s); }
+        } catch (hash<ExceptionInfo> ex) {
+            failed = True;
+            assertEq(-1, make_json(ex).find("invalid-fixture-key"));
+        }
+        assertTrue(failed);
+        foreach int status in ((401, 403, 429, 500, 302)) {
+            handler.status = status;
+            handler.response_headers = {"Location": endpoint + "/must-not-follow"};
+            int before = handler.calls.size();
+            hash<auto> result = connection().ping(False);
+            assertFalse(result.ok);
+            assertEq(before + 1, handler.calls.size());
+            assertEq(-1, make_json(result).find("stability-fixture-key"));
+        }
+    }
+
+    private malformedTest() {
+        on_exit handler.response = {"credits": 0};
+        foreach auto body in ((NULL, (), {}, "ok", {"credits": NULL}, {"credits": "50"},
+                {"credits": False}, {"credits": -1}, {"credits": 0, "error": NULL})) {
+            handler.response = body;
+            assertFalse(connection().ping(False).ok);
+        }
+    }
+
+    private copyTest() {
+        foreach AbstractRestClient parent in ((new StabilityAiRestClient::StabilityAiRestClient(options, True),
+                new StabilityAiRestClientIo(options))) {
+            AbstractRestClient copy = parent.copyWithUrl(endpoint);
+            assertEq(parent.className(), copy.className());
+            assertEq(0, copy.restGet("/v1/user/balance").body.credits);
+            assertEq("org-fixture", last().headers.organization);
+            assertThrows("STABILITYAI-CONFIG-ERROR", sub () { parent.copyWithUrl("https://untrusted.example"); });
+        }
+    }
+
+    private validationTest() {
+        foreach auto key in ((NOTHING, NULL, "", " ", "bad\nkey")) {
+            assertThrows("STABILITYAI-CONFIG-ERROR", sub () {
+                new StabilityAiRestClientIo(options + {"apikey": key, "token": "stability-fixture-key"});
+            });
+        }
+        foreach string url in (("http://remote.example", "https://user:secret@host", "https://host/path",
+                "https://host?query=1", "https://host#fragment")) {
+            assertThrows("STABILITYAI-CONFIG-ERROR", sub () { new StabilityAiRestClientIo(options + {"url": url}); });
+        }
+        foreach AbstractRestClient client in ((new StabilityAiRestClient::StabilityAiRestClient(options, True),
+                new StabilityAiRestClientIo(options))) {
+            int before = handler.calls.size();
+            foreach string path in (("https://untrusted.example/x", "//untrusted.example/x", "/../x", "/x#fragment")) {
+                assertThrows("STABILITYAI-CONFIG-ERROR", sub () { client.restGet(path); });
+            }
+            assertEq(before, handler.calls.size());
+        }
+    }
+
+    private configTest() {
+        foreach string url in (("stability-ai://localhost", "stability-ai://x", "https://api.stability.ai")) {
+            StabilityAiRestConnection conn({"name": "saved", "url": url, "opts": {"apikey": "fixture"}});
+            assertEq("stability-ai://api.stability.ai", conn.getUrl());
+            assertEq("StabilityAi", conn.getAppName());
+        }
+        StabilityAiRestConnection conn = connection({"ping_path": "https://untrusted.example", "ping_method": "POST"});
+        assertEq(endpoint, conn.getUrl());
+        assertTrue(conn.ping(True).ok);
+        assertEq("/v1/user/balance", last().path);
+    }
+
+    private liveTest() {
+        if (getenv("QORE_STABILITYAI_LIVE_AUTH") != "1") {
+            testSkip("set QORE_STABILITYAI_LIVE_AUTH=1 for read-only live authentication");
+        }
+        *string key = getenv("STABILITYAI_APIKEY");
+        assertTrue(key.val().toBool(), "STABILITYAI_APIKEY must be set in the private child environment");
+        hash<auto> opts = {"apikey": key, "timeout": 30s, "connect_timeout": 10s};
+        if (getenv("QORE_STABILITYAI_LIVE_ORGANIZATION").val()) {
+            opts.organization = getenv("QORE_STABILITYAI_LIVE_ORGANIZATION");
+        }
+        StabilityAiRestConnection conn({"name": "5422-live", "opts": opts});
+        assertTrue(conn.ping(False).ok, "real Qore connection ping authenticates");
+        foreach AbstractRestClient client in ((new StabilityAiRestClient::StabilityAiRestClient(opts, True),
+                new StabilityAiRestClientIo(opts))) {
+            auto result = client.restGet("/v1/user/balance");
+            assertEq(200, result.status_code);
+            conn.validatePingResponse(result.body);
+            printf("LIVE safe balance observation: %.6f credits\n", result.body.credits);
+        }
+        StabilityAiRestConnection invalid({"name": "5422-negative",
+            "opts": opts + {"apikey": "qore-5422-deliberately-invalid"}});
+        hash<auto> result = invalid.ping(False);
+        assertFalse(result.ok);
+        assertEq(401, result.ex.arg.status_code, "invalid-key control is rejected by Stability");
+    }
+}

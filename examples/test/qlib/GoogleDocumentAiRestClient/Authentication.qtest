@@ -1,0 +1,243 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.; MIT license (see COPYING.MIT).
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires GoogleDocumentAiRestClient
+%requires HttpServer
+%requires HttpServerUtil
+%requires json
+
+%exec-class AuthenticationTest
+
+class DocumentAiAuthHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex mutex();
+        int token_calls = 0;
+        int service_calls = 0;
+        string issued_token = "qore-5426-fixture-token";
+        int service_status = 200;
+        hash<auto> response_headers = {};
+        auto response = {};
+        *hash<auto> last;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        AutoLock lock(mutex);
+        if (cx.raw_path == "/token") {
+            ++token_calls;
+            return makeResponse({"Content-Type": "application/json"}, 200,
+                make_json({"access_token": issued_token, "expires_in": 3600, "token_type": "Bearer"}));
+        }
+        ++service_calls;
+        last = {"path": cx.raw_path, "headers": hdr, "body": body};
+        int status = hdr.authorization == "Bearer qore-5426-fixture-token" ? service_status : 401;
+        return makeResponse({"Content-Type": "application/json"} + response_headers, status,
+            make_json(status == 200 ? response : {"error": {"code": status}}));
+    }
+}
+
+class AuthenticationTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        DocumentAiAuthHandler handler();
+        string endpoint;
+        string credentials;
+        hash<auto> options;
+    }
+
+    constructor() : Test("Document AI authentication", "1.0") {
+        addTestCase("sync client authenticates and sends quota project", \syncTest());
+        addTestCase("async and raw requests authenticate", \asyncTest());
+        addTestCase("both connection constructors use authenticated ping", \connectionTest());
+        addTestCase("401 and 403 fail actual connection ping", \negativePingTest());
+        addTestCase("malformed success bodies fail ping", \malformedPingTest());
+        addTestCase("client copies retain authentication and reject other origins", \copyTest());
+        addTestCase("URL and region validation happens before transport", \urlTest());
+        addTestCase("explicit quota project overrides ADC quota project", \quotaTest());
+        addTestCase("polling ping authenticates", \pollPingTest());
+        addTestCase("redirects cannot forward bearer credentials", \redirectTest());
+        addTestCase("parallel client copies retain independent requests", \parallelTest());
+        addTestCase("live ADC and deliberately invalid credentials", \liveTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5426", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        credentials = tmp_location() + "/qore-5426-auth-" + get_random_string(16) + ".json";
+        File file();
+        file.open2(credentials, O_CREAT | O_EXCL | O_WRONLY, 0600);
+        file.write(make_json({"type": "authorized_user", "client_id": "fixture-client",
+            "client_secret": "fixture-secret", "refresh_token": "fixture-refresh",
+            "token_uri": endpoint + "/token", "quota_project_id": "fixture-quota"}));
+        file.close();
+        options = {"url": endpoint, "gcp_project_id": "fixture-resource", "gcp_sa_json_path": credentials,
+            "timeout": 10s, "connect_timeout": 5s};
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        delete server;
+        if (is_file(credentials)) { unlink(credentials); }
+        GcpAuth::clearTokenCache();
+    }
+
+    private syncTest() {
+        GoogleDocumentAiRestClient::GoogleDocumentAiRestClient client(options, True);
+        assertEq(200, client.restGet("/v1/check").status_code);
+        assertEq("Bearer qore-5426-fixture-token", handler.last.headers.authorization);
+        assertEq("fixture-quota", handler.last.headers."x-goog-user-project");
+        assertEq("/v1/check", handler.last.path);
+    }
+
+    private asyncTest() {
+        GoogleDocumentAiRestClientIo client(options);
+        assertEq(200, client.restGet("/v1/check").status_code);
+        assertEq(200, client.restDoRawRequest("POST", "/v1/raw", "{\"value\":false}",
+            {"Content-Type": "application/json"}).status_code);
+        assertEq("{\"value\":false}", handler.last.body.toString());
+        assertEq("Bearer qore-5426-fixture-token", handler.last.headers.authorization);
+        assertEq(200, client.restDoRequestAsync("GET", "/v1/future").get().status_code);
+        assertEq("/v1/future", handler.last.path);
+    }
+
+    private GoogleDocumentAiRestConnection connection() {
+        return new GoogleDocumentAiRestConnection({"name": "fixture", "url": endpoint, "opts": options - "url"});
+    }
+
+    private connectionTest() {
+        GoogleDocumentAiRestConnection first = connection();
+        GoogleDocumentAiRestConnection second("fixture2", "Fixture", endpoint, {}, options - "url");
+        foreach GoogleDocumentAiRestConnection conn in ((first, second)) {
+            assertTrue(conn.ping(True).ok);
+            assertEq("/v1/projects/fixture-resource/locations/us/processors?pageSize=1", handler.last.path);
+            assertEq("GoogleDocumentAi", conn.getAppName());
+            assertEq(200, conn.get(False).restGet("/v1/sync").status_code);
+            assertEq(200, conn.getAsync(False).restGet("/v1/async").status_code);
+        }
+    }
+
+    private negativePingTest() {
+        on_exit {
+            handler.issued_token = "qore-5426-fixture-token";
+            handler.service_status = 200;
+            GcpAuth::clearTokenCache();
+        }
+        handler.issued_token = "deliberately-invalid";
+        GcpAuth::clearTokenCache();
+        hash<auto> invalid = connection().ping(False);
+        assertFalse(invalid.ok);
+        assertEq(-1, make_json(invalid).find("deliberately-invalid"));
+        handler.issued_token = "qore-5426-fixture-token";
+        GcpAuth::clearTokenCache();
+        handler.service_status = 403;
+        on_exit handler.service_status = 200;
+        hash<auto> denied = connection().ping(False);
+        assertFalse(denied.ok);
+        assertEq(-1, make_json(denied).find("qore-5426-fixture-token"));
+    }
+
+    private malformedPingTest() {
+        on_exit handler.response = {};
+        foreach auto response in ((NULL, (), "ok", {"processors": {}}, {"nextPageToken": 1},
+                {"unexpected": True}, {"processors": ({"name": "bad"},)}, {"error": {}},
+                {"processors": NULL}, {"nextPageToken": NULL}, {"error": NULL})) {
+            handler.response = response;
+            assertFalse(connection().ping(False).ok);
+        }
+    }
+
+    private copyTest() {
+        foreach AbstractRestClient parent in ((
+                new GoogleDocumentAiRestClient::GoogleDocumentAiRestClient(options, True),
+                new GoogleDocumentAiRestClientIo(options))) {
+            AbstractRestClient child = parent.copyWithUrl(endpoint);
+            assertEq(parent.className(), child.className());
+            assertEq(200, child.restGet("/v1/copy").status_code);
+            assertThrows("GOOGLE-DOCUMENTAI-CONFIG-ERROR", sub () {
+                parent.copyWithUrl("https://untrusted.example");
+            });
+        }
+    }
+
+    private redirectTest() {
+        on_exit { handler.service_status = 200; handler.response_headers = {}; }
+        handler.service_status = 302;
+        handler.response_headers = {"Location": endpoint + "/credential-target"};
+        foreach AbstractRestClient client in ((new GoogleDocumentAiRestClient::GoogleDocumentAiRestClient(options, True),
+                new GoogleDocumentAiRestClientIo(options))) {
+            int before = handler.service_calls;
+            bool rejected = False;
+            try { client.restGet("/redirect"); } catch () { rejected = True; }
+            assertTrue(rejected);
+            assertEq(before + 1, handler.service_calls);
+        }
+    }
+
+    private parallelTest() {
+        GoogleDocumentAiRestClientIo parent(options);
+        GoogleDocumentAiRestClientIo first = cast<GoogleDocumentAiRestClientIo>(parent.copyWithUrl(endpoint));
+        GoogleDocumentAiRestClientIo second = cast<GoogleDocumentAiRestClientIo>(parent.copyWithUrl(endpoint));
+        auto a = first.restDoRequestAsync("GET", "/parallel-first");
+        auto b = second.restDoRequestAsync("GET", "/parallel-second");
+        assertEq(200, a.get().status_code);
+        assertEq(200, b.get().status_code);
+        delete parent;
+        assertEq(200, first.restGet("/after-parent").status_code);
+        assertEq(200, second.restGet("/after-parent-second").status_code);
+    }
+
+    private urlTest() {
+        assertThrows("GOOGLE-DOCUMENTAI-CONFIG-ERROR", sub () {
+            new GoogleDocumentAiRestClientIo({"url": "https://us-documentai.googleapis.com", "gcp_region": "eu"});
+        });
+        foreach string url in (("http://remote.example", "https://user:secret@host", "https://host/path",
+                "https://host?x=1")) {
+            assertThrows("GOOGLE-DOCUMENTAI-CONFIG-ERROR", sub () {
+                new GoogleDocumentAiRestClientIo({"url": url});
+            });
+        }
+        GoogleDocumentAiRestClientIo client(options);
+        int calls = handler.service_calls;
+        assertThrows("GOOGLE-DOCUMENTAI-CONFIG-ERROR", sub () {
+            client.restGet("https://untrusted.example/path");
+        });
+        assertEq(calls, handler.service_calls);
+    }
+
+    private quotaTest() {
+        GoogleDocumentAiRestClientIo client(options + {"gcp_quota_project_id": "explicit-quota"});
+        client.restGet("/v1/check");
+        assertEq("explicit-quota", handler.last.headers."x-goog-user-project");
+    }
+
+    private pollPingTest() {
+        auto poll = connection().startPollConnect();
+        date deadline = now_us() + 15s;
+        while (auto info = poll.continuePoll()) {
+            assertTrue(now_us() < deadline, "ping has a bounded deadline");
+            Socket::poll((info,), 1s);
+        }
+        assertTrue(poll.goalReached());
+        assertEq("/v1/projects/fixture-resource/locations/us/processors?pageSize=1", handler.last.path);
+    }
+
+    private liveTest() {
+        *string project = getenv("QORE_DOCUMENTAI_LIVE_PROJECT");
+        if (!project.val()) { testSkip("set QORE_DOCUMENTAI_LIVE_PROJECT for live authenticated ping"); }
+        hash<auto> opts = {"gcp_project_id": project, "gcp_region": "us", "timeout": 30s, "connect_timeout": 10s};
+        GoogleDocumentAiRestConnection conn({"name": "5426-live", "opts": opts});
+        assertTrue(conn.ping(False).ok, "live Qore ADC ping succeeds");
+        handler.issued_token = "deliberately-invalid";
+        GcpAuth::clearTokenCache();
+        on_exit {
+            handler.issued_token = "qore-5426-fixture-token";
+            GcpAuth::clearTokenCache();
+        }
+        GoogleDocumentAiRestConnection invalid({"name": "5426-negative", "opts": opts
+            + {"gcp_sa_json_path": credentials}});
+        hash<auto> result = invalid.ping(False);
+        assertFalse(result.ok, "the live service rejects an invalid bearer obtained through GcpAuth");
+        assertEq(401, result.ex.arg.status_code, "negative control is HTTP 401 from Document AI");
+    }
+}

@@ -1,0 +1,351 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires StabilityAiRestClient
+%requires StabilityAiDataProvider
+%requires QoreMediaUtils
+%requires HttpServer
+%requires HttpServerUtil
+%requires json
+%exec-class StabilityMediaWireTest
+
+const Wav = <524946462600000057415645666d74201000000001000100401f0000803e00000200100064617461020000000000>;
+const InputWav = <524946462477010057415645666d74201000000001000100401f0000803e0000020010006461746100770100>
+    + binary(strmul("\0", 96000));
+const Glb = <676c5446020000000c000000>;
+const Job = "a6dc6c6e20acda010fe14d71f180658f2896ed9b4ec25aa99a6ff06c796987c4";
+
+const Png = parse_base64_string("iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmElEQVR4nO3QMREAIBDAsJeDHPwfXkBGBjpk73XWPvdnowO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAeup0yLMxMyo0AAAAASUVORK5CYII=");
+
+class StabilityMediaHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex mutex();
+        list<hash<auto>> calls = ();
+        int status = 200;
+        data response = Png;
+        hash<auto> response_headers = {"Content-Type": "image/png", "Seed": "0", "Finish-Reason": "SUCCESS"};
+        timeout delay = 0ms;
+        *Counter entered;
+    }
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        {
+            AutoLock lock(mutex);
+            push calls, {"path": cx.raw_path, "method": hdr.method, "headers": hdr, "body": body};
+        }
+        if (entered && cx.raw_path == "/v2beta/results/" + Job) { entered.dec(); }
+        if (delay) { usleep(int(delay) * 1000); }
+        return makeResponse(response_headers, status, response);
+    }
+}
+
+class StabilityMediaWireTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        StabilityMediaHandler handler();
+        string endpoint;
+        hash<auto> options;
+    }
+    constructor() : Test("Stability AI actual media transport", "1.0") {
+        addTestCase("core sync and async multipart scalar serialization", \generationTest());
+        addTestCase("media registry facade uses the shared multipart path", \facadeTest());
+        addTestCase("named file and raw bytes uploads preserve content", \uploadTest());
+        addTestCase("base64 and safety response decoding", \responseTest());
+        addTestCase("conditional validation rejects input before transport", \invalidTest());
+        addTestCase("every paid operation family uses its documented wire contract", \familiesTest());
+        addTestCase("getters and bounded waits retain pending and completed identity", \jobsTest());
+        addTestCase("account reference generic and legacy JSON requests authenticate", \readsTest());
+        addTestCase("concurrent waits enforce independent request deadlines", \concurrentTest());
+        server = new HttpServer(<HttpServerOptionInfo>{"logger": new Logger::Logger("5422-media", Logger::LoggerLevel::ERROR)});
+        server.setDefaultHandler("fixture", handler);
+        endpoint = sprintf("http://127.0.0.1:%d", server.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
+        options = {"url": endpoint, "apikey": "fixture-media-key", "organization": "org-media", "timeout": 5s};
+        set_return_value(main());
+    }
+    globalTearDown() { delete server; }
+    private hash<auto> last() { return handler.calls[-1]; }
+    private string wireBody() { return binary_to_string(binary(last().body), "ISO-8859-1"); }
+
+    private checkPart(string name, string expected) {
+        string body = wireBody();
+        assertTrue(body.find("name=\"" + name + "\"") >= 0, name);
+        assertTrue(body.find("\r\n\r\n" + expected + "\r\n") >= 0, name + " wire value");
+    }
+    private checkMultipart(string path) {
+        hash<auto> call = last();
+        assertEq(path, call.path);
+        assertEq("POST", call.method);
+        assertEq("Bearer fixture-media-key", call.headers.authorization);
+        assertEq("org-media", call.headers.organization);
+        assertTrue(call.headers."content-type" =~ /^multipart\/form-data;.*boundary=/);
+        string boundary = (call.headers."content-type" =~ x/boundary="?([^"; ]+)/)[0];
+        assertTrue(wireBody().find("--" + boundary) == 0);
+        assertTrue(wireBody().find("--" + boundary + "--") >= 0);
+    }
+    private generationTest() {
+        foreach AbstractRestClient client in ((new StabilityAiRestClient::StabilityAiRestClient(options, True),
+                new StabilityAiRestClientIo(options))) {
+            StabilityAiOperation operation("generate-core", client);
+            auto field = operation.getRequestType().getFields().output_format;
+            auto choices = field.getAllowedValues();
+            choices[0].display_name = "Changed label";
+            field.setAllowedValues(choices);
+            hash<auto> result = operation.doRequest({"prompt": "a blue cube", "seed": 0, "negative_prompt": "",
+                "output_format": "png"});
+            checkMultipart("/v2beta/stable-image/generate/core");
+            assertEq("image/*", last().headers.accept);
+            checkPart("prompt", "a blue cube");
+            checkPart("seed", "0");
+            checkPart("negative_prompt", "");
+            checkPart("output_format", "png");
+            assertEq(Png, result.artifacts[0].data);
+            assertEq(0, result.artifacts[0].seed);
+            assertEq("image/png", result.artifacts[0].content_type);
+            assertEq(result, operation.getResponseType().acceptsValue(result));
+        }
+    }
+    private facadeTest() {
+        auto generator = QoreMediaUtils::MediaProviderRegistry::createImageGenerator(<QoreMediaUtils::ImageGeneratorConfig>{
+            "backend": "stability-ai", "api_key": "fixture-media-key", "url": endpoint, "model": "core",
+            "provider_options": {"organization": "org-media"}});
+        auto image = generator.generateImage("a red cube", {"seed": 0, "negative_prompt": ""});
+        checkMultipart("/v2beta/stable-image/generate/core");
+        assertEq(Png, image.image);
+        assertEq("image/png", image.content_type);
+        assertEq(0, image.seed);
+        checkPart("negative_prompt", "");
+    }
+    private uploadTest() {
+        StabilityAiRestClientIo client(options);
+        foreach auto file in ((Png, {"name": "product.png", "mime_type": "image/png", "content": Png},
+                {"name": "product.png", "mime_type": "image/png", "content": make_base64_string(Png)})) {
+            StabilityAiOperation operation("remove-background", client);
+            auto result = operation.doRequest({"image": file, "output_format": "png"});
+            checkMultipart("/v2beta/stable-image/edit/remove-background");
+            assertTrue(wireBody().find(binary_to_string(Png, "ISO-8859-1")) >= 0);
+            if (file.typeCode() == NT_HASH) {
+                assertTrue(wireBody().find("filename=\"product.png\"") >= 0);
+                assertTrue(wireBody().find("image/png") >= 0);
+            }
+            assertEq(Png, result.artifacts[0].data);
+        }
+    }
+    private responseTest() {
+        on_exit { handler.response = Png; handler.response_headers = {"Content-Type": "image/png", "Seed": "0"}; }
+        StabilityAiOperation operation("generate-core", new StabilityAiRestClientIo(options));
+        handler.response_headers = {"Content-Type": "application/json; type=image/png"};
+        handler.response = make_json({"image": make_base64_string(Png), "seed": 0, "finish_reason": "SUCCESS"});
+        auto result = operation.doRequest({"prompt": "a cube", "representation": "application/json"});
+        assertEq(Png, result.artifacts[0].data);
+        assertEq(0, result.artifacts[0].seed);
+        handler.response = make_json({"image": "", "seed": 0, "finish_reason": "CONTENT_FILTERED"});
+        assertThrows("STABILITYAI-CONTENT-ERROR", sub () { operation.doRequest({"prompt": "a cube"}); });
+        handler.response_headers = {"Content-Type": "image/png"};
+        handler.response = binary("<html>error</html>");
+        assertThrows("MEDIA-RESPONSE-ERROR", sub () { operation.doRequest({"prompt": "a cube"}); });
+        handler.response = Png;
+        handler.response_headers = {"Content-Type": "image/jpeg"};
+        assertThrows("MEDIA-RESPONSE-ERROR", sub () { operation.doRequest({"prompt": "a cube"}); });
+    }
+    private invalidTest() {
+        int before = handler.calls.size();
+        foreach hash<auto> item in (({"action": "generate-core", "options": {"prompt": "cube", "unknown": False}},
+                {"action": "generate-core", "options": {"prompt": "cube", "seed": NULL}},
+                {"action": "transform-audio-2", "options": {"prompt": "bell", "audio": Wav}},
+                {"action": "generate-sd3", "options": {"prompt": "cube", "image": Png}},
+                {"action": "generate-sd3", "options": {"prompt": "cube", "mode": "image-to-image", "image": Png}},
+                {"action": "generate-ultra", "options": {"prompt": "cube", "strength": 0}},
+                {"action": "outpaint-image", "options": {"image": Png, "left": 0, "right": 0}},
+                {"action": "get-image-result", "options": {"job_id": "https://wrong.example"}})) {
+            StabilityAiOperation operation(item.action, new StabilityAiRestClientIo(options));
+            assertThrows("STABILITYAI-INPUT-ERROR", sub () { operation.doRequest(item.options); });
+        }
+        StabilityAiDataProvider::StabilityAiDataProvider root(new StabilityAiRestClientIo(options));
+        foreach string name in (("generate-image", "generate-core")) {
+            auto provider = root.getChildProvider(name);
+            assertThrows("STABILITYAI-INPUT-ERROR", sub () { provider.doRequest({"prompt": "cube", "negative_prompt": NULL}); });
+            foreach auto seed in ((0.5, number("0.5"), True, "1.5", "invalid")) {
+                assertThrows("STABILITYAI-INPUT-ERROR", sub () { provider.doRequest({"prompt": "cube", "seed": seed}); });
+            }
+        }
+        assertEq(before, handler.calls.size());
+    }
+
+    private familiesTest() {
+        on_exit { handler.status = 200; handler.response = Png; handler.response_headers = {"Content-Type": "image/png"}; }
+        # Independently reviewed endpoint and input table, never derived from the implementation manifest.
+        hash<auto> Cases = {
+            "generate-ultra": ("/v2beta/stable-image/generate/ultra", {"prompt": "cube", "image": Png, "strength": 0}, "image"),
+            "generate-sd3": ("/v2beta/stable-image/generate/sd3", {"prompt": "cube", "model": "sd3.5-flash",
+                "mode": "image-to-image", "image": Png, "strength": 0}, "image"),
+            "upscale-fast": ("/v2beta/stable-image/upscale/fast", {"image": Png}, "image"),
+            "upscale-conservative": ("/v2beta/stable-image/upscale/conservative", {"image": Png, "prompt": "cube", "creativity": 0.2}, "image"),
+            "start-creative-upscale": ("/v2beta/stable-image/upscale/creative", {"image": Png, "prompt": "cube", "creativity": 0.1}, "job"),
+            "erase-object": ("/v2beta/stable-image/edit/erase", {"image": Png, "mask": Png, "grow_mask": 0}, "image"),
+            "inpaint-image": ("/v2beta/stable-image/edit/inpaint", {"image": Png, "mask": Png, "prompt": "cube"}, "image"),
+            "outpaint-image": ("/v2beta/stable-image/edit/outpaint", {"image": Png, "left": 1, "prompt": "", "creativity": 0}, "image"),
+            "search-and-replace": ("/v2beta/stable-image/edit/search-and-replace", {"image": Png, "prompt": "cube", "search_prompt": "ball"}, "image"),
+            "search-and-recolor": ("/v2beta/stable-image/edit/search-and-recolor", {"image": Png, "prompt": "blue", "select_prompt": "cube"}, "image"),
+            "start-background-relight": ("/v2beta/stable-image/edit/replace-background-and-relight", {"subject_image": Png,
+                "background_reference": Png, "light_reference": Png, "keep_original_background": False, "preserve_original_subject": 0}, "job"),
+            "control-sketch": ("/v2beta/stable-image/control/sketch", {"image": Png, "prompt": "cube", "control_strength": 0}, "image"),
+            "control-structure": ("/v2beta/stable-image/control/structure", {"image": Png, "prompt": "cube", "control_strength": 0}, "image"),
+            "control-style": ("/v2beta/stable-image/control/style", {"image": Png, "prompt": "cube", "fidelity": 0}, "image"),
+            "transfer-style": ("/v2beta/stable-image/control/style-transfer", {"init_image": Png, "style_image": Png, "style_strength": 0}, "image"),
+            "generate-fast-3d": ("/v2beta/3d/stable-fast-3d", {"image": Png, "remesh": "none"}, "model"),
+            "generate-point-aware-3d": ("/v2beta/3d/stable-point-aware-3d", {"image": Png, "remesh": "none"}, "model"),
+            "generate-audio-2": ("/v2beta/audio/stable-audio-2/text-to-audio", {"prompt": "bell", "model": "stable-audio-2.5", "steps": 4, "cfg_scale": 1}, "audio"),
+            "transform-audio-2": ("/v2beta/audio/stable-audio-2/audio-to-audio", {"prompt": "bell", "audio": InputWav, "strength": 0}, "audio"),
+            "inpaint-audio-2": ("/v2beta/audio/stable-audio-2/inpaint", {"prompt": "bell", "audio": InputWav, "mask_start": 0, "mask_end": 1}, "audio"),
+            "start-audio-3": ("/v2beta/audio/stable-audio/text-to-audio", {"prompt": "bell"}, "job"),
+            "start-audio-3-transform": ("/v2beta/audio/stable-audio/audio-to-audio", {"prompt": "bell", "audio": InputWav, "strength": 0}, "job"),
+            "start-audio-3-inpaint": ("/v2beta/audio/stable-audio/inpaint", {"prompt": "bell", "audio": InputWav, "mask_start": 0, "mask_end": 1}, "job"),
+            "legacy-image-to-image": ("/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image", {"engine_id": "stable-diffusion-xl-1024-v1-0",
+                "init_image": Png, "init_image_mode": "IMAGE_STRENGTH", "image_strength": 0,
+                "text_prompts": ({"text": "cube", "weight": 1},)}, "legacy"),
+            "legacy-mask-image": ("/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image/masking", {"engine_id": "stable-diffusion-xl-1024-v1-0",
+                "init_image": Png, "mask_image": Png, "mask_source": "MASK_IMAGE_WHITE", "text_prompts": ({"text": "cube", "weight": 1},)}, "legacy"),
+        };
+        foreach hash<auto> item in (Cases.pairIterator()) {
+            on_error rethrow $1.err, sprintf("%s: %s", item.key, $1.desc), $1.arg;
+            string kind = item.value[2];
+            handler.status = kind == "job" ? 202 : 200;
+            handler.response_headers = {"Content-Type": kind == "job" || kind == "legacy" ? "application/json"
+                : kind == "model" ? "model/gltf-binary" : kind == "audio" ? "audio/wav" : "image/png", "Seed": "0"};
+            handler.response = kind == "job" ? make_json({"id": Job}) : kind == "model" ? Glb : kind == "audio" ? Wav
+                : kind == "legacy" ? make_json({"artifacts": ({"base64": make_base64_string(Png), "seed": 0, "finishReason": "SUCCESS"},)}) : Png;
+            StabilityAiOperation operation(item.key, new StabilityAiRestClientIo(options));
+            auto response = operation.doRequest(item.value[1]);
+            checkMultipart(item.value[0]);
+            if (kind == "legacy") { checkPart("text_prompts[0][text]", "cube"); }
+            if (item.key == "start-background-relight") { checkPart("keep_original_background", "false"); }
+            if (kind == "job") { assertEq(Job, response.job_id); assertEq("pending", response.status); }
+            else { assertEq("succeeded", response.status); assertTrue(response.artifacts[0].data.size() > 0); }
+            assertEq(response, operation.getResponseType().acceptsValue(response));
+        }
+    }
+
+    private jobsTest() {
+        on_exit { handler.status = 200; handler.response = Png; handler.response_headers = {"Content-Type": "image/png"}; }
+        StabilityAiRestClientIo client(options);
+        foreach hash<auto> item in (({"action": "get-image-result", "path": "/v2beta/results/"},
+                {"action": "get-upscale-result", "path": "/v2beta/stable-image/upscale/creative/result/"},
+                {"action": "get-audio-result", "path": "/v2beta/audio/results/"})) {
+            handler.status = 202;
+            handler.response_headers = {"Content-Type": "application/json", "Retry-After": "0"};
+            handler.response = make_json({"id": Job, "status": "in-progress"});
+            StabilityAiOperation operation(item.action, client);
+            auto response = operation.doRequest({"job_id": Job});
+            assertEq(item.path + Job, last().path);
+            assertEq("GET", last().method);
+            assertEq(Job, response.job_id);
+            assertEq("pending", response.status);
+        }
+        StabilityAiDataProvider::StabilityAiDataProvider root(client);
+        AbstractDataProvider wait = root.getChildProvider("wait-for-image");
+        bool timed_out = False;
+        try { wait.doRequest({"job_id": Job, "operation_timeout": 50ms, "poll_interval": 10ms}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("STABILITYAI-JOB-TIMEOUT", ex.err);
+            assertEq(Job, ex.arg.job_id);
+            assertEq("pending", ex.arg.last_status.status);
+            timed_out = True;
+        }
+        assertTrue(timed_out);
+        handler.status = 200;
+        handler.response_headers = {"Content-Type": "image/png"};
+        handler.response = Png;
+        auto completed = wait.doRequest({"job_id": Job, "operation_timeout": 1s, "poll_interval": 10ms});
+        assertEq(Job, completed.job_id);
+        assertEq(Png, completed.artifacts[0].data);
+        handler.status = 202;
+        handler.response_headers = {"Content-Type": "application/json"};
+        handler.response = make_json({"id": strmul("b", 64), "status": "in-progress"});
+        assertThrows("STABILITYAI-RESPONSE-ERROR", sub () { wait.doRequest({"job_id": Job}); });
+        foreach hash<auto> invalid in (({"id": Job, "status": "failed"},
+                {"id": Job, "errors": ("fixture failure",)})) {
+            handler.response = make_json(invalid);
+            assertThrows("STABILITYAI-RESPONSE-ERROR", sub () { wait.doRequest({"job_id": Job}); });
+        }
+        foreach int status in ((404, 429, 500)) {
+            handler.status = status;
+            handler.response = make_json({"errors": ("fixture error",)});
+            int before = handler.calls.size();
+            assertThrows("REST-RESPONSE-ERROR", sub () { wait.doRequest({"job_id": Job}); });
+            assertEq(before + 1, handler.calls.size(), "get failures cannot resubmit or retry paid work");
+        }
+    }
+
+    private readsTest() {
+        on_exit { handler.status = 200; handler.response = Png; handler.response_headers = {"Content-Type": "image/png"}; }
+        StabilityAiDataProvider::StabilityAiDataProvider root(new StabilityAiRestClientIo(options));
+        handler.response_headers = {"Content-Type": "application/json"};
+        foreach hash<auto> item in (({"action": "get-balance", "path": "/v1/user/balance", "body": {"credits": 0}},
+                {"action": "get-account", "path": "/v1/user/account", "body": {"id": "fixture-user", "email": "fixture@example.test",
+                    "organizations": ({"id": "org-media", "name": "Fixture", "role": "MEMBER", "is_default": True},)}},
+                {"action": "list-engines", "path": "/v1/engines/list", "body": ({"id": "stable-diffusion-xl-1024-v1-0",
+                    "name": "Stable Diffusion XL", "description": "Fixture engine", "type": "PICTURE"},)})) {
+            handler.response = make_json(item.body);
+            auto result = root.getChildProvider(item.action).doRequest({});
+            assertEq(item.body, result);
+            assertEq(item.path, last().path);
+            assertEq("GET", last().method);
+            assertEq("Bearer fixture-media-key", last().headers.authorization);
+            assertEq("org-media", last().headers.organization);
+        }
+        auto choices = root.getChildProvider("legacy-text-to-image").getReferenceData("engines");
+        assertEq("stable-diffusion-xl-1024-v1-0", choices[0].value);
+        assertEq("Stable Diffusion XL", choices[0].display_name);
+        assertEq("/v1/engines/list", last().path);
+        handler.response = make_json({"credits": 0});
+        auto generic = root.getChildProvider("__call__").doRequest({"method": "GET", "path": "/v1/user/balance", "include_debug": True});
+        assertTrue(generic.val().toBool());
+        assertEq(-1, make_json(generic.debug).find("fixture-media-key"));
+        assertEq("org-media", last().headers.organization);
+        handler.response = make_json({"artifacts": ({"base64": make_base64_string(Png), "seed": 0, "finishReason": "SUCCESS"},)});
+        auto legacy = root.getChildProvider("legacy-text-to-image").doRequest({"engine_id": "stable-diffusion-xl-1024-v1-0",
+            "text_prompts": ({"text": "blue mug", "weight": 1},), "seed": 4294967295,
+            "extras": {"value": {"value": "literal"}, "enabled": False, "count": 0}});
+        assertEq("/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image", last().path);
+        assertTrue(last().headers."content-type" =~ /^application\/json/);
+        auto sent = parse_json(last().body);
+        assertEq("blue mug", sent.text_prompts[0].text);
+        assertEq(4294967295, sent.seed);
+        assertEq({"value": {"value": "literal"}, "enabled": False, "count": 0}, sent.extras);
+        assertEq(Png, legacy.artifacts[0].data);
+    }
+
+    private concurrentTest() {
+        on_exit { handler.delay = 0ms; handler.entered = NOTHING; }
+        handler.status = 200;
+        handler.response_headers = {"Content-Type": "image/png"};
+        handler.response = Png;
+        handler.delay = 200ms;
+        Counter entered(1);
+        Counter finished(1);
+        handler.entered = entered;
+        StabilityAiDataProvider::StabilityAiDataProvider root(new StabilityAiRestClientIo(options));
+        auto wait = root.getChildProvider("wait-for-image");
+        hash<auto> long_result;
+        background sub () {
+            try { long_result = wait.doRequest({"job_id": Job, "operation_timeout": 2s}); }
+            catch (hash<ExceptionInfo> ex) { long_result = {"error": ex.err}; }
+            finished.dec();
+        }();
+        assertEq(0, entered.waitForZero(2s));
+        bool timed_out = False;
+        string other = strmul("b", 64);
+        try { wait.doRequest({"job_id": other, "operation_timeout": 40ms}); }
+        catch (hash<ExceptionInfo> ex) {
+            timed_out = True;
+            assertEq("STABILITYAI-JOB-TIMEOUT", ex.err);
+            assertEq(other, ex.arg.job_id);
+        }
+        assertTrue(timed_out);
+        assertTrue(finished.waitForZero(1ms) != 0, "the short wait returned before the long request");
+        assertEq(0, finished.waitForZero(3s));
+        assertEq(Job, long_result.job_id);
+        assertEq("succeeded", long_result.status);
+    }
+}

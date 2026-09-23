@@ -1,0 +1,77 @@
+{
+  "openapi": "3.1.0",
+  "info": {"title": "FLUX Video Edit", "version": "video-edit-v1"},
+  "servers": [{"url": "https://api.bfl.ai"}],
+  "paths": {
+    "/v1/flux-tools/video-edit-v1": {
+      "post": {
+        "operationId": "generate_flux_tools_video_edit_v1",
+        "summary": "Edit a video",
+        "description": "Transform a source clip with an edit instruction. The server sets duration, resolution, aspect ratio, and audio from the source; sources larger than 720p are downscaled to 720p. This endpoint does not accept FLUX 3 generation controls such as mode, version, seed, or generate_audio.",
+        "security": [{"APIKeyHeader": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/VideoEditInputs"},
+              "example": {
+                "video": "https://cdn.sanity.io/files/2gpum2i6/production/f1654af36e7694775939b1aa8a2bb0419ff819ea.mp4",
+                "prompt": "Remove the orange bucket."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Task accepted. Poll the returned polling_url until Ready, then download result.sample.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AsyncResponse"}}}
+          },
+          "422": {
+            "description": "Invalid request, including unknown fields, an empty prompt, or safety_tolerance outside 0 to 4.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {"APIKeyHeader": {"type": "apiKey", "in": "header", "name": "x-key"}},
+    "schemas": {
+      "VideoEditInputs": {
+        "title": "Video Edit",
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["video", "prompt"],
+        "properties": {
+          "video": {"type": "string", "description": "The video to edit, as an HTTP(S) URL or a base64-encoded MP4. Up to 15 seconds and 50 MiB, at least 160 pixels on each side and at least 17 frames after normalization to 24 fps."},
+          "prompt": {"type": "string", "minLength": 1, "maxLength": 4096, "description": "Edit instruction. Surrounding whitespace is removed before validation."},
+          "safety_tolerance": {"type": "integer", "minimum": 0, "maximum": 4, "default": 2, "description": "Input and output moderation tolerance; 0 is strictest. Sexual content is capped at level 3 and hate content at level 2 regardless of this value."}
+        }
+      },
+      "AsyncResponse": {
+        "type": "object",
+        "required": ["id", "polling_url"],
+        "properties": {
+          "id": {"type": "string"},
+          "polling_url": {"type": "string"},
+          "cost": {"type": ["number", "null"], "description": "Cost in credits for this request."},
+          "input_mp": {"type": ["number", "null"], "description": "Input megapixels."},
+          "output_mp": {"type": ["number", "null"], "description": "Output megapixels."}
+        }
+      },
+      "HTTPValidationError": {
+        "type": "object",
+        "properties": {"detail": {"type": "array", "items": {"$ref": "#/components/schemas/ValidationError"}}}
+      },
+      "ValidationError": {
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "properties": {
+          "loc": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
+          "msg": {"type": "string"},
+          "type": {"type": "string"}
+        }
+      }
+    }
+  }
+}

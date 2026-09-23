@@ -459,6 +459,7 @@ class SchemaBase inherits RestSchemaValidator::AbstractSchemaBaseValidator {
     public constructor(string objType, hash<auto> oh) {
         optional_field(objType, oh, "maximum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \maximum);
         optional_field(objType, oh, "minimum", (NT_FLOAT: True, NT_INT: True, NT_NUMBER: True), \minimum);
+        normalizeNumericBounds(oh);
         optional_field(objType, oh, "exclusiveMaximum", NT_BOOLEAN, \exclusiveMax);
         optional_field(objType, oh, "exclusiveMinimum", NT_BOOLEAN, \exclusiveMin);
         optional_field(objType, oh, "maxLength", NT_INT, \maxLength);

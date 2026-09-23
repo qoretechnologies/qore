@@ -78,6 +78,12 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - accept unconstrained array elements when `items` is absent while retaining bounds and uniqueness
+    - compare unique JSON array values with structural typed keys instead of loose equality
+    - preserve decimal numeric boundaries so exact fractional endpoints validate consistently
+      (public minimum/maximum and numeric exclusive bounds now use Qore numbers instead of floats)
+    - accept opaque GLB model responses as binary media
+    - retain supplied enumeration labels and descriptions in structured field choices
     - enforce boolean enumerations and preserve false values in generated enumeration examples
     - preserve opaque audio, image, and video response bytes in the null schema validator
     - retain nullable value types and independent presence requirements across cached field uses
@@ -334,16 +340,29 @@ public namespace RestSchemaValidator {
         Swagger 2.0 and OpenAPI 3.0 schema definitions.
     */
     public class AbstractSchemaBase inherits Qore::Serializable {
+        #! Keeps decimal schema bounds independent of binary floating point expansion
+        /** Parsers validate member types before calling this helper. JSON decimal literals and Qore
+            decimal values must compare identically at inclusive and exclusive boundaries.
+            @param source original schema properties
+        */
+        private normalizeNumericBounds(hash<auto> source) {
+            if (exists source.minimum) { minimum = decimalBound(source.minimum); }
+            if (exists source.maximum) { maximum = decimalBound(source.maximum); }
+        }
+
+        private static number decimalBound(auto value) {
+            return value.typeCode() == NT_FLOAT ? number(value.toString()) : number(value);
+        }
         public {
             #! Maximum value constraint
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2
             */
-            *softfloat maximum;
+            *softnumber maximum;
 
             #! Minimum value constraint
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.3
             */
-            *softfloat minimum;
+            *softnumber minimum;
 
             #! Exclusive maximum flag
             /** @see https://tools.ietf.org/html/draft-fge-json-schema-validation-00#section-5.1.2
@@ -414,12 +433,12 @@ public namespace RestSchemaValidator {
             #! Numeric exclusiveMaximum value (JSON Schema draft-07+ / OpenAPI 3.1)
             /** In JSON Schema draft-07+, exclusiveMaximum is a direct numeric value (not a boolean modifier)
             */
-            *softfloat exclusiveMaxValue;
+            *softnumber exclusiveMaxValue;
 
             #! Numeric exclusiveMinimum value (JSON Schema draft-07+ / OpenAPI 3.1)
             /** In JSON Schema draft-07+, exclusiveMinimum is a direct numeric value (not a boolean modifier)
             */
-            *softfloat exclusiveMinValue;
+            *softnumber exclusiveMinValue;
         }
 
         #! Returns the label for path/channel in error messages
@@ -662,6 +681,9 @@ public namespace RestSchemaValidator {
             string pl = getPathLabel();
             string ml = getMethodLabel();
 
+            # Compare the original decimal value, before the transport's final float conversion.
+            value = decimalBound(v);
+
             # Check maximum constraint (boolean exclusiveMax)
             if (exists maximum) {
                 if (exclusiveMax) {
@@ -871,7 +893,7 @@ public namespace RestSchemaValidator {
         }
 
         #! Validates the value against the schema definition
-        private checkArrayParam(bool serialize, bool request, AbstractSchemaObject items, string path, string method,
+        private checkArrayParam(bool serialize, bool request, *AbstractSchemaObject items, string path, string method,
                 string name, reference<list<auto>> value) {
             string pl = getPathLabel();
             string ml = getMethodLabel();
@@ -890,33 +912,37 @@ public namespace RestSchemaValidator {
                 return;
             }
 
-            # check array element types
-            if (!uniqueItems || items.type != "array") {
-                # hash for checking uniqueness if uniqueItems is true
-                hash<string, bool> h;
-                foreach auto v in (\value) {
-                    items.check(serialize, request, path, method, name, \v);
-                    if (uniqueItems) {
-                        if (h{v}) {
-                            throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: parameter value %y is duplicated in "
-                                "the array", method, path, v);
-                        }
-                        h{v} = True;
+            hash<string, bool> seen;
+            foreach auto val in (\value) {
+                if (items) { items.check(serialize, request, path, method, name, \val); }
+                if (uniqueItems) {
+                    string key = AbstractSchemaBaseValidator::uniqueValueKey(val);
+                    if (seen{key}) {
+                        throw "SCHEMA-VALIDATION-ERROR", sprintf("%s %s: Array parameter %y does not have unique items",
+                            method, path, name);
                     }
-                }
-            } else {
-                # perform slow array uniqueness check
-                list<auto> unique_items = ();
-                foreach auto val in (\value) {
-                    items.check(serialize, request, path, method, name, \val);
-                    if (unique_items.contains(val)) {
-                        throw "SCHEMA-VALIDATION-ERROR",
-                            sprintf("%s %s: Array parameter %y does not have unique items",
-                                method, path, name);
-                    }
-                    unique_items += val;
+                    seen{key} = True;
                 }
             }
+        }
+
+        #! Canonical typed key for JSON equality without scalar coercion or quadratic list scans
+        private static string uniqueValueKey(auto value, int depth = 0) {
+            if (depth > 128) { throw "SCHEMA-VALIDATION-ERROR", "array element exceeds the supported nesting depth"; }
+            int tc = value.typeCode();
+            if (inlist(tc, (NT_INT, NT_FLOAT, NT_NUMBER))) { return "number:" + number(value).toString(); }
+            if (tc == NT_NULL || tc == NT_NOTHING) { return "null"; }
+            if (tc == NT_LIST) {
+                return "list:" + make_json(map AbstractSchemaBaseValidator::uniqueValueKey($1, depth + 1), value);
+            }
+            if (tc == NT_HASH) {
+                hash<string, string> sorted = {};
+                foreach string key in (sort(keys value)) {
+                    sorted{key} = AbstractSchemaBaseValidator::uniqueValueKey(value{key}, depth + 1);
+                }
+                return "object:" + make_json(sorted);
+            }
+            return value.type() + ":" + make_json(value);
         }
 
         #! Throws an \c SCHEMA-VALIDATION-ERROR exception
@@ -1465,7 +1491,7 @@ public namespace RestSchemaValidator {
                 "name": name,
                 "desc": getMergedFieldDesc(desc),
                 "type": AutoType,
-                "allowed_values": keys enumValues,
+                "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
             } + ((type == "object" || hasSchemaCompositionFeatures()) && required ? {
                 "attr": {
@@ -1503,6 +1529,14 @@ public namespace RestSchemaValidator {
                 }
             }
             return desc.val() ? desc.getDecoded(CE_XHTML) : "";
+        }
+
+        #! Returns enumeration values for field construction
+        /** Subclasses can attach structured presentation metadata. updateFieldType() restores
+            each value's declared scalar type after the placeholder field is constructed.
+        */
+        private *list<auto> getFieldEnumValues() {
+            return keys enumValues;
         }
 
         #! Returns a field object from the given cache
@@ -1554,7 +1588,7 @@ public namespace RestSchemaValidator {
                     "name": name,
                     "desc": field_desc,
                     "type": AutoType,
-                    "allowed_values": keys enumValues,
+                    "allowed_values": getFieldEnumValues(),
                     "default_value": default_value,
                 } + (required ? {
                     "attr": {
@@ -1572,7 +1606,7 @@ public namespace RestSchemaValidator {
                 "name": name,
                 "desc": field_desc,
                 "type": AutoType,
-                "allowed_values": keys enumValues,
+                "allowed_values": getFieldEnumValues(),
                 "default_value": default_value,
             });
             fieldmap{name}{rstr} = field;
@@ -2725,7 +2759,8 @@ public namespace RestSchemaValidator {
                 *hash<auto> dh = ct ? DataDeserializationSupport{ct} : NOTHING;
                 # Media responses have no structured deserializer: preserve their bytes as for
                 # application/octet-stream. This includes generated audio returned by inference APIs.
-                if (!dh && (ct =~ /^(audio|image|video)\// || ct == "application/pdf") && !is_mime_text(ct)) {
+                if (!dh && (ct =~ /^(audio|image|video)\// || inlist(ct,
+                        ("application/pdf", "model/gltf-binary"))) && !is_mime_text(ct)) {
                     dh = DataDeserializationSupport{MimeTypeOctetStream};
                 }
                 if (!dh) {

@@ -1,0 +1,514 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file StabilityAiRestClient.qm Qore user module for calling Stability AI REST services
+
+/*  StabilityAiRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires QoreMediaUtils
+%requires json
+%requires(reexport) RestSchemaActions
+
+module StabilityAiRestClient {
+    version = "1.1";
+    desc = "user module for Stability AI image, audio, 3D, and account REST services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("stability-ai",
+            StabilityAiRestConnection::ConnectionScheme);
+        QoreMediaUtils::MediaProviderRegistry::registerImageGeneratorFactory(
+            new StabilityAiImageGeneratorFactory());
+    };
+}
+
+/** @mainpage StabilityAiRestClient Module
+
+    @tableofcontents
+
+    @section stabilityairestclientintro StabilityAiRestClient Introduction
+
+    The %StabilityAiRestClient module provides a REST client for
+    [Stability AI](https://stability.ai) — the company behind Stable
+    Diffusion. Pinned official contracts cover image generation and editing, audio,
+    3D assets, asynchronous results, and supported legacy account/image operations.
+    Shared RestSchemaActions transport owns JSON and multipart encoding. The same
+    validation and response decoding serve app actions and the media backend.
+
+    Connections require a sensitive `apikey` or `token`; explicit `apikey` wins.
+    Optional `organization` scopes every authenticated request. Ping reads
+    `/v1/user/balance` and validates its shape; a zero balance still authenticates.
+    The saved `stability-ai` scheme is preserved. Explicit HTTPS origins are trusted
+    configuration; HTTP is restricted to loopback tests. Redirects and copies to
+    other origins are rejected. Credentials are removed from diagnostic errors.
+
+    The main classes are:
+    - @ref StabilityAiRestClient::StabilityAiRestClient — sync client
+    - @ref StabilityAiRestClient::StabilityAiRestClientIo — async client
+    - @ref StabilityAiRestClient::StabilityAiRestConnection — connection
+    - @ref StabilityAiRestClient::StabilityAiImageGenerator —
+      @ref QoreMediaUtils::AbstractImageGenerator implementation
+
+    @par Example: text-to-image via the QoreMediaUtils abstraction
+
+    @code{.py}
+%modern
+%requires QoreMediaUtils
+%requires StabilityAiRestClient
+
+QoreMediaUtils::AbstractImageGenerator gen =
+    QoreMediaUtils::MediaProviderRegistry::createImageGenerator(
+        <QoreMediaUtils::ImageGeneratorConfig>{
+            "backend": "stability-ai",
+            "api_key": api_key,
+            "model":   "ultra",
+        });
+hash<QoreMediaUtils::ImageResult> r = gen.generateImage(
+    "a futuristic city skyline at dusk, painted in the style of Moebius",
+    {"output_format": "png", "aspect_ratio": "16:9"});
+File f();
+f.open2("/tmp/out.png", O_CREAT | O_WRONLY | O_TRUNC);
+f.write(r.image);
+    @endcode
+
+    @section StabilityAiRestClientRelnotes Release Notes
+
+    @subsection StabilityAiRestClientv1_1 StabilityAiRestClient v1.1
+    - add pinned, attributed offline OpenAPI resources and reviewed presentation overlays
+    - authenticate sync, async, raw, copied, connection, and media-backend requests consistently
+    - use real multipart generation and validate response signatures instead of guessing MIME types
+
+    @subsection StabilityAiRestClientv1_0 StabilityAiRestClient v1.0
+    - the initial version of the %StabilityAiRestClient module
+*/
+
+#! contains all public symbols of the StabilityAiRestClient module
+public namespace StabilityAiRestClient {
+#! Default Stability AI v2beta URL
+public const DefaultUrl = "https://api.stability.ai";
+
+#! Path map: model alias -> v2beta endpoint
+public const ModelPathMap = {
+    "ultra": "/v2beta/stable-image/generate/ultra",
+    "sd3":   "/v2beta/stable-image/generate/sd3",
+    "core":  "/v2beta/stable-image/generate/core",
+};
+
+#! Default model
+public const DefaultModel = "ultra";
+
+#! Common base class for StabilityAiRestClient functionality
+public class StabilityAiRestClientBase {
+    public {
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "data": "json",
+            "timeout": 120s,
+            "connect_timeout": 10s,
+            "ssl_verify_cert": True,
+        };
+    }
+
+    private {
+        # Immutable after construction; copies must remain on this origin.
+        string credential_origin;
+        string api_secret;
+        *string organization;
+    }
+
+    #! Stores immutable credentials and the explicitly configured origin
+    /** @param opts service credentials and transport options
+        @throw STABILITYAI-CONFIG-ERROR credentials or endpoint are invalid
+    */
+    constructor(hash<auto> opts) {
+        hash<auto> normalized = getOptions(opts);
+        credential_origin = normalized.url;
+        api_secret = normalized.token;
+        organization = opts.organization;
+    }
+
+    #! Normalizes credentials and transport policy for both client implementations
+    /** @param opts client options; an explicitly supplied `apikey` takes precedence over `token`
+        @return normalized options with Bearer authentication
+        @throw STABILITYAI-CONFIG-ERROR missing credentials or an unsafe endpoint
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        if (rv.hasKey("apikey")) {
+            rv.token = rv.apikey;
+        }
+        if (rv.token.typeCode() != NT_STRING || rv.token !~ /^\S+$/) {
+            throw "STABILITYAI-CONFIG-ERROR", "a nonempty apikey or token is required";
+        }
+        if (rv.hasKey("organization") && (rv.organization.typeCode() != NT_STRING
+                || rv.organization !~ /^[a-zA-Z0-9_-]+$/)) {
+            throw "STABILITYAI-CONFIG-ERROR", "organization must be a nonempty organization ID";
+        }
+        rv.url = normalizeEndpoint(rv.url);
+        if (rv.url =~ /^https:/) { rv.ssl_verify_cert = True; }
+        rv.token_type = "Bearer";
+        rv.max_redirects = 0;
+        rv.redirect_passthru = False;
+        rv.error_passthru = False;
+        rv.allow_any_response = False;
+        # The service uses API keys, never a refresh flow or an alternative signer.
+        foreach string option in (keys rv) {
+            if (option =~ /^(oauth2_|custom_token_|negotiate_|rest_body_auth_)/) {
+                delete rv{option};
+            }
+        }
+        rv.headers = map {$1.key: $1.value}, rv.headers.pairIterator(),
+            !inlist($1.key.lwr(), ("authorization", "organization"));
+        if (rv.organization.val()) {
+            rv.headers.organization = rv.organization;
+        }
+        rv -= ("apikey", "organization", "token_api_key_header", "username", "password");
+        return rv;
+    }
+
+    #! Validates an explicitly configured service origin
+    /** @param endpoint HTTPS origin, or an HTTP loopback origin for local testing
+        @return origin without a trailing slash
+        @throw STABILITYAI-CONFIG-ERROR unsafe URL, user information, or path
+    */
+    static string normalizeEndpoint(string endpoint) {
+        hash<auto> parsed;
+        try { parsed = parse_url(endpoint); }
+        catch () { throw "STABILITYAI-CONFIG-ERROR", "invalid Stability AI endpoint"; }
+        if (!parsed.host.val() || parsed.username.val() || parsed.password.val() || endpoint =~ /[?#@\r\n\\]/
+                || (parsed.path.val() && parsed.path != "/")
+                || (parsed.protocol != "https"
+                    && !(parsed.protocol == "http" && inlist(parsed.host, ("localhost", "127.0.0.1", "::1"))))) {
+            throw "STABILITYAI-CONFIG-ERROR", "use an HTTPS origin or an HTTP loopback test origin";
+        }
+        endpoint =~ s/\/$//;
+        return endpoint;
+    }
+
+    #! Adds the selected credentials only after validating the request target
+    private hash<auto> authenticate(string endpoint, *string path, *hash<auto> hdr) {
+        if (normalizeEndpoint(endpoint) != credential_origin || path =~ /^\/?[a-zA-Z][-a-zA-Z0-9+.]*:/
+                || path =~ /^\/\// || path =~ /[#\r\n\\]/ || path =~ /(^|\/)\.\.(\/|\?|$)/) {
+            throw "STABILITYAI-CONFIG-ERROR", "authenticated requests must stay on the configured origin";
+        }
+        hdr = map {$1.key: $1.value}, hdr.pairIterator(),
+            !inlist($1.key.lwr(), ("authorization", "organization"));
+        hdr.authorization = "Bearer " + api_secret;
+        if (exists organization) {
+            hdr.organization = organization;
+        }
+        return hdr;
+    }
+
+    #! Prevents a copied client from forwarding credentials to another origin
+    private string checkedCopyUrl(string endpoint) {
+        endpoint = normalizeEndpoint(endpoint);
+        if (endpoint != credential_origin) {
+            throw "STABILITYAI-CONFIG-ERROR", "create a new connection to use a different origin";
+        }
+        return endpoint;
+    }
+
+    #! Restores the service-specific scope when parent copy code reconstructs a client
+    private hash<auto> scopedCopyOptions(hash<auto> opts) {
+        if (exists organization) { opts.organization = organization; }
+        return opts;
+    }
+}
+
+#! Sync REST client for Stability AI
+public class StabilityAiRestClient inherits RestClient::RestClient,
+        StabilityAiRestClientBase {
+    #! Creates a synchronous client with the shared authentication policy
+    /** @param opts service credentials and transport options
+        @param do_not_connect defer connection until the first request
+        @throw STABILITYAI-CONFIG-ERROR credentials or endpoint are invalid
+        @throw HTTP-CLIENT-ERROR the initial connection fails
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : StabilityAiRestClientBase(opts),
+            RestClient(StabilityAiRestClientBase::getOptions(opts), do_not_connect) {
+    }
+
+    private signRequest(string method, *string path, *data body, reference<hash<auto>> hdr) {
+        hdr = authenticate(getURL(), path, hdr);
+    }
+
+    private nothing preparePath(reference<string> path) {
+        # Validate before RestClient canonicalizes repeated slashes and dot segments.
+        authenticate(getURL(), path, NOTHING);
+        RestClient::preparePath(\path);
+    }
+
+    #! Copies the client within its existing credential origin
+    /** @param new_url same service origin
+        @return an independent client retaining authentication and organization
+        @throw STABILITYAI-CONFIG-ERROR the target changes origin
+    */
+    AbstractRestClient copyWithUrl(string new_url) {
+        return RestClient::copyWithUrl(checkedCopyUrl(new_url));
+    }
+
+    private AbstractRestClient copySelf(hash<auto> opts) {
+        return RestClient::copySelf(scopedCopyOptions(opts));
+    }
+}
+
+#! Async REST client for Stability AI
+public class StabilityAiRestClientIo inherits RestClientIo::RestClientIo,
+        StabilityAiRestClientBase {
+    #! Creates an asynchronous client without submitting a service request
+    /** @param opts service credentials and transport options
+        @param shared_mgr optional shared transport connection manager
+        @throw STABILITYAI-CONFIG-ERROR credentials or endpoint are invalid
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : StabilityAiRestClientBase(opts),
+            RestClientIo(StabilityAiRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+        hdr = authenticate(getUrl(), path, hdr);
+        return rv;
+    }
+
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        hdr = authenticate(getUrl(), path, hdr);
+        return rv;
+    }
+
+    #! Copies the client within its existing credential origin
+    /** @param new_url same service origin
+        @return an independent client retaining authentication and organization
+        @throw STABILITYAI-CONFIG-ERROR the target changes origin
+    */
+    AbstractRestClient copyWithUrl(string new_url) {
+        return RestClientIo::copyWithUrl(checkedCopyUrl(new_url));
+    }
+
+    private AbstractRestClient copySelf(hash<auto> opts) {
+        return RestClientIo::copySelf(scopedCopyOptions(opts));
+    }
+}
+
+#! Connection class for Stability AI
+public class StabilityAiRestConnection inherits RestClient::RestConnection {
+    public {
+        const DefaultUrl = "stability-ai://api.stability.ai";
+        const DefaultConnectionUrl = DefaultUrl;
+
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Stability AI Connection",
+            "short_desc": "Authenticated access to Stability AI media services",
+            "desc": "A connection to the [Stability AI](https://stability.ai) "
+                "REST API for image generation and editing, audio, and 3D assets.\n\n"
+                "Requires an API key for Bearer authentication.  Get your API "
+                "key from the [Stability AI dashboard](https://platform.stability.ai).",
+            "cls": Class::forName("StabilityAiRestConnection"),
+            "auto_url": True,
+            "schemes": {"stability-ai": True},
+            "base_scheme_map": {"https": "stability-ai"},
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Stability AI API key (Bearer token)",
+                    "type": "string",
+                    "desc": "The Stability AI API key used for Bearer authentication.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "organization": <ConnectionOptionInfo>{
+                    "display_name": "Organization",
+                    "short_desc": "Organization whose credits and resources are used",
+                    "type": "string",
+                    "desc": "Optional organization ID from the authenticated account's organizations. "
+                        "Omit it to use the API key's default organization.",
+                },
+            },
+            "required_options": "apikey|token",
+        };
+    }
+
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(StabilityAiRestConnection::getConfig({
+                "name": name, "desc": description, "url": url, "opts": options,
+            }), attributes) {
+    }
+
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(StabilityAiRestConnection::getConfig(config), attr) {
+    }
+
+    #! Preserves deliberate endpoints and migrates auto-URL placeholders
+    private static hash<auto> getConfig(hash<auto> config) {
+        string target = config.url ?? DefaultUrl;
+        if (inlist(target, ("stability-ai://x", "stability-ai://localhost"))) {
+            target = DefaultUrl;
+        }
+        StabilityAiRestClientBase::normalizeEndpoint(regex_subst(target, "^stability-ai://", "https://"));
+        target =~ s/^https:\/\//stability-ai:\/\//;
+        hash<auto> options = config.opts ?? {};
+        options.ping_method = "GET";
+        options.ping_path = "/v1/user/balance";
+        options -= ("ping_body", "ping_headers");
+        return config + {"url": target, "opts": options};
+    }
+
+    string getType() { return "stability-ai"; }
+    *string getAppName() { return "StabilityAi"; }
+
+    #! Rejects malformed successful ping responses while accepting zero credits
+    /** @param body parsed JSON or JSON text from the balance endpoint
+        @throw REST-PING-ERROR the response is not a numeric credit balance
+    */
+    validatePingResponse(auto body) {
+        if (body.typeCode() == NT_STRING || body.typeCode() == NT_BINARY) {
+            try { body = parse_json(body.toString("UTF-8")); }
+            catch () { throw "REST-PING-ERROR", "Stability AI ping returned invalid JSON"; }
+        }
+        if (body.typeCode() != NT_HASH || body.hasKey("error")
+                || !inlist(body.credits.typeCode(), (NT_INT, NT_FLOAT, NT_NUMBER)) || body.credits < 0) {
+            throw "REST-PING-ERROR", "Stability AI ping did not return a valid credit balance";
+        }
+    }
+
+    bool hasDataProvider() { return True; }
+
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("StabilityAiDataProvider");
+        return create_object("StabilityAiDataProvider", getAsync());
+    }
+
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    private StabilityAiRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new StabilityAiRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new StabilityAiRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    #! Keeps persisted scheme and authentication ping consistent after updates
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            hash<auto> normalized = getConfig({"url": url, "opts": opts});
+            if (url != normalized.url) { update.url = normalized.url; }
+            foreach string key in ("ping_method", "ping_path") {
+                if (opts{key} != normalized.opts{key}) { update{key} = normalized.opts{key}; }
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+}
+
+#! @ref QoreMediaUtils::AbstractImageGenerator "AbstractImageGenerator" backed by
+#! Stability AI's v2beta `/stable-image/generate/*` endpoints
+public class StabilityAiImageGenerator inherits QoreMediaUtils::AbstractImageGenerator {
+    private {
+        StabilityAiRestClientIo rest;
+        string model;
+        string output_format;
+        *string aspect_ratio;
+        hash<auto> defaults;
+    }
+
+    constructor(hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        if (!config.api_key.val()) {
+            throw "MEDIA-CONFIG-ERROR",
+                "ImageGeneratorConfig.api_key is required for the Stability AI backend";
+        }
+        hash<auto> client_options = {
+            "apikey": config.api_key,
+            "url":    config.url ?? StabilityAiRestClient::DefaultUrl,
+        };
+        defaults = config.provider_options ?? {};
+        if (defaults.hasKey("organization")) { client_options.organization = remove defaults.organization; }
+        rest = new StabilityAiRestClientIo(client_options);
+        model = config.model ?? StabilityAiRestClient::DefaultModel;
+        output_format = config.output_format ?? "png";
+        aspect_ratio = config.aspect_ratio;
+        if (!StabilityAiRestClient::ModelPathMap{model}) {
+            throw "MEDIA-CONFIG-ERROR",
+                sprintf("StabilityAi model %y is unknown; known models: %y",
+                    model, keys StabilityAiRestClient::ModelPathMap);
+        }
+    }
+
+    string getMode() { return "stability-ai"; }
+    *string getModel() { return model; }
+
+    hash<QoreMediaUtils::ImageResult> generateImage(string prompt,
+            *hash<auto> opts) {
+        hash<auto!> req = defaults + {"model": model, "output_format": output_format};
+        if (exists aspect_ratio) { req.aspect_ratio = aspect_ratio; }
+        req += opts;
+        req.prompt = prompt;
+        hash<auto> resp = StabilityAiApi::generateImage(rest, req);
+        return <QoreMediaUtils::ImageResult>{
+            "image":        resp.image,
+            "content_type": resp.content_type,
+            "model":        req.model,
+            "seed":         exists resp.seed ? int(resp.seed) : NOTHING,
+            "metadata": {
+                "finish_reason": resp.finish_reason,
+                "seed":          resp.seed,
+            },
+        };
+    }
+}
+
+#! Factory for @ref StabilityAiImageGenerator
+public class StabilityAiImageGeneratorFactory inherits QoreMediaUtils::AbstractImageGeneratorFactory {
+    string getMode() {
+        return "stability-ai";
+    }
+    string getDisplayName() {
+        return "Stability AI text-to-image (Stable Diffusion 3 / Ultra / Core)";
+    }
+    QoreMediaUtils::AbstractImageGenerator create(
+            hash<QoreMediaUtils::ImageGeneratorConfig> config) {
+        return new StabilityAiImageGenerator(config);
+    }
+}
+}

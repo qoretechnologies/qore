@@ -39,7 +39,7 @@ try_decode_csv(const StringViewLike& s, const basic_csv_decode_options<typename 
 
     json_decoder<T> decoder;
 
-    basic_csv_reader<char_type,jsoncons::string_source<char_type>> reader(s,decoder,options);
+    basic_csv_reader<char_type,jsoncons::chars_source<char_type>> reader(s,decoder,options);
     reader.read(ec);
     if (JSONCONS_UNLIKELY(ec))
     {
@@ -69,7 +69,7 @@ try_decode_csv(const StringViewLike& s, const basic_csv_decode_options<typename 
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(make_alloc_set(), cursor);
+    return reflect::decode_traits<T>::decode(make_alloc_set(), cursor);
 }
 
 template <typename T,typename CharT>
@@ -111,7 +111,7 @@ try_decode_csv(std::basic_istream<CharT>& is, const basic_csv_decode_options<Cha
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(make_alloc_set(), cursor);
+    return reflect::decode_traits<T>::decode(make_alloc_set(), cursor);
 }
 
 template <typename T,typename InputIt>
@@ -158,7 +158,7 @@ try_decode_csv(InputIt first, InputIt last,
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(make_alloc_set(), cursor);
+    return reflect::decode_traits<T>::decode(make_alloc_set(), cursor);
 }
 
 // With leading allocator_set parameter
@@ -178,7 +178,7 @@ try_decode_csv(const allocator_set<Alloc,TempAlloc>& aset,
 
     json_decoder<T,TempAlloc> decoder(aset.get_allocator(), aset.get_temp_allocator());
 
-    basic_csv_reader<char_type,jsoncons::string_source<char_type>,TempAlloc> reader(s,decoder,options,aset.get_temp_allocator());
+    basic_csv_reader<char_type,jsoncons::chars_source<char_type>,TempAlloc> reader(s,decoder,options,aset.get_temp_allocator());
     reader.read(ec);
     if (JSONCONS_UNLIKELY(ec))
     {
@@ -204,14 +204,14 @@ try_decode_csv(const allocator_set<Alloc,TempAlloc>& aset,
 
     std::error_code ec;   
 
-    basic_csv_cursor<char_type,string_source<char_type>,TempAlloc> cursor(
+    basic_csv_cursor<char_type,chars_source<char_type>,TempAlloc> cursor(
         std::allocator_arg, aset.get_temp_allocator(), s, options, ec);
     if (JSONCONS_UNLIKELY(ec))
     {
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(aset, cursor);
+    return reflect::decode_traits<T>::decode(aset, cursor);
 }
 
 template <typename T,typename CharT,typename Alloc,typename TempAlloc >
@@ -261,7 +261,7 @@ try_decode_csv(const allocator_set<Alloc,TempAlloc>& aset,
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(aset, cursor);
+    return reflect::decode_traits<T>::decode(aset, cursor);
 }
 
 template <typename T, typename... Args>

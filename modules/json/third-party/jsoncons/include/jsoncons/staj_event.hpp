@@ -20,7 +20,7 @@
 #include <jsoncons/config/compiler_support.hpp>
 #include <jsoncons/conv_error.hpp>
 #include <jsoncons/utility/write_number.hpp>
-#include <jsoncons/item_event_visitor.hpp>
+#include <jsoncons/generic_visitor.hpp>
 #include <jsoncons/json_exception.hpp>
 #include <jsoncons/json_parser.hpp>
 #include <jsoncons/json_type.hpp>
@@ -37,19 +37,21 @@ namespace jsoncons {
 
 enum class staj_events : uint64_t
 {
-    string_value      = 0b0000000000000001,
-    byte_string_value = 0b0000000000000010,
-    null_value        = 0b0000000000000100,
-    bool_value        = 0b0000000000001000,
-    int64_value       = 0b0000000000010000,
-    uint64_value      = 0b0000000000100000,
-    half_value        = 0b0000000001000000,
-    double_value      = 0b0000000010000000,
-    begin_object      = 0b0000000100000000,
-    end_object        = 0b0000001000000000,   
-    begin_array       = 0b0000010000000000,
-    end_array         = 0b0000100000000000,
-    key               = 0b0001000000000000
+    string_value      = 1,
+    byte_string_value = 2,
+    null_value        = 4,
+    bool_value        = 8,
+    int64_value       = 16,
+    uint64_value      = 32,
+    half_value        = 64,
+    double_value      = 128,
+    begin_object      = 256,
+    end_object        = 512,   
+    begin_array       = 1024,
+    end_array         = 2048,
+    key_flag          = 4096,
+    key               = key_flag | string_value,
+    id                = key_flag | uint64_value
 };
 
 using staj_event_type = staj_events; // For backwards compatibility
@@ -101,87 +103,90 @@ inline bool is_end_container(staj_events types) noexcept
 template <typename CharT>
 std::basic_ostream<CharT>& operator<<(std::basic_ostream<CharT>& os, staj_events tag)
 {
-    static constexpr const CharT* begin_array_name = JSONCONS_CSTRING_CONSTANT(CharT, "begin_array");
-    static constexpr const CharT* end_array_name = JSONCONS_CSTRING_CONSTANT(CharT, "end_array");
-    static constexpr const CharT* begin_object_name = JSONCONS_CSTRING_CONSTANT(CharT, "begin_object");
-    static constexpr const CharT* end_object_name = JSONCONS_CSTRING_CONSTANT(CharT, "end_object");
-    static constexpr const CharT* key_name = JSONCONS_CSTRING_CONSTANT(CharT, "key");
-    static constexpr const CharT* string_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "string_value");
-    static constexpr const CharT* byte_string_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "byte_string_value");
-    static constexpr const CharT* null_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "null_value");
-    static constexpr const CharT* bool_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "bool_value");
-    static constexpr const CharT* uint64_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "uint64_value");
-    static constexpr const CharT* int64_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "int64_value");
-    static constexpr const CharT* half_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "half_value");
-    static constexpr const CharT* double_value_name = JSONCONS_CSTRING_CONSTANT(CharT, "double_value");
+    static constexpr const CharT* begin_array_literal = JSONCONS_CSTRING_CONSTANT(CharT, "begin_array");
+    static constexpr const CharT* end_array_literal = JSONCONS_CSTRING_CONSTANT(CharT, "end_array");
+    static constexpr const CharT* begin_object_literal = JSONCONS_CSTRING_CONSTANT(CharT, "begin_object");
+    static constexpr const CharT* end_object_literal = JSONCONS_CSTRING_CONSTANT(CharT, "end_object");
+    static constexpr const CharT* key_literal = JSONCONS_CSTRING_CONSTANT(CharT, "key");
+    static constexpr const CharT* string_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "string_value");
+    static constexpr const CharT* byte_string_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "byte_string_value");
+    static constexpr const CharT* null_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "null_value");
+    static constexpr const CharT* bool_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "bool_value");
+    static constexpr const CharT* uint64_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "uint64_value");
+    static constexpr const CharT* int64_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "int64_value");
+    static constexpr const CharT* half_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "half_value");
+    static constexpr const CharT* double_value_literal = JSONCONS_CSTRING_CONSTANT(CharT, "double_value");
 
-    switch (tag)
+    switch (tag & ~staj_events::key_flag)
     {
         case staj_events::begin_array:
         {
-            os << begin_array_name;
+            os << begin_array_literal;
             break;
         }
         case staj_events::end_array:
         {
-            os << end_array_name;
+            os << end_array_literal;
             break;
         }
         case staj_events::begin_object:
         {
-            os << begin_object_name;
+            os << begin_object_literal;
             break;
         }
         case staj_events::end_object:
         {
-            os << end_object_name;
-            break;
-        }
-        case staj_events::key:
-        {
-            os << key_name;
+            os << end_object_literal;
             break;
         }
         case staj_events::string_value:
         {
-            os << string_value_name;
+            os << string_value_literal;
             break;
         }
         case staj_events::byte_string_value:
         {
-            os << byte_string_value_name;
+            os << byte_string_value_literal;
             break;
         }
         case staj_events::null_value:
         {
-            os << null_value_name;
+            os << null_value_literal;
             break;
         }
         case staj_events::bool_value:
         {
-            os << bool_value_name;
+            os << bool_value_literal;
             break;
         }
         case staj_events::int64_value:
         {
-            os << int64_value_name;
+            os << int64_value_literal;
             break;
         }
         case staj_events::uint64_value:
         {
-            os << uint64_value_name;
+            os << uint64_value_literal;
             break;
         }
         case staj_events::half_value:
         {
-            os << half_value_name;
+            os << half_value_literal;
             break;
         }
         case staj_events::double_value:
         {
-            os << double_value_name;
+            os << double_value_literal;
             break;
         }
+        default:
+        {
+            break;
+        }
+    }
+    if ((tag & staj_events::key_flag) != staj_events{})
+    {
+        os << ' ' << key_literal;
     }
     return os;
 }
@@ -189,9 +194,9 @@ std::basic_ostream<CharT>& operator<<(std::basic_ostream<CharT>& os, staj_events
 template <typename CharT>
 class basic_staj_event
 {
-    staj_events event_type_;
+    staj_events event_flags_;
     semantic_tag tag_;
-    uint64_t ext_tag_{0};
+    uint64_t raw_tag_{0};
     union
     {
         bool bool_value_;
@@ -203,75 +208,87 @@ class basic_staj_event
         const uint8_t* byte_string_data_;
     } value_;
     std::size_t length_{0};
+
+    staj_events storage_tag() const
+    {
+        static constexpr staj_events mask = ~staj_events::key_flag;
+        return event_flags_ & mask;
+    }
 public:
     using char_type = CharT;
     using string_view_type = jsoncons::basic_string_view<char_type>;
 
-    basic_staj_event(staj_events event_type, semantic_tag tag = semantic_tag::none)
-        : event_type_(event_type), tag_(tag), value_()
+    basic_staj_event(staj_events event_type, semantic_tag tag = semantic_tag::none,
+        staj_events key_flag = staj_events{})
+        : event_flags_(event_type | key_flag), tag_(tag), value_()
     {
     }
 
-    basic_staj_event(staj_events event_type, std::size_t length, semantic_tag tag = semantic_tag::none)
-        : event_type_(event_type), tag_(tag), value_(), length_(length)
+    basic_staj_event(staj_events event_type, std::size_t length, 
+        semantic_tag tag = semantic_tag::none,
+        staj_events key_flag = staj_events{})
+        : event_flags_(event_type | key_flag), tag_(tag), value_(), length_(length)
     {
     }
 
-    basic_staj_event(null_type, semantic_tag tag)
-        : event_type_(staj_events::null_value), tag_(tag), value_()
-    {
-    }
-
-    basic_staj_event(bool value, semantic_tag tag)
-        : event_type_(staj_events::bool_value), tag_(tag)
+    basic_staj_event(bool value, semantic_tag tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(staj_events::bool_value | key_flag), tag_(tag)
     {
         value_.bool_value_ = value;
     }
 
-    basic_staj_event(int64_t value, semantic_tag tag)
-        : event_type_(staj_events::int64_value), tag_(tag)
+    basic_staj_event(int64_t value, semantic_tag tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(staj_events::int64_value | key_flag), tag_(tag)
     {
         value_.int64_value_ = value;
     }
 
-    basic_staj_event(uint64_t value, semantic_tag tag)
-        : event_type_(staj_events::uint64_value), tag_(tag)
+    basic_staj_event(uint64_t value, semantic_tag tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(staj_events::uint64_value | key_flag), tag_(tag)
     {
         value_.uint64_value_ = value;
     }
 
-    basic_staj_event(half_arg_t, uint16_t value, semantic_tag tag)
-        : event_type_(staj_events::half_value), tag_(tag)
+    basic_staj_event(half_arg_t, uint16_t value, semantic_tag tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(staj_events::half_value | key_flag), tag_(tag)
     {
         value_.half_value_ = value;
     }
 
-    basic_staj_event(double value, semantic_tag tag)
-        : event_type_(staj_events::double_value), tag_(tag)
+    basic_staj_event(double value, semantic_tag tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(staj_events::double_value | key_flag), tag_(tag)
     {
         value_.double_value_ = value;
     }
 
     basic_staj_event(const string_view_type& s,
         staj_events event_type,
-        semantic_tag tag = semantic_tag::none)
-        : event_type_(event_type), tag_(tag), length_(s.length())
+        semantic_tag tag = semantic_tag::none,
+        staj_events key_flag = staj_events{})
+        : event_flags_(event_type | key_flag), tag_(tag), length_(s.length())
     {
         value_.string_data_ = s.data();
     }
 
     basic_staj_event(const byte_string_view& s,
         staj_events event_type,
-        semantic_tag tag = semantic_tag::none)
-        : event_type_(event_type), tag_(tag), length_(s.size())
+        semantic_tag tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(event_type | key_flag), tag_(tag), length_(s.size())
     {
         value_.byte_string_data_ = s.data();
     }
 
     basic_staj_event(const byte_string_view& s,
         staj_events event_type,
-        uint64_t ext_tag)
-        : event_type_(event_type), tag_(semantic_tag::ext), ext_tag_(ext_tag), length_(s.size())
+        uint64_t raw_tag,
+        staj_events key_flag = staj_events{})
+        : event_flags_(event_type | key_flag), tag_(semantic_tag::ext), raw_tag_(raw_tag), length_(s.size())
     {
         value_.byte_string_data_ = s.data();
     }
@@ -305,13 +322,12 @@ public:
     typename std::enable_if<ext_traits::is_string<T>::value && std::is_same<typename T::value_type, CharT_>::value, T>::type
     get_(Allocator alloc,std::error_code& ec) const
     {
-        constexpr const char_type* true_constant = JSONCONS_CSTRING_CONSTANT(char_type,"true"); 
-        constexpr const char_type* false_constant = JSONCONS_CSTRING_CONSTANT(char_type,"false"); 
-        constexpr const char_type* null_constant = JSONCONS_CSTRING_CONSTANT(char_type,"null"); 
+        constexpr const char_type* true_literal = JSONCONS_CSTRING_CONSTANT(char_type,"true"); 
+        constexpr const char_type* false_literal = JSONCONS_CSTRING_CONSTANT(char_type,"false"); 
+        constexpr const char_type* null_literal = JSONCONS_CSTRING_CONSTANT(char_type,"null"); 
 
-        switch (event_type_)
+        switch (storage_tag())
         {
-            case staj_events::key:
             case staj_events::string_value:
             {
                 return jsoncons::make_obj_using_allocator<T>(alloc, value_.string_data_, length_);
@@ -351,11 +367,11 @@ public:
             }
             case staj_events::bool_value:
             {
-                return jsoncons::make_obj_using_allocator<T>(alloc, value_.bool_value_ ? true_constant : false_constant);
+                return jsoncons::make_obj_using_allocator<T>(alloc, value_.bool_value_ ? true_literal : false_literal);
             }
             case staj_events::null_value:
             {
-                return jsoncons::make_obj_using_allocator<T>(alloc, null_constant);
+                return jsoncons::make_obj_using_allocator<T>(alloc, null_literal);
             }
             default:
             {
@@ -370,15 +386,14 @@ public:
         get_(Allocator, std::error_code& ec) const
     {
         T s;
-        switch (event_type_)
+        switch (storage_tag())
         {
-        case staj_events::key:
-        case staj_events::string_value:
-            s = T(value_.string_data_, length_);
-            break;
-        default:
-            ec = conv_errc::not_string_view;
-            break;        
+            case staj_events::string_value:
+                s = T(value_.string_data_, length_);
+                break;
+            default:
+                ec = conv_errc::not_string_view;
+                break;        
         }
         return s;
     }
@@ -388,7 +403,7 @@ public:
         get_(Allocator, std::error_code& ec) const
     {
         T s;
-        switch (event_type_)
+        switch (storage_tag())
         {
             case staj_events::byte_string_value:
                 s = T(value_.byte_string_data_, length_);
@@ -405,7 +420,7 @@ public:
                             std::is_same<typename T::value_type,uint8_t>::value,T>::type
     get_(Allocator alloc, std::error_code& ec) const
     {
-        switch (event_type_)
+        switch (storage_tag())
         {
             case staj_events::byte_string_value:
             {
@@ -434,7 +449,7 @@ public:
     typename std::enable_if<ext_traits::is_integer<IntegerType>::value, IntegerType>::type
     get_(Allocator, std::error_code& ec) const
     {
-        switch (event_type_)
+        switch (storage_tag())
         {
             case staj_events::string_value:
             {
@@ -477,19 +492,18 @@ public:
         return as_bool(ec);
     }
 
-    staj_events event_type() const noexcept { return event_type_; }
+    staj_events event_type() const noexcept { return event_flags_; }
 
     semantic_tag tag() const noexcept { return tag_; }
 
-    uint64_t ext_tag() const noexcept { return ext_tag_; }
+    uint64_t ext_tag() const noexcept { return raw_tag_; }
 
 private:
 
     double as_double(std::error_code& ec) const
     {
-        switch (event_type_)
+        switch (storage_tag())
         {
-            case staj_events::key:
             case staj_events::string_value:
             {
                 double val{0};
@@ -524,7 +538,7 @@ private:
 
     bool as_bool(std::error_code& ec) const
     {
-        switch (event_type_)
+        switch (storage_tag())
         {
             case staj_events::bool_value:
                 return value_.bool_value_;
@@ -540,11 +554,11 @@ private:
         }
     }
 public:
-    void send_json_event(basic_json_visitor<CharT>& visitor,
+    void send_event(basic_json_visitor<CharT>& visitor,
         const ser_context& context,
         std::error_code& ec) const
     {
-        switch (event_type())
+        switch (storage_tag())
         {
             case staj_events::begin_array:
                 visitor.begin_array(tag(), context);
@@ -558,11 +572,15 @@ public:
             case staj_events::end_object:
                 visitor.end_object(context, ec);
                 break;
-            case staj_events::key:
-                visitor.key(string_view_type(value_.string_data_,length_), context);
-                break;
             case staj_events::string_value:
-                visitor.string_value(string_view_type(value_.string_data_,length_), tag(), context);
+                if ((event_flags_ & staj_events::key_flag) != staj_events{})
+                {
+                    visitor.key(string_view_type(value_.string_data_,length_), context);
+                }
+                else
+                {
+                    visitor.string_value(string_view_type(value_.string_data_,length_), tag(), context);
+                }
                 break;
             case staj_events::byte_string_value:
                 visitor.byte_string_value(byte_string_view(value_.byte_string_data_,length_), tag(), context);
@@ -590,15 +608,12 @@ public:
         }
     }
     
-    void send_value_event(basic_item_event_visitor<CharT>& visitor,
+    void send_event(basic_generic_visitor<CharT>& visitor,
         const ser_context& context,
         std::error_code& ec) const
     {
-        switch (event_type())
+        switch (storage_tag())
         {
-            case staj_events::key:
-                visitor.string_value(string_view_type(value_.string_data_,length_), tag(), context);
-                break;
             case staj_events::begin_array:
                 visitor.begin_array(tag(), context);
                 break;
@@ -641,6 +656,9 @@ public:
     }
 
 };
+
+using staj_event = basic_staj_event<char>;
+using wstaj_event = basic_staj_event<wchar_t>;
 
 } // namespace jsoncons
 

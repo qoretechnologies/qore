@@ -1,0 +1,36 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires QoreMediaUtils
+%exec-class Mp4Test
+
+const Clip = parse_base64_string(File::readTextFile(get_script_dir() + "/fixtures/one-second-blue-mp4.base64"));
+
+class Mp4Test inherits QUnit::Test {
+    constructor() : Test("MP4 upload metadata", "1.0") {
+        addTestCase("original FFmpeg clip metadata matches independently decoded frames", \validTest());
+        addTestCase("truncated forged and incomplete boxes fail", \invalidTest());
+        addTestCase("audio tracks preserve video dimensions duration and frame count", \audioTest());
+        set_return_value(main());
+    }
+    private validTest() {
+        assertEq("video/mp4", identifyMediaContentType(Clip));
+        assertEq("video/mp4", validateMediaContentType(Clip, "video/mp4"));
+        assertEq(<Mp4VideoInfo>{"width": 160, "height": 160, "duration_seconds": 1.0,
+            "frame_count": 24, "frame_rate": 24.0, "has_audio": False}, getMp4VideoInfo(Clip));
+    }
+    private invalidTest() {
+        assertThrows("MEDIA-RESPONSE-ERROR", sub () { validateMediaContentType(Clip, "image/png"); });
+        foreach binary content in ((<00>, Clip[0..31], Clip[0..Clip.size() - 2],
+                <000000016674797069736f6d00000200>, <000000006674797069736f6d00000200>)) {
+            assertThrows("MEDIA-INPUT-ERROR", sub () { getMp4VideoInfo(content); });
+        }
+    }
+    private audioTest() {
+        auto clip = parse_base64_string(File::readTextFile(get_script_dir() + "/fixtures/one-second-blue-audio-mp4.base64"));
+        assertEq(<Mp4VideoInfo>{"width": 160, "height": 160, "duration_seconds": 1.0,
+            "frame_count": 24, "frame_rate": 24.0, "has_audio": True}, getMp4VideoInfo(clip));
+    }
+}

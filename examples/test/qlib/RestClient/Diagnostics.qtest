@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires RestClient
+%exec-class RestDiagnosticsTest
+
+class RestDiagnosticsTest inherits QUnit::Test {
+    constructor() : Test("REST diagnostics credential redaction", "1.0") {
+        addTestCase("nested errors redact headers and echoed credentials", \redactionTest());
+        set_return_value(main());
+    }
+    private redactionTest() {
+        hash<auto> headers = {"Authorization": "Bearer rejected-secret", "X-API-Key": "second-secret"};
+        auto safe = RestDiagnostics::redact({"status_code": 401, "body": "Rejected rejected-secret",
+            "errors": ({"reason": "second-secret", "AUTHORIZATION": "other-secret"},),
+            "raw": binary("Bearer rejected-secret")}, headers);
+        assertEq(401, safe.status_code);
+        assertEq("Rejected <redacted>", safe.body);
+        assertEq("<redacted>", safe.errors[0].reason);
+        assertEq("<redacted>", safe.errors[0].AUTHORIZATION);
+        assertEq(binary("<redacted>"), safe.raw);
+        assertEq("Bearer rejected-secret", headers.Authorization, "redaction cannot mutate authentication state");
+    }
+}

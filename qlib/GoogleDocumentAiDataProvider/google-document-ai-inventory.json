@@ -1,0 +1,834 @@
+{
+  "imported": "2026-09-19",
+  "methods": [
+    {
+      "action": null,
+      "decision": "excluded: legacy nonregional operation namespace; modern jobs use projects.locations.operations",
+      "flat_path": "v1/operations/{operationsId}",
+      "id": "documentai.operations.delete",
+      "method": "DELETE",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-processor-types",
+      "decision": "consolidated into stable list-processor-types (paginated processorTypes.list)",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}:fetchProcessorTypes",
+      "id": "documentai.projects.locations.fetchProcessorTypes",
+      "method": "GET",
+      "uri_template": "v1/{+parent}:fetchProcessorTypes",
+      "version": "v1"
+    },
+    {
+      "action": "get-location",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}",
+      "id": "documentai.projects.locations.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-locations",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations",
+      "id": "documentai.projects.locations.list",
+      "method": "GET",
+      "uri_template": "v1/{+name}/locations",
+      "version": "v1"
+    },
+    {
+      "action": "cancel-operation",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/operations/{operationsId}:cancel",
+      "id": "documentai.projects.locations.operations.cancel",
+      "method": "POST",
+      "uri_template": "v1/{+name}:cancel",
+      "version": "v1"
+    },
+    {
+      "action": "get-operation",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/operations/{operationsId}",
+      "id": "documentai.projects.locations.operations.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-operations",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/operations",
+      "id": "documentai.projects.locations.operations.list",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "get-processor-type",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processorTypes/{processorTypesId}",
+      "id": "documentai.projects.locations.processorTypes.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-processor-types",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processorTypes",
+      "id": "documentai.projects.locations.processorTypes.list",
+      "method": "GET",
+      "uri_template": "v1/{+parent}/processorTypes",
+      "version": "v1"
+    },
+    {
+      "action": "start-batch-processing",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:batchProcess",
+      "id": "documentai.projects.locations.processors.batchProcess",
+      "method": "POST",
+      "uri_template": "v1/{+name}:batchProcess",
+      "version": "v1"
+    },
+    {
+      "action": "create-processor",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors",
+      "id": "documentai.projects.locations.processors.create",
+      "method": "POST",
+      "uri_template": "v1/{+parent}/processors",
+      "version": "v1"
+    },
+    {
+      "action": "delete-processor",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}",
+      "id": "documentai.projects.locations.processors.delete",
+      "method": "DELETE",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "disable-processor",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:disable",
+      "id": "documentai.projects.locations.processors.disable",
+      "method": "POST",
+      "uri_template": "v1/{+name}:disable",
+      "version": "v1"
+    },
+    {
+      "action": "enable-processor",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:enable",
+      "id": "documentai.projects.locations.processors.enable",
+      "method": "POST",
+      "uri_template": "v1/{+name}:enable",
+      "version": "v1"
+    },
+    {
+      "action": "get-processor",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}",
+      "id": "documentai.projects.locations.processors.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": null,
+      "decision": "excluded: Human in the Loop deprecated; https://docs.cloud.google.com/document-ai/docs/deprecation",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/humanReviewConfig:reviewDocument",
+      "id": "documentai.projects.locations.processors.humanReviewConfig.reviewDocument",
+      "method": "POST",
+      "uri_template": "v1/{+humanReviewConfig}:reviewDocument",
+      "version": "v1"
+    },
+    {
+      "action": "list-processors",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors",
+      "id": "documentai.projects.locations.processors.list",
+      "method": "GET",
+      "uri_template": "v1/{+parent}/processors",
+      "version": "v1"
+    },
+    {
+      "action": "process-document",
+      "decision": "consolidated into process-document",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:process",
+      "id": "documentai.projects.locations.processors.process",
+      "method": "POST",
+      "uri_template": "v1/{+name}:process",
+      "version": "v1"
+    },
+    {
+      "action": "start-version-batch-processing",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:batchProcess",
+      "id": "documentai.projects.locations.processors.processorVersions.batchProcess",
+      "method": "POST",
+      "uri_template": "v1/{+name}:batchProcess",
+      "version": "v1"
+    },
+    {
+      "action": "delete-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}",
+      "id": "documentai.projects.locations.processors.processorVersions.delete",
+      "method": "DELETE",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "deploy-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:deploy",
+      "id": "documentai.projects.locations.processors.processorVersions.deploy",
+      "method": "POST",
+      "uri_template": "v1/{+name}:deploy",
+      "version": "v1"
+    },
+    {
+      "action": "evaluate-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:evaluateProcessorVersion",
+      "id": "documentai.projects.locations.processors.processorVersions.evaluateProcessorVersion",
+      "method": "POST",
+      "uri_template": "v1/{+processorVersion}:evaluateProcessorVersion",
+      "version": "v1"
+    },
+    {
+      "action": "get-evaluation",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}/evaluations/{evaluationsId}",
+      "id": "documentai.projects.locations.processors.processorVersions.evaluations.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-evaluations",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}/evaluations",
+      "id": "documentai.projects.locations.processors.processorVersions.evaluations.list",
+      "method": "GET",
+      "uri_template": "v1/{+parent}/evaluations",
+      "version": "v1"
+    },
+    {
+      "action": "get-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}",
+      "id": "documentai.projects.locations.processors.processorVersions.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-processor-versions",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions",
+      "id": "documentai.projects.locations.processors.processorVersions.list",
+      "method": "GET",
+      "uri_template": "v1/{+parent}/processorVersions",
+      "version": "v1"
+    },
+    {
+      "action": "process-document",
+      "decision": "consolidated into process-document",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:process",
+      "id": "documentai.projects.locations.processors.processorVersions.process",
+      "method": "POST",
+      "uri_template": "v1/{+name}:process",
+      "version": "v1"
+    },
+    {
+      "action": "train-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions:train",
+      "id": "documentai.projects.locations.processors.processorVersions.train",
+      "method": "POST",
+      "uri_template": "v1/{+parent}/processorVersions:train",
+      "version": "v1"
+    },
+    {
+      "action": "undeploy-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:undeploy",
+      "id": "documentai.projects.locations.processors.processorVersions.undeploy",
+      "method": "POST",
+      "uri_template": "v1/{+name}:undeploy",
+      "version": "v1"
+    },
+    {
+      "action": "set-default-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:setDefaultProcessorVersion",
+      "id": "documentai.projects.locations.processors.setDefaultProcessorVersion",
+      "method": "POST",
+      "uri_template": "v1/{+processor}:setDefaultProcessorVersion",
+      "version": "v1"
+    },
+    {
+      "action": "create-schema",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas",
+      "id": "documentai.projects.locations.schemas.create",
+      "method": "POST",
+      "uri_template": "v1/{+parent}/schemas",
+      "version": "v1"
+    },
+    {
+      "action": "delete-schema",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "id": "documentai.projects.locations.schemas.delete",
+      "method": "DELETE",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "get-schema",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "id": "documentai.projects.locations.schemas.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-schemas",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas",
+      "id": "documentai.projects.locations.schemas.list",
+      "method": "GET",
+      "uri_template": "v1/{+parent}/schemas",
+      "version": "v1"
+    },
+    {
+      "action": "update-schema",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "id": "documentai.projects.locations.schemas.patch",
+      "method": "PATCH",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "create-schema-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions",
+      "id": "documentai.projects.locations.schemas.schemaVersions.create",
+      "method": "POST",
+      "uri_template": "v1/{+parent}/schemaVersions",
+      "version": "v1"
+    },
+    {
+      "action": "delete-schema-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "id": "documentai.projects.locations.schemas.schemaVersions.delete",
+      "method": "DELETE",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "generate-schema-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions:generate",
+      "id": "documentai.projects.locations.schemas.schemaVersions.generate",
+      "method": "POST",
+      "uri_template": "v1/{+parent}/schemaVersions:generate",
+      "version": "v1"
+    },
+    {
+      "action": "get-schema-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "id": "documentai.projects.locations.schemas.schemaVersions.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-schema-versions",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions",
+      "id": "documentai.projects.locations.schemas.schemaVersions.list",
+      "method": "GET",
+      "uri_template": "v1/{+parent}/schemaVersions",
+      "version": "v1"
+    },
+    {
+      "action": "update-schema-version",
+      "decision": "dedicated action",
+      "flat_path": "v1/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "id": "documentai.projects.locations.schemas.schemaVersions.patch",
+      "method": "PATCH",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": null,
+      "decision": "excluded: legacy nonregional operation namespace; modern jobs use projects.locations.operations",
+      "flat_path": "v1/projects/{projectsId}/operations/{operationsId}",
+      "id": "documentai.projects.operations.get",
+      "method": "GET",
+      "uri_template": "v1/{+name}",
+      "version": "v1"
+    },
+    {
+      "action": "list-processor-types",
+      "decision": "consolidated into stable list-processor-types (paginated processorTypes.list)",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}:fetchProcessorTypes",
+      "id": "documentai.projects.locations.fetchProcessorTypes",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}:fetchProcessorTypes",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-location",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}",
+      "id": "documentai.projects.locations.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-locations",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations",
+      "id": "documentai.projects.locations.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}/locations",
+      "version": "v1beta3"
+    },
+    {
+      "action": "cancel-operation",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/operations/{operationsId}:cancel",
+      "id": "documentai.projects.locations.operations.cancel",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:cancel",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-operation",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/operations/{operationsId}",
+      "id": "documentai.projects.locations.operations.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-operations",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/operations",
+      "id": "documentai.projects.locations.operations.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-processor-type",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processorTypes/{processorTypesId}",
+      "id": "documentai.projects.locations.processorTypes.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-processor-types",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processorTypes",
+      "id": "documentai.projects.locations.processorTypes.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}/processorTypes",
+      "version": "v1beta3"
+    },
+    {
+      "action": "start-batch-processing",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:batchProcess",
+      "id": "documentai.projects.locations.processors.batchProcess",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:batchProcess",
+      "version": "v1beta3"
+    },
+    {
+      "action": "create-processor",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors",
+      "id": "documentai.projects.locations.processors.create",
+      "method": "POST",
+      "uri_template": "v1beta3/{+parent}/processors",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-delete-dataset-documents",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:batchDeleteDocuments",
+      "id": "documentai.projects.locations.processors.dataset.batchDeleteDocuments",
+      "method": "POST",
+      "uri_template": "v1beta3/{+dataset}:batchDeleteDocuments",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-get-dataset-schema",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset/datasetSchema",
+      "id": "documentai.projects.locations.processors.dataset.getDatasetSchema",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-get-dataset-document",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:getDocument",
+      "id": "documentai.projects.locations.processors.dataset.getDocument",
+      "method": "GET",
+      "uri_template": "v1beta3/{+dataset}:getDocument",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-import-dataset-documents",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:importDocuments",
+      "id": "documentai.projects.locations.processors.dataset.importDocuments",
+      "method": "POST",
+      "uri_template": "v1beta3/{+dataset}:importDocuments",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-list-dataset-documents",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset:listDocuments",
+      "id": "documentai.projects.locations.processors.dataset.listDocuments",
+      "method": "POST",
+      "uri_template": "v1beta3/{+dataset}:listDocuments",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-update-dataset-schema",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset/datasetSchema",
+      "id": "documentai.projects.locations.processors.dataset.updateDatasetSchema",
+      "method": "PATCH",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "delete-processor",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}",
+      "id": "documentai.projects.locations.processors.delete",
+      "method": "DELETE",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "disable-processor",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:disable",
+      "id": "documentai.projects.locations.processors.disable",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:disable",
+      "version": "v1beta3"
+    },
+    {
+      "action": "enable-processor",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:enable",
+      "id": "documentai.projects.locations.processors.enable",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:enable",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-processor",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}",
+      "id": "documentai.projects.locations.processors.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": null,
+      "decision": "excluded: Human in the Loop deprecated; https://docs.cloud.google.com/document-ai/docs/deprecation",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/humanReviewConfig:reviewDocument",
+      "id": "documentai.projects.locations.processors.humanReviewConfig.reviewDocument",
+      "method": "POST",
+      "uri_template": "v1beta3/{+humanReviewConfig}:reviewDocument",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-processors",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors",
+      "id": "documentai.projects.locations.processors.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}/processors",
+      "version": "v1beta3"
+    },
+    {
+      "action": "process-document",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:process",
+      "id": "documentai.projects.locations.processors.process",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:process",
+      "version": "v1beta3"
+    },
+    {
+      "action": "start-version-batch-processing",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:batchProcess",
+      "id": "documentai.projects.locations.processors.processorVersions.batchProcess",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:batchProcess",
+      "version": "v1beta3"
+    },
+    {
+      "action": "delete-processor-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}",
+      "id": "documentai.projects.locations.processors.processorVersions.delete",
+      "method": "DELETE",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "deploy-processor-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:deploy",
+      "id": "documentai.projects.locations.processors.processorVersions.deploy",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:deploy",
+      "version": "v1beta3"
+    },
+    {
+      "action": "evaluate-processor-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:evaluateProcessorVersion",
+      "id": "documentai.projects.locations.processors.processorVersions.evaluateProcessorVersion",
+      "method": "POST",
+      "uri_template": "v1beta3/{+processorVersion}:evaluateProcessorVersion",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-evaluation",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}/evaluations/{evaluationsId}",
+      "id": "documentai.projects.locations.processors.processorVersions.evaluations.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-evaluations",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}/evaluations",
+      "id": "documentai.projects.locations.processors.processorVersions.evaluations.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}/evaluations",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-processor-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}",
+      "id": "documentai.projects.locations.processors.processorVersions.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-import-processor-version",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions:importProcessorVersion",
+      "id": "documentai.projects.locations.processors.processorVersions.importProcessorVersion",
+      "method": "POST",
+      "uri_template": "v1beta3/{+parent}/processorVersions:importProcessorVersion",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-processor-versions",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions",
+      "id": "documentai.projects.locations.processors.processorVersions.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}/processorVersions",
+      "version": "v1beta3"
+    },
+    {
+      "action": "process-document",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:process",
+      "id": "documentai.projects.locations.processors.processorVersions.process",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:process",
+      "version": "v1beta3"
+    },
+    {
+      "action": "train-processor-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions:train",
+      "id": "documentai.projects.locations.processors.processorVersions.train",
+      "method": "POST",
+      "uri_template": "v1beta3/{+parent}/processorVersions:train",
+      "version": "v1beta3"
+    },
+    {
+      "action": "undeploy-processor-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/processorVersions/{processorVersionsId}:undeploy",
+      "id": "documentai.projects.locations.processors.processorVersions.undeploy",
+      "method": "POST",
+      "uri_template": "v1beta3/{+name}:undeploy",
+      "version": "v1beta3"
+    },
+    {
+      "action": "set-default-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}:setDefaultProcessorVersion",
+      "id": "documentai.projects.locations.processors.setDefaultProcessorVersion",
+      "method": "POST",
+      "uri_template": "v1beta3/{+processor}:setDefaultProcessorVersion",
+      "version": "v1beta3"
+    },
+    {
+      "action": "beta-update-dataset",
+      "decision": "dedicated action",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/processors/{processorsId}/dataset",
+      "id": "documentai.projects.locations.processors.updateDataset",
+      "method": "PATCH",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "create-schema",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas",
+      "id": "documentai.projects.locations.schemas.create",
+      "method": "POST",
+      "uri_template": "v1beta3/{+parent}/schemas",
+      "version": "v1beta3"
+    },
+    {
+      "action": "delete-schema",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "id": "documentai.projects.locations.schemas.delete",
+      "method": "DELETE",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-schema",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "id": "documentai.projects.locations.schemas.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-schemas",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas",
+      "id": "documentai.projects.locations.schemas.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}/schemas",
+      "version": "v1beta3"
+    },
+    {
+      "action": "update-schema",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}",
+      "id": "documentai.projects.locations.schemas.patch",
+      "method": "PATCH",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "create-schema-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions",
+      "id": "documentai.projects.locations.schemas.schemaVersions.create",
+      "method": "POST",
+      "uri_template": "v1beta3/{+parent}/schemaVersions",
+      "version": "v1beta3"
+    },
+    {
+      "action": "delete-schema-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "id": "documentai.projects.locations.schemas.schemaVersions.delete",
+      "method": "DELETE",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "generate-schema-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions:generate",
+      "id": "documentai.projects.locations.schemas.schemaVersions.generate",
+      "method": "POST",
+      "uri_template": "v1beta3/{+parent}/schemaVersions:generate",
+      "version": "v1beta3"
+    },
+    {
+      "action": "get-schema-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "id": "documentai.projects.locations.schemas.schemaVersions.get",
+      "method": "GET",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    },
+    {
+      "action": "list-schema-versions",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions",
+      "id": "documentai.projects.locations.schemas.schemaVersions.list",
+      "method": "GET",
+      "uri_template": "v1beta3/{+parent}/schemaVersions",
+      "version": "v1beta3"
+    },
+    {
+      "action": "update-schema-version",
+      "decision": "duplicate: supported stable contract is exposed instead",
+      "flat_path": "v1beta3/projects/{projectsId}/locations/{locationsId}/schemas/{schemasId}/schemaVersions/{schemaVersionsId}",
+      "id": "documentai.projects.locations.schemas.schemaVersions.patch",
+      "method": "PATCH",
+      "uri_template": "v1beta3/{+name}",
+      "version": "v1beta3"
+    }
+  ],
+  "normalization_boundary": 1,
+  "sources": {
+    "v1": {
+      "bytes": 397842,
+      "methods": 42,
+      "revision": "20260915",
+      "schemas": 324,
+      "sha256": "7e18521900f94b8719c4ad366e10707b4a1f8a019d5aac156fa62fd7c6963b03",
+      "url": "https://documentai.googleapis.com/$discovery/rest?version=v1"
+    },
+    "v1beta3": {
+      "bytes": 408313,
+      "methods": 48,
+      "revision": "20260915",
+      "schemas": 324,
+      "sha256": "89699fd011959f24db9c2f816ccbe51d5986fe1b62304f81052fb013a05403c8",
+      "url": "https://documentai.googleapis.com/$discovery/rest?version=v1beta3"
+    }
+  }
+}

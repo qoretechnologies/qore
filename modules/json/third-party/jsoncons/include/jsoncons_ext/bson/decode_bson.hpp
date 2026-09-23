@@ -69,7 +69,7 @@ try_decode_bson(const BytesViewLike& v,
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(make_alloc_set(), cursor);
+    return reflect::decode_traits<T>::decode(make_alloc_set(), cursor);
 }
 
 template <typename T>
@@ -111,7 +111,7 @@ try_decode_bson(std::istream& is,
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(make_alloc_set(), cursor);
+    return reflect::decode_traits<T>::decode(make_alloc_set(), cursor);
 }
 
 template <typename T,typename InputIt>
@@ -125,7 +125,7 @@ try_decode_bson(InputIt first, InputIt last,
     std::error_code ec;   
     jsoncons::json_decoder<T> decoder;
     auto adaptor = make_json_visitor_adaptor<json_visitor>(decoder);
-    basic_bson_reader<binary_iterator_source<InputIt>> reader(binary_iterator_source<InputIt>(first, last), adaptor, options);
+    basic_bson_reader<iterator_source<InputIt>> reader(iterator_source<InputIt>(first, last), adaptor, options);
     reader.read(ec);
     if (JSONCONS_UNLIKELY(ec))
     {
@@ -147,13 +147,13 @@ try_decode_bson(InputIt first, InputIt last,
     using result_type = read_result<value_type>;
 
     std::error_code ec;
-    basic_bson_cursor<binary_iterator_source<InputIt>> cursor(binary_iterator_source<InputIt>(first, last), options, ec);
+    basic_bson_cursor<iterator_source<InputIt>> cursor(iterator_source<InputIt>(first, last), options, ec);
     if (JSONCONS_UNLIKELY(ec))
     {
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(make_alloc_set(), cursor);
+    return reflect::decode_traits<T>::decode(make_alloc_set(), cursor);
 }
 
 // With leading allocator_set parameter
@@ -201,7 +201,7 @@ try_decode_bson(const allocator_set<Alloc,TempAlloc>& aset,
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(aset, cursor);
+    return reflect::decode_traits<T>::decode(aset, cursor);
 }
 
 template <typename T,typename Alloc,typename TempAlloc >
@@ -248,7 +248,7 @@ try_decode_bson(const allocator_set<Alloc,TempAlloc>& aset,
         return result_type{jsoncons::unexpect, ec, cursor.line(), cursor.column()};
     }
 
-    return reflect::decode_traits<T>::try_decode(aset, cursor);
+    return reflect::decode_traits<T>::decode(aset, cursor);
 }
 
 template <typename T, typename... Args>

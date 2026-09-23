@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/index-identity"
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndex >= 1.2
+%requires IndexIdentityFixture
+%try-module yaml
+%define NoYaml
+%endtry
+%exec-class ProviderIndexTypesTest
+
+class ProviderIndexTypesTest inherits QUnit::Test {
+    private { string directory; }
+    constructor() : Test("Provider index type preservation", "1.0", \ARGV) {
+        directory = make_tmp_dir("provider-index-types-");
+        on_exit remove_tree(directory);
+        addTestCase("nested inputs and media outputs survive YAML and index readback", \roundTripTest());
+        addTestCase("unserializable type blocks publication with structured evidence", \failureTest());
+        set_return_value(main());
+    }
+    private checkYaml() {
+%ifdef NoYaml
+        testSkip("yaml is not available");
+%endif
+    }
+    private hash<auto> publish() {
+        return ProviderIndex::ProviderIndex::createDataProviderIndex(<DataProviderIndexInfo>{}, directory,
+            <ProviderIndexCreateOptions>{"load_known_factories": False, "load_environment": False,
+                "load_typescript_actions": False, "apps": ("IndexIdentityFixture",)});
+    }
+    private roundTripTest() {
+        checkYaml();
+        HashDataType input("IndexNestedInput");
+        input.addQoreFields({
+            "value": {"name": "value", "type": AbstractDataProviderTypeMap."string"},
+            "enabled": {"name": "enabled", "type": AbstractDataProviderTypeMap."bool", "allowed_values": (
+                <AllowedValueInfo>{"value": False, "display_name": "Disabled"},
+                <AllowedValueInfo>{"value": True, "display_name": "Enabled"},)},
+        });
+        HashDataType output("IndexMediaOutput");
+        output.addQoreFields({"data": {"name": "data", "type": AbstractDataProviderTypeMap."binary"},
+            "seed": {"name": "seed", "type": AbstractDataProviderTypeMap."int"},
+            "detail": {"name": "detail", "type": input}});
+        auto action = DataProviderActionCatalog::getActionHashEx("IndexIdentityFixture").record;
+        action.action = "typed";
+        action.path = "/typed";
+        action.output_type = output;
+        action.options = DataProviderActionCatalog::getActionOptionFromFields({
+            "object": new QoreDataField({"name": "object", "type": input})});
+        DataProviderActionCatalog::registerAction(action);
+        auto published = publish();
+        assertTrue(published.summary.qualification.complete);
+        for (int pass = 0; pass < 2; ++pass) {
+            auto restored = ProviderIndexUtil::readDataProviderIndex().actioninfomap.IndexIdentityFixture.typed;
+            auto value = {"value": "ordinary", "enabled": False};
+            assertEq(value, restored.options.object.type.acceptsValue(value));
+            assertThrows("MISSING-VALUE-ERROR", sub () { restored.options.object.type.acceptsValue({"enabled": False}); });
+            assertEq(False, restored.options.object.type.getFields().enabled.getAllowedValues()[0].value);
+            assertEq("Disabled", restored.options.object.type.getFields().enabled.getAllowedValues()[0].display_name);
+            auto media = {"data": <000102ff>, "seed": 0, "detail": value};
+            assertEq(media, restored.output_type.acceptsValue(media));
+            auto again = Serializable::deserialize(restored.output_type.serialize());
+            assertEq(media, again.acceptsValue(media));
+        }
+    }
+    private failureTest() {
+        checkYaml();
+        auto previous = publish();
+        string original = File::readTextFile(previous.path);
+        auto action = DataProviderActionCatalog::getActionHashEx("IndexIdentityFixture").record;
+        action.action = "invalid";
+        action.path = "/invalid";
+        HashDataType invalid("Unserializable", NOTHING, {"callback": sub () {}});
+        action.output_type = invalid;
+        DataProviderActionCatalog::registerAction(action);
+        bool rejected = False;
+        try { publish(); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            assertFalse(ex.arg.complete);
+            assertEq(1, ex.arg.failures.size());
+            assertEq("serialize-action-types", ex.arg.failures[0].phase);
+            assertEq("invalid", ex.arg.failures[0].action);
+            rejected = True;
+        }
+        assertTrue(rejected);
+        assertEq(original, File::readTextFile(previous.path));
+    }
+}

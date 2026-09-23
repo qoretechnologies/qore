@@ -709,6 +709,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testCredentialRedaction());
         addTestCase("restDoRawRequest sends pre-serialized body as-is",
             \testRestDoRawRequest());
+        addTestCase("Accept header lists each media type once", \testAcceptHeaderUnique());
 
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
@@ -4390,6 +4391,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "getConstructorOptions preserves caller's http_version, not the normalized protocol");
         assertEq("json", opts.data);
         assertEq("foo", opts.token);
+    }
+
+    #! Tests that the Accept header lists each media type once
+    /** \c MimeTypeYamlApp and \c MimeTypeYaml are both \c "application/yaml", so listing both sent the same media
+        range twice.
+    */
+    testAcceptHeaderUnique() {
+        list<string> types = RestClientIo::RestClientIo::Accept.split(",");
+        assertEq(RestClientIo::RestClientIo::AcceptList, types,
+            "the header is built from the accepted media types");
+        hash<string, int> seen;
+        foreach string type in (types) {
+            assertFalse(seen.hasKey(type), sprintf("%y is listed once", type));
+            seen{type} = $#;
+        }
+        assertTrue(seen.hasKey(MimeTypeYaml), "the registered YAML media type is accepted");
+        assertTrue(seen.hasKey(MimeTypeYamlRpc), "the legacy YAML media type is accepted");
+        assertEq(elements types, RestClientIo::RestClientIo::AcceptMap.size(),
+            "every accepted media type appears in the header");
     }
 
     testRestDoRawRequest() {
