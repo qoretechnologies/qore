@@ -1194,7 +1194,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF | ARG_OTHER)) {
                 return;
             }
-        } else if (prepareDefaultArgs(&xsink2, variant, sig, is_copy, self, ARG_DEF)) {
+        } else if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF)) {
+            // the variant is fixed here; an exception evaluating or type-checking a default argument must go to
+            // the caller, otherwise the call would proceed with the ill-typed value
             return;
         }
         if (processDefaultArgs(xsink, func, variant, sig, is_copy, self)) {

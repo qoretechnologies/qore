@@ -1874,6 +1874,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         producers outpace consumers — configurable memory limit, push timeout/drop control, and monitoring
       - added a \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool" for memory-limited pool logging
 
+    - @ref mapperintro "Mapper" module
+      - fixed \c Mapper::getOutputFromHash() and a mapper's \c output option failing with a
+        \c RUNTIME-TYPE-ERROR when given a typed hash of string field descriptions such as
+        \c hash<string, *string>
+
     - @ref mewsrestclientintro "MewsRestClient" module
       - the connection URL is no longer generated automatically; it depends on the Mews environment and must be
         supplied by the user
@@ -3272,6 +3277,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed an exception raised while evaluating or type-checking the default value of an omitted argument being
+      reported as unhandled instead of being raised to the caller; the call then proceeded and the function body
+      ran with the parameter holding a value its type does not accept
     - Fixed @ref Qore::CFLAGS omitting the macOS deployment target the library was built for; a program compiled
       against the library with those flags targeted an older macOS than the library, and the linker warned about it
     - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X>, \c reference<X>, union

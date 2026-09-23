@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DefaultArgTypeErrorTest
+
+# an exception raised evaluating or type-checking an omitted argument's default value must propagate to the
+# caller, and the body must never run with the ill-typed value
+*hash<auto> sub dat_nothing() {
+    return NOTHING;
+}
+
+int sub dat_throw() {
+    throw "DEFAULT-ARG-ERROR", "from default arg";
+}
+
+list<string> dat_calls;
+
+sub dat_func(*bool u, hash<auto> c = dat_nothing()) {
+    dat_calls += sprintf("func: %y", c);
+}
+
+sub dat_func_throw(*bool u, int i = dat_throw()) {
+    dat_calls += sprintf("func_throw: %y", i);
+}
+
+# overloaded, so the variant is matched at runtime by the argument types
+sub dat_overload(string s, hash<auto> c = dat_nothing()) {
+    dat_calls += sprintf("overload string: %y", c);
+}
+sub dat_overload(int i, hash<auto> c = dat_nothing()) {
+    dat_calls += sprintf("overload int: %y", c);
+}
+
+class DatClass {
+    public {
+        *hash<auto> m;
+    }
+
+    constructor(*bool u, hash<auto> c = dat_nothing()) {
+        dat_calls += sprintf("constructor: %y", c);
+    }
+
+    static staticMethod(*bool u, hash<auto> c = dat_nothing()) {
+        dat_calls += sprintf("static: %y", c);
+    }
+
+    method(*bool u, hash<auto> c = m) {
+        dat_calls += sprintf("method: %y", c);
+    }
+}
+
+public class DefaultArgTypeErrorTest inherits QUnit::Test {
+    constructor() : Test("DefaultArgTypeErrorTest", "1.0") {
+        addTestCase("function", \functionTest());
+        addTestCase("default expression throws", \defaultThrowsTest());
+        addTestCase("overloaded function", \overloadTest());
+        addTestCase("static method", \staticMethodTest());
+        addTestCase("method", \methodTest());
+        addTestCase("constructor", \constructorTest());
+        addTestCase("dynamic call", \dynamicCallTest());
+        addTestCase("valid default", \validDefaultTest());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    setUp() {
+        dat_calls = ();
+    }
+
+    private checkTypeError(code c) {
+        assertThrows("RUNTIME-TYPE-ERROR", "parameter 2 \\('c'\\) expects type 'hash<auto>', but got no value",
+            c);
+        assertEq((), dat_calls);
+    }
+
+    functionTest() {
+        checkTypeError(sub () { dat_func(True); });
+        # an explicit NOTHING raises the same error
+        *hash<auto> n;
+        checkTypeError(sub () { dat_func(True, n); });
+    }
+
+    defaultThrowsTest() {
+        assertThrows("DEFAULT-ARG-ERROR", "from default arg", sub () { dat_func_throw(True); });
+        assertEq((), dat_calls);
+    }
+
+    overloadTest() {
+        checkTypeError(sub () { dat_overload("a"); });
+        checkTypeError(sub () { dat_overload(1); });
+        auto v = "a";
+        checkTypeError(sub () { dat_overload(v); });
+        v = 1;
+        checkTypeError(sub () { dat_overload(v); });
+    }
+
+    staticMethodTest() {
+        checkTypeError(sub () { DatClass::staticMethod(True); });
+    }
+
+    methodTest() {
+        DatClass o(True, {});
+        dat_calls = ();
+        checkTypeError(sub () { o.method(True); });
+        o.m = {"a": 1};
+        o.method(True);
+        assertEq(("method: {a: 1}",), dat_calls);
+    }
+
+    constructorTest() {
+        checkTypeError(sub () { DatClass o(True); });
+        checkTypeError(sub () { new DatClass(True); });
+    }
+
+    dynamicCallTest() {
+        checkTypeError(sub () { call_function(\dat_func(), True); });
+        checkTypeError(sub () { call_function_args(\dat_func(), (True,)); });
+        checkTypeError(sub () { call_static_method("DatClass", "staticMethod", True); });
+    }
+
+    validDefaultTest() {
+        dat_func(True, {"x": 1});
+        DatClass::staticMethod(False, {});
+        assertEq(("func: {x: 1}", "static: {}"), dat_calls);
+    }
+}
