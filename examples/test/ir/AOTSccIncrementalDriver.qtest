@@ -112,6 +112,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testOrderSetFollowsThePreload());
         addTestCase("a stale provider reached only over a content edge is compiled first",
             \testCoordinatorCompilesAPreloadedStaleProviderFirst());
+        addTestCase("a compile that read a stale peer in a content cycle falls back to the group's parse",
+            \testContentCycleFailureFallsBackToGroupParse());
 
         set_return_value(main());
     }
@@ -2081,5 +2083,50 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(("b.qc", "d.qc", "a.qc", "c.qc"), map $1.split(" ")[0], compiles(fx),
             "the provider is compiled first, and each component once");
         assertEq((), stalePlan(fx).stale, "and the group is current");
+    }
+
+    #! A compile that read a stale peer's previous object inside a content cycle is answered by the group's parse.
+    /** No order serves both members of a content cycle: here `a` folds a constant of `d` and `d` one of `a`, both
+        stale, and whichever is compiled first preloads the other's previous object.  The stand-in compiler fails
+        `a` the way a changed signature did on Qorus.  That failure may be the peer's stale declarations rather
+        than the source's, and only the group's own parse, which preloads nothing, can tell -- so the coordinator
+        falls back to it.  A failure with no stale peer preloaded is the source's own and still fails at once.
+    */
+    testContentCycleFailureFallsBackToGroupParse() {
+        TmpDir tmp("qore-aot-driver-content-cycle-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeDepfile(fx.qo_dir, "a", (), "d");
+        writeDepfile(fx.qo_dir, "d", (), "a");
+        string check_d = "if [ \"$(basename \"$src\")\" = a.qc ] && ! grep -q '^compiled$' \"$preload_dir/d.qo\"; "
+            + "then echo 'PARSE-TYPE-ERROR: a compiled against the previous d.qo' >&2; exit 1; fi";
+        writeCompiler(fx, NOTHING, check_d);
+        writeBatchCompiler(fx);
+        assertEq(("b", "a", "d", "c"), orderSet(fx, fx.names),
+            "the cycle is broken at a, which is compiled before d");
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertTrue(result.output.find("falling back to the group's own parse, which preloads nothing") != -1,
+            "the failure inside the cycle is answered by the group's parse: " + result.output);
+        assertEq(-1, result.output.find("cannot build stale component"),
+            "and is not reported as the source's own: " + result.output);
+        list<string> built = compiles(fx);
+        assertEq(("b.qc b.qo", "a.qc a.qo"), built.size() >= 2 ? built[0..1] : built,
+            "b compiled standalone, then a failed against the previous d: " + join(", ", built));
+        assertEq(4, (select built, $1 =~ /^batch /).size(), "the group's parse compiled every member");
+        assertEq((), stalePlan(fx).stale, "and the group is current");
+
+        # the same failure with no stale component left to preload is the source's own
+        TmpDir tmp2("qore-aot-driver-own-failure-");
+        hash<auto> fx2 = fixture(tmp2.path, NOTHING, False);
+        writeCompiler(fx2, NOTHING, "if [ \"$(basename \"$src\")\" = c.qc ]; then "
+            + "echo 'PARSE-EXCEPTION: c is broken' >&2; exit 1; fi");
+        result = plan(fx2);
+        assertEq(1, result.rc, "the coordinator fails: " + result.output);
+        assertTrue(result.output.find("cannot build stale component") != -1,
+            "the failure is reported as the source's own: " + result.output);
+        assertEq(-1, result.output.find("falling back"), "without a group parse: " + result.output);
+        assertEq(-1, result.output.find("the plan should not have needed the batch"),
+            "the batch is never started: " + result.output);
     }
 }

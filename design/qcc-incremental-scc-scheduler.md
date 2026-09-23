@@ -581,7 +581,14 @@ walked through current components in between. That relation includes every requi
 predecessor, so the result is still a topological order. Content dependencies can form cycles;
 a cycle among pending components has no order that serves all of them and is broken at the
 first pending component in topological order, whose required predecessors are all taken by
-then. The escalation that follows a failed compile is unchanged.
+then.
+
+A member compiled first inside such a cycle reads its peer's previous object, and a failure
+there may be the peer's stale declarations rather than the source's own error. Only the group's
+own parse, which preloads nothing, can tell the two apart, so a standalone compile that fails
+while it preloads a component still pending in the same pass falls back to that parse, the way
+exit 78 does (`preloads_pending_component()`). A failure with no pending component preloaded is
+the source's own and still fails the build at once, without paying for a group parse first.
 
 ## What actually causes the mode-transition cascade
 

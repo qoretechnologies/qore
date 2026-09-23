@@ -40,7 +40,8 @@ run_source_order() {
 cleanup() {
     if [ -n "$stale_file" ]; then
         rm -f "$stale_file" "$stale_file.rows" "$stale_file.keys" \
-            "$stale_file.order" "$stale_file.components"
+            "$stale_file.order" "$stale_file.components" "$stale_file.pending" \
+            "$stale_file.preload"
     fi
     if [ -n "$subset_plan_file" ]; then
         rm -f "$subset_plan_file"
@@ -326,6 +327,31 @@ report_stale_components() {
         }' "$stale_file" >&2
 }
 
+#! True when component KEY, row ROW of this pass, preloads a row the pass has yet to compile.
+#  The rows are ordered so that every compile follows the stale components it
+#  preloads, which leaves this possible only inside a cycle of content
+#  dependencies: no order serves every member of one, so a member compiled
+#  first reads a peer's previous object.  A failure there may be the peer's
+#  stale declarations rather than the source's own error, and only the group's
+#  own parse, which preloads nothing, can tell the two apart.
+preloads_pending_component() {
+    awk -F '\t' -v row="$2" 'NR > row && $5 != "" { print $5 }' \
+        "$stale_file.components" > "$stale_file.pending"
+    if [ ! -s "$stale_file.pending" ]; then
+        return 1
+    fi
+    # The loop that calls this reads its rows from standard input.
+    if ! (
+        QORE_QCC_GRAPH_SNAPSHOT=$graph_snapshot
+        export QORE_QCC_GRAPH_SNAPSHOT
+        run_source_order --scc-preload "$context" "$1"
+    ) < /dev/null > "$stale_file.preload"; then
+        echo "$0: cannot read the preload set of stale component $1" >&2
+        return 1
+    fi
+    grep -Fxq -f "$stale_file.pending" "$stale_file.preload"
+}
+
 #! Records what the group now reads from outside itself, for the next build.
 #  The build tool watches those inputs through one depfile on the group's
 #  external-input stamp, which the bootstrap depends on: a move in any of them
@@ -555,7 +581,9 @@ while :; do
             "$stale_count component(s)" >&2
         exit 1
     fi
+    row=0
     while IFS="$tab" read -r component_index component_key component_size source output; do
+        row=$((row + 1))
         [ -n "$component_key" ] || continue
         component_lock=$(dirname "$output")/.qcc-scc/$component_key.lock
         # `$?` after a NEGATED condition is the negation's status, not the builder's,
@@ -587,6 +615,17 @@ while :; do
                 echo "$0: the objects preloaded to compile stale component" \
                     "$component_key could not be resolved; falling back to the" \
                     "group's own parse, which preloads nothing" >&2
+                rm -f "$stale_file.components"
+                escalate_to_group_batch
+            fi
+            # A compile that read a stale peer's previous object cannot be told
+            # apart from a broken source; see preloads_pending_component().  A
+            # real error fails the group's parse as well, and is reported there.
+            if preloads_pending_component "$component_key" "$row"; then
+                echo "$0: stale component $component_key was compiled against" \
+                    "the previous object of a stale component it preloads, which" \
+                    "a cycle of content dependencies left for later in this pass;" \
+                    "falling back to the group's own parse, which preloads nothing" >&2
                 rm -f "$stale_file.components"
                 escalate_to_group_batch
             fi
