@@ -415,7 +415,7 @@ bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
     return rsh.checkNode(n);
 }
 
-void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
+void RObject::setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen) {
     assert(rml.checkRSectionExclusive());
     // the lock-free dereference path reads rset alone and infers rcount from it; see RObject::rset
     assert(rs || !rcnt);
@@ -429,9 +429,8 @@ void RObject::setRSet(RSet* rs, int rcnt, bool closed) {
     rcount = rcnt;
     // set after the old set is invalidated, which clears this flag for every object of that set
     rclosed.store(closed ? rs : nullptr, std::memory_order_relaxed);
-    // record the reference count the scan saw, so a later canDelete() can tell a stale snapshot from a genuine
-    // external reference
-    scan_refs.store(references.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    // record the edge generation the scan read before following the object's edges; see edgesUnchangedSinceScan()
+    scan_edge_gen.store(seen_edge_gen, std::memory_order_relaxed);
 #ifdef DEBUG
     if (rcount > references) {
         printd(0, "RObject::setRSet() this: %p '%s' cannot set rcount %d > references %d\n", this, getName(), rcount,
@@ -873,8 +872,29 @@ void RSet::dbg() {
 }
 #endif
 
+std::atomic<unsigned> RSet::untracked_edge_epoch{0};
+
+bool RSet::keepNeedsRescan(bool rescanned) const {
+    // A dereference that has already rescanned the set once trusts it: an edge added by another thread since
+    // then leaves the set marked for the next dereference, and rescanning here until other threads stop adding
+    // edges would not terminate while they do not.
+    return !rescanned && !edgesUnchangedSinceScan();
+}
+
+bool RSet::edgesUnchangedSinceScan() const {
+    if (scan_epoch.load(std::memory_order_relaxed) != untracked_edge_epoch.load(std::memory_order_seq_cst)) {
+        return false;
+    }
+    for (rset_t::const_iterator i = set.begin(), e = set.end(); i != e; ++i) {
+        if (!(*i)->edgesUnchangedSinceScan()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // if we return 1, the rset has been invalidated already
-int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator, RSetDerefHelper& cleanup) {
+int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup) {
     printd(QRO_LVL, "RSet::canDelete() this: %p valid: %d\n", this, (int)valid);
 
     if (q_disable_gc)
@@ -907,10 +927,11 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
         if (ref_copy < rcount) {
             need_rescan = true;
         } else if (ref_copy != rcount) {
-            // ref_copy > rcount: the triggering object has live external refs outside the cycle -- unless its
-            // own rcount is a stale snapshot.  See the member loop below: a reference the scan counted can be
-            // dropped afterwards without invalidating the rset, and nothing would ever re-examine the verdict.
-            if (scan_refs >= 0 && ref_copy < scan_refs) {
+            // ref_copy > rcount: the triggering object has references from outside the set -- unless the set has
+            // gained an edge between its members since it was scanned, which the counts do not include and which
+            // looks like one from outside.  A reference the scan counted that has gone since does not matter:
+            // it only makes the true number of references from outside larger than the one read here.
+            if (keepNeedsRescan(rescanned)) {
                 need_rescan = true;
             } else {
                 return 0;
@@ -928,18 +949,9 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
                 }
                 if ((*i)->rcount != r) {
                     printd(QRO_LVL, "RSet::canDelete() this: %p cannot delete graph obj %p '%s' rcount: %d "
-                        "refs: %d (scan_refs: %d)\n", this, *i, (*i)->getName(), (*i)->rcount, r,
-                        (*i)->scan_refs.load());
-                    // rcount < refs normally means a live reference from outside the rset.  But rcount is a
-                    // snapshot taken when the rset was built, and a reference the scan DID count can be dropped
-                    // afterwards without invalidating the rset -- a container holding the object can lose its
-                    // last other holder, or an object in another rset can be collected.  The verdict cached here
-                    // would then be wrong forever, because a plain deref of an object whose rset says "cannot
-                    // delete" never triggers another scan.  Whenever a member has lost references since the
-                    // scan, the snapshot no longer describes the graph: rescan instead of trusting it.  After
-                    // the rescan scan_refs matches again, so this cannot loop.
-                    int member_scan_refs = (*i)->scan_refs.load(std::memory_order_relaxed);
-                    if (member_scan_refs >= 0 && r < member_scan_refs) {
+                        "refs: %d\n", this, *i, (*i)->getName(), (*i)->rcount, r);
+                    // rcount < refs means a reference from outside the set, as for the triggering object above
+                    if (keepNeedsRescan(rescanned)) {
                         need_rescan = true;
                         break;
                     }
@@ -961,6 +973,11 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
                         if (r > n.internal) {
                             printd(QRO_LVL, "RSet::canDelete() this: %p cannot delete graph node %p (%s) internal: "
                                 "%d refs: %d\n", this, n.node, get_type_name(n.node), n.internal, r);
+                            // a reference from a member added since the scan is not in n.internal either
+                            if (keepNeedsRescan(rescanned)) {
+                                need_rescan = true;
+                                break;
+                            }
                             return 0;
                         }
                     }
@@ -1191,6 +1208,9 @@ void RSetHelper::startNode(int id) {
     const ScanNode& n = nodes[id];
     switch (n.kind) {
         case NodeKind::Object:
+            // read before the edges are followed: an edge added after this leaves the generation different from
+            // the one the set records, whether or not this scan sees the edge
+            nodes[id].edge_gen = static_cast<RObject*>(n.ptr)->edge_gen.load(std::memory_order_seq_cst);
             if (!n.leaf) {
                 static_cast<RObject*>(n.ptr)->scanMembers(*this);
             }
@@ -1254,6 +1274,8 @@ bool RSetHelper::scan(RObject& root) {
     root_obj = &root;
     // the object's rsection is held, so its recursive set cannot be replaced while the scan runs
     root_rset = root.rset;
+    // before any edge is followed; see RSet::edgesUnchangedSinceScan()
+    scan_epoch = RSet::untracked_edge_epoch.load(std::memory_order_seq_cst);
 
     // Tarjan's strongly connected components algorithm with an explicit stack, as the graph can be deeper than the
     // thread's stack allows
@@ -1614,6 +1636,7 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
         printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p: %s) ALREADY SCANNED IN ANOTHER THREAD\n", this,
             &obj, obj.getName());
         sah.setOutcome(ScanOutcome::Already);
+        scan_skipped = true;
         return;
     }
 
@@ -1645,6 +1668,7 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
                 printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p: %s) TRANSACTION COMPLETE IN ANOTHER THREAD\n",
                     this, &obj, obj.getName());
                 sah.setOutcome(ScanOutcome::Already);
+                scan_skipped = true;
                 return;
             }
             printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p: %s) RESTARTING TRANSACTION: %d\n", this, &obj,
@@ -1711,7 +1735,11 @@ void RSetHelper::commit() {
             }
             RObject* obj = static_cast<RObject*>(n.ptr);
             assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
-            obj->confirmRSet(obj == root_obj);
+            obj->confirmRSet(obj == root_obj, n.edge_gen);
+            RSet* rs = obj->rset.load(std::memory_order_relaxed);
+            if (rs) {
+                rs->setScanEpoch(scan_epoch);
+            }
             if (n.unlock) {
                 unlockNode(n);
             }
@@ -1742,6 +1770,7 @@ void RSetHelper::commit() {
         RSet*& rs = rsets[n.component];
         if (!rs) {
             rs = new RSet;
+            rs->setScanEpoch(scan_epoch);
 #ifdef DEBUG
             ++rset_create_count;
 #endif
@@ -1770,13 +1799,17 @@ void RSetHelper::commit() {
             // scan changed another component and holds the rsection exclusively
             printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p unchanged\n", obj, obj->getName(),
                 obj->rset.load(std::memory_order_relaxed));
-            obj->confirmRSet(true);
+            obj->confirmRSet(true, n.edge_gen);
+            RSet* rs = obj->rset.load(std::memory_order_relaxed);
+            if (rs) {
+                rs->setScanEpoch(scan_epoch);
+            }
             continue;
         }
         RSet* rs = rsets[n.component];
         printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
             n.internal);
-        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component]);
+        obj->setRSet(rs, rs ? n.internal : 0, rs && component_closed[n.component], n.edge_gen);
     }
 
 #ifdef DEBUG
@@ -1855,3 +1888,63 @@ void RSetHelper::rollback(bool yield) {
     }
 #endif
 }
+
+void qore_dgc_value_stored(RObject& holder, const QoreValue& v) {
+    // the holder's edge is added first; the objects reached are marked after it, as the scan reads each object's
+    // generation before following its edges
+    holder.edgesAdded();
+    if (!needs_scan(v)) {
+        return;
+    }
+    // the objects, closure-bound variables and references the value reaches without passing through an object;
+    // an explicit stack, as a value can be nested deeper than the thread's stack allows
+    std::vector<const AbstractQoreNode*> todo;
+    todo.push_back(v.getInternalNode());
+    while (!todo.empty()) {
+        const AbstractQoreNode* n = todo.back();
+        todo.pop_back();
+        switch (n->getType()) {
+            case NT_OBJECT:
+                // the value is only read; the mark is the object's own bookkeeping
+                qore_object_private::get(*const_cast<QoreObject*>(static_cast<const QoreObject*>(n)))->edgesAdded();
+                break;
+
+            case NT_LIST: {
+                ConstListIterator li(static_cast<const QoreListNode*>(n));
+                while (li.next()) {
+                    const QoreValue& lv = li.getValue();
+                    if (needs_scan(lv)) {
+                        todo.push_back(lv.getInternalNode());
+                    }
+                }
+                break;
+            }
+
+            case NT_HASH: {
+                ConstHashIterator hi(static_cast<const QoreHashNode*>(n));
+                while (hi.next()) {
+                    const QoreValue hv = hi.get();
+                    if (needs_scan(hv)) {
+                        todo.push_back(hv.getInternalNode());
+                    }
+                }
+                break;
+            }
+
+            case NT_RUNTIME_CLOSURE: {
+                const cvar_map_t& cmap = static_cast<const QoreClosureBase*>(n)->getMap();
+                for (cvar_map_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i) {
+                    i->second->edgesAdded();
+                }
+                break;
+            }
+
+            default:
+                // a reference: the variable or object it refers to is only found by evaluating it, so every set
+                // stops trusting its counts until it is scanned again
+                RSet::untracked_edge_epoch.fetch_add(1, std::memory_order_seq_cst);
+                break;
+        }
+    }
+}
+

@@ -39,6 +39,8 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/HttpClientEventSink.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/RSet.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -2114,6 +2116,14 @@ nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
 
     priv->registerStreamQueue(static_cast<int32_t>(stream_id), queue_ptr,
         const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr);
+
+    // the scanner reports the registered objects (Pattern B in design/dgc.md), and no scan follows the new edges;
+    // the arguments keep both objects alive for the duration of the call
+    qore_object_private* spriv = qore_object_private::get(*self);
+    qore_dgc_value_stored(*spriv, QoreValue(const_cast<QoreObject*>(obj_queue)));
+    if (notifier_obj_ptr) {
+        qore_dgc_value_stored(*spriv, QoreValue(notifier_obj_ptr));
+    }
 }
 
 //! Clears all stream queue registrations

@@ -458,21 +458,45 @@ sub closure_outlives_writes(reference<hash<string, int>> rv, Tally t, reference<
 }
 
 #! another thread replaces the value of a closure-bound variable through a closure while the frame holds it
+#! The closures that the threads of the closure shapes call
+/** They are held here and called through static methods, so that the closure each thread runs captures nothing that
+    reaches the cycle: a thread's closure keeps what it captured until the thread's function has returned, which is
+    after its on_exit code has signalled, so a captured cycle could still be held when the destructions are counted.
+    The frame of each shape removes its closure before anything is counted.
+*/
+class ClosureTarget {
+    public {
+        static *code<nothing(Node)> set;
+        static *code<nothing()> write;
+    }
+
+    static callSet(Node n) {
+        code<nothing(Node)> c = ClosureTarget::set;
+        c(n);
+    }
+
+    static callWrite() {
+        code<nothing()> c = ClosureTarget::write;
+        c();
+    }
+}
+
 sub closure_thread_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
     Node root();
     make_cycle(root);
-    code set = sub (Node n) { root = n; };
+    ClosureTarget::set = sub (Node n) { root = n; };
     Counters c();
     Counter done(1);
     background sub () {
         on_exit done.dec();
         Node n();
         make_cycle(n);
-        set(n);
+        ClosureTarget::callSet(n);
         # the thread's own reference to the new cycle is released here, before it signals
         remove n;
     }();
     done.waitForZero();
+    remove ClosureTarget::set;
     for (int i = 0; i < Writes; ++i) {
         root.x = new Leaf();
     }
@@ -490,7 +514,7 @@ sub closure_thread_writes(reference<hash<string, int>> rv, Tally t, reference<*C
 sub closure_concurrent_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
     Node root();
     make_cycle(root);
-    code write = sub () {
+    ClosureTarget::write = sub () {
         root.x = new Leaf();
     };
     int threads = 4;
@@ -502,7 +526,7 @@ sub closure_concurrent_writes(reference<hash<string, int>> rv, Tally t, referenc
             on_exit done.dec();
             Counters c();
             for (int j = 0; j < Writes / threads; ++j) {
-                write();
+                ClosureTarget::callWrite();
             }
             hash<string, int> counts = {};
             c.record(\counts, "closure-concurrent");
@@ -514,6 +538,7 @@ sub closure_concurrent_writes(reference<hash<string, int>> rv, Tally t, referenc
         }();
     }
     done.waitForZero();
+    remove ClosureTarget::write;
     rv += sum;
     rv."closure-concurrent-held-dtors" = Tally::cycleSince(t);
     release = new Counters();
@@ -578,6 +603,70 @@ sub closure_remove_writes(reference<hash<string, int>> rv, Tally t, reference<*C
     release = new Counters();
 }
 
+#! an edge is added between the members of a scanned set without a scan: the set is marked
+/** A TreeMap (whose values the scanner reports through private data) held by the root gains a value that is a
+    member of the set.  No scan follows, so the set's counts miss the new edge: the dereference that finds the set
+    marked rescans it once, after which the outside holders letting go rescan nothing, and the set is collected when
+    it is released.
+*/
+sub marked_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    list<Node> l = (new Node(),);
+    make_cycle(l[0]);
+    l[0].out = new TreeMap();
+    list<Request> reqs = ();
+    for (int i = 0; i < 10; ++i) {
+        reqs += new Request(l[0]);
+    }
+    # a write scanned while the requests hold the set
+    l[0].x = new Leaf();
+    Counters c();
+    l[0].out.put("peer", l[0].peer);
+    while (reqs) {
+        pop reqs;
+    }
+    c.record(\rv, "marked");
+    rv."marked-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! two objects that each hold a Queue, closed into cycles only by values pushed into the queues
+/** No scan follows a push, and the cycle is only complete after the last one: its counts are only right if the
+    pushes mark the sets they change.
+*/
+sub queue_cycle_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node a();
+    Node b();
+    a.out = new Queue();
+    b.out = new Queue();
+    Counters c();
+    a.out.push(b);
+    b.out.push(a);
+    a.out.push(a);
+    b.out.push(b);
+    c.record(\rv, "queue-cycle");
+    rv."queue-cycle-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! as queue_cycle_writes(), with references to the objects' members pushed instead of the objects
+/** The objects a reference refers to are not found without evaluating it, so a push of one makes every set
+    rescan before trusting its counts again (RSet::untracked_edge_epoch).
+*/
+sub queue_ref_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node a();
+    Node b();
+    a.out = new Queue();
+    b.out = new Queue();
+    Counters c();
+    a.out.push(\b.x);
+    b.out.push(\a.x);
+    a.out.push(\a.x);
+    b.out.push(\b.x);
+    c.record(\rv, "queue-ref");
+    rv."queue-ref-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! runs one check and records what releasing its set cost and destroyed
 sub run(reference<hash<string, int>> rv, string shape,
         code<nothing(reference<hash<string, int>>, Tally, reference<*Counters>)> check) {
@@ -601,6 +690,53 @@ public hash<string, int> sub concurrent_writes(int threads) {
     rv.dtors = Tally::cycleSince(t);
     rv."leaf-dtors" = Leaf::destroyed - t.leaf;
     return rv;
+}
+
+#! several threads add members to a set through a Queue while the others let go of their references to it
+/** Each thread holds a reference to the set from outside it while it pushes new members into a Queue in the set,
+    and releases it while other threads are still pushing: every push marks the set, and every release has to
+    decide whether the set's verdict still stands.  Returns the objects of the set destroyed while it was held
+    (\c held-dtors) and once it was released (\c dtors).
+*/
+public hash<string, int> sub concurrent_marks(int threads) {
+    hash<string, int> rv = {};
+    Tally t();
+    concurrent_marks_intern(\rv, t, threads);
+    rv.dtors = Tally::cycleSince(t);
+    return rv;
+}
+
+#! the set written by the threads of concurrent_marks(); held here for the reason given for ConcurrentTarget
+class MarkTarget {
+    public {
+        static *list<Node> l;
+    }
+}
+
+sub concurrent_marks_intern(reference<hash<string, int>> rv, Tally t, int threads) {
+    MarkTarget::l = (new Node(),);
+    make_cycle(MarkTarget::l[0]);
+    MarkTarget::l[0].out = new Queue();
+    Counter done(threads);
+    for (int i = 0; i < threads; ++i) {
+        background sub () {
+            on_exit done.dec();
+            # a holder from outside the set
+            Request r(MarkTarget::l[0]);
+            Queue q = MarkTarget::l[0].out;
+            for (int j = 0; j < Writes; ++j) {
+                Node n();
+                n.peer = MarkTarget::l[0];
+                q.push(n);
+            }
+            # released before the thread signals
+            remove q;
+            remove r;
+        }();
+    }
+    done.waitForZero();
+    rv."held-dtors" = Tally::cycleSince(t);
+    remove MarkTarget::l;
 }
 
 #! the cycle written by the threads of concurrent_writes()
@@ -651,6 +787,9 @@ public hash<string, int> sub get_results() {
     run(\rv, "confirm", \confirm_writes());
     run(\rv, "server", \server_writes());
     run(\rv, "release", \release_writes());
+    run(\rv, "marked", \marked_writes());
+    run(\rv, "queue-cycle", \queue_cycle_writes());
+    run(\rv, "queue-ref", \queue_ref_writes());
     run(\rv, "closure-outlives", \closure_outlives_writes());
     run(\rv, "closure-thread", \closure_thread_writes());
     run(\rv, "closure-concurrent", \closure_concurrent_writes());

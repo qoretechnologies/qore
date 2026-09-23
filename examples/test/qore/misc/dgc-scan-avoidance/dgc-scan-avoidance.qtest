@@ -43,7 +43,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             # a method call holds a real reference to self; the scan deferred by the writes is made when the
             # call returns
             "method-scans": 100,
-            "method-walked": 9,
+            "method-walked": 3,
             "method-sets": 1,
             "method-release-scans": 1,
             "method-release-walked": 0,
@@ -120,7 +120,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
             # a set held only by a list: every write walks the set
             "list-scans": 100,
-            "list-walked": 303,
+            "list-walked": 300,
             "list-sets": 1,
             "list-release-scans": 1,
             "list-release-walked": 0,
@@ -134,12 +134,12 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "registry-local-release-walked": 201,
             "registry-local-release-sets": 1,
 
-            # a registry held only through its entries: growth and removal each walk the whole registry
+            # a registry held only through its entries: growth and removal each walk the whole registry once
             "registry-cycle-scans": 200,
             "registry-cycle-walked": 5150,
             "registry-cycle-sets": 100,
             "registry-cycle-unregister-scans": 100,
-            "registry-cycle-unregister-walked": 15049,
+            "registry-cycle-unregister-walked": 5050,
             "registry-cycle-unregister-sets": 99,
             "registry-cycle-release-scans": 1,
             "registry-cycle-release-walked": 0,
@@ -166,36 +166,60 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
             # a server controller in a recursive set, reached only through a list, that registers and removes an
             # operation per request inside its own methods: each deferral discards the controller's set and the
-            # scan made when the method returns rebuilds it - two sets and several walks of its graph per request
+            # scan made when the method returns rebuilds it - two sets and walks of its graph per request
             "server-scans": 300,
-            "server-walked": 10500,
+            "server-walked": 4500,
             "server-sets": 200,
             "server-release-scans": 1,
             "server-release-walked": 3,
             "server-release-sets": 0,
 
-            # requests releasing their references to a member of a recursive set from outside it: the set is
-            # unchanged, but each release rescans it, because the member's count falls below the one recorded by
-            # the scan made while the requests held it (RSet::canDelete(), scan_refs)
+            # requests releasing their references to a member of a recursive set from outside it: no edge between
+            # the set's members has been added since it was scanned, so the set's verdict stands and no release
+            # rescans it (RSet::keepNeedsRescan())
             "release-scans": 0,
-            "release-walked": 30,
+            "release-walked": 0,
             "release-sets": 0,
             "release-release-scans": 1,
             "release-release-walked": 0,
             "release-release-sets": 0,
+
+            # the same, with an edge added between the set's members by a TreeMap and no scan: the set is marked,
+            # the first dereference to find it so rescans it once (one new set, with the TreeMap in it), and the
+            # releases after that rescan nothing
+            "marked-scans": 0,
+            "marked-walked": 4,
+            "marked-sets": 1,
+            "marked-release-scans": 1,
+            "marked-release-walked": 1,
+            "marked-release-sets": 0,
+
+            # cycles closed only by values pushed into Queues: each push marks the sets it changes, and the
+            # dereferences that find them marked rescan them
+            "queue-cycle-scans": 0,
+            "queue-cycle-walked": 19,
+            "queue-cycle-sets": 3,
+            "queue-cycle-release-scans": 1,
+            "queue-cycle-release-walked": 2,
+            "queue-cycle-release-sets": 1,
+
+            # the same with references pushed: the objects a reference refers to cannot be marked, so every set
+            # rescans before trusting its counts again
+            "queue-ref-scans": 0,
+            "queue-ref-walked": 28,
+            "queue-ref-sets": 3,
+            "queue-ref-release-scans": 1,
+            "queue-ref-release-walked": 9,
+            "queue-ref-release-sets": 1,
         };
 
-        #! the scan counters of the IR tiers that differ from the AST interpreter's (ExpectedScanCounts)
+        #! the scan counters of the compiled tiers that differ from the AST interpreter's (ExpectedScanCounts)
         /** A compiled assignment hands a value it does not use again over to the lvalue, as the AST interpreter does,
-            so the scan a new object's constructor deferred is not made when the object is linked in.  What is left
-            are the temporary references the IR takes to objects on the lvalue path (the registry's hub, for
-            example): releasing each one below the reference count a scan recorded rescans the set (see the
-            "release" shape).
+            so the scan a new object's constructor deferred is not made when the object is linked in; and the
+            temporary references the compiled code takes to objects on the lvalue path are released without a
+            rescan, as the set they belong to has gained no edge (see the "release" shape).
         */
         const CompiledScanCounts = {
-            "method-walked": 6,
-            "registry-cycle-walked": 15448,
-            "registry-cycle-unregister-walked": 15149,
             # removing a closure-bound variable writes it through an lvalue helper, whose scan the frame's real
             # reference to the variable defers
             "closure-remove-scans": 101,
@@ -207,11 +231,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "jit": CompiledScanCounts,
             "tiered": CompiledScanCounts,
             # the compiled module
-            "aot": {
-                "server-walked": 7530,
-                # as in the IR tiers (CompiledScanCounts)
-                "closure-remove-scans": 101,
-            },
+            "aot": CompiledScanCounts,
         };
 
         #! destructions for each check, and other checks made in every build
@@ -272,6 +292,15 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "release-held-dtors": 0,
             "release-dtors": 2,
             "release-leaf-dtors": 11,
+            "marked-held-dtors": 0,
+            "marked-dtors": 2,
+            "marked-leaf-dtors": 11,
+            "queue-cycle-held-dtors": 0,
+            "queue-cycle-dtors": 2,
+            "queue-cycle-leaf-dtors": 0,
+            "queue-ref-held-dtors": 0,
+            "queue-ref-dtors": 2,
+            "queue-ref-leaf-dtors": 0,
         };
 
         #! the execution modes that the worker is run in
@@ -292,6 +321,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
         addTestCase("checks in this program", \testInProgram());
         addTestCase("concurrent writes", \testConcurrentWrites());
+        addTestCase("concurrent marks", \testConcurrentMarks());
         addTestCase("each execution mode", \testExecModes());
         addTestCase("compiled module", \testCompiledModule());
 
@@ -311,6 +341,14 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         assertEq(0, rv."held-dtors", "no object collected while the set is held");
         assertEq(2 + Threads, rv."dtors", "every object of the set collected once it is released");
         assertEq(Threads * DgcScanAvoidanceChecks::Writes, rv."leaf-dtors", "every value written released");
+    }
+
+    #! several threads add members to a set through a Queue in it while the others release their references to it
+    testConcurrentMarks() {
+        hash<string, int> rv = DgcScanAvoidanceChecks::concurrent_marks(Threads);
+        assertEq(0, rv."held-dtors", "no object collected while the set is held");
+        assertEq(2 + Threads * DgcScanAvoidanceChecks::Writes, rv."dtors",
+            "every object of the set, including every member added by a push, collected once it is released");
     }
 
     testExecModes() {

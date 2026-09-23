@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -169,12 +169,12 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
 
     bool inc_obj = false;
     bool dec_obj = false;
+    bool new_needs_scan = needs_scan(value);
 
     {
         QoreAutoRWWriteLocker al(rwl);
 
         bool old_needs_scan = false;
-        bool new_needs_scan = needs_scan(value);
 
         Map::iterator it = data.find(keyStr->c_str());
 
@@ -211,6 +211,11 @@ void TreeMapData::put(QoreObject* self, const QoreStringNode* key, const QoreVal
     }
     if (dec_obj) {
         qore_object_private::get(*self)->decScanPrivateData();
+    }
+    // no scan follows the new edge; the object's recursive set, and those of the objects the value reaches, must
+    // not trust their reference counts until one has (Pattern B in design/dgc.md)
+    if (new_needs_scan) {
+        qore_dgc_value_stored(*qore_object_private::get(*self), value);
     }
 }
 

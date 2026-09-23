@@ -155,37 +155,61 @@ runs when a destructor raises a Qore exception. Graphs with unshared containers 
 dereference path. Mandatory reference release cannot be cancelled partway
 through. This applies to both objects and closure-bound variables.
 
-### `rcount` is a snapshot: `scan_refs` and stale verdicts
+### Knowing that a set's counts are current
 
 `rcount` is computed once, when the rset is built, and `RSet::canDelete()` then compares it against the object's
-*live* `references` on every deref. That comparison self-corrects only for references the scan never counted: when
-a genuinely external reference goes away, `references` falls to `rcount` and the cycle collects.
+*live* `references` on every deref. A member with `references > rcount` is held from outside the set, and the set
+is kept. That verdict is only as good as the counts, and the graph can change after the scan without a new one:
 
-It does not self-correct when the graph changes in a way that would make the scan count *more* than it did —
-a container in the cycle losing its last holder outside the rset, or an object in a different rset being
-collected. Nothing invalidates the rset in those cases, `canDelete()` keeps reading `rcount < references` as a
-live external reference, and it returns 0 forever: a plain deref of an object whose rset says "cannot delete"
-never triggers another scan (`RObject::deref()` only sets `do_scan` when `rrefs` is 0 and only requests a rescan
-when `deferred_scan` was set). The cycle is then stranded for the life of the process.
+- **An edge removed** between members — a container in the cycle losing its last holder outside the set, an
+  object in a different set being collected, a value taken out of a C++ container. The true number of internal
+  references is then *lower* than `rcount`, so the true number of outside references is *higher* than the one
+  `canDelete()` reads: a verdict of "cannot delete" stays right. When the outside references go, `references`
+  falls below `rcount` and `canDelete()` asks for a rescan (`ref_copy < rcount`, or a member with
+  `rcount > references`).
+- **An edge added** between members without a scan following it. The new reference is not in `rcount`, so it looks
+  like one from outside, and "cannot delete" would stand for the life of the process: a plain deref of an object
+  whose rset says "cannot delete" never triggers another scan.
 
-`RObject::scan_refs` records what `references` was when `rcount` was assigned (`RObject::setRSet()`). When
-`canDelete()` finds a member with `rcount != references` *and* that member has lost references since the scan,
-the snapshot no longer describes the graph, so it asks for a rescan instead of trusting it. It leaves the set
-in place while doing so: the scan recomputes the components from the live graph and, when they are the ones
-already recorded, confirms the set and records the reference count it saw, which is all the verdict was
-missing. Throwing the set away first would make that scan build an identical one — and since evaluating an
-object into an lvalue holds a temporary reference that is released *after* the scan has recorded its count,
-the next dereference asked for the same rescan again: one assignment of an object in a cycle cost five walks
-of the graph and four discarded sets. Members whose reference count is unchanged still return 0 immediately, so this costs no extra scans in the
-ordinary "something outside still holds it" case, and after a rescan `scan_refs` matches again, so it cannot
-loop.
+Only the second can strand a set, and edges are added in few places. A write through an lvalue, and the C++ member
+setters (`qore_object_private::setValueIntern()`, `merge()`), scan the object they wrote. Containers whose values
+the scanner reports through private data (Pattern B below) store values with no scan. Each object therefore
+carries a mutation generation:
+
+- `RObject::edge_gen` is advanced by `RObject::edgesAdded()` wherever an edge may be added without a scan having
+  followed it yet: by the scanning writers just before their scan (`~LValueHelper`, `setValueIntern()`, `merge()`),
+  and by `qore_dgc_value_stored()`, which Pattern B containers call when they store a value that needs a scan. It
+  marks the holder and every object and closure-bound variable that the value reaches without passing through an
+  object, since the new edge can join the holder's component to theirs.
+- A scan reads each object's generation before it follows the object's edges (`RSetHelper::startNode()`), and the
+  commit records it as `RObject::scan_edge_gen` whether it assigns a new set or confirms the one in place. An edge
+  added while the scan runs therefore leaves the two different even if the scan did not see it.
+- A reference stored in such a container refers to a variable or object that is only found by evaluating it, so
+  it advances `RSet::untracked_edge_epoch` instead; each set records the epoch its scan read, and a set whose
+  epoch is behind is not trusted either.
+
+`RSet::edgesUnchangedSinceScan()` is true when every member's generation is the recorded one and the epoch has
+not moved. `RSet::keepNeedsRescan()` is what `canDelete()` asks before returning "cannot delete" — for the
+triggering object, for a member, and for a list, hash, closure or reference in the set held from outside it: a
+set with an edge added since its scan is rescanned first. The rescan records the current generations, so the set
+is trusted again after it. A dereference that has rescanned once (and did scan, rather than finding that another
+thread just had: `RSetHelper::skipped()`) trusts the set afterwards, so it cannot loop while other threads keep
+adding edges; the mark stays for the next dereference.
+
+This replaced a reference-count snapshot (`scan_refs`) that asked for a rescan whenever a member had lost references
+since the scan. It could not tell an outside holder letting go — which leaves the counts exact — from an internal
+edge that had gone, so every outside holder of a set member that let go rescanned the whole set: ten requests
+releasing a shared controller in a 103-object graph walked it ten times, and object destruction in a server was
+dominated by those scans. It also only noticed an added edge by chance, when a member happened to lose a reference
+afterwards. `examples/test/qore/misc/dgc-scan-avoidance/dgc-scan-avoidance.qtest` has the shapes: outside holders
+releasing a set rescan nothing (`release`), a set marked by a TreeMap is rescanned once (`marked`), cycles closed
+only by values or references pushed into Queues are collected (`queue-cycle`, `queue-ref`), and threads pushing
+members into a set while others release it (`concurrent marks`).
 
 A dereference also saves its triggering reference count as `ref_copy`. Another thread can change the live
 count while that dereference waits for a scan. `RSet::canDelete()` rejects superseded snapshots before
-examining the set: comparing an old `ref_copy` with each fresh `scan_refs` could otherwise request the same
-rescan indefinitely and block every callback worker using that object. A newer reference keeps the object
-alive or provides its own collection opportunity when released. This applies to object and captured-variable
-dereferences alike.
+examining the set: a newer reference keeps the object alive or provides its own collection opportunity when
+released. This applies to object and captured-variable dereferences alike.
 
 ## When a scan is triggered — and when it may be skipped
 
@@ -440,7 +464,7 @@ Two rules keep the writing pass from being starved:
   no new scan. Without this, a stream of read-only scans could keep both a writing scan and
   `qore_object_private::customDeref()` out of the r-section indefinitely, and collection would stop.
 
-`RObject::scan_refs` is atomic because two scans in shared mode can confirm the same set at once, and the
+`RObject::scan_edge_gen` is atomic because two scans in shared mode can confirm the same set at once, and the
 assertions that a scan holds the r-section of the object it is walking accept either mode
 (`RSectionLock::checkRSectionHeld()`).
 
@@ -667,6 +691,15 @@ if (scan_private_data) {
 
 **When you introduce a new C++ container class that can hold `QoreValue` and be stored as private data, you must add a `scanMembers` method and register it in this dispatcher**, and the enclosing object must set `scan_private_data = true` (or override `needsScan` to return true when appropriate).
 
+**Every time such a container stores a value that needs a scan (`needs_scan()`), it must call
+`qore_dgc_value_stored(holder, value)`** with the object whose private data it is. No scan follows the store, so
+the recursive sets the new edge changes do not count it, and without the mark a verdict of "cannot delete" made
+with those counts can stand for the life of the process; see "Knowing that a set's counts are current". Call it
+after the value is in the container and while the value is still referenced: `Queue::push()` calls it under the
+queue's lock, since another thread can take the value as soon as the lock is released. Removing a value needs no
+call. `TreeMapData::put()`, `qore_queue_private::push()` / `insert()` and
+`Http2ClientPollOperationBase::registerStreamQueue()` are the current callers.
+
 **Look the private data up with `getScanPrivateData()`, never with a raising lookup such as `getReferencedPrivateData(key, xsink)`.** Most scanned objects do not have the data being probed for, so a raising lookup creates and discards an exception for nearly every object. Creating an exception captures the call stack, and call stack capture calls external language stack location helpers: the Python helper acquires the GIL. The scan holds r-sections at that point, so a thread that holds the GIL and waits for one of those objects (for example a Python thread whose Qore thread initialization dereferences an object) deadlocks with the scan. Nothing in a scan may raise an exception or call into user or foreign-language code.
 
 Failing to do this produces exactly the symptom that motivated this document: a cycle with an "invisible" edge through a C++ container; DGC sees `rcount < references` on some member, calls `canDelete` → returns 0, and the cycle leaks forever.
@@ -823,7 +856,7 @@ Debug builds add `dbg_hold_object_lock()` and `dbg_scan_wait_notify()`, which ma
 
 ## Related files
 
-- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `scan_refs`, `rclosed`, `rset` and
+- `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations, `edge_gen`, `rclosed`, `rset` and
   its `rcount` invariant, the container-edge and per-container counting memos.
 - `include/qore/intern/RSection.h` — r-section lock semantics.
 - `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation, and the scanner proper

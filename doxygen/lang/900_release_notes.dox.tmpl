@@ -1010,6 +1010,13 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       @ref Qore::get_scan_stats() "get_scan_stats()" and written to a file when the process exits; and
       @ref Qore::get_scan_waits() "get_scan_waits()" (or the C function \c qore_dump_scan_waits() from a
       debugger) names, for each thread waiting in a scan, the object it waits for and the thread holding it
+    - garbage collection no longer rescans a reference cycle each time a reference to one of its objects from
+      outside the cycle is released: the decision that the cycle is still referenced is kept unless an edge has
+      been added inside the cycle since it was last scanned.  Releasing the requests that hold a shared object in a
+      cycle, which rescanned the whole cycle once per request, now scans nothing
+    - fixed reference cycles closed only by values stored in a @ref Qore::Thread::Queue "Queue" or a
+      @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue held by that
+      object) being kept for the life of the process
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
       - new @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to

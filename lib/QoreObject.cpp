@@ -601,6 +601,8 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
     }
 
     if (check_recursive) {
+        // see RObject::edgesAdded()
+        edgesAdded();
         RSetHelper orsh(*this, xsink);
     }
 }
@@ -626,6 +628,8 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
     }
 
     if (check_recursive) {
+        // see RObject::edgesAdded()
+        edgesAdded();
         RSetHelper orsh(*this, xsink);
     }
 }
@@ -1138,6 +1142,9 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
 
     // scan object if necessary
     if (before || after) {
+        // the set does not count an edge added here until the scan has followed the object's edges; see
+        // RObject::edgesAdded()
+        edgesAdded();
         RSetHelper rsh(*this, xsink);
     }
 }
@@ -1344,6 +1351,8 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // in other cases, the references value could change in another thread
 
         bool rrf = false;
+        // set once this dereference has rescanned; see RSet::keepNeedsRescan()
+        bool rescanned = false;
         if (ref_copy) {
             // Fast path: a dereference of an object that is in no recursive set has nothing to decide, and
             // deciding that takes no lock at all.
@@ -1414,7 +1423,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                             }
                         }
                     } else {
-                        rc = rs->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
+                        rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
                     }
 
                     if (!rc) {
@@ -1432,6 +1441,10 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                         // recalculate rset immediately
                         {
                             RSetHelper rsh(*this, xsink);
+                            // a scan another thread made instead can predate an edge the set is marked for
+                            if (!rsh.skipped()) {
+                                rescanned = true;
+                            }
                         }
                         continue;
                     } else {

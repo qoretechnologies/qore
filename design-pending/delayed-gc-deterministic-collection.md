@@ -313,33 +313,38 @@ What the numbers say:
 ### Scan counts by shape (debug build, 100 writes; `examples/test/qore/misc/dgc-scan-avoidance`)
 
 Objects walked by the scans the writes made, with the compiled tiers handing a dead assigned value over to the lvalue
-(Phase 0b) and a closure-bound local's frame lending its object a real reference (Phase 2). Every shape also asserts collection: nothing destroyed while the
-set is held, everything destroyed once it is released.
+(Phase 0b), a closure-bound local's frame lending its object a real reference (Phase 2), and a set's verdict
+trusted unless an edge was added between its members since its scan (Phase 4, `design/dgc.md`, "Knowing that a set's
+counts are current"). Every shape also asserts collection: nothing destroyed while the set is held, everything
+destroyed once it is released. All execution modes and the AOT module now walk the same number of objects.
 
 | shape | ast | ir / jit / tiered | aot |
 |---|---|---|---|
 | plain local root | 0 | 0 | 0 |
-| `self` writes in a method, root held by a list | 9 | 6 | 9 |
+| `self` writes in a method, root held by a list | 3 | 3 | 3 |
 | closure-bound local root (the frame lends its object a real reference) | 0 | 0 | 0 |
 | non-root member (`root.peer.x`), root in a local | 300 | 300 | 300 |
-| root held only by a list | 303 | 303 | 303 |
+| root held only by a list | 300 | 300 | 300 |
 | registry growth, hub in a local | 0 | 0 | 0 |
-| registry growth, hub held only by its own cycle | 5,150 | 15,448 | 5,150 |
-| registry removal, same | 15,049 | 15,149 | 15,049 |
+| registry growth, hub held only by its own cycle | 5,150 | 5,150 | 5,150 |
+| registry removal, same | 5,050 | 5,050 | 5,050 |
 | registry growth with `@=` | 200 | 200 | 200 |
 | confirming scan of an open cycle, holder in a list | 500 | 500 | 500 |
-| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 10,500 | 10,500 | 7,530 |
-| 10 requests releasing their references to a set member from outside the set, after a scan made while they held it | 30 | 30 | 30 |
+| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 4,500 | 4,500 | 4,500 |
+| 10 requests releasing their references to a set member from outside the set, after a scan made while they held it | 0 | 0 | 0 |
 
 The server shape rebuilds the controller's recursive set twice per request (200 sets for 100 requests): the
 registration and the removal are made in the controller's own methods, the deferral discards the set, and the
 scan made when the method's real reference goes must rebuild it with the r-sections of the whole graph held
 exclusively. This is the contention measured in qorus-core's request threads.
 
-The release shape rescans the whole set on every release although the set is unchanged: `RSet::canDelete()`
-cannot tell an outside holder letting go from an internal reference dropped without invalidating the set, and
-rescans whenever a member's count falls below the one the last scan recorded. This is the object-destruction scan
-cost measured in qorus-core after `6aa593e80`.
+The release shape rescanned the whole set on every release although the set was unchanged (30 objects walked):
+`RSet::canDelete()` could not tell an outside holder letting go from an internal reference dropped without
+invalidating the set, and rescanned whenever a member's count fell below the one the last scan recorded. This was
+the object-destruction scan cost measured in qorus-core after `6aa593e80`. Phase 4 replaced that rule with the
+mutation generation: a removed edge cannot make a verdict of "cannot delete" wrong, and an added one marks the set,
+so the releases rescan nothing. The same rule removed the IR tiers' extra registry walks and most of the server
+shape's.
 
 The compiled tiers diverge on the registry shapes because a compiled assignment
 (`qore_rt_lv_path_assign()`) borrows the value and takes references of its own, releasing them after the
@@ -351,8 +356,8 @@ tiered by default and qlib is shipped AOT, so the compiled columns are the ones 
 Since then the compiled tiers hand a value they do not use again over to the lvalue (`design/dgc.md`, "The rrefs
 deferral"): registry growth with the hub in a local walks 0 objects in every tier, the AOT module matches the AST
 interpreter on the registry shapes, and the server shape walks 10,500 (ir/jit/tiered) and 7,514 (aot). The IR tiers
-still walk 15,448 on the registry held only by its cycle: they take temporary references to the hub on the path,
-and releasing them rescans the set - the release shape again.
+still walked 15,448 on the registry held only by its cycle: they take temporary references to the hub on the path,
+and releasing them rescanned the set - the release shape again, gone with Phase 4.
 
 ### Other quantities
 

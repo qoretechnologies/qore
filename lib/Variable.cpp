@@ -726,6 +726,9 @@ LValueHelper::~LValueHelper() {
 #endif
             bool deferred;
             {
+                // the root's set does not count an edge this write added until a scan has followed its edges
+                // again; see RObject::edgesAdded()
+                robj->edgesAdded();
                 RSetHelper rsh(*robj, vl.xsink);
                 deferred = rsh.deferred();
             }
@@ -3507,6 +3510,8 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
         // for this dereference, but a set can have been released since.  See design/dgc.md, "A dereference that
         // has nothing to decide takes no lock", and design/closure-bound-locals.md.
         else if (rset.load(std::memory_order_acquire) || qodh.hasDeferredScan()) {
+            // set once this dereference has rescanned; see RSet::keepNeedsRescan()
+            bool rescanned = false;
             while (true) {
                 {
                     QoreRSectionLocker al(rml);
@@ -3521,7 +3526,7 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                             assert(!rcount);
                             break;
                         }
-                        int rc = rs->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
+                        int rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
                         if (rc == 1) {
                             printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive "
                                 "reference; deleting value\n", this);
@@ -3540,6 +3545,10 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                 // need to recalculate references: a scan deferred while the frame held the variable is made here,
                 // after which the loop decides collection with the set it found
                 RSetHelper rsh(*this, xsink);
+                // a scan another thread made instead can predate an edge the set is marked for
+                if (!rsh.skipped()) {
+                    rescanned = true;
+                }
 #ifdef DEBUG
                 {
                     ClosureVarValue::dbg_after_rescan_t hook = dbg_after_rescan.load();
