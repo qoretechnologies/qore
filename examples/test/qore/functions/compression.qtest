@@ -8,6 +8,20 @@
 
 %exec-class CompressionTest
 
+#! the one-shot compression and decompression functions of an algorithm
+hashdecl DecompressionAlgorithmInfo {
+    #! the name of the algorithm in exception messages
+    string label;
+    #! compresses a string
+    code<binary(string)> compress;
+    #! decompresses to a binary with a maximum size
+    code<binary(binary, int)> to_binary;
+    #! decompresses to a string with a maximum size
+    code<string(binary, int)> to_string;
+    #! decompresses to a binary with a maximum size using named arguments
+    code<binary(binary, int)> named;
+}
+
 public class CompressionTest inherits QUnit::Test {
     private {
         # issue 1432: runs out of data while compressing
@@ -29,6 +43,24 @@ public class CompressionTest inherits QUnit::Test {
         const CompressedString = compress(UncompressedString);
 
         const GzippedString = gzip(UncompressedString);
+
+        # data for the decompression limit tests: 10000 bytes
+        const LimitData = strmul("0123456789", 1000);
+
+        # the decompressed size of the decompression bomb tests
+        const BombSize = 256 * 1024 * 1024;
+
+        # the maximum decompressed size of the decompression bomb tests
+        const BombMaxSize = 1024 * 1024;
+
+        # the tolerated growth of the peak memory of the process in the decompression bomb tests
+        const BombMaxPeakGrowth = 64 * 1024 * 1024;
+
+        # "hello hello hello websocket" compressed with raw DEFLATE and a sync flush (Z_SYNC_FLUSH), as a
+        # permessage-deflate WebSocket client sends it (RFC 7692); the data ends with an empty stored block and not
+        # with a final block
+        const SyncFlushedRawDeflate = <ca48cdc9c957c84022cb53938af393b3534b00000000ffff>;
+        const SyncFlushedRawDeflateText = "hello hello hello websocket";
     }
 
     constructor() : Test("CompressionTest", "1.0") {
@@ -38,6 +70,11 @@ public class CompressionTest inherits QUnit::Test {
         addTestCase("brotli compression tests", \brotliTest());
         addTestCase("zstd compression tests", \zstdTest());
         addTestCase("lz4 compression tests", \lz4Test());
+        addTestCase("decompression size limits", \decompressionLimitTest());
+        addTestCase("decompression bombs stay bounded", \decompressionBombTest());
+        addTestCase("decompressor transform size limits", \transformLimitTest());
+        addTestCase("raw deflate data ending with a sync flush", \rawDeflateSyncFlushTest());
+        addTestCase("zstd data with several frames", \zstdMultiFrameTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -91,7 +128,10 @@ public class CompressionTest inherits QUnit::Test {
         assertThrows("BZIP2-DECOMPRESS-ERROR", \bunzip2_to_string(), BadGzip);
         assertThrows("BZIP2-DECOMPRESS-ERROR", \bunzip2_to_binary(), BadDeflate);
         assertThrows("BZIP2-DECOMPRESS-ERROR", \bunzip2_to_string(), BadDeflate);
-        assertThrows("BZIP2-DECOMPRESS-ERROR", sub() { bunzip2_to_binary(Bzip2CompressedString.substr(0, 20)); });
+        assertThrows("BZIP2-DECOMPRESS-ERROR", "Unexpected end",
+            sub() { bunzip2_to_binary(Bzip2CompressedString.substr(0, 20)); });
+        assertThrows("BZIP2-DECOMPRESS-ERROR", "Unexpected end",
+            sub() { bunzip2_to_string(Bzip2CompressedString.substr(0, 20)); });
         assertThrows("BZIP2-DECOMPRESS-ERROR", sub() { bunzip2_to_binary(Bzip2CompressedString + <01>); });
     }
 
@@ -921,5 +961,242 @@ public class CompressionTest inherits QUnit::Test {
         assertEq(1, LZ4_MIN_ACCELERATION);
         assertEq(65537, LZ4_MAX_ACCELERATION);
         assertEq("lz4", COMPRESSION_ALG_LZ4);
+    }
+
+    # returns the one-shot compression and decompression functions of each algorithm
+    private static list<hash<DecompressionAlgorithmInfo>> getAlgorithms() {
+        return (
+            <DecompressionAlgorithmInfo>{
+                "label": "zlib",
+                "compress": binary sub (string str) { return compress(str); },
+                "to_binary": binary sub (binary c, int max) { return uncompress_to_binary(c, max); },
+                "to_string": string sub (binary c, int max) { return uncompress_to_string(c, "utf-8", max); },
+                "named": binary sub (binary c, int max) { return uncompress_to_binary(compressed_data: c,
+                    max_size: max); },
+            },
+            <DecompressionAlgorithmInfo>{
+                "label": "gzip",
+                "compress": binary sub (string str) { return gzip(str); },
+                "to_binary": binary sub (binary c, int max) { return gunzip_to_binary(c, max); },
+                "to_string": string sub (binary c, int max) { return gunzip_to_string(c, "utf-8", max); },
+                "named": binary sub (binary c, int max) { return gunzip_to_binary(compressed_data: c,
+                    max_size: max); },
+            },
+            <DecompressionAlgorithmInfo>{
+                "label": "raw deflate",
+                "compress": binary sub (string str) { return deflate_raw(str); },
+                "to_binary": binary sub (binary c, int max) { return inflate_raw_to_binary(c, max); },
+                "to_string": string sub (binary c, int max) { return inflate_raw_to_string(c, "utf-8", max); },
+                "named": binary sub (binary c, int max) { return inflate_raw_to_binary(compressed_data: c,
+                    max_size: max); },
+            },
+            <DecompressionAlgorithmInfo>{
+                "label": "bzip2",
+                "compress": binary sub (string str) { return bzip2(str); },
+                "to_binary": binary sub (binary c, int max) { return bunzip2_to_binary(c, max); },
+                "to_string": string sub (binary c, int max) { return bunzip2_to_string(c, "utf-8", max); },
+                "named": binary sub (binary c, int max) { return bunzip2_to_binary(compressed_data: c,
+                    max_size: max); },
+            },
+            <DecompressionAlgorithmInfo>{
+                "label": "Brotli",
+                "compress": binary sub (string str) { return brotli(str); },
+                "to_binary": binary sub (binary c, int max) { return unbrotli_to_binary(c, max); },
+                "to_string": string sub (binary c, int max) { return unbrotli_to_string(c, "utf-8", max); },
+                "named": binary sub (binary c, int max) { return unbrotli_to_binary(compressed_data: c,
+                    max_size: max); },
+            },
+            <DecompressionAlgorithmInfo>{
+                "label": "Zstd",
+                "compress": binary sub (string str) { return zstd(str); },
+                "to_binary": binary sub (binary c, int max) { return unzstd_to_binary(c, max); },
+                "to_string": string sub (binary c, int max) { return unzstd_to_string(c, "utf-8", max); },
+                "named": binary sub (binary c, int max) { return unzstd_to_binary(compressed_data: c,
+                    max_size: max); },
+            },
+        );
+    }
+
+    # returns a regular expression for the exception raised for decompressed data that exceeds the given size
+    private static string getLimitMessage(string label, int max_size) {
+        return sprintf("^%s decompressed data exceeds the maximum size of %d byte%s$", label, max_size,
+            max_size == 1 ? "" : "s");
+    }
+
+    decompressionLimitTest() {
+        int size = LimitData.size();
+        binary data = binary(LimitData);
+        foreach hash<DecompressionAlgorithmInfo> alg in (getAlgorithms()) {
+            string label = alg.label;
+            binary c = alg.compress(LimitData);
+            assertLt(size, c.size(), label + " data is compressed");
+
+            # no limit, at the limit, and above it
+            assertEq(data, alg.to_binary(c, 0), label + " without a limit");
+            assertEq(data, alg.to_binary(c, size), label + " binary at the limit");
+            assertEq(data, alg.to_binary(c, size + 1), label + " binary above the limit");
+            assertEq(LimitData, alg.to_string(c, size), label + " string at the limit");
+            assertEq(LimitData, alg.to_string(c, size + 1), label + " string above the limit");
+            assertEq(data, alg.named(c, size), label + " with named arguments");
+
+            # below the limit
+            assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage(label, size - 1), alg.to_binary,
+                (c, size - 1));
+            assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage(label, size - 1), alg.to_string,
+                (c, size - 1));
+            assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage(label, 1), alg.to_binary, (c, 1));
+            assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage(label, size - 1), alg.named,
+                (c, size - 1));
+
+            # a negative limit is an error
+            assertThrows("DECOMPRESSION-LIMIT-ERROR", alg.to_binary, (c, -1));
+            assertThrows("DECOMPRESSION-LIMIT-ERROR", alg.to_string, (c, -1));
+
+            # a limit of one byte accepts data that decompresses to one byte
+            assertEq(<41>, alg.to_binary(alg.compress("A"), 1), label + " one byte at a one-byte limit");
+        }
+    }
+
+    # returns data compressed with the given algorithm that decompresses to the given number of spaces, without
+    # ever holding the decompressed data in memory
+    private static binary makeBomb(string alg, int size, int level = COMPRESSION_LEVEL_DEFAULT) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(alg, level));
+        binary chunk = binary(strmul(" ", 1024 * 1024));
+        for (int i = 0; i < size / chunk.size(); ++i) {
+            tos.write(chunk);
+        }
+        tos.close();
+        return bos.getData();
+    }
+
+    # returns the peak resident memory of the process in bytes, if available
+    private static *int getPeakMemory() {
+        try {
+            string status = ReadOnlyFile::readTextFile("/proc/self/status");
+            *string kb = (status =~ x/^VmHWM:\s+([0-9]+) kB/m)[0];
+            return kb ? kb.toInt() * 1024 : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            # not available on this platform
+        }
+    }
+
+    decompressionBombTest() {
+        # each bomb decompresses to BombSize bytes; the zlib stream is also used as raw DEFLATE data by removing
+        # its 2-byte header and 4-byte trailer
+        binary zlib_bomb = makeBomb(COMPRESSION_ALG_ZLIB, BombSize);
+        hash<string, binary> bombs = {
+            "zlib": zlib_bomb,
+            "gzip": makeBomb(COMPRESSION_ALG_GZIP, BombSize),
+            "raw deflate": zlib_bomb.substr(2, zlib_bomb.size() - 6),
+            "bzip2": makeBomb(COMPRESSION_ALG_BZIP2, BombSize),
+            "Brotli": makeBomb(COMPRESSION_ALG_BROTLI, BombSize, 1),
+            "Zstd": makeBomb(COMPRESSION_ALG_ZSTD, BombSize),
+        };
+        hash<string, code<binary(binary, int)>> decompressors = map {$1.label: $1.to_binary}, getAlgorithms();
+
+        *int peak = getPeakMemory();
+        foreach hash<auto> i in (bombs.pairIterator()) {
+            binary bomb = i.value;
+            assertLt(BombSize / 1000, bomb.size(), i.key + " bomb expands by more than 1000:1");
+            assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage(i.key, BombMaxSize), decompressors{i.key},
+                (bomb, BombMaxSize));
+        }
+        if (peak) {
+            # without a limit, each bomb would allocate BombSize bytes
+            assertLt(BombMaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+        }
+    }
+
+    # compresses data with a transform
+    private static binary streamCompress(string alg, data input) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(alg));
+        tos.write(binary(input));
+        tos.close();
+        return bos.getData();
+    }
+
+    # decompresses data with a transform while writing it to an output stream
+    private static binary streamDecompressOutput(string alg, binary input, int max_size) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_decompressor(alg, max_size));
+        tos.write(input);
+        tos.close();
+        return bos.getData();
+    }
+
+    # decompresses data with a transform while reading it from an input stream
+    private static binary streamDecompressInput(string alg, binary input, int max_size) {
+        TransformInputStream tis(new BinaryInputStream(input), get_decompressor(alg, max_size));
+        binary rv;
+        while (*binary b = tis.read(4096)) {
+            rv += b;
+        }
+        return rv;
+    }
+
+    transformLimitTest() {
+        int size = LimitData.size();
+        binary data = binary(LimitData);
+        foreach string alg in (COMPRESSION_ALG_ZLIB, COMPRESSION_ALG_GZIP, COMPRESSION_ALG_BZIP2,
+                COMPRESSION_ALG_BROTLI, COMPRESSION_ALG_ZSTD) {
+            binary c = streamCompress(alg, LimitData);
+            string msg = getLimitMessage(alg, size - 1);
+            list<code<binary(string, binary, int)>> decompressors = (
+                binary sub (string a, binary c, int m) { return streamDecompressOutput(a, c, m); },
+                binary sub (string a, binary c, int m) { return streamDecompressInput(a, c, m); },
+            );
+            foreach code<binary(string, binary, int)> decompress in (decompressors) {
+                assertEq(data, decompress(alg, c, 0), alg + " without a limit");
+                assertEq(data, decompress(alg, c, size), alg + " at the limit");
+                assertEq(data, decompress(alg, c, size + 1), alg + " above the limit");
+                assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", msg, decompress, (alg, c, size - 1));
+            }
+            BinaryOutputStream bos();
+            TransformOutputStream tos(bos, get_decompressor(algorithm: alg, max_size: size));
+            tos.write(c);
+            tos.close();
+            assertEq(data, bos.getData(), alg + " with named arguments");
+        }
+        assertThrows("DECOMPRESSION-LIMIT-ERROR", \get_decompressor(), (COMPRESSION_ALG_GZIP, -1));
+
+        # a transform stops a bomb at the limit
+        binary bomb = makeBomb(COMPRESSION_ALG_GZIP, BombSize);
+        *int peak = getPeakMemory();
+        assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage(COMPRESSION_ALG_GZIP, BombMaxSize),
+            \streamDecompressOutput(), (COMPRESSION_ALG_GZIP, bomb, BombMaxSize));
+        if (peak) {
+            assertLt(BombMaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+        }
+    }
+
+    rawDeflateSyncFlushTest() {
+        # RFC 7692: a message ends with a sync flush and not with a final block
+        assertEq(SyncFlushedRawDeflateText, inflate_raw_to_string(SyncFlushedRawDeflate, "utf-8"));
+        assertEq(binary(SyncFlushedRawDeflateText), inflate_raw_to_binary(SyncFlushedRawDeflate));
+        assertEq(binary(SyncFlushedRawDeflateText), inflate_raw_to_binary(SyncFlushedRawDeflate,
+            SyncFlushedRawDeflateText.size()));
+        assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", \inflate_raw_to_binary(),
+            (SyncFlushedRawDeflate, SyncFlushedRawDeflateText.size() - 1));
+        # data that ends inside a block is still truncated
+        assertThrows("ZLIB-ERROR", "Unexpected end", \inflate_raw_to_binary(), SyncFlushedRawDeflate.substr(0, 5));
+        # a stream that ends with a final block may be followed by other bytes
+        assertEq(binary(SyncFlushedRawDeflateText), inflate_raw_to_binary(deflate_raw(SyncFlushedRawDeflateText)
+            + <0000ffff>));
+    }
+
+    zstdMultiFrameTest() {
+        # the first frame declares its size; the decompressed data is the concatenation of all frames
+        binary c = zstd("abc") + zstd("def") + streamCompress(COMPRESSION_ALG_ZSTD, "ghi");
+        assertEq("abcdefghi", unzstd_to_string(c, "utf-8"));
+        assertEq(binary("abcdefghi"), unzstd_to_binary(c, 9));
+        assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage("Zstd", 8), \unzstd_to_binary(), (c, 8));
+        # a frame that declares a size above the limit fails before anything is decompressed
+        assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", getLimitMessage("Zstd", 2), \unzstd_to_binary(),
+            (zstd("abc"), 2));
+        # a truncated frame
+        binary big = streamCompress(COMPRESSION_ALG_ZSTD, strmul("abcdefgh", 10000));
+        assertThrows("ZSTD-ERROR", \unzstd_to_binary(), big.substr(0, big.size() - 3));
     }
 }

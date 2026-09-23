@@ -567,6 +567,60 @@ DLLEXPORT QoreStringNode* qore_bunzip2_to_string(const BinaryNode* bin, const Qo
 //! decompresses bzip2 data to a binary
 DLLEXPORT BinaryNode* qore_bunzip2_to_binary(const BinaryNode* bin, ExceptionSink* xsink);
 
+//! A function that decompresses data to a string with an optional maximum decompressed size
+/** @since %Qore 3.0
+*/
+typedef QoreStringNode* (*qore_uncompress_to_string_max_t)(const BinaryNode* b, const QoreEncoding* enc,
+    size_t max_size, ExceptionSink* xsink);
+//! A function that decompresses data to a binary with an optional maximum decompressed size
+/** @since %Qore 3.0
+*/
+typedef BinaryNode* (*qore_uncompress_to_binary_max_t)(const BinaryNode* b, size_t max_size, ExceptionSink* xsink);
+
+//! decompresses data compressed with the DEFLATE algorithm to a string with a maximum decompressed size
+/** @param b the compressed data
+    @param enc the encoding of the string
+    @param max_size the maximum decompressed size in bytes; 0 = no limit
+    @param xsink raises \c DECOMPRESSION-LIMIT-EXCEEDED as soon as the decompressed data would exceed @p max_size;
+    no more than @p max_size + 1 bytes of output are ever allocated
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* qore_inflate_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+    ExceptionSink* xsink);
+//! decompresses data compressed with the DEFLATE algorithm to a binary with a maximum decompressed size
+/** @see qore_inflate_to_string(const BinaryNode*, const QoreEncoding*, size_t, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT BinaryNode* qore_inflate_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink);
+//! gunzips compressed data to a string with a maximum decompressed size
+/** @see qore_inflate_to_string(const BinaryNode*, const QoreEncoding*, size_t, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* qore_gunzip_to_string(const BinaryNode* bin, const QoreEncoding* enc, size_t max_size,
+    ExceptionSink* xsink);
+//! gunzips compressed data to a binary with a maximum decompressed size
+/** @see qore_inflate_to_string(const BinaryNode*, const QoreEncoding*, size_t, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT BinaryNode* qore_gunzip_to_binary(const BinaryNode* bin, size_t max_size, ExceptionSink* xsink);
+//! decompresses bzip2 data to a string with a maximum decompressed size
+/** @see qore_inflate_to_string(const BinaryNode*, const QoreEncoding*, size_t, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* qore_bunzip2_to_string(const BinaryNode* bin, const QoreEncoding* enc, size_t max_size,
+    ExceptionSink* xsink);
+//! decompresses bzip2 data to a binary with a maximum decompressed size
+/** @see qore_inflate_to_string(const BinaryNode*, const QoreEncoding*, size_t, ExceptionSink*)
+
+    @since %Qore 3.0
+*/
+DLLEXPORT BinaryNode* qore_bunzip2_to_binary(const BinaryNode* bin, size_t max_size, ExceptionSink* xsink);
+
 //! parses a string of base64-encoded data and returns a BinaryNode
 DLLEXPORT BinaryNode* parseBase64(const char* buf, int len, ExceptionSink* xsink);
 

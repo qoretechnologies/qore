@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -46,7 +46,13 @@ public:
    static constexpr int64 LEVEL_DEFAULT = -1;
 
    DLLLOCAL static Transform *getCompressor(const QoreStringNode *alg, int64 level, ExceptionSink *xsink);
-   DLLLOCAL static Transform *getDecompressor(const QoreStringNode *alg, ExceptionSink *xsink);
+   //! Returns a decompressor for the given algorithm
+   /** @param alg the algorithm
+       @param max_size the maximum total decompressed size in bytes; 0 = no limit; the transform raises
+       \c DECOMPRESSION-LIMIT-EXCEEDED as soon as its output would exceed this size
+       @param xsink exception sink
+   */
+   DLLLOCAL static Transform *getDecompressor(const QoreStringNode *alg, size_t max_size, ExceptionSink *xsink);
 };
 
 #endif // _QORE_COMPRESSIONTRANSFORMS_H

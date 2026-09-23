@@ -319,7 +319,7 @@ static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& heade
     }
 }
 
-static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* content_encoding,
+static qore_uncompress_to_string_max_t get_decoder_for_content_encoding(const char* content_encoding,
         bool& ignore_encoding) {
     ignore_encoding = false;
     if (!content_encoding) {
@@ -372,7 +372,7 @@ static qore_uncompress_to_string_t get_decoder_for_content_encoding(const char* 
     @param xsink for raising exceptions on unknown encodings
     @return the decompressor function, or nullptr for identity/character encodings
 */
-static qore_uncompress_to_binary_t get_binary_decoder_for_content_encoding(const char* content_encoding,
+static qore_uncompress_to_binary_max_t get_binary_decoder_for_content_encoding(const char* content_encoding,
         ExceptionSink* xsink) {
     if (!strcasecmp(content_encoding, "deflate") || !strcasecmp(content_encoding, "x-deflate")) {
         return qore_inflate_to_binary;
@@ -414,7 +414,7 @@ static qore_uncompress_to_binary_t get_binary_decoder_for_content_encoding(const
     @return the body, or no value if there is nothing to change
 */
 static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
-        const char* content_encoding, qore_uncompress_to_string_t dec, bool encoding_passthru, bool is_text,
+        const char* content_encoding, qore_uncompress_to_string_max_t dec, bool encoding_passthru, bool is_text,
         ExceptionSink* xsink) {
     if (!bin || !bin->size()) {
         return QoreValue();
@@ -426,7 +426,7 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
         }
         if (!is_text) {
             // the decoded octets are not text, so they are decoded to binary
-            qore_uncompress_to_binary_t bin_dec = get_binary_decoder_for_content_encoding(content_encoding, xsink);
+            qore_uncompress_to_binary_max_t bin_dec = get_binary_decoder_for_content_encoding(content_encoding, xsink);
             if (*xsink) {
                 return QoreValue();
             }
@@ -434,7 +434,7 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
                 // an encoding that is not a compression, such as "identity", leaves the body as it is
                 return QoreValue();
             }
-            return bin_dec(bin, xsink);
+            return bin_dec(bin, 0, xsink);
         }
         if (!dec) {
             bool ignore_encoding = false;
@@ -448,7 +448,7 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
                 return QoreValue();
             }
         }
-        QoreStringNode* decoded = dec(bin, body_enc, xsink);
+        QoreStringNode* decoded = dec(bin, body_enc, 0, xsink);
         return decoded;
     }
 
@@ -2710,7 +2710,7 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL const char* normalizeContentEncoding(ExceptionSink* xsink, QoreHashNode& ans, bool recv_callback,
-            qore_uncompress_to_string_t& dec) {
+            qore_uncompress_to_string_max_t& dec) {
         const char* content_encoding = get_string_header(xsink, ans, "content-encoding");
         if (*xsink) {
             return nullptr;
@@ -5892,13 +5892,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // callback below still fires to signal end-of-data.
                     if (recv_callback && accumulated_body && accumulated_body->size()) {
                         bool ignore_encoding = false;
-                        qore_uncompress_to_string_t dec =
+                        qore_uncompress_to_string_max_t dec =
                             get_decoder_for_content_encoding(
                                 resp_content_encoding.c_str(), ignore_encoding);
                         QoreValue cb_data;
                         if (dec && !ignore_encoding) {
                             QoreStringNode* decoded = dec(*accumulated_body,
-                                QCS_UTF8, xsink);
+                                QCS_UTF8, 0, xsink);
                             if (*xsink) {
                                 channel->close();
                                 return nullptr;
@@ -6359,7 +6359,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     if (!body_val.isNullOrNothing() && body_val.getType() == NT_BINARY) {
         const BinaryNode* bin = body_val.get<const BinaryNode>();
         if (bin && bin->size()) {
-            qore_uncompress_to_string_t dec = nullptr;
+            qore_uncompress_to_string_max_t dec = nullptr;
             const char* content_encoding = normalizeContentEncoding(xsink, **ans, false, dec);
             if (*xsink) {
                 return nullptr;
@@ -7834,13 +7834,13 @@ public:
 
         SimpleRefHolder<SimpleValueQoreNode> decoded;
         if (is_text) {
-            qore_uncompress_to_string_t dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
+            qore_uncompress_to_string_max_t dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
             assert(dec);
-            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8, xsink) : nullptr;
+            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8, 0, xsink) : nullptr;
         } else {
-            qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
+            qore_uncompress_to_binary_max_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
             assert(dec);
-            decoded = dec ? dec(bin, xsink) : nullptr;
+            decoded = dec ? dec(bin, 0, xsink) : nullptr;
         }
         if (*xsink) {
             xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",

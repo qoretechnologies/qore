@@ -1132,6 +1132,14 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       - @ref Qore::thread_cancelled() "thread_cancelled()": returns @ref True if cancellation has been requested
         for the current thread
 
+    - Added a \c max_size argument limiting the size of the decompressed data to
+      @ref Qore::uncompress_to_binary() "uncompress_to_binary()", @ref Qore::gunzip_to_binary() "gunzip_to_binary()",
+      @ref Qore::bunzip2_to_binary() "bunzip2_to_binary()", @ref Qore::unbrotli_to_binary() "unbrotli_to_binary()",
+      @ref Qore::unzstd_to_binary() "unzstd_to_binary()", @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()",
+      their \c *_to_string() counterparts, and @ref Qore::get_decompressor() "get_decompressor()"; decompression
+      stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the output would exceed the limit, so a
+      "decompression bomb" (a small input that expands to a huge output) never allocates more than the limit
+
     - Added the @ref char "char" value type for single Unicode codepoints, including
       \c c'...' and \c c"..." literals, the @ref char_type "char" and
       @ref softchar_type "softchar" type restrictions, and the
@@ -3272,6 +3280,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::unzstd_to_binary() "unzstd_to_binary()" and
+      @ref Qore::unzstd_to_string() "unzstd_to_string()" failing with "Destination buffer is too small" for data
+      with several frames when the first frame declares its size; the output buffer was sized for the first frame
+      only
+    - Fixed @ref Qore::bunzip2_to_binary() "bunzip2_to_binary()" and
+      @ref Qore::bunzip2_to_string() "bunzip2_to_string()" growing their output buffer to several gigabytes for
+      truncated input before reporting a misleading buffer-size error; truncated input is now reported as an
+      unexpected end of the compressed data as soon as the input is exhausted
     - Fixed an exception thrown by the default value expression of an omitted argument being reported as
       unhandled instead of being raised to the caller; the call then proceeded and the function body ran without
       the parameter's default value

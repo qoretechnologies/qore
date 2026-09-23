@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2025 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -35,12 +35,27 @@
 
 DLLLOCAL void init_compression_functions(QoreNamespace& ns);
 
-// Decompression functions for HTTP content-encoding support
-// Brotli, Zstd, and LZ4 are required since Qore 3.0
-DLLLOCAL BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, ExceptionSink* xsink);
-DLLLOCAL QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink);
+//! Raises DECOMPRESSION-LIMIT-EXCEEDED for decompressed data that exceeds the given maximum size
+DLLLOCAL void qore_raise_decompression_limit_exceeded(const char* alg, size_t max_size, ExceptionSink* xsink);
 
-DLLLOCAL BinaryNode* qore_unzstd_to_binary(const BinaryNode* b, ExceptionSink* xsink);
-DLLLOCAL QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink);
+//! Raises DECOMPRESSION-LIMIT-ERROR if the given maximum decompressed size is negative
+/** @return 0 for OK, -1 if an exception was raised
+*/
+DLLLOCAL int qore_check_decompression_max_size(int64 max_size, ExceptionSink* xsink);
+
+// Decompression functions with an optional maximum decompressed size (0 = no limit); they raise
+// DECOMPRESSION-LIMIT-EXCEEDED as soon as the decompressed data would exceed the maximum
+// Brotli, Zstd, and LZ4 are required since Qore 3.0
+DLLLOCAL BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink);
+DLLLOCAL QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+    ExceptionSink* xsink);
+
+DLLLOCAL BinaryNode* qore_unzstd_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink);
+DLLLOCAL QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+    ExceptionSink* xsink);
+
+DLLLOCAL BinaryNode* qore_inflate_raw_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink);
+DLLLOCAL QoreStringNode* qore_inflate_raw_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+    ExceptionSink* xsink);
 
 #endif

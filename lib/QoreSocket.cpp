@@ -1833,7 +1833,7 @@ public:
             return;
         }
 
-        transform = CompressionTransforms::getDecompressor(content_encoding, xsink);
+        transform = CompressionTransforms::getDecompressor(content_encoding, 0, xsink);
         if (*xsink) {
             return;
         }
@@ -11160,7 +11160,7 @@ QoreHashNode* QoreSocket::parseServerSentEvent(ExceptionSink* xsink, const QoreS
 QoreHashNode* QoreSocket::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
         int timeout_ms) {
     if (content_encoding && (*content_encoding != "identity")) {
-        SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(content_encoding, xsink));
+        SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(content_encoding, 0, xsink));
         if (*xsink) {
             return nullptr;
         }
@@ -15087,7 +15087,7 @@ void SocketReadServerSentEventPollOperation::initTransform(ExceptionSink* xsink,
         return;
     }
 
-    transform = CompressionTransforms::getDecompressor(content_encoding, xsink);
+    transform = CompressionTransforms::getDecompressor(content_encoding, 0, xsink);
     if (*xsink) {
         return;
     }

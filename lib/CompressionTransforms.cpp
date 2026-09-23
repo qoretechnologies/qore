@@ -41,6 +41,9 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/CompressionTransforms.h"
+#include "qore/intern/ql_compression.h"
+
+#include <string>
 
 class CompressionErrorHelper {
 
@@ -740,20 +743,77 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
     return nullptr;
 }
 
-Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, ExceptionSink *xsink) {
-    if (*alg == ALG_ZLIB) {
+static Transform *get_unlimited_decompressor(const QoreStringNode *alg, ExceptionSink *xsink) {
+    if (*alg == CompressionTransforms::ALG_ZLIB) {
         return new ZlibInflateTransform(xsink, false);
-    } else if (*alg == ALG_GZIP) {
+    } else if (*alg == CompressionTransforms::ALG_GZIP) {
         return new ZlibInflateTransform(xsink, true);
-    } else if (*alg == ALG_BZIP2) {
+    } else if (*alg == CompressionTransforms::ALG_BZIP2) {
         return new Bzip2DecompressTransform(xsink);
-    } else if (*alg == ALG_BROTLI) {
+    } else if (*alg == CompressionTransforms::ALG_BROTLI) {
         return new BrotliDecompressTransform(xsink);
-    } else if (*alg == ALG_ZSTD) {
+    } else if (*alg == CompressionTransforms::ALG_ZSTD) {
         return new ZstdDecompressTransform(xsink);
-    } else if (*alg == ALG_LZ4) {
+    } else if (*alg == CompressionTransforms::ALG_LZ4) {
         return new Lz4DecompressTransform(xsink);
     }
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
+}
+
+//! Limits the total output of a decompression transform
+/** The output of each call is bounded by the destination buffer of the caller, so no more than the maximum size plus
+    one destination buffer is ever decompressed; output beyond the maximum is discarded with an exception.
+*/
+class LimitedDecompressionTransform : public Transform {
+public:
+    DLLLOCAL LimitedDecompressionTransform(Transform *t, const char *alg, size_t max_size) : t(t), alg(alg),
+            max_size(max_size) {
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen,
+            ExceptionSink *xsink) override {
+        if (exceeded) {
+            qore_raise_decompression_limit_exceeded(alg.c_str(), max_size, xsink);
+            return std::make_pair(0, 0);
+        }
+        std::pair<int64, int64> rv = t->apply(src, srcLen, dst, dstLen, xsink);
+        if (*xsink) {
+            return rv;
+        }
+        assert(rv.second >= 0);
+        total += rv.second;
+        if (total > max_size) {
+            exceeded = true;
+            qore_raise_decompression_limit_exceeded(alg.c_str(), max_size, xsink);
+            return std::make_pair(0, 0);
+        }
+        return rv;
+    }
+
+    DLLLOCAL size_t outputBufferSize() override {
+        return t->outputBufferSize();
+    }
+
+    DLLLOCAL size_t inputBufferSize() override {
+        return t->inputBufferSize();
+    }
+
+private:
+    SimpleRefHolder<Transform> t;
+    std::string alg;
+    size_t max_size;
+    size_t total = 0;
+    bool exceeded = false;
+};
+
+Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, size_t max_size, ExceptionSink *xsink) {
+    SimpleRefHolder<Transform> t(get_unlimited_decompressor(alg, xsink));
+    if (!t || *xsink) {
+        return nullptr;
+    }
+    if (!max_size) {
+        return t.release();
+    }
+    return new LimitedDecompressionTransform(t.release(), alg->c_str(), max_size);
 }
