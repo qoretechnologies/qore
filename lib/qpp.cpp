@@ -2443,6 +2443,8 @@ static FILE* get_java_file(const std::string& ns, const std::string& name, std::
 #define T_QORE       8
 #define T_OTHER      9
 #define T_CSTRING   10
+// a builtin constant whose value depends on the running library: qore_runtime(<C++ expression>)
+#define T_QORE_RUNTIME 11
 
 static int get_val_type(const std::string& str) {
     if (!str.empty()) {
@@ -2467,6 +2469,8 @@ static int get_val_type(const std::string& str) {
             return T_BOOL;
         if (!str.compare(0, 5, "qore(") && str[lc] == ')')
             return T_QORE;
+        if (!str.compare(0, 13, "qore_runtime(") && str[lc] == ')')
+            return T_QORE_RUNTIME;
         if (!str.compare(0, 2, "0x"))
             return T_INT;
     }
@@ -2652,6 +2656,15 @@ static int get_qore_value(const std::string& qv, std::string& v, const char* cna
             else {
                 v.assign(qv, 4, qv.size() - 4);
             }
+            return 0;
+        }
+
+        case T_QORE_RUNTIME: {
+            if (force_node || !cname) {
+                error("qore_runtime() can only be used for the value of a constant\n");
+                return -1;
+            }
+            v.assign(qv, 12, qv.size() - 12);
             return 0;
         }
 
@@ -3335,11 +3348,44 @@ public:
         return 0;
     }
 
-    int serializeCppBinding(FILE* fp) const {
+    int serializeCppBinding(FILE* fp, const std::string& ns) const {
         std::string qv;
         const char* prefix = 0;
         if (get_qore_value(value, qv, name.c_str(), &prefix))
             return -1;
+        if (get_val_type(value) == T_QORE_RUNTIME) {
+            // qv is "(<value>, <value in compiled code>)"; code referencing the constant reads it from the process
+            // it runs in; see ConstantEntry::setRuntimeDependent()
+            std::string args(qv, 1, qv.size() - 2);
+            size_t comma = std::string::npos;
+            int depth = 0;
+            for (size_t i = 0; i < args.size(); ++i) {
+                char c = args[i];
+                if (c == '(' || c == '[' || c == '{') {
+                    ++depth;
+                } else if (c == ')' || c == ']' || c == '}') {
+                    --depth;
+                } else if (c == ',' && !depth) {
+                    if (comma != std::string::npos) {
+                        comma = std::string::npos;
+                        break;
+                    }
+                    comma = i;
+                }
+            }
+            if (comma == std::string::npos) {
+                error("constant '%s': qore_runtime() takes exactly two arguments: the value and the value of the "
+                    "parse define in code compiled ahead of time\n", name.c_str());
+                return -1;
+            }
+            std::string rt_val(args, 0, comma);
+            std::string compiled_val(args, comma + 1);
+            trim(rt_val);
+            trim(compiled_val);
+            fprintf(fp, "    qore_ns_add_runtime_constant(ns, \"%s\", \"%s\", %s, %s);\n",
+                ns.empty() ? "Qore" : ns.c_str(), name.c_str(), rt_val.c_str(), compiled_val.c_str());
+            return 0;
+        }
         if (prefix)
             fprintf(fp, "    %s\n    ns.addConstant(\"%s\", %s_%s);\n", qv.c_str(), name.c_str(), prefix, name.c_str());
         else
@@ -4721,7 +4767,7 @@ public:
         if (!cmap.empty()) {
             //fputc('\n', fp);
             for (cmap_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i)
-                if (i->second->serializeCppBinding(fp))
+                if (i->second->serializeCppBinding(fp, ns))
                     return -1;
         }
         return 0;

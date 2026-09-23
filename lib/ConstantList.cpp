@@ -125,7 +125,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
         : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti || pti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
-        rt_in_init(false), aot_parse_shell_value_set(false),
+        rt_in_init(false), aot_parse_shell_value_set(false), runtime_dependent(false),
         // a constant created already initialized -- every builtin -- is finished now; one that still has to
         // be initialized is stamped when ConstantEntryInitHelper retires
         init_seq(n_init ? qore_next_constant_init_seq() : 0),
@@ -157,6 +157,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         // a shell's compile-time value is copied with the entry so every Program importing the same shell
         // resolves constant initializers the same way
         aot_parse_shell_value_set(old.aot_parse_shell_value_set),
+        runtime_dependent(old.runtime_dependent),
         // the copy keeps the original's sequence: importing a module must not reorder its constants relative
         // to each other, or the AOT writer would pick a different owner for a shared value in the importing
         // Program than the module was built with
@@ -166,14 +167,44 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         aot_pending_init(old.aot_pending_init),
         saved_val(old.saved_val.refSelf()),
         aot_parse_shell_value(old.aot_parse_shell_value.refSelf()),
-        access(old.access), from_module(old.from_module) {
+        access(old.access), from_module(old.from_module), runtime_dependent_path(old.runtime_dependent_path),
+        runtime_compiled_define(old.runtime_compiled_define.refSelf()) {
     assert(!old.in_init);
     assert(old.init);
+    // each copy resolves references to itself, so code parsed in the importing Program reads that Program's value
+    if (old.runtime_ref) {
+        runtime_ref = new RuntimeConstantRefNode(loc, this);
+    }
     //printd(5, "ConstantEntry::ConstantEntry() this: %p copy '%s' ti: '%s' nti: '%s'\n", this, name.c_str(),
     //  QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(val.getTypeInfo()));
 }
 
+void ConstantEntry::setRuntimeDependent(std::string path, QoreValue compiled_define) {
+    assert(builtin);
+    assert(!runtime_ref);
+    runtime_dependent_path = std::move(path);
+    runtime_compiled_define = compiled_define;
+    runtime_dependent = true;
+    runtime_ref = new RuntimeConstantRefNode(loc, this);
+}
+
+void ConstantEntry::delRuntimeRef() {
+    if (runtime_ref) {
+        // the node only refers to this entry; it holds no value of its own
+        runtime_ref->deref(nullptr);
+        runtime_ref = nullptr;
+    }
+    // a builtin define value is a plain value that cannot throw when released
+    runtime_compiled_define.discard(nullptr);
+    runtime_compiled_define.clear();
+}
+
+QoreValue ConstantEntry::getParseDefineValue() const {
+    return runtime_dependent && qore_aot_is_compiler_process() ? runtime_compiled_define : val;
+}
+
 void ConstantEntry::del(QoreListNode& l) {
+    delRuntimeRef();
     //printd(5, "ConstantEntry::del(l) this: %p '%s' node: %p (%d) %s %d (saved_val: %s)\n", this, name.c_str(),
     //  node, get_node_type(node), get_type_name(node), node->reference_count(), saved_val.getTypeName());
     aot_init_expr.discard(nullptr);
@@ -208,6 +239,7 @@ void ConstantEntry::del(QoreListNode& l) {
 }
 
 void ConstantEntry::del(ExceptionSink* xsink) {
+    delRuntimeRef();
     aot_init_expr.discard(xsink);
     aot_parse_shell_value.discard(xsink);
 #ifdef DEBUG
@@ -855,7 +887,7 @@ QoreValue ConstantList::find(const char* name, const QoreTypeInfo*& constantType
             // the defining source file so a folded cross-unit constant/enum
             // reference still triggers a rebuild when that file changes.
             qore_aot_note_referenced_decl(i->second->loc, consumer_loc);
-            return i->second->val;
+            return i->second->getParseValue();
         }
         constantTypeInfo = nothingTypeInfo;
         found = true;

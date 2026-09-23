@@ -168,7 +168,8 @@ public:
         external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
         external_stub_dependent : 1, // initializer references an external stub constant
         rt_in_init : 1, // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
-        aot_parse_shell_value_set : 1 // a preloaded `.qo` shell supplied a compile-time value (see below)
+        aot_parse_shell_value_set : 1, // a preloaded `.qo` shell supplied a compile-time value (see below)
+        runtime_dependent : 1 // builtin whose value depends on the running library; see setRuntimeDependent()
         ;
 
     //! deferred AOT initializer for an unpopulated shell, or nullptr; owned by the AOT runtime
@@ -311,6 +312,45 @@ public:
     //! Initializes a delayed value once, optionally returning errors to a dependent constant's evaluation
     DLLLOCAL int parseCommitRuntimeInit(ExceptionSink* runtime_xsink = nullptr);
 
+    //! Marks a builtin constant whose value depends on the state of the running library
+    /** The value of such a constant can differ between the process that parses code and the process that runs
+        it: Qore::Option::HAVE_SIGNAL_HANDLING depends on the options the library was initialized with, and
+        qcc compiles code that runs in other processes.  A reference to it therefore resolves to a
+        RuntimeConstantRefNode naming this entry instead of to its value, so that neither the parser nor the IR
+        lowering folds the value into the code, and the AOT writer serializes the reference by name
+        (see getRuntimeDependentPath()), which the loading process resolves against its own constant.
+
+        The value itself is unchanged, so evaluation, reflection, and parse defines read it as before.
+
+        @param path the constant's fully-qualified path without a leading "::", as the AOT writer names
+        constants (ex: "Qore::Option::HAVE_SIGNAL_HANDLING")
+        @param compiled_define the value of the constant's parse define in code compiled ahead of time; see
+        getParseDefineValue(); ownership is taken
+    */
+    DLLLOCAL void setRuntimeDependent(std::string path, QoreValue compiled_define);
+
+    //! Returns the value the constant's parse define takes in a Program created in this process; borrowed
+    /** Parse defines are decided when code is parsed, which for code compiled ahead of time is in the compiler.
+        A runtime-dependent builtin's value there describes the compiler, not the processes the code will run
+        in, so the compiler uses the value the constant was registered with for compiled code instead (see
+        qore_aot_set_compiler_process()).
+    */
+    DLLLOCAL QoreValue getParseDefineValue() const;
+
+    //! Returns the fully-qualified path of a runtime-dependent builtin constant, or nullptr
+    DLLLOCAL const std::string* getRuntimeDependentPath() const {
+        return runtime_dependent ? &runtime_dependent_path : nullptr;
+    }
+
+    //! Returns what a parse-time reference to this constant resolves to; the value is borrowed
+    /** This is the value, except for a runtime-dependent builtin, where it is the shared reference node that
+        evaluates the value when the code runs; see setRuntimeDependent().
+    */
+    DLLLOCAL QoreValue getParseValue() const;
+
+    //! Releases the reference node of a runtime-dependent builtin
+    DLLLOCAL void delRuntimeRef();
+
     DLLLOCAL QoreValue get(const QoreProgramLocation* loc, const QoreTypeInfo*& constantTypeInfo, ClassNs ptr) {
         if (in_init) {
             parse_error(*loc, "recursive constant reference found to constant '%s'", name.c_str());
@@ -330,7 +370,7 @@ public:
         qore_aot_note_referenced_decl(this->loc, loc);
 
         constantTypeInfo = getParseTypeInfo();
-        return val;
+        return getParseValue();
     }
 
     DLLLOCAL const char* getName() const {
@@ -400,6 +440,13 @@ protected:
     QoreValue aot_parse_shell_value{};
     ClassAccess access;
     std::string from_module;
+
+    //! the fully-qualified path of a runtime-dependent builtin constant; see setRuntimeDependent()
+    std::string runtime_dependent_path;
+    //! the reference a parse-time reference to a runtime-dependent builtin resolves to; owned by this entry
+    RuntimeConstantRefNode* runtime_ref = nullptr;
+    //! the parse define value of a runtime-dependent builtin in code compiled ahead of time
+    QoreValue runtime_compiled_define{};
 
     DLLLOCAL ~ConstantEntry() {
         assert(saved_val.isNothing());
@@ -855,5 +902,9 @@ public:
         return ce->val.getTypeName();
     }
 };
+
+inline QoreValue ConstantEntry::getParseValue() const {
+    return runtime_ref ? QoreValue(static_cast<AbstractQoreNode*>(runtime_ref)) : val;
+}
 
 #endif // _QORE_CONSTANTLIST_H

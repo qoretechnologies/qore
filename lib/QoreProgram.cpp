@@ -1132,7 +1132,7 @@ void qore_program_private_base::newProgram() {
     assert(ns);
     ConstantListIterator cli(qore_ns_private::getConstantList(ns));
     while (cli.next()) {
-        QoreValue v = cli.getValue();
+        QoreValue v = cli.getEntry()->getParseDefineValue();
         // skip boolean options defined as False
         if (v.getType() == NT_BOOLEAN && !v.getAsBool()) {
             continue;

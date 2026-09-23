@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreNamespaceIntern.h"
 
 #include <openssl/evp.h>
 
@@ -247,9 +248,15 @@ const HAVE_STACK_GUARD = bool(QORE_CONST_HAVE_CHECK_STACK_POS);
 
     @note This constant is always @ref False on native Windows ports and is also @ref False if the qore library was initialized with signals disabled (such as with <tt>qore -b</tt> or <tt>qore --disable-signals</tt>)
 
+    @note Code reads the value of the process it runs in, including code compiled ahead of time with \c qcc, so a
+    compiled module loaded into <tt>qore -b</tt> sees @ref False.  The \c HAVE_SIGNAL_HANDLING parse define, as in
+    <tt>%%ifdef HAVE_SIGNAL_HANDLING</tt>, is decided when the code is parsed; in code compiled ahead of time it is
+    defined if the library supports signal handling, since the compiler cannot know how the library the code
+    will run with is initialized
+
     @see @ref signal_handling
  */
-const HAVE_SIGNAL_HANDLING = qore((bool)(QORE_CONST_HAVE_SIGNAL_HANDLING && !(qore_library_options & QLO_DISABLE_SIGNAL_HANDLING)));
+const HAVE_SIGNAL_HANDLING = qore_runtime((bool)(QORE_CONST_HAVE_SIGNAL_HANDLING && !(qore_library_options & QLO_DISABLE_SIGNAL_HANDLING)), (bool)QORE_CONST_HAVE_SIGNAL_HANDLING);
 
 //! Indicates if the %Qore library has been built with debugging enabled
 const HAVE_LIBRARY_DEBUGGING = bool(QORE_CONST_DEBUG);

@@ -264,6 +264,17 @@ bool qore_aot_source_parse_active() {
     return aot_source_parse_active;
 }
 
+//! set once, before the library is initialized, and only read afterwards
+static std::atomic<bool> aot_compiler_process{false};
+
+void qore_aot_set_compiler_process() {
+    aot_compiler_process.store(true, std::memory_order_relaxed);
+}
+
+bool qore_aot_is_compiler_process() {
+    return aot_compiler_process.load(std::memory_order_relaxed);
+}
+
 static bool qore_aot_set_resolved_source_import_recording_active(bool active) {
     bool old = aot_resolved_source_import_recording_active;
     aot_resolved_source_import_recording_active = active;
