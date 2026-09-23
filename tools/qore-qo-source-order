@@ -3239,6 +3239,68 @@ class SourceOrderEngine {
         return rv;
     }
 
+    #! The order in which standalone compiles of \a selected see each other's new objects.
+    /** Standalone compiles run one at a time, and each preloads the objects of what it resolves
+        against.  When a component it preloads is ALSO in the stale set, the compile reads that
+        provider's previous object unless the provider was compiled first.  The topological order
+        alone does not guarantee that: it follows required edges only, and a provider reached
+        solely over a content dependency or a load requirement -- a class used as a type, a
+        folded constant -- is preloaded without being ordered.  A consumer that calls a static
+        method it has just started calling with a new signature then resolves the call eagerly
+        against the stale shell's variants (on Qorus, `OMQ::QonsoleReferenceScope` named without
+        its namespace reaches the preloaded class rather than a deferred import):
+
+          PARSE-TYPE-ERROR: no variant matching
+            'QonsoleReferenceScope::runAuxiliary(string, code<auto()>, string)' can be found;
+            the following variants were tested:
+              QonsoleReferenceScope::runAuxiliary(string purpose, code<auto()> task)
+
+        So a component is taken only once nothing still pending is reachable through what it
+        preloads, directly or through current components in between.  The relation includes
+        every required predecessor, so the result stays a topological order.  Content
+        dependencies can form cycles between components; a cycle among pending components has
+        no order that serves all of them, and it is broken at the first pending component in
+        topological order, whose required predecessors have all been taken by then.
+
+        \return \a selected, providers first
+    */
+    list<int> preloadCompileOrder(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, softlist<int> selected) {
+        hash<string, list<int>> providers = preloadProviderEdges(components, context_info, selected);
+        hash<string, bool> pending = {};
+        foreach int component in (selected) {
+            pending{string(component)} = True;
+        }
+        list<int> rv = ();
+        while (pending) {
+            *int chosen;
+            *int first_pending;
+            foreach int candidate in (components.topological_order) {
+                string candidate_key = string(candidate);
+                if (!pending{candidate_key}) {
+                    continue;
+                }
+                if (!exists first_pending) {
+                    first_pending = candidate;
+                }
+                # a path back to the candidate itself is a cycle through its own preloads, which any
+                # standalone compile of it has
+                hash<string, bool> others = pending - candidate_key;
+                if (!reachesAny(candidate, providers, {}, others)) {
+                    chosen = candidate;
+                    break;
+                }
+            }
+            @assert(exists first_pending);
+            if (!exists chosen) {
+                chosen = first_pending;
+            }
+            push rv, chosen;
+            remove pending{string(chosen)};
+        }
+        return rv;
+    }
+
     #! True if a member of \a targets is reached from \a start over \a edges without crossing \a kept.
     private static bool reachesAny(int start, hash<string, list<int>> edges, hash<string, bool> kept,
             hash<string, bool> targets) {
@@ -4274,8 +4336,8 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-map-cmake PREFIX CONTEXT\n"
         "       %s --cmake-plan GROUP CONTEXT\n"
         "       %s --scc-generation-map FILE CONTEXT\n"
-        "       %s [--scc-publish-set|--scc-current-set|--scc-preload-set|--scc-convex-set]\n"
-        "           CONTEXT KEY_FILE\n"
+        "       %s [--scc-publish-set|--scc-current-set|--scc-preload-set|--scc-convex-set\n"
+        "           |--scc-order-set] CONTEXT KEY_FILE\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
         "           |--scc-current-all|--scc-stale|--scc-source-stale]\n"
         "           [--batch-stamp STAMP] [--rebuild-closure] CONTEXT\n"
@@ -4302,6 +4364,11 @@ sub usage(*string error = NOTHING, bool success = False) {
         "would preload was itself compiled against another listed component, whose\n"
         "previous declarations the preloaded object would bring back.  What is left\n"
         "out stays stale for the next pass.\n"
+        "\n"
+        "--scc-order-set prints the keys in KEY_FILE in the order standalone\n"
+        "compiles of them must run: a component follows every listed component it\n"
+        "preloads, over content dependencies and load requirements as well as\n"
+        "required edges, so no compile reads a listed provider's previous object.\n"
         "\n"
         "Exit 75 means the member sources moved away from the --expect source\n"
         "token -- an agent outside the build edited them. Exit 76 means the\n"
@@ -4561,7 +4628,8 @@ int sub main() {
                 || arg == "--scc-stale" || arg == "--scc-source-stale"
                 || arg == "--scc-compile-plan" || arg == "--scc-graph-generation"
                 || arg == "--scc-publish-set" || arg == "--scc-current-set"
-                || arg == "--scc-preload-set" || arg == "--scc-convex-set") {
+                || arg == "--scc-preload-set" || arg == "--scc-convex-set"
+                || arg == "--scc-order-set") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -4819,7 +4887,8 @@ int sub main() {
             }
         }
         if (component_command == "publish-set" || component_command == "current-set"
-                || component_command == "preload-set" || component_command == "convex-set") {
+                || component_command == "preload-set" || component_command == "convex-set"
+                || component_command == "order-set") {
             # A shared parse over PART of a group publishes exactly the
             # components it compiled.  Naming them in a file rather than on the
             # command line keeps a subset of any size addressable, and resolving
@@ -4853,6 +4922,13 @@ int sub main() {
                 foreach string output in (
                         engine.componentPreloadOutputs(components, context_info, selected)) {
                     printf("%s\n", output);
+                }
+                return 0;
+            }
+            if (component_command == "order-set") {
+                foreach int component in (
+                        engine.preloadCompileOrder(components, context_info, selected)) {
+                    printf("%s\n", components.component_keys[component]);
                 }
                 return 0;
             }

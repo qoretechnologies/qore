@@ -108,6 +108,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testAnUnconvergedPlanNamesTheStaleComponents());
         addTestCase("adopting a current tree never reads as a partly stale one",
             \testAdoptingACurrentTreeIsNeverTorn());
+        addTestCase("standalone compiles are ordered after every stale component they preload",
+            \testOrderSetFollowsThePreload());
+        addTestCase("a stale provider reached only over a content edge is compiled first",
+            \testCoordinatorCompilesAPreloadedStaleProviderFirst());
 
         set_return_value(main());
     }
@@ -1982,5 +1986,100 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             qore_bin, source_order_tool, snapshot, incremental_tool,
             qo_dir + "/" + name + ".qo", fx.src_dir + "/" + name + ".qc",
             qo_dir + "/qcc-single.sh");
+    }
+
+    #! The keys --scc-order-set prints for \a names, as member basenames.
+    private list<string> orderSet(hash<auto> fx, list<string> names) {
+        string key_file = fx.qo_dir + "/order-set.keys";
+        write(key_file, join("\n", map componentFor(fx.qo_dir, $1).key, names) + "\n");
+        hash<auto> result = runTool(("--scc-order-set", fx.context, key_file));
+        assertEq(0, result.rc, "--scc-order-set: " + result.output);
+        hash<string, string> name_of_key = map {componentFor(fx.qo_dir, $1).key: $1}, fx.names;
+        list<string> order = ();
+        foreach string line in (result.output.split("\n")) {
+            if (trim(line)) {
+                push order, name_of_key{trim(line)} ?? trim(line);
+            }
+        }
+        return order;
+    }
+
+    #! Standalone compiles run after every listed component they preload, over any kind of edge.
+    /** The stale listing is in topological order, which follows required edges only.  A component
+        that preloads another listed one over a content dependency or a load requirement would read
+        that provider's previous object if it were compiled first.
+    */
+    testOrderSetFollowsThePreload() {
+        TmpDir tmp("qore-aot-driver-order-set-");
+        # singletons a, b, c, d, e; c requires a
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, ("e",));
+        string qo_dir = fx.qo_dir;
+        assertEq(("a", "b", "c", "d", "e"), orderSet(fx, fx.names),
+            "with no edge but c -> a the order is the topological one");
+
+        # a folds a constant of d: a content dependency, preloaded but not ordered
+        writeDepfile(qo_dir, "a", (), "d");
+        assertEq(("b", "d", "a", "c", "e"), orderSet(fx, fx.names),
+            "a follows the content provider it preloads, and c still follows a");
+        assertEq(-1, runTool(("--scc-prerequisites", fx.context,
+                componentFor(qo_dir, "a").key)).output.find("\t"),
+            "the content dependency is still not a required edge");
+
+        # b's object calls into e: a load requirement
+        writeLoadRequires(qo_dir, "b", (fx.src_dir + "/e.qc",));
+        assertEq(("d", "a", "c", "e", "b"), orderSet(fx, fx.names),
+            "b follows the provider its load requirement names");
+
+        # only listed components are ordered: a reaches d only through e, which is not listed
+        writeDepfile(qo_dir, "a", (), "e");
+        writeLoadRequires(qo_dir, "b", ());
+        writeDepfile(qo_dir, "e", (), "d");
+        assertEq(("b", "d", "a", "c"), orderSet(fx, ("a", "b", "c", "d")),
+            "a follows d, which it preloads through the unlisted e");
+
+        # a content cycle has no order that serves both members; it is broken in topological order
+        writeDepfile(qo_dir, "a", (), "d");
+        writeDepfile(qo_dir, "d", (), "a");
+        writeDepfile(qo_dir, "e", ());
+        # b and e are free; a, c and d all wait on each other until the cycle is broken at a, and c
+        # then still waits on d, which it preloads through a
+        assertEq(("b", "e", "a", "d", "c"), orderSet(fx, fx.names),
+            "a cycle of content dependencies is broken at its first member in topological order");
+        assertEq(("a", "c"), orderSet(fx, ("c", "a")),
+            "the order does not depend on the key file's order");
+    }
+
+    #! A stale provider reached only over a content edge is compiled before its stale consumer.
+    /** The shape a Qorus incremental build failed on: `QonsoleReferenceScope.qc` changed a static
+        method's signature and `QorusQonsoleCore.qc` started calling the new one in the same edit.
+        The consumer reached the provider only over a declaration contract -- preloaded, not
+        ordered -- and was listed first, so its standalone compile preloaded the provider's previous
+        object and failed to resolve the call:
+
+          PARSE-TYPE-ERROR: no variant matching
+            'QonsoleReferenceScope::runAuxiliary(string, code<auto()>, string)' can be found
+
+        The stand-in compiler fails the same way: compiling `a` fails unless the `d.qo` it preloads
+        has already been compiled.
+    */
+    testCoordinatorCompilesAPreloadedStaleProviderFirst() {
+        TmpDir tmp("qore-aot-driver-stale-provider-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeDepfile(fx.qo_dir, "a", (), "d");
+        writeCompiler(fx, NOTHING,
+            "if [ \"$(basename \"$src\")\" = a.qc ] && ! grep -q '^compiled$' \"$preload_dir/d.qo\"; then "
+            + "echo 'PARSE-TYPE-ERROR: a compiled against the previous d.qo' >&2; exit 1; fi");
+
+        list<string> stale = map basename($1.source), stalePlan(fx).stale;
+        assertEq(("a.qc", "b.qc", "c.qc", "d.qc"), stale,
+            "the stale listing names the consumer before its content provider");
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertEq(-1, result.output.find("PARSE-TYPE-ERROR"),
+            "no compile reads a stale provider: " + result.output);
+        assertEq(("b.qc", "d.qc", "a.qc", "c.qc"), map $1.split(" ")[0], compiles(fx),
+            "the provider is compiled first, and each component once");
+        assertEq((), stalePlan(fx).stale, "and the group is current");
     }
 }

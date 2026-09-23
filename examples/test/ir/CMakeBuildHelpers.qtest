@@ -83,6 +83,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
         }
         addTestCase("a partial parse runs a preloaded provider's body from a constant initializer",
             \testSubsetParseInitializerCallsPreloadedBody());
+        addTestCase("an edit to a provider and its consumer compiles the provider first",
+            \testIncrementalStaleProviderCompiledFirst());
 
         set_return_value(main());
     }
@@ -2589,6 +2591,105 @@ add_dependencies(qo-objects ${QO_ORDER_TARGETS})
         string converged = run(build);
         assertEq(0, occurrences(converged, "qcc: script-context .qo"),
             "the build after the partial parse converges: " + converged);
+    }
+
+    #! One edit changes a static method's signature and the call in its consumer.
+    /** The shape a Qorus incremental build failed on: `QonsoleReferenceScope.qc` changed
+        `runAuxiliary(string, code<auto()>)` to take a third argument and `QorusQonsoleCore.qc` started
+        passing one, in the same edit.  The consumer folds a constant of the provider, so after the
+        group's own parse it reaches the provider only over a declaration contract -- preloaded, but
+        not an ordering edge -- and it is listed first.  The call names the class without its
+        namespace, which resolves against the preloaded class instead of a deferred import, so a
+        standalone compile of the consumer ahead of the provider read the provider's previous object:
+
+          PARSE-TYPE-ERROR: no variant matching 'A::f(string, string)' can be found; the following
+            variants were tested:
+             A::f(string a)
+    */
+    testIncrementalStaleProviderCompiledFirst() {
+        TmpDir tmp("qore-cmake-qcc-stale-provider-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        string snippets_dir = src_dir + "/srcs";
+        mkdir(src_dir);
+        mkdir(snippets_dir);
+
+        string provider = "%new-style
+%strict-args
+public namespace StaleProvider {
+public class A {
+    public {
+        const K = 1;
+    }
+    public static string f(string a) {
+        return a;
+    }
+}
+}
+";
+        string consumer = "%new-style
+%strict-args
+public namespace StaleProvider {
+public class B {
+    public {
+        const K = A::K + 1;
+    }
+    public static string g() {
+        return A::f(\"x\");
+    }
+}
+}
+";
+        write(snippets_dir + "/a.qc", provider);
+        write(snippets_dir + "/b.qc", consumer);
+        # the consumer is listed first, so it is first in the topological order
+        write(src_dir + "/CMakeLists.txt",
+"cmake_minimum_required(VERSION 3.16)
+project(QoreQoStaleProvider NONE)
+find_package(Qore REQUIRED)
+
+qore_qcc_compile_objects(QO_OBJECTS
+    GROUP staleprovider
+    OUTPUT_DIR \"${CMAKE_BINARY_DIR}/qo\"
+    SCRIPT_DIR \"${CMAKE_BINARY_DIR}/qo-scripts\"
+    SOURCES
+        \"${CMAKE_SOURCE_DIR}/srcs/b.qc\"
+        \"${CMAKE_SOURCE_DIR}/srcs/a.qc\"
+    PARSE_OPTIONS PO_MODERN
+    WARNINGS_ARE_ERRORS
+    STAMPS_VAR QO_STAMPS
+    ORDER_TARGETS_VAR QO_ORDER_TARGETS)
+add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
+add_dependencies(qo-objects ${QO_ORDER_TARGETS})
+");
+
+        string configure = run(sprintf("cmake -S %s -B %s%s", src_dir, build_dir,
+            qore_dir ? " -DQore_DIR=" + qore_dir : ""));
+        assertTrue(is_file(build_dir + "/Makefile"), "the fixture configures: " + configure);
+        string build = sprintf("cmake --build %s -- -j9", build_dir);
+        string clean = run(build);
+        assertEq(2, occurrences(clean, "qcc: script-context .qo"),
+            "the clean build compiles both members: " + clean);
+
+        write(snippets_dir + "/a.qc", replace(replace(provider, "f(string a)", "f(string a, *string b)"),
+            "return a;", "return a + (b ?? \"\");"));
+        write(snippets_dir + "/b.qc", replace(consumer, "A::f(\"x\")", "A::f(\"x\", \"y\")"));
+        string edited = run(build);
+        assertEq(-1, edited.find("PARSE-TYPE-ERROR"),
+            "the consumer is not compiled against the provider's previous object: " + edited);
+        assertEq(-1, edited.find("cannot build stale component"), "the incremental plan succeeds: " + edited);
+        assertEq(-1, edited.find("selecting the shared-parse batch"),
+            "without a whole-group parse: " + edited);
+        int provider_pos = edited.find("_srcs_a_qc.qo\n");
+        int consumer_pos = edited.find("_srcs_b_qc.qo\n");
+        assertTrue(provider_pos >= 0 && consumer_pos > provider_pos,
+            "the provider is compiled before its consumer: " + edited);
+        assertEq(2, occurrences(edited, "qcc: script-context .qo"),
+            "each edited member is compiled once: " + edited);
+
+        string converged = run(build);
+        assertEq(0, occurrences(converged, "qcc: script-context .qo"),
+            "the build after the incremental compiles converges: " + converged);
     }
 
     #! A group's object recipes carry no depfile; one depfile watches what the group reads from outside.

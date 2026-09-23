@@ -39,7 +39,8 @@ run_source_order() {
 
 cleanup() {
     if [ -n "$stale_file" ]; then
-        rm -f "$stale_file"
+        rm -f "$stale_file" "$stale_file.rows" "$stale_file.keys" \
+            "$stale_file.order" "$stale_file.components"
     fi
     if [ -n "$subset_plan_file" ]; then
         rm -f "$subset_plan_file"
@@ -528,15 +529,33 @@ while :; do
     # edges.  The component key survives that -- it names a member set -- while
     # the index does not, so the key is what the builder is given to address its
     # component with.
-    awk -F '\t' '$1 == "rebuild-closure" || !seen[$2]++' "$stale_file" > "$stale_file.components"
+    awk -F '\t' '$1 != "rebuild-closure" && !seen[$2]++' "$stale_file" > "$stale_file.rows"
+    # The stale listing is in topological order, which follows required edges
+    # only.  A stale component can also preload another one over a content
+    # dependency or a load requirement, and compiling it first would resolve it
+    # against that provider's previous object -- a call to a signature changed in
+    # the same edit then fails to parse.  So the rows are compiled in the order
+    # the helper derives from everything each compile preloads.
+    awk -F '\t' '{ print $2 }' "$stale_file.rows" > "$stale_file.keys"
+    if ! (
+        QORE_QCC_GRAPH_SNAPSHOT=$graph_snapshot
+        export QORE_QCC_GRAPH_SNAPSHOT
+        run_source_order --scc-order-set "$context" "$stale_file.keys"
+    ) > "$stale_file.order"; then
+        echo "$0: cannot order the $stale_count stale component(s) for" \
+            "standalone compiles" >&2
+        exit 1
+    fi
+    awk -F '\t' 'NR == FNR { row[$2] = $0; next } ($1 in row) { print row[$1] }' \
+        "$stale_file.rows" "$stale_file.order" > "$stale_file.components"
+    ordered_count=$(awk 'END { print NR + 0 }' "$stale_file.components")
+    rm -f "$stale_file.rows" "$stale_file.keys" "$stale_file.order"
+    if [ "$ordered_count" -ne "$stale_count" ]; then
+        echo "$0: ordering the stale set returned $ordered_count of" \
+            "$stale_count component(s)" >&2
+        exit 1
+    fi
     while IFS="$tab" read -r component_index component_key component_size source output; do
-        # The closure row is a property of the plan, not a component in it.
-        # Written as a block rather than `test && continue`: an AND-OR list whose
-        # first command fails leaves the list's status non-zero, and this loop
-        # runs under `set -e`.
-        if [ "$component_index" = "rebuild-closure" ]; then
-            continue
-        fi
         [ -n "$component_key" ] || continue
         component_lock=$(dirname "$output")/.qcc-scc/$component_key.lock
         # `$?` after a NEGATED condition is the negation's status, not the builder's,

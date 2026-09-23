@@ -545,6 +545,37 @@ stale sets into one source per pass, and a parse of one source is a standalone c
 more overhead. Making it the default would need a stale set whose members do not reach each
 other through preloads, which the edits measured here did not produce.
 
+*Standalone compiles follow what they preload (fixed).* The default path has the same
+hazard between passes' members that convexity handles inside one parse. A pass compiles its
+stale components one at a time, and each compile preloads the `.qo` of what it resolves
+against; a provider that is stale in the same pass is preloaded as its *previous* object
+unless it was compiled first. The stale listing was compiled in topological order, which
+follows **required** edges only, and a provider reached solely over a content dependency or a
+load requirement is preloaded without being ordered. On Qorus, one edit changed
+`QonsoleReferenceScope::runAuxiliary(string, code<auto()>)` to take a third argument and made
+`Classes/QorusQonsoleCore.qc` pass one. The consumer reached the provider only over a
+declaration contract (the group's own parse records no compile contract for it), and it came
+first:
+
+```
+PARSE-TYPE-ERROR: no variant matching 'QonsoleReferenceScope::runAuxiliary(string, code<auto()>, string)'
+  can be found; the following variants were tested:
+   QonsoleReferenceScope::runAuxiliary(string purpose, code<auto()> task)
+```
+
+A cross-source static call is normally deferred to link time, which hides this; the call named
+the class without its namespace (the manifest has `OMQ::QonsoleReferenceScope`), and that form
+resolves against the preloaded class so the stale shell's variants decided it.
+
+The coordinator now compiles a pass's rows in the order `qore-qo-source-order --scc-order-set`
+gives (`preloadCompileOrder()`): a component is taken only once no other pending component is
+reachable through what it preloads — the relation `componentPreloadOutputs()` closes over,
+walked through current components in between. That relation includes every required
+predecessor, so the result is still a topological order. Content dependencies can form cycles;
+a cycle among pending components has no order that serves all of them and is broken at the
+first pending component in topological order, whose required predecessors are all taken by
+then. The escalation that follows a failed compile is unchanged.
+
 ## What actually causes the mode-transition cascade
 
 The cascade — the first incremental build after any full build walking the whole closure of
