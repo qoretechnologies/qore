@@ -436,7 +436,7 @@ private:
     enum CleanupFlags : unsigned {
         CF_NONE = 0,
         CF_SKIP_LVARS = 1,       //!< skip local var cleanup (for return - pre-instantiation handles it)
-        CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break)
+        CF_FILL_REMAINING = 2,   //!< fill remaining elements in ref foreach (for break and return)
     };
 
     //! Emit block cleanup instructions (handler lowering + ScopeExit + UninstantiateLocal + RefForeach)

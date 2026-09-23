@@ -17,6 +17,7 @@ class RefForeachTest inherits QUnit::Test {
         addTestCase("break with remaining fill", \testBreakFill());
         addTestCase("continue in body", \testContinue());
         addTestCase("return from body", \testReturnFromBody());
+        addTestCase("return keeps the referenced list's unvisited elements", \testReturnWriteBack());
         addTestCase("nested ref foreach", \testNestedRefForeach());
         addTestCase("exception in body", \testExceptionInBody());
         addTestCase("exception safety on init", \testExceptionSafetyInit());
@@ -111,6 +112,55 @@ class RefForeachTest inherits QUnit::Test {
         auto result = doReturnFromBody();
         # Return happens before write-back, so l still has original value
         assertEq((1, 2, 3, 4, 5), result);
+    }
+
+    static int returnFromRefBody(reference<list<auto>> l, auto stop) {
+        foreach auto v in (\l) {
+            v *= 10;
+            if (v == stop * 10) {
+                return $#;
+            }
+        }
+        return -1;
+    }
+
+    static int returnFromInnerPlainLoop(reference<list<auto>> l) {
+        foreach auto v in (\l) {
+            v *= 10;
+            foreach auto x in ((1, 2)) {
+                if (v == 20 && x == 2) {
+                    return 1;
+                }
+            }
+        }
+        return -1;
+    }
+
+    static int returnFromInnerRefLoop(reference<list<list<auto>>> l) {
+        foreach list<auto> inner in (\l) {
+            foreach auto v in (\inner) {
+                v *= 10;
+                if (v == 30) {
+                    return 1;
+                }
+            }
+        }
+        return -1;
+    }
+
+    testReturnWriteBack() {
+        list<auto> l = (1, 2, 3, 4, 5);
+        assertEq(2, returnFromRefBody(\l, 3));
+        assertEq((10, 20, 30, 4, 5), l, "the caller's list keeps the unvisited elements");
+        l = (1, 2, 3);
+        assertEq(2, returnFromRefBody(\l, 3));
+        assertEq((10, 20, 30), l, "return at the last element");
+        l = (1, 2, 3);
+        assertEq(1, returnFromInnerPlainLoop(\l));
+        assertEq((10, 20, 3), l, "return from a plain loop nested in the ref foreach");
+        list<list<auto>> nested = ((1, 2), (3, 4), (5, 6));
+        assertEq(1, returnFromInnerRefLoop(\nested));
+        assertEq(((10, 20), (30, 4), (5, 6)), nested, "both nested lists keep their unvisited elements");
     }
 
     testNestedRefForeach() {

@@ -1480,8 +1480,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // source-level caller resumes.  The function wrapper still pops
             // pre-instantiated local slots later; UninstantiateLocal clears the
             // value without corrupting that stack ownership contract.
-            // Also handles RefForeach cleanup (record + finalize without fill remaining).
-            if (!emitBlockCleanups(0, error, false)) {
+            // Also handles RefForeach cleanup: record the current element, then write the
+            // referenced list back with its unvisited elements unchanged, as break does.
+            if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
                 return false;
             }
             // Emit CatchCleanup for all active catch scopes before returning
@@ -1519,8 +1520,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             lowered = builder.createRefSelf(lowered, stmt->loc)->result;
         }
         // Emit block cleanups for all active scopes (fires on_exit handlers,
-        // clears lvar values, and handles RefForeach cleanup).
-        if (!emitBlockCleanups(0, error, false)) {
+        // clears lvar values, and writes back any enclosing ref foreach list with
+        // its unvisited elements unchanged).
+        if (!emitBlockCleanups(0, error, false, CF_FILL_REMAINING)) {
             return false;
         }
         // Emit CatchCleanup for all active catch scopes before returning
