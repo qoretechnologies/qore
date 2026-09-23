@@ -314,6 +314,12 @@ fi
 if [ $CORE_PATTERN_SET -eq 0 ]; then
     sysctl -w "kernel.core_pattern=$CORE_DIR_ABS/core.%e.%p" 2>/dev/null && CORE_PATTERN_SET=1
 fi
+# macOS writes cores to kern.corefile (/cores/core.%P), which only root can write, so a crashing test left no
+# core and no backtrace.  Only on disposable CI machines, where the system-wide setting does not outlive the job.
+if [ $CORE_PATTERN_SET -eq 0 ] && [ "$(uname -s)" = "Darwin" ] && [ -n "$CI" ] && sudo -n true 2>/dev/null; then
+    sudo -n sysctl -w "kern.corefile=$CORE_DIR_ABS/core.%P" > /dev/null 2>&1 && CORE_PATTERN_SET=1
+    echo "kern.corefile: $(sysctl -n kern.corefile 2>/dev/null)"
+fi
 # Show the actual core pattern so we know where cores will land
 if [ -f /proc/sys/kernel/core_pattern ]; then
     KERN_CORE_PATTERN=$(cat /proc/sys/kernel/core_pattern 2>/dev/null)
@@ -488,6 +494,18 @@ for test in $TESTS; do
                     "$CORE_DIR"/*|"$CORE_DIR_ABS"/*) ;;
                     *) cp "$CORE_FILE" "$CORE_DIR/" 2>/dev/null && rm -f "$CORE_FILE" || true ;;
                 esac
+            elif [ -n "$CORE_FILE" ] && command -v lldb > /dev/null 2>&1; then
+                echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                # the crashing thread first, as the head of the file is what the log shows
+                lldb --batch -c "$CORE_FILE" "$QORE" -o "thread backtrace" -o "thread backtrace all" \
+                    > "$BT_FILE" 2>&1
+                head -500 "$BT_FILE"
+                # a macOS core holds the whole address space (gigabytes); the macOS CI machine cannot upload
+                # artifacts, and a few cores would fill its disk
+                if [ -n "$CI" ]; then
+                    rm -f "$CORE_FILE"
+                fi
             elif command -v gdb > /dev/null 2>&1; then
                 echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
