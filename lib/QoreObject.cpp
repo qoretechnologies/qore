@@ -1402,7 +1402,15 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                         RSet::isValid(rs), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan.load(),
                         qodh.doScan());
 
-                    if (!rs) {
+                    if (rs && rs->isStale() && qodh.deferredScan()) {
+                        // this dereference released the last real reference of an object whose scan was deferred,
+                        // and no scan has confirmed or replaced its set since (RSet::markStale()): the deferred
+                        // scan is made before collection is decided.  A set that a scan started elsewhere has
+                        // recorded since the deferral describes the graph after the change, and is used as is.
+                        printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' deferred scan with a set; "
+                            "rescanning\n", this, getClassName());
+                        rc = -1;
+                    } else if (!rs) {
                         // an object in no recursive set has no recursive references either; the fast path
                         // above relies on this to skip the comparison without reading rcount
                         assert(!rcount);

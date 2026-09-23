@@ -315,7 +315,7 @@ What the numbers say:
 Objects walked by the scans the writes made, with the compiled tiers handing a dead assigned value over to the lvalue
 (Phase 0b), a closure-bound local's frame lending its object a real reference (Phase 2), and a set's verdict
 trusted unless an edge was added between its members since its scan (Phase 4, `design/dgc.md`, "Knowing that a set's
-counts are current"). Every shape also asserts collection: nothing destroyed while the set is held, everything
+counts are current"), and a deferred scan marking the set stale instead of discarding it (Phase 3b). Every shape also asserts collection: nothing destroyed while the set is held, everything
 destroyed once it is released. All execution modes and the AOT module now walk the same number of objects.
 
 | shape | ast | ir / jit / tiered | aot |
@@ -330,7 +330,7 @@ destroyed once it is released. All execution modes and the AOT module now walk t
 | registry removal, same | 5,050 | 5,050 | 5,050 |
 | registry growth with `@=` | 200 | 200 | 200 |
 | confirming scan of an open cycle, holder in a list | 500 | 500 | 500 |
-| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 4,500 | 4,500 | 4,500 |
+| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 3,000 | 3,000 | 3,000 |
 | 10 requests releasing their references to a set member from outside the set, after a scan made while they held it | 0 | 0 | 0 |
 
 The server shape rebuilds the controller's recursive set twice per request (200 sets for 100 requests): the

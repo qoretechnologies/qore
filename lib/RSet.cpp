@@ -628,12 +628,17 @@ int RObject::checkDeferScan() {
         // reference from outside the set for ever.
         if (!rset.load(std::memory_order_relaxed))
             return -1;
-        // otherwise we need to invalidate the rset and ensure that
-        // rrefs does not go to zero until this is done
+        // otherwise we need to mark the rset stale and ensure that rrefs does not go to zero until this is done:
+        // the dereference that releases the last real reference makes the deferred scan, which must find the
+        // mark in place
         ++rref_wait;
     }
 
-    removeInvalidateRSet();
+    // The set is kept, marked stale, rather than invalidated: a stale set is never collected and its counts are
+    // not trusted until the deferred scan has confirmed or replaced it (RSet::canDelete()), which is all that
+    // discarding it achieved, and the deferred scan can then confirm it in place instead of building an
+    // identical one.  See design/dgc.md, "The rrefs deferral".
+    markRSetStale();
     AutoLocker al(rlck);
     // more than one thread can be invalidating at once, so the real references may only be released once the
     // last of them has finished
@@ -652,6 +657,16 @@ void RObject::clearRSetClosed() {
         // the object holds a reference to the set, which its rsection keeps in place
         assert(rs == rset.load(std::memory_order_relaxed));
         rs->clearClosed();
+    }
+}
+
+void RObject::markRSetStale() {
+    QoreAutoVarRWWriteLocker al(rml);
+    RSet* rs = rset.load(std::memory_order_relaxed);
+    if (rs) {
+        rs->markStale();
+        // a scan started elsewhere must enter the set again: its counts describe the graph before the change
+        clearRSetClosed();
     }
 }
 
@@ -910,6 +925,11 @@ int RSet::canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator
 
     if (!valid)
         return -1;
+
+    // a scan of a member was deferred after a change: the set is kept until that scan is made (markStale())
+    if (isStale()) {
+        return 0;
+    }
 
     bool need_rescan = false;
     {
@@ -1739,6 +1759,8 @@ void RSetHelper::commit() {
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
+                // the scan found the set it would build: it describes the graph again
+                rs->clearStale();
             }
             if (n.unlock) {
                 unlockNode(n);
@@ -1803,6 +1825,7 @@ void RSetHelper::commit() {
             RSet* rs = obj->rset.load(std::memory_order_relaxed);
             if (rs) {
                 rs->setScanEpoch(scan_epoch);
+                rs->clearStale();
             }
             continue;
         }

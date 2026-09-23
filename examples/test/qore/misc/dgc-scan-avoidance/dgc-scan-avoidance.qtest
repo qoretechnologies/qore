@@ -32,19 +32,20 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         /** TierScanCounts lists what differs in the other execution modes.
         */
         const ExpectedScanCounts = {
-            # a plain local variable holds a real reference, so the scans are deferred to its release
+            # a plain local variable holds a real reference, so the scans are deferred to its release; the deferral
+            # keeps the set, marked stale, and the deferred scan confirms it in place (no new set)
             "local-scans": 100,
             "local-walked": 0,
             "local-sets": 0,
             "local-release-scans": 1,
             "local-release-walked": 3,
-            "local-release-sets": 1,
+            "local-release-sets": 0,
 
             # a method call holds a real reference to self; the scan deferred by the writes is made when the
             # call returns
             "method-scans": 100,
             "method-walked": 3,
-            "method-sets": 1,
+            "method-sets": 0,
             "method-release-scans": 1,
             "method-release-walked": 0,
             "method-release-sets": 0,
@@ -56,13 +57,13 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "closure-sets": 0,
             "closure-release-scans": 1,
             "closure-release-walked": 3,
-            "closure-release-sets": 1,
+            "closure-release-sets": 0,
 
             # the closure outlives the frame of the variable holding the cycle: the frame's release ends the lent
             # reference, and the scan deferred by the writes is made then, while the closure keeps the set
             "closure-outlives-scans": 102,
             "closure-outlives-walked": 5,
-            "closure-outlives-sets": 2,
+            "closure-outlives-sets": 1,
             "closure-outlives-release-scans": 1,
             "closure-outlives-release-walked": 0,
             "closure-outlives-release-sets": 0,
@@ -74,7 +75,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "closure-thread-sets": 0,
             "closure-thread-release-scans": 1,
             "closure-thread-release-walked": 3,
-            "closure-thread-release-sets": 1,
+            "closure-thread-release-sets": 0,
 
             # several threads write through a closure while the frame holds the variable: every write is deferred,
             # whichever thread makes it (the counts are summed over the threads)
@@ -83,12 +84,12 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "closure-concurrent-sets": 0,
             "closure-concurrent-release-scans": 1,
             "closure-concurrent-release-walked": 3,
-            "closure-concurrent-release-sets": 1,
+            "closure-concurrent-release-sets": 0,
 
             # an exception unwinds the frame: the lent reference ends and the cycle is collected
             "closure-exception-scans": 102,
             "closure-exception-walked": 5,
-            "closure-exception-sets": 2,
+            "closure-exception-sets": 1,
             "closure-exception-release-scans": 1,
             "closure-exception-release-walked": 0,
             "closure-exception-release-sets": 0,
@@ -99,13 +100,13 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "closure-ref-arg-sets": 0,
             "closure-ref-arg-release-scans": 1,
             "closure-ref-arg-release-walked": 3,
-            "closure-ref-arg-release-sets": 1,
+            "closure-ref-arg-release-sets": 0,
 
             # the variable is removed while its frame holds it: the value leaves with its real reference, which is
             # removed when the value is released, and the scan deferred by the writes collects the cycle then
             "closure-remove-scans": 100,
             "closure-remove-walked": 3,
-            "closure-remove-sets": 1,
+            "closure-remove-sets": 0,
             "closure-remove-release-scans": 1,
             "closure-remove-release-walked": 0,
             "closure-remove-release-sets": 0,
@@ -165,10 +166,11 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "confirm-release-sets": 0,
 
             # a server controller in a recursive set, reached only through a list, that registers and removes an
-            # operation per request inside its own methods: each deferral discards the controller's set and the
-            # scan made when the method returns rebuilds it - two sets and walks of its graph per request
+            # operation per request inside its own methods: each deferral marks the controller's set stale, and the
+            # scan made when the method returns replaces it, as the operation joins or leaves the controller's
+            # component - two sets per request
             "server-scans": 300,
-            "server-walked": 4500,
+            "server-walked": 3000,
             "server-sets": 200,
             "server-release-scans": 1,
             "server-release-walked": 3,

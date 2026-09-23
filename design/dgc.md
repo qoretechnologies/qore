@@ -105,16 +105,31 @@ container from a recursive set: the container's one physical reference to an obj
 entirely internal, and the smaller set would be collected prematurely. Including the owner completes the
 cycle, and its real references keep `references > rcount`, preventing collection.
 
-**A deferred scan discards the recursive set recorded for the object, every time it is deferred.** Because a
+**A deferred scan marks the recursive set recorded for the object stale, every time it is deferred.** Because a
 scan rooted elsewhere assigns a set to an object that has real references, a set can be attached between one
-deferred scan and the next, and it describes the graph as it was when that scan ran. `checkDeferScan()`
-therefore invalidates the set on each deferral rather than only on the first: a hub whose container is grown
-one entry at a time, while the hub is held by a real reference for each of those mutations, otherwise keeps
-the `rcount` it was given when the container was shortest. `RSet::canDelete()` reads the difference as a live
-reference from outside the set and returns 0 for the life of the object, so the cycle is never collected —
-`rref_wait` counts the invalidations in flight, because more than one thread can be making one at a time and
-the real references may only reach zero once the last has finished.
-`examples/test/qore/misc/dgc-deferred-scan-sets.qtest` covers it for list and hash containers.
+deferred scan and the next, and it describes the graph as it was when that scan ran: a hub whose container is grown
+one entry at a time, while the hub is held by a real reference for each of those mutations, would otherwise keep
+the `rcount` it was given when the container was shortest, and `RSet::canDelete()` would read the difference as a
+live reference from outside the set for the life of the object. A removal under a deferred root is the other
+direction: the set still counts the removed reference as internal, and without a rule a dereference would find the
+references left from outside equal to the stale `rcount`s and collect objects that are still held.
+
+`checkDeferScan()` therefore marks the set **stale** (`RObject::markRSetStale()`, `RSet::markStale()`) and clears
+its closed mark, so that scans started elsewhere enter it again. `canDelete()` keeps a stale set - it neither
+collects it nor rescans it - until the deferred scan is made: `qore_object_private::customDeref()` makes it when
+the object's last real reference goes and its set is still stale, and a closure-bound variable's dereference does
+the same. That scan, or any other scan that walks the set in the meantime, confirms the set in place when the
+components are the ones recorded (clearing the mark, without a new set or the exclusive r-section of the graph)
+or replaces it. A set that a scan started elsewhere has recorded since the deferral already describes the graph
+after the change, so the deferred scan is not made for it. `rref_wait` counts the marks in flight, because more
+than one thread can be making one at a time and the real references may only reach zero once the last has
+finished, so the deferred scan always finds the mark in place.
+
+The set used to be discarded on every deferral instead, which cost a new set - and the exclusive r-section of the
+whole graph - each time: a plain local variable holding a cycle rebuilt its set when released, and the
+server-controller shape in `dgc-scan-avoidance` walked half as much again (4,500 objects for 100 requests, now
+3,000). `examples/test/qore/misc/dgc-deferred-scan-sets.qtest` covers the grown containers and the removals, for
+list and hash containers.
 
 ### Watched nodes
 
@@ -331,8 +346,9 @@ state.** Three rules establish it:
   scan of the object at all, so `RObject::valuesCanChangeWithoutScan()` keeps a set containing such an object
   from ever being marked closed.
 
-Invalidating a set clears the mark for every member (`RSet::invalidateIntern()`), so a set that is rescanned,
-collected or torn down is never left marked. Nothing else may mark a set closed: a set whose mark outlives a
+Invalidating a set clears the mark for every member (`RSet::invalidateIntern()`), and so does marking it stale
+when a scan of a member is deferred (`RObject::markRSetStale()`), so a set that is rescanned, collected, torn down
+or changed under a deferred scan is never left marked. Nothing else may mark a set closed: a set whose mark outlives a
 change to one of its nodes describes a graph that no longer exists, and the cycles through it are then never
 found.
 

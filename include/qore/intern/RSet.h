@@ -325,6 +325,9 @@ public:
     DLLLOCAL int checkDeferScan();
 
     DLLLOCAL void removeInvalidateRSet();
+
+    //! Marks the object's recursive set stale, and not closed, instead of invalidating it; see RSet::markStale()
+    DLLLOCAL void markRSetStale();
     DLLLOCAL void removeInvalidateRSetIntern();
 
     //! Takes this object's recursive set out of the closed state, so that scans enter it again
@@ -518,6 +521,29 @@ public:
         scan_epoch.store(epoch, std::memory_order_relaxed);
     }
 
+    //! Marks the set as describing the graph before a change whose scan was deferred
+    /** Called by RObject::checkDeferScan() with the deferring object's write lock held.  A stale set is kept by
+        every dereference (canDelete() returns 0) until the deferred scan is made, when the object's last real
+        reference is released: that scan confirms the set in place or replaces it, and either clears the mark.
+        Replacing the set on every deferral instead cost a new set, and the exclusive r-section of the whole graph,
+        each time.
+    */
+    DLLLOCAL void markStale() {
+        stale.store(true, std::memory_order_release);
+    }
+
+    //! Clears the stale mark; called by a scan that has confirmed the set against the live graph
+    DLLLOCAL void clearStale() {
+        if (stale.load(std::memory_order_relaxed)) {
+            stale.store(false, std::memory_order_release);
+        }
+    }
+
+    //! Returns true if the set is stale; see markStale()
+    DLLLOCAL bool isStale() const {
+        return stale.load(std::memory_order_acquire);
+    }
+
     //! Advanced when an edge is added whose target objects cannot be found to mark them; see edgesUnchangedSinceScan()
     DLLLOCAL static std::atomic<unsigned> untracked_edge_epoch;
 
@@ -603,6 +629,8 @@ protected:
     std::atomic_bool valid;
     //! untracked_edge_epoch as read by the scan that last assigned or confirmed the set
     std::atomic<unsigned> scan_epoch{0};
+    //! true while a scan of one of the members is deferred; see markStale()
+    std::atomic_bool stale{false};
 
     // called with the write lock held
     DLLLOCAL void invalidateIntern() {
