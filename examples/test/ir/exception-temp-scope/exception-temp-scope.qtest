@@ -1,0 +1,113 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include exception-temp-scope-checks.qi
+
+%exec-class ExceptionTempScopeTest
+
+#! Tests the variables that a closure run by a background thread keeps
+/** The checks in exception-temp-scope-checks.qi run in this program, in each execution mode, and from a compiled
+    module: the AST interpreter, the IR tiers and compiled code each create the closure a thread runs.
+*/
+class ExceptionTempScopeTest inherits QUnit::Test {
+    public {
+        #! objects destroyed when each handler runs: the raising statement's temporary, and nothing else
+        const Expected = {
+            "local-store": 1,
+            "hash-store": 1,
+            "list-store": 1,
+            "path-store": 1,
+            "second-statement": 1,
+            "throw": 1,
+            "call-throws": 1,
+            "in-loop": 1,
+            # the list the loop iterates over is kept; only the body statement's temporary is gone
+            "enclosing-in-handler": 1,
+            "enclosing-iterations": 2,
+            # every iteration of a typed loop runs its handler
+            "typed-loop-caught": 3,
+            # and with local variables in the try body
+            "typed-lvars-caught": 3,
+            "typed-lvars-released": 1,
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("ExceptionTempScopeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testInProgram() {
+        checkResults("in-program", ExceptionTempScopeChecks::get_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("exception-temp-scope-worker.q", get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-exception-temp-scope-");
+        string qmod_path = tmp.path + DirSep + "ExceptionTempScopeChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "ExceptionTempScopeChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("exception-temp-scope-module-worker.q", tmp.path));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir,
+            module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and compares them with the expected results
+    private checkWorkerOutput(string label, string out) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        checkResults(label, results);
+    }
+
+    private checkResults(string label, hash<string, int> results) {
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

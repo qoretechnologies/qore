@@ -3,6 +3,8 @@
     QoreIRLowering.cpp
 
     Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
 */
 
 #include <algorithm>
@@ -7296,7 +7298,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                     }
                 }
                 // Create LValuePathAssign instruction (no result value — assignment
-                auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
+                auto* path_inst = builder.append<QoreIRLValuePathInstruction>(
                     QoreIROpcode::LValuePathAssign);
                 path_inst->result = builder.getFunction()->createValue();
                 path_inst->path = std::move(lv_path);
@@ -10258,7 +10260,7 @@ QoreIRValue QoreIRLowering::lowerSplice(const QoreValue& expr, std::string& erro
         }
     }
 
-    auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
+    auto* path_inst = builder.append<QoreIRLValuePathInstruction>(
         QoreIROpcode::LValuePathTernary);
     path_inst->result = builder.getFunction()->createValue();
     path_inst->path = std::move(lv_path);
@@ -10344,7 +10346,7 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
                 }
             }
             // Create LValuePathTernary instruction
-            auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
+            auto* path_inst = builder.append<QoreIRLValuePathInstruction>(
                 QoreIROpcode::LValuePathTernary);
             path_inst->result = builder.getFunction()->createValue();
             path_inst->path = std::move(lv_path);
@@ -11801,7 +11803,7 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     if (!key_val.isValid()) return QoreIRValue();
 
     // Load current element value
-    auto load_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name.c_str());
+    auto load_inst = builder.append<QoreIRHashKeyAccessInstruction>(key_name.c_str());
     load_inst->loc = loc;
     load_inst->result = builder.getFunction()->createValue();
     load_inst->operands.push_back(hash_val);
@@ -11812,7 +11814,7 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     if (!new_val.isValid()) return QoreIRValue();
 
     // Store result back to hash element (COW-safe via QoreIRHashKeyStoreInstruction)
-    auto store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreInstruction>(
+    auto store_inst = builder.append<QoreIRHashKeyStoreInstruction>(
         container_var, key_name.c_str());
     store_inst->loc = loc;
     if (!exception_stack.empty()) {
@@ -11863,7 +11865,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicCompoundOp(
     }
 
     // Store result back with dynamic key
-    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreDynamicInstruction>(
+    auto* store_inst = builder.append<QoreIRHashKeyStoreDynamicInstruction>(
         container_var);
     store_inst->loc = loc;
     if (!exception_stack.empty()) {
@@ -11898,7 +11900,7 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
     if (!index_val.isValid()) return QoreIRValue();
 
     // Load current element value via ListIndexAccess
-    auto load_inst = builder.getBlock()->appendInstruction<QoreIRListIndexAccessInstruction>();
+    auto load_inst = builder.append<QoreIRListIndexAccessInstruction>();
     load_inst->loc = loc;
     load_inst->result = builder.getFunction()->createValue();
     load_inst->operands.push_back(list_val);
@@ -11910,7 +11912,7 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
     if (!new_val.isValid()) return QoreIRValue();
 
     // Store result back to list element (COW-safe via QoreIRListIndexStoreInstruction)
-    auto store_inst = builder.getBlock()->appendInstruction<QoreIRListIndexStoreInstruction>(container_var);
+    auto store_inst = builder.append<QoreIRListIndexStoreInstruction>(container_var);
     store_inst->loc = loc;
     store_inst->operands.push_back(list_val);
     store_inst->operands.push_back(new_val);
@@ -11938,7 +11940,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
     }
 
     // Store value to hash element (COW-safe via QoreIRHashKeyStoreInstruction)
-    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreInstruction>(
+    auto* store_inst = builder.append<QoreIRHashKeyStoreInstruction>(
         container_var, key_name.c_str());
     store_inst->loc = loc;
     if (!exception_stack.empty()) {
@@ -11975,7 +11977,7 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     }
 
     // Store value to hash element with dynamic key
-    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreDynamicInstruction>(
+    auto* store_inst = builder.append<QoreIRHashKeyStoreDynamicInstruction>(
         container_var);
     store_inst->loc = loc;
     if (!exception_stack.empty()) {
@@ -12044,7 +12046,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         }
     }
     // Create the instruction with a properly allocated result value ID
-    auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(opcode);
+    auto* path_inst = builder.append<QoreIRLValuePathInstruction>(opcode);
     path_inst->result = builder.getFunction()->createValue();
     path_inst->path = std::move(lv_path);
     path_inst->mode = mode;
@@ -12107,7 +12109,7 @@ QoreIRValue QoreIRLowering::emitListIndexDirectStore(
     }
 
     // Store value to list element (COW-safe via QoreIRListIndexStoreInstruction)
-    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRListIndexStoreInstruction>(container_var);
+    auto* store_inst = builder.append<QoreIRListIndexStoreInstruction>(container_var);
     store_inst->loc = loc;
     // the store can throw (element type coercion, invalid index), so it must unwind to the enclosing catch block,
     // exactly as the equivalent hash store does in emitHashKeyDirectStore()

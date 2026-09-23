@@ -6555,7 +6555,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     };
 
-    auto cleanupToTempScope = [&](uint32_t scope_id, bool no_throw, bool fallback_to_nearest = false) {
+    // keep_mark: release only the temps registered after the mark's sentinel and keep the mark, as a branch to an
+    // exception handler in this frame does: the scope an instruction records can belong to a statement that is still
+    // running once the handler has - a try, or a loop - whose own DiscardTemps must find its mark then.  A mark left
+    // behind by a statement that the exception ended is removed by the DiscardTemps of the statement enclosing it.
+    // See design/ir-exception-branch-temp-scope.md.
+    auto cleanupToTempScope = [&](uint32_t scope_id, bool no_throw, bool fallback_to_nearest = false,
+            bool keep_mark = false) {
         if (!scope_id && !fallback_to_nearest) {
             return;
         }
@@ -6571,7 +6577,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         size_t mark_index = temp_cleanup_marks.size() - 1
             - static_cast<size_t>(std::distance(temp_cleanup_marks.rbegin(), mark));
-        size_t cleanup_size = mark->cleanup_size;
+        // the mark's sentinel is at cleanup_size; keeping the mark keeps its sentinel too
+        size_t cleanup_size = mark->cleanup_size + (keep_mark ? 1 : 0);
         ExceptionSink* eff_xsink = no_throw ? nullptr : xsink;
         unsigned cancel_countdown = 100;
         while (cleanup.size() > cleanup_size) {
@@ -6598,7 +6605,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             weak_load_temp_slots.erase(id);
             releaseBorrowedTemp(id);
         }
-        temp_cleanup_marks.erase(temp_cleanup_marks.begin() + mark_index, temp_cleanup_marks.end());
+        temp_cleanup_marks.erase(temp_cleanup_marks.begin() + mark_index + (keep_mark ? 1 : 0),
+            temp_cleanup_marks.end());
         ephemeral_weak_ref_slots.clear();
     };
 
@@ -7351,6 +7359,7 @@ next_instruction:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -7429,6 +7438,7 @@ next_instruction:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -7540,6 +7550,7 @@ next_instruction:
                 temp.discard(inst->opcode == QoreIROpcode::DecrefNoThrow ? nullptr : xsink);
                 if (inst->opcode == QoreIROpcode::Decref && xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -7713,13 +7724,14 @@ next_instruction:
                     if (!inv->exception_target) {
                         return returnAfterUnhandledException();
                     }
-                    cleanupToTempScope(inv->temp_scope_id, true);
+                    cleanupToTempScope(inv->temp_scope_id, true, false, true);
                     if (getenv("QORE_IR_TRACE_EXCEPTIONS")) {
                         fprintf(stderr, "[ir-exception] func='%s' branch-exception xsink=%d target=%p\n",
                             func.name.c_str(), xsink && *xsink ? 1 : 0,
                             static_cast<void*>(inv->exception_target));
                         fflush(stderr);
                     }
+                    cleanupToTempScope(inv->temp_scope_id, true, false, true);
                     prev_block = block;
                     block = inv->exception_target;
                     ip = 0;
@@ -7854,12 +7866,13 @@ next_instruction:
                     }
                     // Check for thread cancellation or program interrupt at loop headers
                     if (qore_check_cancel(xsink, "IR loop")) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         if (br->exception_target) {
+                            cleanupToTempScope(br->temp_scope_id, true, false, true);
                             block = br->exception_target;
                             ip = 0;
                             break;
                         }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -7896,12 +7909,13 @@ next_instruction:
                     }
                     // Check for thread cancellation or program interrupt at loop headers
                     if (qore_check_cancel(xsink, "IR loop")) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         if (br->exception_target) {
+                            cleanupToTempScope(br->temp_scope_id, true, false, true);
                             block = br->exception_target;
                             ip = 0;
                             break;
                         }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -8539,6 +8553,7 @@ load_local_done:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -8666,6 +8681,7 @@ load_local_done:
                 store_dynamic_key();
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -8892,6 +8908,7 @@ load_local_done:
                 } while (false);
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -9165,12 +9182,13 @@ load_local_done:
                     }
                     // Check for thread cancellation or program interrupt at loop headers
                     if (qore_check_cancel(xsink, "IR loop")) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         if (fused_inst->exception_target) {
+                            cleanupToTempScope(fused_inst->temp_scope_id, true, false, true);
                             block = fused_inst->exception_target;
                             ip = 0;
                             break;
                         }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
@@ -9187,6 +9205,7 @@ load_local_done:
                 if (*xsink) {
                     out.discard(xsink);
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -9280,6 +9299,7 @@ load_local_done:
                     mhk->key1.c_str(), offset, xsink));
                 if (*xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -9360,6 +9380,7 @@ load_local_done:
                             select_inst->key1.c_str(), xsink);
                         if (*xsink) {
                             if (inst->exception_target) {
+                                cleanupToTempScope(inst->temp_scope_id, true, false, true);
                                 prev_block = block;
                                 block = inst->exception_target;
                                 ip = 0;
@@ -9413,6 +9434,7 @@ load_local_done:
                             }
                             if (*xsink) {
                                 if (inst->exception_target) {
+                                    cleanupToTempScope(inst->temp_scope_id, true, false, true);
                                     prev_block = block;
                                     block = inst->exception_target;
                                     ip = 0;
@@ -10171,6 +10193,7 @@ load_local_done:
                     QoreValue stored = coerceIRLocalValue(local_inst->local, val, xsink);
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
                             prev_block = block;
                             block = inst->exception_target;
                             ip = 0;
@@ -10239,6 +10262,7 @@ load_local_done:
                     }
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
                             prev_block = block;
                             block = inst->exception_target;
                             ip = 0;
@@ -10290,6 +10314,7 @@ load_local_done:
                     }
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
                             prev_block = block;
                             block = inst->exception_target;
                             ip = 0;
@@ -10408,6 +10433,7 @@ load_local_done:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -10830,6 +10856,7 @@ load_local_done:
                     no_narrow_holder = coerceIRLocalValue(local_inst->local, val, xsink);
                     if (xsink && *xsink) {
                         if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
                             prev_block = block;
                             block = inst->exception_target;
                             ip = 0;
@@ -10870,6 +10897,7 @@ load_local_done:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -10935,6 +10963,7 @@ load_local_done:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11007,6 +11036,7 @@ load_local_done:
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11139,7 +11169,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11162,7 +11192,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11185,7 +11215,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11235,7 +11265,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11260,7 +11290,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11284,6 +11314,7 @@ load_local_done:
                     stmt_return, xsink);
                 if (rc || (xsink && *xsink)) {
                     if (inst->exception_target && xsink && *xsink) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11368,6 +11399,7 @@ load_local_done:
                                 : inst->opcode == QoreIROpcode::TypedForeachNextString ? 3 : 0,
                         xsink);
                     if (inst->exception_target) {
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11444,7 +11476,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11477,7 +11509,7 @@ load_local_done:
                     if (inst->exception_target) {
                         // in-frame landing pad: drain by scope so enclosing-scope temps
                         // survive; see design/ir-exception-branch-temp-scope.md
-                        cleanupToTempScope(inst->temp_scope_id, true);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11594,6 +11626,8 @@ load_local_done:
             case QoreIROpcode::CheckException: {
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
+                        // the handler is in this frame: only the raising statement's temps are dead there
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -11723,6 +11757,7 @@ load_local_done:
                         // If handler execution raised an exception, route to the
                         // ScopeExit instruction's exception_target (try/catch landing pad)
                         if (xsink && *xsink && inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
                             prev_block = block;
                             block = inst->exception_target;
                             ip = 0;
@@ -11902,13 +11937,14 @@ load_local_done:
                 if (val.getType() == NT_LIST) {
                     str = q_sprintf(val.get<const QoreListNode>(), 0, 0, xsink);
                     if (*xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         if (inst->exception_target) {
+                            cleanupToTempScope(inst->temp_scope_id, true, false, true);
                             prev_block = block;
                             block = inst->exception_target;
                             ip = 0;
                             break;
                         }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         if (debug_active) {
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                         }
@@ -12564,7 +12600,7 @@ load_local_done:
                 // lvh is now destructed — object lock released
                 if (assignment_failed || (xsink && *xsink)) {
                     if (xsink && *xsink && inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -12715,7 +12751,7 @@ load_local_done:
                     res.discard(xsink);
                     res = QoreValue();
                     if (xsink && *xsink && inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -13236,7 +13272,7 @@ load_local_done:
                     res.discard(xsink);
                     res = QoreValue();
                     if (xsink && *xsink && inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -13390,7 +13426,7 @@ load_local_done:
                 }
                 if (navigation_failed || (xsink && *xsink)) {
                     if (xsink && *xsink && inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -13586,7 +13622,7 @@ load_local_done:
                     res.discard(xsink);
                     res = QoreValue();
                     if (xsink && *xsink && inst->exception_target) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupToTempScope(inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = inst->exception_target;
                         ip = 0;
@@ -14419,7 +14455,7 @@ load_local_done:
                         if (!invoke_inst->exception_target) {
                             return returnAfterUnhandledException(true);
                         }
-                        cleanupToTempScope(invoke_inst->temp_scope_id, true);
+                        cleanupToTempScope(invoke_inst->temp_scope_id, true, false, true);
                         prev_block = block;
                         block = invoke_inst->exception_target;
                         ip = 0;
@@ -14482,7 +14518,7 @@ load_local_done:
                     if (!invoke_inst->exception_target) {
                         return returnAfterUnhandledException(true);
                     }
-                    cleanupToTempScope(invoke_inst->temp_scope_id, true);
+                    cleanupToTempScope(invoke_inst->temp_scope_id, true, false, true);
                     prev_block = block;
                     block = invoke_inst->exception_target;
                     ip = 0;
@@ -14770,7 +14806,7 @@ load_local_done:
                     if (!de_invoke_inst->exception_target) {
                         return returnAfterUnhandledException(true);
                     }
-                    cleanupToTempScope(de_invoke_inst->temp_scope_id, true);
+                    cleanupToTempScope(de_invoke_inst->temp_scope_id, true, false, true);
                     prev_block = block;
                     block = de_invoke_inst->exception_target;
                     ip = 0;
@@ -15250,7 +15286,7 @@ load_local_done:
                     // Whatever this scoped drain leaves behind is released by the DiscardTemps
                     // of the enclosing statement (try.merge), or by the full drain in
                     // returnAfterUnhandledException() if the exception leaves the frame.
-                    cleanupToTempScope(throw_inst->temp_scope_id, true);
+                    cleanupToTempScope(throw_inst->temp_scope_id, true, false, true);
                     prev_block = block;
                     block = throw_inst->exception_target;
                     ip = 0;
@@ -15316,7 +15352,7 @@ load_local_done:
                     // Scoped drain, for the same reason as Throw above: the outer landing pad
                     // is in this frame, so enclosing-scope temps (e.g. an enclosing typed
                     // foreach's list) must survive the branch.
-                    cleanupToTempScope(rethrow_inst->temp_scope_id, true);
+                    cleanupToTempScope(rethrow_inst->temp_scope_id, true, false, true);
                     prev_block = block;
                     block = rethrow_inst->exception_target;
                     ip = 0;
