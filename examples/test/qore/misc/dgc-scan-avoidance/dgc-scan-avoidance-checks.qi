@@ -667,6 +667,37 @@ sub queue_ref_writes(reference<hash<string, int>> rv, Tally t, reference<*Counte
     release = new Counters();
 }
 
+#! the edge that closes the cycle is replaced while a list holds the root
+/** The value replaced - the root - still has a reference, from the list, after the edge to it is gone.  Released
+    before the scan that repairs the set, it was compared with the set's count of references from inside it, which
+    still included the removed edge, the two were equal, and the root and its peer were collected while the list
+    held them.
+*/
+sub cut_list_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    list<Node> l = (new Node(),);
+    make_cycle(l[0]);
+    Counters c();
+    l[0].peer.peer = new Leaf();
+    # still referenced: a further write must work
+    l[0].peer.x = new Leaf();
+    c.record(\rv, "cut-list");
+    rv."cut-list-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! as cut_list_writes(), with the edge replaced through the public C++ API QoreObject::setValue()
+sub cut_api_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    list<Node> l = (new Node(),);
+    make_cycle(l[0]);
+    Counters c();
+    # the hook references neither object, so that their counts are the ones the set sees
+    call_function("dbg_object_set_value", l, "peer", "peer", new Leaf());
+    l[0].peer.x = new Leaf();
+    c.record(\rv, "cut-api");
+    rv."cut-api-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! runs one check and records what releasing its set cost and destroyed
 sub run(reference<hash<string, int>> rv, string shape,
         code<nothing(reference<hash<string, int>>, Tally, reference<*Counters>)> check) {
@@ -790,6 +821,10 @@ public hash<string, int> sub get_results() {
     run(\rv, "marked", \marked_writes());
     run(\rv, "queue-cycle", \queue_cycle_writes());
     run(\rv, "queue-ref", \queue_ref_writes());
+    run(\rv, "cut-list", \cut_list_writes());
+    if (have_scan_count()) {
+        run(\rv, "cut-api", \cut_api_writes());
+    }
     run(\rv, "closure-outlives", \closure_outlives_writes());
     run(\rv, "closure-thread", \closure_thread_writes());
     run(\rv, "closure-concurrent", \closure_concurrent_writes());

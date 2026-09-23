@@ -1138,8 +1138,6 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
             before = false;
     }
 
-    old_value.discard(xsink);
-
     // scan object if necessary
     if (before || after) {
         // the set does not count an edge added here until the scan has followed the object's edges; see
@@ -1147,6 +1145,9 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
         edgesAdded();
         RSetHelper rsh(*this, xsink);
     }
+
+    // released after the scan has repaired the sets that counted the edge to it; see ~LValueHelper
+    old_value.discard(xsink);
 }
 
 QoreValue qore_object_private::evalBuiltinMethodWithPrivateData(const QoreMethod& method,

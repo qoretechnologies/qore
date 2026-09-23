@@ -213,6 +213,25 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "queue-ref-release-scans": 1,
             "queue-ref-release-walked": 9,
             "queue-ref-release-sets": 1,
+
+            # the edge that closes the cycle is replaced while a list holds the root
+            "cut-list-scans": 2,
+            "cut-list-walked": 8,
+            "cut-list-sets": 0,
+            "cut-list-release-scans": 1,
+            "cut-list-release-walked": 0,
+            "cut-list-release-sets": 0,
+
+            # the same through the public C++ API (debug builds only: dbg_object_set_value())
+            "cut-api-scans": 1,
+            "cut-api-walked": 8,
+            "cut-api-sets": 0,
+            "cut-api-release-scans": 1,
+            "cut-api-release-walked": 0,
+            "cut-api-release-sets": 0,
+            "cut-api-held-dtors": 0,
+            "cut-api-dtors": 2,
+            "cut-api-leaf-dtors": 2,
         };
 
         #! the scan counters of the compiled tiers that differ from the AST interpreter's (ExpectedScanCounts)
@@ -303,6 +322,10 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "queue-ref-held-dtors": 0,
             "queue-ref-dtors": 2,
             "queue-ref-leaf-dtors": 0,
+            # nothing is collected while the list holds the root; both are once it is released
+            "cut-list-held-dtors": 0,
+            "cut-list-dtors": 2,
+            "cut-list-leaf-dtors": 2,
         };
 
         #! the execution modes that the worker is run in

@@ -1017,6 +1017,10 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - fixed reference cycles closed only by values stored in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue held by that
       object) being kept for the life of the process
+    - fixed objects in a reference cycle being destroyed while still referenced when the member that closed the
+      cycle was replaced (for example <tt>root.peer.peer = value</tt> on a cycle between \c root and \c peer held
+      by a list or a local variable): the value replaced was released before the cycle's reference counts were
+      recalculated
     - updated module ABI and the @ref Qore::Program "Program" container to allow for better sandboxing
     - <b>ReadOnlyFile short reads</b>
       - new @ref Qore::ReadOnlyFile::readShortBinary() "ReadOnlyFile::readShortBinary()" method returns immediately with any available data without trying to

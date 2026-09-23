@@ -4946,6 +4946,45 @@ static QoreValue f_dbg_ref_remove_key(const QoreListNode* params, RuntimeConfig&
     return rv.release();
 }
 
+//! sets a member of an object with the public C++ API QoreObject::setValue()
+/** The object is <tt>holder[0].member</tt>; neither it nor \c holder[0] is referenced for the call, so that their
+    reference counts are the ones the recursive sets see.  The value the member held before is released only after
+    the recursive-reference scan that the change makes; see qore_object_private::setValueIntern().
+
+    @param holder a list whose first element is an object
+    @param member the member of that object that holds the object to change
+    @param key the member to set
+    @param val the value to set
+*/
+static QoreValue f_dbg_object_set_value(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreListNode* holder = get_param_value(params, 0).get<const QoreListNode>();
+    QoreStringNodeValueHelper member(get_param_value(params, 1));
+    QoreStringNodeValueHelper key(get_param_value(params, 2));
+    QoreValue first = holder->retrieveEntry(0);
+    if (first.getType() != NT_OBJECT) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_object_set_value() requires a list whose first element "
+            "is an object");
+        return QoreValue();
+    }
+    // the object holds the value, and the caller's list holds the object, for the duration of the call
+    QoreObject* target;
+    {
+        ValueHolder mv(first.get<QoreObject>()->getReferencedMemberNoMethod(member->c_str(), xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (mv->getType() != NT_OBJECT) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_object_set_value() member \"%s\" does not hold an "
+                "object", member->c_str());
+            return QoreValue();
+        }
+        target = mv->get<QoreObject>();
+    }
+    // setValue() takes over the reference
+    target->setValue(key->c_str(), get_param_value(params, 3).refSelf(), xsink);
+    return QoreValue();
+}
+
 //! sets a key in the referenced hash in place and then removes another key with the same helper
 /** QoreTypeSafeReferenceHelper::getUnique() lets the caller change the hash without the helper knowing, so the
     removal that follows must not skip the recursive-reference scan even if it removes a scalar.
@@ -5110,6 +5149,9 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, QORE_PARAM_NO_ARG, "src");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
+    qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 4, listTypeInfo, QORE_PARAM_NO_ARG, "holder", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "key", autoTypeInfo, QORE_PARAM_NO_ARG, "val");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,
         QORE_PARAM_NO_ARG, "set_key", autoTypeInfo, QORE_PARAM_NO_ARG, "val", stringTypeInfo, QORE_PARAM_NO_ARG,

@@ -711,11 +711,6 @@ LValueHelper::~LValueHelper() {
         static_var_lvalue_value = QoreValue();
     }
 
-    // now delete temporary values (if any)
-    for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); i != e; ++i) {
-        discard(*i, vl.xsink);
-    }
-
     delete lvid_set;
 
     if (robj) {
@@ -747,6 +742,17 @@ LValueHelper::~LValueHelper() {
             robj->tDeref();
         }
     }
+
+    // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
+    // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
+    // would compare what is left of its references - from outside the set - with those counts, find them equal,
+    // and collect objects that are still referenced (a cycle's back edge replaced while the root is held by a
+    // local variable or a list).  A removed value that the scan did not reach keeps the reference held here, which
+    // only makes it look held from outside while the scan runs.
+    for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); i != e; ++i) {
+        discard(*i, vl.xsink);
+    }
+
     for (RObject* o : removal_objects) {
         o->tDeref();
     }

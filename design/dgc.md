@@ -301,6 +301,16 @@ innermost `RObject` on the path, the one whose member changed, and deferring its
 set. `examples/test/qore/misc/dgc-deferred-scan-sets.qtest` covers member and slice removals and a removal that
 leaves a smaller cycle.
 
+**The values a write replaced or removed are released only after its scan.** Until that scan has repaired them,
+the recursive sets they belonged to still count the edges that pointed at them. Released before it, a removed
+value was dereferenced against those counts: in `root.peer.peer = new Leaf()` on a cycle `root <-> peer` whose root
+a list (or a local variable) holds, the root's one remaining reference - the list's - equalled its `rcount` of 1,
+the peer's reference from the root equalled its own, and both were collected while the list still held them.
+`~LValueHelper` releases its temporaries after the scan, and `qore_object_private::setValueIntern()` releases the
+old value after its scan. A removed value the scan does not reach only keeps a reference from the helper while the
+scan runs, which makes it look held from outside. The `cut-list` and `cut-api` shapes in
+`examples/test/qore/misc/dgc-scan-avoidance` cover it.
+
 Removing an object, or a container, closure or reference that needs a scan still scans, because dropping an
 edge can make a cycle collectable. `delete` needs no special case: deleting an object removes a value that needs
 a scan. Any other removal (`lvh.remove()` of the whole value, or an unexpected container type) keeps the
