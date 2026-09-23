@@ -8048,6 +8048,49 @@ static bool aotAppendStaticMemberImportRecords(const std::vector<AOTCompiledFunc
             rec.consumer_source_file = consumer_file ? consumer_file : "";
             imported.push_back(std::move(rec));
         }
+
+        // Static variables the function reaches by name, which take no expression slot: a resolved read and
+        // every write.  The same path is recorded whether the compile resolved the variable or deferred it, so
+        // what the object names does not depend on which sources the compile had declared.  Optional, like a
+        // call import: the code binds the variable by name when it runs, and a variable a loaded module
+        // declares is resolved from the module rather than from a linked object.
+        const char* func_file = aotFuncSourceFile(func);
+        if (shouldSkipByCompileFile(func_file, compile_file, compile_files)) {
+            continue;
+        }
+        for (size_t j = 0; j < func.slot_ids.static_var_refs.size(); ++j) {
+            if (!aotCheckSymbolIndexCancel(j, error, "AOT symbol-index static-variable import collection")) {
+                return false;
+            }
+            const AOTStaticVarRefId& ref = func.slot_ids.static_var_refs[j];
+            // a variable declared by what this object compiles is its own, not an import
+            if (!ref.provider_source_file.empty()
+                    && !shouldSkipByCompileFile(ref.provider_source_file.c_str(), compile_file, compile_files)) {
+                continue;
+            }
+            std::string path = aotStaticMemberImportPath(ref.class_ref, ref.var_name);
+            if (path.empty()) {
+                continue;
+            }
+            std::string seen_key = path;
+            seen_key += '\n';
+            seen_key += func_file ? func_file : "";
+            if (!seen.insert(seen_key).second) {
+                continue;
+            }
+
+            QoreAOTSymbolIndexRecord rec;
+            rec.kind = QoreAOTSymbolKind::STATIC_VAR;
+            rec.dependency_class = QoreAOTDependencyClass::QORE_API;
+            rec.flags = QORE_AOT_SYMBOL_FLAG_OPTIONAL_IMPORT;
+            rec.qore_path = std::move(path);
+            rec.consumer_source_file = func_file ? func_file : "";
+            // No provider, exactly as the deferred form records none: a provider would widen an existing
+            // dependency on that source to its compile contract, and only the compile that resolved the
+            // variable would know it -- so the two modes would publish different contracts for one source.
+            // Load requirements attribute the path through the build group's source-symbol manifest.
+            imported.push_back(std::move(rec));
+        }
     }
     return true;
 }

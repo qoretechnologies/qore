@@ -413,10 +413,11 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     A preloaded fragment is also run: parse commit evaluates static variable initializers, including
     those of preloaded classes, and code they reach in a fragment can only be loaded in a program that
-    declares every class and function it calls.  A call that is resolved at run time is not a build
-    dependency, so \c qcc records those providers beside each object separately, and the build
-    scheduler preloads them together with the object; the same failure is also reported with status
-    \c 78.
+    declares every class and function it calls and every static variable it reads or writes.  A call
+    or static variable that is resolved at run time is not a build dependency, so \c qcc records
+    those providers beside each object separately, whether or not the compile had them declared,
+    and the build scheduler preloads them together with the object; the same failure is also reported
+    with status \c 78.
 
     What a rebuild covers is decided by contracts rather than by source bytes.  A consumer that folds
     a provider's compile-time constant or enum member leaves no trace of it in the emitted object, so

@@ -264,8 +264,8 @@ predecessors, which is what `--scc-preload-set` reports. Both answer from one
 closure (`componentPreloadOutputs()`), so what a source is preloaded with does not
 depend on which path compiled it.
 
-The partial parse is nevertheless **opt-in** (`QORE_QCC_SUBSET_PARSE=1`); what
-the default waits on is below. The coordinator falls back to the group's own
+The partial parse is nevertheless **opt-in** (`QORE_QCC_SUBSET_PARSE=1`), for
+its cost rather than its correctness (measured below). The coordinator falls back to the group's own
 parse when a partial parse fails, so enabling it cannot break a build — but the
 fallback costs the failed parse on top of the group's, so a partial parse that
 fails routinely is worse than not trying.
@@ -277,8 +277,7 @@ of its group from preloaded `.qo` shells does not get what the group's own parse
 would have given it, and the rules written for a parse of ONE source do not all
 carry over to a parse of several.
 
-Three defects sat between the partial parse and a Qorus build; two are fixed and
-the third is the one the default still waits on.
+Three defects sat between the partial parse and a Qorus build; all three are fixed.
 
 **It makes the parse defer to sources it is compiling itself.** *(Fixed.)* The
 source-symbol manifest names which source of the build group provides each
@@ -319,8 +318,8 @@ orders by the plan instead. Parse options are now saved and restored around each
 batch source; module loads, parse defines and module parse commands are batch
 state by construction and are left alone.
 
-**A subset must be convex, and the preload set must be complete.** *(Partly fixed;
-the convexity half is what the default still waits on.)* Two separate requirements hide
+**A subset must be convex, and the preload set must be complete.** *(Fixed.)* Two
+separate requirements hide
 here, and both come from the same fact: **a `.qo` carries the declarations it was compiled
 against**.
 
@@ -729,10 +728,12 @@ incremental build after a group parse walks the whole closure of whatever was
 edited, however small the edit, and why the coordinator prefers to stay in one
 mode for a whole build.
 
-The sharper form of the same fact is that **parse commit runs user code**. A
-constant initializer that calls across the subset boundary needs the provider's
-body, and a shell does not carry one. With the two defects above fixed, a
-419-source subset of Qorus reaches exactly that:
+**Parse commit runs user code, including a preloaded object's**
+([#5466](https://github.com/qoretechnologies/qore/issues/5466)). A preloaded `.qo` is not a
+declaration shell: it carries its source-stripped IR, and a constant initializer in a source the
+parse compiles calls into a preloaded provider exactly as it would into one the parse compiled.
+What that needs is every class and function the provider's code reaches *declared* in the parse,
+which is the preload closure's job, not a body the object lacks. The report that opened #5466,
 
 ```
 RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
@@ -740,11 +741,33 @@ RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
    GroupRuntimeContext::hostOmqMap() (Classes/MetadataActionContext.qc:379-615)
 ```
 
-`hostOmqMap()`'s body is in `QorusMapManager.qc`, which that subset preloads
-rather than compiles. No preload-set or ordering rule fixes this: either the
-shells carry enough to execute the initializer, or a subset must be widened to
-include every source whose body a member's constant initialization reaches. Until
-one of those exists, `QORE_QCC_SUBSET_PARSE` stays off by default.
+was the completeness defect above -- `OmqMap.qc` was neither compiled nor preloaded, so
+`new OmqMap()` was deferred and its deferred value read as no value -- and not a missing body. On
+the current Qorus tree a partial parse compiling `MetadataActionContext.qc` with
+`QorusMapManager.qc`, `GroupRuntimeContext.qc` and `OmqMap.qc` all preloaded commits cleanly, and
+`CMakeBuildHelpers.qtest` pins the same call chain, counting the preloaded body's runs.
+
+What #5466 did find was a hole in what an object records about a **static class variable**. A
+read the parse resolves is a `LoadStaticVar` that names the variable itself and takes no
+expression slot, and every write is a `LValuePath` rooted at the variable, so only a read
+*deferred* to link time reached the symbol index, and with it `<object>.load-requires`. A constant
+initializer is where that decides the outcome. `TypeMap` folds `QorusMapManager::groups`, so:
+
+- the whole-group parse resolves the read and records nothing about `QorusMapManager.qc`;
+- the next partial parse therefore does not preload it, and defers the whole initializer to link
+  time instead of running it -- recording the provider, because the read was deferred;
+- the parse after that preloads it, runs the initializer, and records nothing again.
+
+The object alternated between the two forms on every build. Slot extraction now also records the
+static variables a function reaches by name (`AOTStaticVarRefId`, compile-time only), and the
+symbol index imports each one another source declares as an optional `static_var` record without a
+provider -- the same record whichever mode compiled the object, and the same one the deferred form
+writes. `.load-requires` attributes it through the source-symbol manifest. It carries no provider
+because an import's provider widens an existing dependency on that source to its compile contract,
+which only the compile that resolved the variable could do.
+
+`QORE_QCC_SUBSET_PARSE` stays opt-in for the reason measured above: on a group as dense as Qorus the
+convexity rule reduces most multi-source stale sets to one source per pass.
 
 ## Two channels decide staleness, and both have to agree about granularity
 
@@ -1289,6 +1312,9 @@ which two builders can still race to restore.
 22. A preload set is closed over what the code of each preloaded object needs declared when it
     runs at parse commit (`<object>.load-requires`), as well as over its dependencies. A
     late-bound call is never a dependency, whichever compile mode recorded the object.
+23. What an object records about a symbol its code reaches does not depend on whether the
+    compile had that symbol declared. A static class variable read or written by name is imported
+    by path, without a provider, whether the parse resolved it or deferred it.
 
 ## Tests
 
@@ -1310,7 +1336,9 @@ which two builders can still race to restore.
   folded enum members in both compile modes; the body-contract rows a consumer records;
   that a preloaded object's module loads in a program a `--stub` parse left mid-parse; and
   that a preloaded object's code that cannot load at parse commit exits 78 while a failure
-  in the compiled source's own initializer exits 1
+  in the compiled source's own initializer exits 1; and that a static class variable another
+  source declares is imported the same way by a batch and a standalone compile, whether it is
+  folded into a constant, read in a body or written
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a cascade walked to convergence, a pass that changes
@@ -1333,9 +1361,10 @@ which two builders can still race to restore.
   that no member depfile reaches a target consuming the object stamps, that a module a member
   started requiring after the group parse is watched and an edit to it rebuilds that member
   alone, and that configuring resets the consolidated dependencies an earlier configuration
-  left
-  left, and that code a preloaded sibling runs at parse commit finds what it calls -- a static
-  method, a function and a construction -- after its caller was compiled standalone
+  left, that code a preloaded sibling runs at parse commit finds what it calls -- a static
+  method, a function and a construction -- after its caller was compiled standalone, and that a
+  partial parse's constant initializers run a preloaded provider's body on every build, not every
+  other one
 - `examples/test/qore/misc/static-var-deferred-init.qtest` -- a static variable initializer is
   deferred only at parse commit: reads report what is still pending, a failure is reported by
   every read, and initializers are classified from their own exceptions
