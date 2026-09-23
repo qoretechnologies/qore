@@ -68,7 +68,7 @@ if [ -f "${TMP}/host_stub.qo" ]; then
     exit 1
 fi
 # Target must have its register entry point.
-SYMS=$(nm "${TMP}/target.qo" | grep -cE "T qore_target_target_script_register" || true)
+SYMS=$(nm "${TMP}/target.qo" | grep -cE "T _?qore_target_target_script_register" || true)
 if [ "${SYMS}" != "1" ]; then
     echo "FAIL: expected 1 register entry point, got ${SYMS}"
     exit 1
@@ -86,7 +86,7 @@ int sub answer() {
 EOF
 CUSTOM_QO="${TMP}/custom-target.qo"
 "${QCC}" -c -o "${CUSTOM_QO}" "${TMP}/simple.qc" >/dev/null
-nm "${CUSTOM_QO}" | grep -q "T qore_custom_target_custom_target_script_register"
+nm "${CUSTOM_QO}" | grep -qE "T _?qore_custom_target_custom_target_script_register"
 LD_LIBRARY_PATH=build "${QCC}" -o "${TMP}/custom-app" -e answer "${CUSTOM_QO}" >/dev/null
 LD_LIBRARY_PATH=build "${TMP}/custom-app"
 echo "  confirmed: custom .qo filename controls qcc link glue symbols"

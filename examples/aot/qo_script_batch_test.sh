@@ -46,8 +46,8 @@ echo "=== Step 1: batch-compile lib.qc + main.q in one parse cycle ==="
 
 echo ""
 echo "=== Step 2: verify per-file register entry points exist ==="
-nm "${LIB_QO}"  | grep -E "T qore_${LIB_ID}_${LIB_ID}_script_register"   | head -1
-nm "${MAIN_QO}" | grep -E "T qore_${MAIN_ID}_${MAIN_ID}_script_register" | head -1
+nm "${LIB_QO}"  | grep -E "T _?qore_${LIB_ID}_${LIB_ID}_script_register"   | head -1
+nm "${MAIN_QO}" | grep -E "T _?qore_${MAIN_ID}_${MAIN_ID}_script_register" | head -1
 
 echo ""
 echo "=== Step 3: build + run positive harness (batch, reverse order) ==="

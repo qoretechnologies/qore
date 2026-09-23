@@ -52,7 +52,8 @@ DUPS=$(nm "${TMP}/combined.o" | awk '$2 == "T" {print $3}' | sort | uniq -d | wc
 DEFS=$(nm "${TMP}/combined.o" | awk '$2 == "T"' | wc -l)
 echo "  duplicate T symbols: ${DUPS} (expect 0)"
 echo "  defined T symbols:   ${DEFS}"
-[ "${DUPS}" = "0" ] || { echo "FAIL: duplicate symbols"; exit 1; }
+# numerically: BSD wc (macOS) pads its count with spaces
+[ "${DUPS}" -eq 0 ] || { echo "FAIL: duplicate symbols"; exit 1; }
 
 echo ""
 echo "=== Step 5: link C++ host + run ==="

@@ -11,7 +11,9 @@ set -euo pipefail
 QORE_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "${QORE_ROOT}"
 
-TMP="$(mktemp -d)"
+# qcc labels a fragment with its source's resolved path, and on macOS mktemp
+# answers under /var, a symlink to /private/var
+TMP="$(realpath "$(mktemp -d)")"
 trap 'rm -rf "${TMP}"' EXIT
 
 mkdir -p "${TMP}/lib" "${TMP}/bin" "${TMP}/out"

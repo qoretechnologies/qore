@@ -58,10 +58,10 @@ echo "=== Step 1: batch-compile 4 .qos in one parse cycle ==="
 
 echo ""
 echo "=== Step 2: verify per-file register entry points exist ==="
-nm "${BASE_QO}" | grep -E "T qore_${BASE_ID}_${BASE_ID}_script_register" | head -1
-nm "${MID_QO}"  | grep -E "T qore_${MID_ID}_${MID_ID}_script_register"   | head -1
-nm "${TOP_QO}"  | grep -E "T qore_${TOP_ID}_${TOP_ID}_script_register"   | head -1
-nm "${MAIN_QO}" | grep -E "T qore_${MAIN_ID}_${MAIN_ID}_script_register" | head -1
+nm "${BASE_QO}" | grep -E "T _?qore_${BASE_ID}_${BASE_ID}_script_register" | head -1
+nm "${MID_QO}"  | grep -E "T _?qore_${MID_ID}_${MID_ID}_script_register"   | head -1
+nm "${TOP_QO}"  | grep -E "T _?qore_${TOP_ID}_${TOP_ID}_script_register"   | head -1
+nm "${MAIN_QO}" | grep -E "T _?qore_${MAIN_ID}_${MAIN_ID}_script_register" | head -1
 
 echo ""
 echo "=== Step 3: build + run positive harness (batch, reverse order) ==="

@@ -15,7 +15,9 @@ MODULE_DIR="${QORE_ROOT}/qlib${QORE_MODULE_DIR:+:${QORE_MODULE_DIR}}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 SRC="${TMP}/src/static-method-auto-arg-runtime-dispatch.q"
-SRC_ID="$(realpath "${SRC}" | sed 's/[^A-Za-z0-9_]/_/g')"
+# BSD realpath (macOS) requires the path to exist, and the source is written below
+SRC_ID="$(printf '%s/%s' "$(realpath "$(dirname "${SRC}")")" "$(basename "${SRC}")" \
+    | sed 's/[^A-Za-z0-9_]/_/g')"
 SRC_QO="${TMP}/qo/${SRC_ID}.qo"
 AGG_QO="${TMP}/qo/static_method_auto_arg_runtime_dispatch_agg.qo"
 

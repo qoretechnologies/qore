@@ -14,7 +14,9 @@ QCC="${QCC:-./build/qcc}"
 mkdir -p "${TMP}/src" "${TMP}/qo"
 
 SRC="${TMP}/src/overload-resolution.q"
-SRC_ID="$(realpath "${SRC}" | sed 's/[^A-Za-z0-9_]/_/g')"
+# BSD realpath (macOS) requires the path to exist, and the source is written below
+SRC_ID="$(printf '%s/%s' "$(realpath "$(dirname "${SRC}")")" "$(basename "${SRC}")" \
+    | sed 's/[^A-Za-z0-9_]/_/g')"
 SRC_QO="${TMP}/qo/${SRC_ID}.qo"
 AGG_QO="${TMP}/qo/overload_resolution_agg.qo"
 
