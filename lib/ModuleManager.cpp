@@ -1845,6 +1845,17 @@ static void inherit_module_sandbox_manager(QoreProgram& module_pgm, QoreProgram*
     }
 }
 
+//! Returns the parse options of the Program loading a user module that the module inherits
+/** A module is parsed with the restrictions and permissions of the Program loading it, but not with the options that
+    only select language behavior (QoreParseOptions::FREE_OPTIONS), which would change what the module's own code
+    means, nor with the ones the caller handles itself (\a exclude).  The full-width mask is required: the complement
+    of a legacy integer mask has an empty high word and would drop every extended option.
+*/
+static QoreParseOptions get_inherited_module_parse_options(const QoreParseOptions& parent_po,
+        const QoreParseOptions& exclude) {
+    return parent_po & ~(QoreParseOptions::FREE_OPTIONS | exclude);
+}
+
 QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink, ExceptionSink& wsink,
         const char* path, const char* feature, QoreProgram* pgm, bool reexport, QoreProgram* mpgm,
         QoreProgram* path_pgm, unsigned load_opt, int warning_mask) {
@@ -1878,7 +1889,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     if (p) {
         QoreParseOptions parent_po = p->getParseOptions();
         // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
-        parseOptions |= (parent_po & ~(PO_FREE_OPTIONS | PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG));
+        parseOptions |= get_inherited_module_parse_options(parent_po,
+            PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG);
         // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
         if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
             parseOptions |= PO_ENABLE_DEBUG;
@@ -2629,7 +2641,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     if (p) {
         QoreParseOptions parent_po = p->getParseOptions();
         // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
-        po |= (parent_po & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_NO_GLOBAL_VARS|PO_ENABLE_DEBUG));
+        po |= get_inherited_module_parse_options(parent_po, PO_REQUIRE_TYPES | PO_NO_GLOBAL_VARS | PO_ENABLE_DEBUG);
         // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
         if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
             po |= PO_ENABLE_DEBUG;
@@ -2742,7 +2754,7 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     if (p) {
         QoreParseOptions parent_po = p->getParseOptions();
         // Exclude PO_ENABLE_DEBUG from automatic propagation - it's handled conditionally below
-        po |= (parent_po & ~(PO_FREE_OPTIONS|PO_REQUIRE_TYPES|PO_ENABLE_DEBUG));
+        po |= get_inherited_module_parse_options(parent_po, PO_REQUIRE_TYPES | PO_ENABLE_DEBUG);
         // Propagate PO_ENABLE_DEBUG if the parent has it and doesn't have PO_NO_PROCESS_CONTROL
         if ((parent_po & PO_ENABLE_DEBUG) && !(parent_po & PO_NO_PROCESS_CONTROL)) {
             po |= PO_ENABLE_DEBUG;

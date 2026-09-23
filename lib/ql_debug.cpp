@@ -4989,6 +4989,21 @@ static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, Run
 static QoreValue f_dbg_is_short_string(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return get_param_value(params, 0).isShortString();
 }
+
+//! loads a user module from source text into the calling Program with ModuleManager::registerUserModuleFromSource()
+/** This loader is otherwise only reachable from the C++ API; tests use it to check what the module inherits from
+    the Program loading it.
+
+    @param name the module's name
+    @param src the module's source
+*/
+static QoreValue f_dbg_register_user_module_from_source(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    QoreStringNodeValueHelper src(get_param_value(params, 1));
+    MM.registerUserModuleFromSource(name->c_str(), src->c_str(), getProgram(), xsink);
+    return QoreValue();
+}
 #endif
 
 //! functional domain for debug and unit-test hooks
@@ -5037,6 +5052,9 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_deref_locked_count", f_dbg_get_deref_locked_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "src");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,

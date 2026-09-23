@@ -1329,7 +1329,12 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     When parsing module code, the default warning mask is set to @ref Qore::WARN_MODULES "WARN_MODULES", and any
     warnings are treated as errors.   Furthermore, any restrictions that the importing @ref Qore::Program "Program"
-    object has will be added to the module's @ref Qore::Program "Program" object.
+    object has will be added to the module's @ref Qore::Program "Program" object, including the extended parse
+    options (for example \c no-class-defs, \c no-new or \c no-module-path-directives), as will its permissions
+    (for example @ref allow-weak-references "%allow-weak-references" or
+    @ref allow-opaque-references "%allow-opaque-references").  Options that only select language behavior (the
+    \c broken-* compatibility options, \c fp-fast-math and the streaming syntax options, for example) are not
+    inherited, because they would change the meaning of the module's own code.
 
     Any @ref qore_namespaces "namespaces", @ref qore_classes "classes", @ref constants "constants",
     @ref qore_functions "functions", and @ref global_variables "global variables" declared as @ref mod_public "public"
