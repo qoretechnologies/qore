@@ -1,0 +1,513 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Verifies the message body framing of HTTP/1.x responses: a response to an HTTP/1.0 request never has
+# Transfer-Encoding (RFC 9112 section 6.1), a message body of unknown length is delimited by closing the connection in
+# that case (RFC 9112 section 6.3), a message body is framed as the response headers declare, and a send_callback
+# return value is one chunk.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerResponseFramingTest
+
+#! one form of request with respect to the HTTP version and connection persistence
+hashdecl FramingRequestForm {
+    #! the label for assertion messages
+    string label;
+    #! the HTTP version in the request line
+    string version;
+    #! the Connection header value, if any
+    *string connection;
+}
+
+#! a Qore-implemented InputStream, which only a Qore thread can read (not I/O-thread-safe)
+class QoreBlockStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+    }
+
+    constructor(binary data) {
+        self.data = data;
+    }
+
+    *binary read(int limit) {
+        if (pos >= data.size()) {
+            return;
+        }
+        # return small blocks so that the body is sent in several parts
+        binary rv = data.substr(pos, limit > 3 ? 3 : limit);
+        pos += rv.size();
+        return rv;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+}
+
+#! returns the response for each framing case
+class FramingResponses {
+    public {
+        const Body = "0123456789";
+        const Chunks = ("01", "234", "56789");
+    }
+
+    static *hash<auto> get(string name) {
+        binary b = binary(Body);
+        switch (name) {
+            case "stream": return {"code": 200, "body": new BinaryInputStream(b)};
+            case "stream-length": return {"code": 200, "body": new BinaryInputStream(b), "hdr": {"Content-Length": 10}};
+            case "qore-stream": return {"code": 200, "body": new QoreBlockStream(b)};
+            case "qore-stream-length":
+                return {"code": 200, "body": new QoreBlockStream(b), "hdr": {"Content-Length": 10}};
+            case "chunked-body": return {"code": 200, "chunked_body": new BinaryInputStream(b)};
+            case "string-te": return {"code": 200, "body": Body, "hdr": {"Transfer-Encoding": "chunked"}};
+            case "error-chunked-body": return {"code": 500, "chunked_body": new BinaryInputStream(b)};
+            case "callback": {
+                list<string> l = Chunks;
+                return {"code": 200, "send_callback": auto sub () { return shift l; }};
+            }
+            case "callback-trailer": {
+                list<auto> l = Chunks + ({"X-Trailer": "t"},);
+                return {"code": 200, "send_callback": auto sub () { return shift l; }};
+            }
+        }
+    }
+}
+
+#! serves the framing cases by the last path component
+class FramingHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return FramingResponses::get((hdr.path =~ x/([^\/]+)$/)[0]) ?? {"code": 404, "body": "not found"};
+    }
+}
+
+#! the stream request for StreamRequestHandler: a chunked response whose data send() provides
+class ChunkedStreamRequest inherits AbstractStreamRequest {
+    private {
+        list<string> chunks = FramingResponses::Chunks;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private hash<HttpResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpResponseInfo>{"code": 200, "hdr": {"Transfer-Encoding": "chunked"}};
+    }
+
+    private auto sendImpl() {
+        return shift chunks;
+    }
+}
+
+#! a handler that uses the stream request interface
+class StreamRequestHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new ChunkedStreamRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
+#! makes the connection persistent, then serves the framing cases
+class PersistentFramingHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string name = (hdr.path =~ x/([^\/]+)$/)[0];
+        if (name == "start") {
+            setPersistent(True);
+            return {"code": 200, "body": "started"};
+        }
+        if (!isPersistent()) {
+            return {"code": 500, "body": "not persistent"};
+        }
+        return FramingResponses::get(name) ?? {"code": 404, "body": "not found"};
+    }
+}
+
+#! an inline handler with a message body in memory
+class InlineFramingHandler inherits AbstractHttpRequestHandler {
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        switch ((hdr.path =~ x/([^\/]+)$/)[0]) {
+            case "string-te":
+                return <HttpResponseInfo>{"code": 200, "body": FramingResponses::Body,
+                    "hdr": {"Transfer-Encoding": "chunked"}};
+            case "stream":
+                return <HttpResponseInfo>{"code": 200, "body": new BinaryInputStream(binary(FramingResponses::Body))};
+            case "error":
+                throw "INLINE-TEST-ERROR", "inline handler failure";
+        }
+        return <HttpResponseInfo>{"code": 200, "body": FramingResponses::Body};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "the inline handler was not called inline");
+    }
+}
+
+#! sends an error response with a streamed message body with HttpServer::sendHttpError() on the handler thread
+class SendHttpErrorHandler inherits AbstractHttpRequestHandler {
+    private {
+        HttpServer server;
+    }
+
+    constructor(HttpServer server) {
+        self.server = server;
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        server.sendHttpError(cast<HttpListener>(listener), cx, s, 500, NOTHING,
+            new BinaryInputStream(binary(FramingResponses::Body)), NOTHING, NOTHING, hdr.method == "HEAD");
+        return <HttpResponseInfo>{"code": 500, "reply_sent": True};
+    }
+}
+
+public class HttpServerResponseFramingTest inherits QUnit::Test {
+    public {
+        #! the upper bound for every socket operation; a correct server answers at once
+        const Timeout = 10s;
+
+        const Http10 = <FramingRequestForm>{"label": "HTTP/1.0", "version": "1.0"};
+        const Http10KeepAlive = <FramingRequestForm>{"label": "HTTP/1.0 keep-alive", "version": "1.0",
+            "connection": "keep-alive"};
+        const Http11 = <FramingRequestForm>{"label": "HTTP/1.1", "version": "1.1"};
+        const Http11Close = <FramingRequestForm>{"label": "HTTP/1.1 close", "version": "1.1", "connection": "close"};
+
+        #! responses whose message body length is unknown when the response header is sent
+        const UnknownLengthCases = ("stream", "qore-stream", "chunked-body", "callback", "callback-trailer",
+            "stream-request/x");
+
+        #! the raw chunked message body of the send_callback response on the wire
+        const RawChunkedCallbackBody = "2\r\n01\r\n3\r\n234\r\n5\r\n56789\r\n0\r\n\r\n";
+    }
+
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("HttpServerResponseFramingTest", "1.0", \ARGV) {
+        addTestCase("HTTP/1.0: a body of unknown length is delimited by close",
+            \http10UnknownLengthIsCloseDelimited());
+        addTestCase("HTTP/1.0: a body of known length has Content-Length", \http10KnownLengthHasContentLength());
+        addTestCase("HTTP/1.1: a body of unknown length is chunked", \http11UnknownLengthIsChunked());
+        addTestCase("HTTP/1.1: a stream with Content-Length is not chunked", \http11StreamWithContentLength());
+        addTestCase("send_callback return values are chunks", \sendCallbackChunks());
+        addTestCase("no message body in a response to a HEAD request", \headResponseHasNoBody());
+        addTestCase("error response with a streamed body", \errorResponseWithStreamedBody());
+        addTestCase("persistent connection framing", \persistentConnectionFraming());
+        addTestCase("inline response framing", \inlineResponseFraming());
+        addTestCase("sendHttpError() with a streamed body", \sendHttpErrorStreamedBody());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("response-framing-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setHandler("stream-request", "/stream-request", NOTHING, new StreamRequestHandler());
+        server.setHandler("persistent", "/persistent", NOTHING, new PersistentFramingHandler());
+        server.setHandler("inline", "/inline", NOTHING, new InlineFramingHandler());
+        server.setHandler("send-http-error", "/send-http-error", NOTHING, new SendHttpErrorHandler(server));
+        server.setDefaultHandler("framing", new FramingHandler());
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        assertTrue(server.waitForAsyncIo(Timeout), "async I/O ready");
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    http10UnknownLengthIsCloseDelimited() {
+        foreach hash<FramingRequestForm> form in ((Http10, Http10KeepAlive)) {
+            foreach string path in (UnknownLengthCases) {
+                string label = sprintf("%s /%s", form.label, path);
+                Socket s = openConnection();
+                hash<auto> resp = exchange(s, "GET", path, form);
+                assertEq(200, resp.status_code, label);
+                assertEq("close", resp.framing, label + ": framing");
+                assertEq("close", resp.connection.lwr(), label + ": Connection header");
+                assertEq(FramingResponses::Body, resp.body, label + ": body");
+            }
+        }
+    }
+
+    http10KnownLengthHasContentLength() {
+        foreach string path in ("stream-length", "qore-stream-length", "string-te") {
+            {
+                string label = sprintf("%s /%s", Http10.label, path);
+                Socket s = openConnection();
+                hash<auto> resp = exchange(s, "GET", path, Http10);
+                assertEq("content-length", resp.framing, label + ": framing");
+                assertEq(FramingResponses::Body, resp.body, label + ": body");
+                assertEq("close", resp.connection.lwr(), label + ": Connection header");
+                assertClosed(s, label);
+            }
+            {
+                # the connection persists as requested
+                string label = sprintf("%s /%s", Http10KeepAlive.label, path);
+                Socket s = openConnection();
+                hash<auto> resp = exchange(s, "GET", path, Http10KeepAlive);
+                assertEq("content-length", resp.framing, label + ": framing");
+                assertEq(FramingResponses::Body, resp.body, label + ": body");
+                assertEq("keep-alive", resp.connection.lwr(), label + ": Connection header");
+                resp = exchange(s, "GET", path, Http10KeepAlive);
+                assertEq(FramingResponses::Body, resp.body, label + ": second request on the connection");
+            }
+        }
+    }
+
+    http11UnknownLengthIsChunked() {
+        foreach hash<FramingRequestForm> form in ((Http11, Http11Close)) {
+            foreach string path in (UnknownLengthCases + ("string-te",)) {
+                string label = sprintf("%s /%s", form.label, path);
+                Socket s = openConnection();
+                hash<auto> resp = exchange(s, "GET", path, form);
+                assertEq(200, resp.status_code, label);
+                assertEq("chunked", resp.framing, label + ": framing");
+                assertEq(FramingResponses::Body, resp.body, label + ": body");
+                if (form.connection) {
+                    assertClosed(s, label);
+                } else {
+                    resp = exchange(s, "GET", path, form);
+                    assertEq(FramingResponses::Body, resp.body, label + ": second request on the connection");
+                }
+            }
+        }
+    }
+
+    http11StreamWithContentLength() {
+        foreach hash<FramingRequestForm> form in ((Http11, Http11Close)) {
+            foreach string path in ("stream-length", "qore-stream-length") {
+                string label = sprintf("%s /%s", form.label, path);
+                Socket s = openConnection();
+                hash<auto> resp = exchange(s, "GET", path, form);
+                assertEq("content-length", resp.framing, label + ": framing");
+                assertEq("10", resp."content-length", label + ": Content-Length");
+                assertEq(FramingResponses::Body, resp.body, label + ": body");
+            }
+        }
+    }
+
+    sendCallbackChunks() {
+        # each value that the callback returns is one chunk on the wire
+        {
+            Socket s = openConnection();
+            s.send(getRequest("GET", "callback", Http11Close));
+            hash<auto> resp = s.readHTTPHeader(Timeout);
+            assertEq("chunked", resp."transfer-encoding");
+            assertEq(RawChunkedCallbackBody, readToEof(s).toString());
+        }
+        # a hash return value gives the trailers
+        {
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "callback-trailer", Http11);
+            assertEq(FramingResponses::Body, resp.body);
+            assertEq({"x-trailer": "t"}, resp.trailers);
+            # the connection persists after the trailers
+            resp = exchange(s, "GET", "callback", Http11);
+            assertEq(FramingResponses::Body, resp.body);
+        }
+    }
+
+    headResponseHasNoBody() {
+        # a stray message body would be read as the start of the next response on the connection
+        foreach hash<FramingRequestForm> form in ((Http11, Http10KeepAlive)) {
+            foreach string path in ("callback", "stream", "chunked-body", "qore-stream") {
+                string label = sprintf("%s HEAD /%s", form.label, path);
+                Socket s = openConnection();
+                hash<auto> resp = exchange(s, "HEAD", path, form);
+                assertEq(200, resp.status_code, label);
+                resp = exchange(s, "GET", path, form);
+                assertEq(200, resp.status_code, label + ": next response on the connection");
+                assertEq(FramingResponses::Body, resp.body, label + ": next response body");
+            }
+        }
+    }
+
+    errorResponseWithStreamedBody() {
+        foreach hash<FramingRequestForm> form in ((Http10, Http10KeepAlive, Http11, Http11Close)) {
+            string label = sprintf("%s /error-chunked-body", form.label);
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "error-chunked-body", form);
+            assertEq(500, resp.status_code, label);
+            assertEq(form.version == "1.0" ? "close" : "chunked", resp.framing, label + ": framing");
+            assertEq(FramingResponses::Body, resp.body, label + ": body");
+        }
+    }
+
+    persistentConnectionFraming() {
+        # HTTP/1.1: streamed bodies on a persistent connection
+        {
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "persistent/start", Http11);
+            assertEq("started", resp.body);
+            foreach string name in ("stream-length", "qore-stream-length") {
+                resp = exchange(s, "GET", "persistent/" + name, Http11);
+                assertEq("content-length", resp.framing, "persistent " + name + ": framing");
+                assertEq("10", resp."content-length", "persistent " + name + ": Content-Length");
+                assertEq(FramingResponses::Body, resp.body, "persistent " + name + ": body");
+            }
+            foreach string name in ("stream", "qore-stream", "callback") {
+                resp = exchange(s, "GET", "persistent/" + name, Http11);
+                assertEq("chunked", resp.framing, "persistent " + name + ": framing");
+                assertEq(FramingResponses::Body, resp.body, "persistent " + name + ": body");
+            }
+        }
+        # HTTP/1.0 with keep-alive: a body of unknown length ends the persistent connection
+        foreach string name in ("qore-stream", "callback") {
+            string label = "persistent HTTP/1.0 keep-alive " + name;
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "persistent/start", Http10KeepAlive);
+            assertEq("started", resp.body, label);
+            assertEq("keep-alive", resp.connection.lwr(), label + ": persistent connection");
+            resp = exchange(s, "GET", "persistent/" + name, Http10KeepAlive);
+            assertEq("close", resp.framing, label + ": framing");
+            assertEq("close", resp.connection.lwr(), label + ": Connection header");
+            assertEq(FramingResponses::Body, resp.body, label + ": body");
+        }
+    }
+
+    inlineResponseFraming() {
+        # a body in memory is sent with Content-Length, even if the handler asks for chunked transfer encoding
+        foreach hash<FramingRequestForm> form in ((Http10KeepAlive, Http11)) {
+            string label = form.label + " inline string-te";
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "inline/string-te", form);
+            assertEq("content-length", resp.framing, label + ": framing");
+            assertEq(FramingResponses::Body, resp.body, label + ": body");
+            resp = exchange(s, "GET", "inline/string-te", form);
+            assertEq(FramingResponses::Body, resp.body, label + ": second request on the connection");
+        }
+
+        # a response to a HEAD request has no body: the next response on the connection is parsed correctly
+        {
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "HEAD", "inline/head", Http11);
+            assertEq(200, resp.status_code, "inline HEAD");
+            resp = exchange(s, "GET", "inline/head", Http11);
+            assertEq(200, resp.status_code, "inline GET after HEAD");
+            assertEq(FramingResponses::Body, resp.body, "inline GET after HEAD: body");
+        }
+
+        # a streamed body and a handler exception are answered with an error, and the connection is closed
+        foreach string name in ("stream", "error") {
+            string label = "inline " + name;
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "inline/" + name, Http11);
+            assertEq(500, resp.status_code, label);
+            assertEq("close", resp.connection.lwr(), label + ": Connection header");
+            assertClosed(s, label);
+        }
+    }
+
+    sendHttpErrorStreamedBody() {
+        foreach hash<FramingRequestForm> form in ((Http10KeepAlive, Http11)) {
+            string label = form.label + " sendHttpError()";
+            Socket s = openConnection();
+            hash<auto> resp = exchange(s, "GET", "send-http-error", form);
+            assertEq(500, resp.status_code, label);
+            # an error message on an HTTP/1.0 connection is sent with Content-Length
+            assertEq(form.version == "1.0" ? "content-length" : "chunked", resp.framing, label + ": framing");
+            assertEq(FramingResponses::Body, resp.body, label + ": body");
+        }
+        # no message body in a response to a HEAD request
+        Socket s = openConnection();
+        hash<auto> resp = exchange(s, "HEAD", "send-http-error", Http11);
+        assertEq(500, resp.status_code, "HEAD sendHttpError()");
+        assertEq(NOTHING, resp."transfer-encoding", "HEAD sendHttpError(): Transfer-Encoding");
+        resp = exchange(s, "GET", "inline/next", Http11Close);
+        assertEq(FramingResponses::Body, resp.body, "HEAD sendHttpError(): next response on the connection");
+    }
+
+    private Socket openConnection() {
+        Socket s();
+        s.connect("127.0.0.1:" + port, Timeout);
+        return s;
+    }
+
+    private static string getRequest(string method, string path, hash<FramingRequestForm> form) {
+        return sprintf("%s /%s HTTP/%s\r\nHost: localhost\r\n%s\r\n", method, path, form.version,
+            form.connection ? sprintf("Connection: %s\r\n", form.connection) : "");
+    }
+
+    #! sends the request and returns the response header hash with the message body and its framing
+    /** framing: "none" (HEAD), "chunked", "content-length", or "close" (delimited by closing the connection)
+    */
+    private hash<auto> exchange(Socket s, string method, string path, hash<FramingRequestForm> form) {
+        s.send(getRequest(method, path, form));
+        hash<auto> resp = s.readHTTPHeader(Timeout);
+        if (method == "HEAD") {
+            resp.framing = "none";
+            resp.body = "";
+        } else if (resp."transfer-encoding") {
+            assertEq(NOTHING, resp."content-length", sprintf("%s /%s: no Content-Length with chunked encoding",
+                form.label, path));
+            assertEq("1.1", form.version, sprintf("%s /%s: no Transfer-Encoding in a response to an HTTP/1.0 request",
+                form.label, path));
+            resp.framing = "chunked";
+            hash<auto> chunked = s.readHTTPChunkedBodyBinary(Timeout);
+            resp.body = chunked.body.toString();
+            resp.trailers = chunked - "body";
+        } else if (exists resp."content-length") {
+            resp.framing = "content-length";
+            int size = resp."content-length".toInt();
+            resp.body = size ? s.recv(size, Timeout) : "";
+        } else {
+            resp.framing = "close";
+            # the message body ends when the server closes the connection
+            resp.body = readToEof(s).toString();
+        }
+        return resp;
+    }
+
+    #! reads until the server closes the connection; a timeout means that the server kept it open
+    private binary readToEof(Socket s) {
+        binary rv;
+        while (s.isOpen()) {
+            try {
+                rv += s.recvBinary(-1, Timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "SOCKET-CLOSED") {
+                    break;
+                }
+                rethrow;
+            }
+        }
+        return rv;
+    }
+
+    #! the server closes the connection after the response: the next read returns end of stream at once
+    private assertClosed(Socket s, string label) {
+        string err;
+        try {
+            err = sprintf("received %y", s.recv(1, Timeout));
+        } catch (hash<ExceptionInfo> ex) {
+            # a timeout means that the server kept the connection open
+            err = ex.err;
+        }
+        assertEq("SOCKET-CLOSED", err, label + ": the server must close the connection");
+    }
+}

@@ -1734,57 +1734,6 @@ private:
     bool done = false;
 };
 
-class QoreSocketControllerHttp2ServerStreamPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL QoreSocketControllerHttp2ServerStreamPollOperation(QoreSocket* sock, int32_t stream_id,
-            const char* mname)
-            : sock(sock), stream_id(stream_id), mname(mname) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        output = -1;
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (done) {
-            return nullptr;
-        }
-
-        qore_socket_private* priv = qore_socket_private::get(*sock);
-        if (!priv->h2_session) {
-            output = -1;
-        } else if (priv->h2_session->isServer() && stream_id > 0) {
-            output = stream_id;
-        } else {
-            xsink->raiseException("HTTP2-ERROR",
-                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
-            output = -1;
-        }
-        done = true;
-        return nullptr;
-    }
-
-    DLLLOCAL virtual QoreValue getOutput() const override {
-        return static_cast<int64>(output);
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "http2-server-stream-checked" : "checking-http2-server-stream";
-    }
-
-private:
-    QoreSocket* sock;
-    int32_t stream_id;
-    std::string mname;
-    int32_t output = -1;
-    bool done = false;
-};
-
 class QoreSocketControllerRecvPollOperation : public QoreSocketControllerDeferredPollOperation {
 public:
     enum class Action {
@@ -3002,131 +2951,6 @@ private:
     SimpleRefHolder<QoreSSLCertificate> cert;
     SimpleRefHolder<QoreSSLPrivateKey> pkey;
     bool accept_completed = false;
-};
-
-class QoreSocketControllerHttp2SendResponsePollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL QoreSocketControllerHttp2SendResponsePollOperation(QoreSocket* sock, int32_t stream_id, int status_code,
-            const QoreHashNode* headers, const void* data, size_t size, const QoreStringNode* body_event)
-            : sock(sock), stream_id(stream_id), status_code(status_code) {
-        qore_get_http_header_pairs(headers, hdr_pairs);
-
-        if (data && size) {
-            body = new BinaryNode;
-            body->append(data, size);
-        } else if (body_event && body_event->size()) {
-            body = new BinaryNode;
-            body->append(body_event->c_str(), body_event->size());
-        }
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return h2_state == H2S_SENT;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        bool close_socket = h2_state == H2S_SENDING || h2_state == H2S_FLUSHING;
-        h2_state = H2S_NONE;
-        if (close_socket) {
-            qore_socket_close_from_controller(sock);
-        }
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        qore_socket_private* priv = qore_socket_private::get(*sock);
-        if (!priv->isOpen()) {
-            xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
-            return nullptr;
-        }
-
-        Http2Session* session = priv->h2_session.get();
-        if (!session) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 session no longer available");
-            return nullptr;
-        }
-
-        OptionalNonBlockingHelper nbh(*priv, true, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-
-        while (true) {
-            switch (h2_state) {
-                case H2S_NONE: {
-                    const void* body_ptr = body ? body->getPtr() : nullptr;
-                    size_t body_len = body ? body->size() : 0;
-                    int rv = session->submitResponse(stream_id, status_code, hdr_pairs, body_ptr, body_len, xsink);
-                    if (rv || *xsink) {
-                        return nullptr;
-                    }
-                    h2_state = H2S_SENDING;
-                    continue;
-                }
-
-                case H2S_SENDING: {
-                    int rv = session->sendPendingData(0, xsink);
-                    if (*xsink) {
-                        return nullptr;
-                    }
-                    if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
-                        return getSocketPollInfoHash(xsink, rv);
-                    }
-                    if (session->hasPendingData()) {
-                        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
-                    }
-                    if (session->wantWrite()) {
-                        continue;
-                    }
-                    h2_state = H2S_FLUSHING;
-                    return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
-                }
-
-                case H2S_FLUSHING: {
-                    int rv = session->sendPendingData(0, xsink);
-                    if (*xsink) {
-                        return nullptr;
-                    }
-                    if (rv == SOCK_POLLIN || rv == SOCK_POLLOUT) {
-                        return getSocketPollInfoHash(xsink, rv);
-                    }
-                    if (session->hasPendingData()) {
-                        return getSocketPollInfoHash(xsink, SOCK_POLLOUT);
-                    }
-                    if (session->wantWrite()) {
-                        h2_state = H2S_SENDING;
-                        continue;
-                    }
-                    h2_state = H2S_SENT;
-                    return nullptr;
-                }
-
-                case H2S_SENT:
-                    return nullptr;
-
-                default:
-                    xsink->raiseException("HTTP2-ERROR", "invalid HTTP/2 send response state: %d", h2_state);
-                    return nullptr;
-            }
-        }
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        switch (h2_state) {
-            case H2S_NONE: return "none";
-            case H2S_SENDING: return "sending";
-            case H2S_FLUSHING: return "flushing";
-            case H2S_SENT: return "sent";
-            default: return "unknown";
-        }
-    }
-
-private:
-    QoreSocket* sock;
-    int32_t stream_id;
-    int status_code;
-    std::vector<std::pair<std::string, std::string>> hdr_pairs;
-    SimpleRefHolder<BinaryNode> body;
-    int h2_state = H2S_NONE;
 };
 
 class QoreSocketControllerHttp2EnqueuePollOperation : public SocketPollOperationBase {
@@ -4492,32 +4316,8 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
         return -1;
     }
 
-    int32_t stream_id = priv->getH2ActiveThreadStreamId();
-    ValueHolder h2_stream(qore_socket_exec_poll(s,
-        new QoreSocketControllerHttp2ServerStreamPollOperation(s, stream_id, "sendHTTPResponse"),
-        -1, "sendHTTPResponse", "http2-server-stream-checked", xsink), xsink);
-    if (*xsink) {
+    if (qore_socket_exec_check_http1_allowed(s, "sendHTTPResponse", xsink)) {
         return -1;
-    }
-
-    stream_id = static_cast<int32_t>(h2_stream->getAsBigInt());
-    if (stream_id > 0) {
-        QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
-        if (!io_guard) {
-            return -1;
-        }
-
-        QoreString status_line(priv->enc);
-        status_line.sprintf("HTTP/%s %03d %s", http_version, code, desc);
-        if (info) {
-            info->setKeyValue("response-uri", new QoreStringNode(status_line), nullptr);
-        }
-
-        ValueHolder rv(qore_socket_exec_poll(s,
-            new QoreSocketControllerHttp2SendResponsePollOperation(s, stream_id, code, headers, data, size,
-                body_event),
-            timeout_ms, "sendHTTPResponse", "sent", xsink), xsink);
-        return *xsink ? -1 : 0;
     }
 
     QoreString hdr(s->getEncoding());
@@ -6134,20 +5934,8 @@ int my_socket_priv::getSendHttpMessageChunkedHeaders(ExceptionSink* xsink, QoreS
     return 0;
 }
 
-int32_t my_socket_priv::getH2ActiveServerStreamId() const {
-    return socket->priv->getH2ActiveThreadStreamId();
-}
-
-int32_t my_socket_priv::getH2ActiveThreadStreamId() const {
-    return socket->priv->getH2ActiveThreadStreamId();
-}
-
 bool my_socket_priv::hasH2SessionForAsyncPoll() const {
     return static_cast<bool>(socket->priv->h2_session);
-}
-
-bool my_socket_priv::isH2ServerSessionForAsyncPoll() const {
-    return socket->priv->h2_session && socket->priv->h2_session->isServer();
 }
 
 void my_socket_priv::getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
@@ -6171,6 +5959,13 @@ int my_socket_priv::getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, Qore
 
     socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, 0, source, false, true);
     return 0;
+}
+
+void my_socket_priv::getSendHttpResponseHeaderBlock(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
+        const char* http_version, const QoreHashNode* headers, int source) const {
+    getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+    // size 0 without addsize: a Content-Length header given by the caller is sent as-is, and none is added
+    socket->priv->getSendHttpMessageHeadersCommon(hdr, info, headers, 0, source, false, false);
 }
 
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {

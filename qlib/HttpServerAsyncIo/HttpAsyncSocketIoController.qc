@@ -2416,6 +2416,20 @@ public class HttpAsyncSocketIoController {
             || (exists result.input_stream && !result.input_stream.isIoThreadSafe());
     }
 
+    # Returns True if the headers of an HTTP/1.x response with a streamed message body declare neither Content-Length
+    # nor Transfer-Encoding, so the body is delimited by closing the connection: a response to an HTTP/1.0 request
+    # with a body of unknown length (RFC 9112 sections 6.1 and 6.3)
+    private static bool isCloseDelimited(*hash<auto> hdr) {
+        hdr = HttpServer::http_canonicalize_reply_header_names(hdr);
+        return !exists hdr."Content-Length" && !hdr."Transfer-Encoding";
+    }
+
+    # Returns True if an HTTP/1.x response streams an InputStream body that is delimited by closing the connection;
+    # the stream poll operations cannot send such a body
+    private static bool isCloseDelimitedStream(hash<HttpRequestResultInfo> result) {
+        return exists result.input_stream && isCloseDelimited(result.hdr);
+    }
+
     #! Defers response processing without occupying a worker thread
     /** The timer is tagged with the connection owner and tracked independently so shutdown and
         listener removal can cancel it before captured socket, target, and response objects are released.
@@ -3337,7 +3351,7 @@ public class HttpAsyncSocketIoController {
 
         timeout response_delay = result.response_delay ?? 0ms;
         remove result.response_delay;
-        if (response_delay > 0ms && responseRequiresHandlerThread(result)) {
+        if (response_delay > 0ms && (responseRequiresHandlerThread(result) || isCloseDelimitedStream(result))) {
             log(LoggerLevel::WARN, "ignoring response_delay=%y for %y: streaming/blocking "
                 "responses cannot be paced on the dispatcher pool", response_delay, uh);
             response_delay = 0ms;
@@ -3373,9 +3387,12 @@ public class HttpAsyncSocketIoController {
         # correctly.  For H2/H3 multiplexed paths, the conversion happens in
         # handleHttp2MultiplexedResult / handleHttp3MultiplexedResult.
 
-        # Non-I/O-thread-safe InputStream response body: sync-stream it on
-        # this handler pool thread via sendHTTPResponseWithCallback.  H1.x
-        # is one-connection-per-handler while in-flight, so the async I/O
+        # An InputStream response body that the I/O thread cannot send: a
+        # non-I/O-thread-safe InputStream (its read() runs Qore code), or a
+        # body delimited by closing the connection (HTTP/1.0), which the
+        # stream poll operations do not support.  Sync-stream it on this
+        # handler pool thread, framed as its headers declare.  H1.x is
+        # one-connection-per-handler while in-flight, so the async I/O
         # controller doesn't touch this socket until we hand it back via
         # addIdleConnection() (keep-alive) or close it.  read() runs on
         # this handler pool worker — never on the async I/O thread —
@@ -3384,15 +3401,15 @@ public class HttpAsyncSocketIoController {
         # This replaces the previous "materialize on handler thread, then
         # submit I/O-thread streaming poll op" pattern, which buffered the
         # whole body in memory.  True streaming with bounded memory.
-        if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+        bool close_delimited = isCloseDelimitedStream(result);
+        if (result.input_stream && (!result.input_stream.isIoThreadSafe() || close_delimited)) {
             string status_msg = result.status_message ?? "Unknown";
             timeout send_timeout = result.send_timeout ?? 30s;
             InputStream is = result.input_stream;
             try {
                 is.reassignThread();
-                sock.sendHTTPResponseWithCallback(
-                    auto sub () { return is.read(65536); },
-                    result.code, status_msg, "1.1", result.hdr ?? {}, send_timeout);
+                HttpServer::http_send_streamed_response(sock, result.code, status_msg, result.hdr ?? {},
+                    auto sub () { return is.read(65536); }, send_timeout);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
                     "HTTP/1.x stream send error for %y: %s: %s", uh, ex.err, ex.desc);
@@ -3404,7 +3421,7 @@ public class HttpAsyncSocketIoController {
             remove result.input_stream;
 
             # Response fully sent.  Either keep-alive or close.
-            if (result.close || !result.return_to_idle || !sock.isOpen()) {
+            if (result.close || close_delimited || !result.return_to_idle || !sock.isOpen()) {
                 try { sock.shutdown(); sock.close(); } catch () {}
                 return;
             }
@@ -3567,49 +3584,22 @@ public class HttpAsyncSocketIoController {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 if (result.send_callback) {
-                    # Drain the send_callback on the handler thread (the
-                    # callback is user code that must run here), then submit
-                    # the materialized body via controller-backed async I/O.
-                    # This keeps Qore callback execution off the I/O thread
-                    # and preserves the H1 connection state-machine paths
-                    # below for close and keep-alive handling.
-                    binary buf;
-                    while (True) {
-                        auto chunk = result.send_callback();
-                        if (!exists chunk) {
-                            break;
-                        }
-                        buf += binary(chunk);
-                    }
-                    result.body = buf.size() > 0 ? buf : NOTHING;
-                    remove result.send_callback;
-                    remove result.hdr."Transfer-Encoding";
-
-                    # For keep-alive, use fused send+read (same as Opt #3)
-                    if (result.return_to_idle && !result.close) {
-                        timeout ttl = result.ttl ?? DefaultIdleTimeout;
-                        AbstractPollOperation fused_op =
-                            sock.startPollSendHttpResponseAndReadHeader(
-                                result.code, status_msg, "1.1", result.hdr ?? {},
-                                result.body, ttl);
-                        hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
-                            "sock": sock,
-                            "listener": linfo.listener,
-                            "cx": cx,
-                            "target": target,
-                            "state": HttpConnectionState::SendAndReadHeader,
-                            "stream_op": fused_op,
-                            "ttl": ttl,
-                            "ssl": linfo.ssl,
-                        };
-                        hash<HttpActiveConnectionInfo> cinfo;
-                        {
-                            AutoWriteLock al(m);
-                            cinfo = connections{uh} = new_cinfo;
-                        }
-                        submitConnectionOp(uh, cinfo);
+                    # Stream the send_callback on this handler thread (the
+                    # callback is user code that must run here), framed as the
+                    # headers declare; with chunked transfer encoding each
+                    # return value is one chunk, preserving the record
+                    # boundaries that protocols like DataStream rely on, and a
+                    # hash return value gives the trailers.  As with the
+                    # InputStream branch above, the controller doesn't touch
+                    # this socket until it is handed back or closed.
+                    HttpServer::http_send_streamed_response(sock, result.code, status_msg, result.hdr ?? {},
+                        result.send_callback, result.send_timeout ?? -1);
+                    if (result.close || isCloseDelimited(result.hdr) || !result.return_to_idle || !sock.isOpen()) {
+                        try { sock.shutdown(); sock.close(); } catch () {}
                         return;
                     }
+                    addIdleConnection(sock, linfo.listener, cx, target, result.ttl ?? DefaultIdleTimeout);
+                    return;
                 }
                 {
                     # Use async poll operation for all other H1 responses

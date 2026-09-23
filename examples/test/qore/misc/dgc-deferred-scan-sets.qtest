@@ -51,6 +51,70 @@ class HashHub {
     }
 }
 
+#! A node of a cycle held in a member hash of a Holder
+class Linked {
+    public {
+        auto peer;
+        auto extra;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Linked::destroyed;
+    }
+}
+
+#! Holds a cycle in a member hash and breaks it in its own methods, where it has a real reference (self)
+/** The path of each removal starts at this object, so the scan that the removal makes is rooted here and deferred
+    while the method runs; the recursive set that the removal changed is the cycle's, which this object is not in.
+*/
+class Holder {
+    public {
+        hash<auto> c = {};
+    }
+
+    #! Makes a closed cycle of two nodes: x <-> y
+    makePair() {
+        c.x = new Linked();
+        c.y = new Linked();
+        c.x.peer = c.y;
+        c.y.peer = c.x;
+    }
+
+    #! Makes a cycle of three nodes with a chord: x -> y -> z -> x, and x -> z
+    makeTriangle() {
+        c.x = new Linked();
+        c.y = new Linked();
+        c.z = new Linked();
+        c.x.peer = c.y;
+        c.y.peer = c.z;
+        c.z.peer = c.x;
+        c.x.extra = c.z;
+    }
+
+    #! Removes the pair's edges one member at a time
+    unlinkMembers() {
+        remove c.x.peer;
+        remove c.y.peer;
+    }
+
+    #! Removes the pair's edges with member slices, which take several members at once
+    unlinkSlices() {
+        remove c.x.("peer", "extra");
+        remove c.y.("peer", "extra");
+    }
+
+    #! Removes the chord of the triangle, which leaves a smaller cycle
+    removeChord() {
+        remove c.x.extra;
+    }
+
+    #! Returns the number of nodes still held by the member hash
+    int held() {
+        return (map 1, c.iterator(), $1 instanceof Linked).size();
+    }
+}
+
 public class DgcDeferredScanSetsTest inherits QUnit::Test {
     public {}
 
@@ -59,6 +123,10 @@ public class DgcDeferredScanSetsTest inherits QUnit::Test {
         addTestCase("A cycle through a growing hash is collected", \growingHashIsCollected());
         addTestCase("An open component is still collected", \openComponentIsCollected());
         addTestCase("Growing the graph rebuilds the recursive set", \growingTheGraphRebuildsTheSet());
+        addTestCase("A removal under a deferred root keeps what the set still holds",
+            \removalUnderDeferredRootKeepsHeldObjects());
+        addTestCase("A cycle left by a removal under a deferred root is collected",
+            \cycleLeftByRemovalUnderDeferredRootIsCollected());
         set_return_value(main());
     }
 
@@ -152,6 +220,45 @@ public class DgcDeferredScanSetsTest inherits QUnit::Test {
         int created = DgcDeferredScanSetsTest::rsetCreateCount() - rsets;
         assertGt(1, created, "the hub's recursive set is rebuilt as the container grows");
         assertEq(n, Entry::destroyed, "every entry of the cycle is collected");
+    }
+
+    #! Breaking a cycle inside a method must not collect the objects that the method's object still holds
+    /** The scan that each removal makes is rooted at the method's object and deferred, so the cycle's recursive set
+        keeps counting the removed references as internal unless it is rescanned from the object the value was
+        removed from.  A dereference of a node in between then sees only the references the set counts and frees
+        nodes that the hash still holds.
+    */
+    removalUnderDeferredRootKeepsHeldObjects() {
+        foreach string how in ("members", "slices") {
+            Linked::destroyed = 0;
+            {
+                Holder h();
+                h.makePair();
+                if (how == "members") {
+                    h.unlinkMembers();
+                } else {
+                    h.unlinkSlices();
+                }
+                assertEq(0, Linked::destroyed, how + ": no node is collected while the hash holds it");
+                assertEq(2, h.held(), how + ": both nodes are still usable");
+            }
+            assertEq(2, Linked::destroyed, how + ": both nodes are collected with their holder");
+        }
+    }
+
+    #! A removal that leaves a smaller cycle must leave it collectable
+    cycleLeftByRemovalUnderDeferredRootIsCollected() {
+        Linked::destroyed = 0;
+        {
+            Holder h();
+            h.makeTriangle();
+            h.removeChord();
+            assertEq(0, Linked::destroyed, "no node is collected while the hash holds it");
+            assertEq(3, h.held(), "all nodes are still usable");
+            # releasing the hash leaves the cycle x -> y -> z -> x with no other reference
+            remove h.c;
+            assertEq(3, Linked::destroyed, "the cycle left by the removal is collected");
+        }
     }
 
     private static int rsetCreateCount() {

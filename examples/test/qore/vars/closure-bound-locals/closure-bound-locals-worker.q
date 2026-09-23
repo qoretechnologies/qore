@@ -8,7 +8,8 @@
 
 %requires ClosureBoundLocalChecks
 
-hash<string, int> results = ClosureBoundLocalChecks::get_scan_counts() + ClosureBoundLocalChecks::get_cycle_results()
+hash<string, int> results = ClosureBoundLocalChecks::get_scan_counts()
+    + ClosureBoundLocalChecks::get_scan_object_counts() + ClosureBoundLocalChecks::get_cycle_results()
     + ClosureBoundLocalChecks::get_thread_results() + ClosureBoundLocalChecks::get_removal_results();
 foreach hash<auto> i in (results.pairIterator()) {
     printf("%s=%d\n", i.key, i.value);

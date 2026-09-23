@@ -1258,6 +1258,7 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
 
     // if the scan should be deferred
     if (obj.checkDeferScan()) {
+        scan_deferred = true;
         return;
     }
 

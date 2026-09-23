@@ -76,6 +76,11 @@ Any reference stored as a `QoreValue` in either place is visible. Raw C++ pointe
 If `rrefs > 0`, `RObject::checkDeferScan()` defers starting a scan at that object. Scans are retried after the
 last `realDeref()` drops `rrefs` to 0. If a `realRef()` is leaked, the external reference keeps the object alive.
 
+The frame that creates a closure-bound local variable holds a real reference to it until the variable goes out of
+scope (`ThreadClosureVariableStack::instantiate()` / `releaseEntry()`), since a frame is never part of a cycle. A
+write to the variable through a `\var` argument, or while a closure holds it, therefore defers its scan to the
+frame's release; see `closure-bound-locals.md`.
+
 A scan initiated at another object still traverses a reachable object's members under its r-section lock,
 including when that object has real references. Skipping those edges can omit a live owner of a shared
 container from a recursive set: the container's one physical reference to an object behind it can then look
@@ -225,6 +230,19 @@ is no scan, and the object's recursive set keeps counting a reference that no lo
 dereference collect the set while its objects are still held from outside it.
 `qore_object_private::takeMember()` and `takeMembers()` therefore report the object with
 `LValueHelper::objectRemoved()`, which makes it the scan root when the path supplies none.
+
+When the path does supply a root, its scan enters the object and repairs the set - unless that scan is deferred
+because the root has real references (see "The rrefs deferral"): `remove c.x.peer` in a method of the object holding
+`c`, or through a `\var` argument while the frame holds the variable. The deferred scan is made from the root only
+when its last real reference is released. Meanwhile the set of `x` still counts the removed reference as internal,
+so the dereference of the removed value, or of a member of the set, compares the references left from outside the
+set - the hash still holding `x` and its peer - with the stale `rcount`s, finds them equal, and collects objects that
+are still referenced. `objectRemoved()` therefore also records any object other than the root that lost a value
+needing a scan (holding a weak reference to it), and `~LValueHelper` scans from each of them when
+`RSetHelper::deferred()` reports that the root's scan was deferred. An assignment needs no such rule: its root is the
+innermost `RObject` on the path, the one whose member changed, and deferring its scan invalidates that object's own
+set. `examples/test/qore/misc/dgc-deferred-scan-sets.qtest` covers member and slice removals and a removal that
+leaves a smaller cycle.
 
 Removing an object, or a container, closure or reference that needs a scan still scans, because dropping an
 edge can make a cycle collectable. `delete` needs no special case: deleting an object removes a value that needs

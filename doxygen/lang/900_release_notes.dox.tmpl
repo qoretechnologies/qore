@@ -1045,6 +1045,10 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         sends an HTTP response with an @ref Qore::InputStream "InputStream" body in non-blocking mode for HTTP/1.x
       - @ref Qore::Socket::startPollSendHttpResponseWithStreamAndReadHeader() "Socket::startPollSendHttpResponseWithStreamAndReadHeader()":
         sends an HTTP response with an @ref Qore::InputStream "InputStream" body and waits for the next request (keep-alive) in HTTP/1.x
+      - @ref Qore::Socket::sendHTTPResponseHeader() "Socket::sendHTTPResponseHeader()": sends the status line and
+        header of an HTTP response exactly as given, without adding \c Content-Length or \c Transfer-Encoding, so
+        that the caller frames the message body, for example delimiting it by closing the connection in a response
+        to an HTTP/1.0 request
       - @ref Qore::Socket::startPollSendHttp2StreamingResponse() "Socket::startPollSendHttp2StreamingResponse()":
         sends an HTTP/2 response with an @ref Qore::InputStream "InputStream" body via the I/O thread
       - @ref Qore::Socket::submitHttp2StreamingResponseWithStream() "Socket::submitHttp2StreamingResponseWithStream()":
@@ -1840,6 +1844,15 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - fixed sending two conflicting response header fields, such as a handler's \c "content-type" and the
         server's default \c Content-Type, when a handler or the server configuration named a header in another
         case than the server; header names are now matched case-insensitively
+      - fixed keeping the connection open after the response to an HTTP/1.0 request without the \c keep-alive
+        connection option, or to a request with the \c close option: a handler response without a true \c close
+        key canceled the close that the request requires
+        (<a href="https://www.rfc-editor.org/rfc/rfc9112#section-9.3">RFC 9112 section 9.3</a>), so HTTP/1.0
+        clients that read the response until the connection closes blocked until they timed out
+      - fixed sending chunked transfer encoding, which HTTP/1.0 clients cannot read, in responses to HTTP/1.0
+        requests (<a href="https://www.rfc-editor.org/rfc/rfc9112#section-6.1">RFC 9112 section 6.1</a>): a message
+        body of known length is sent with a \c Content-Length, and a streamed message body of unknown length is
+        delimited by closing the connection
 
     - @ref httpserverutilintro "HttpServerUtil" module
       - cookie-setting support and a refactored, more extensible authentication design
@@ -1848,6 +1861,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - new \c http_version option in @ref HttpServer::HttpListenerOptionInfo "HttpListenerOptionInfo" for HTTP/2 and HTTP/3 mode control
       - new @ref HttpServer::StreamResponseProducer "StreamResponseProducer" worker-thread response-body streamer for non-I/O-thread-safe
         @ref Qore::InputStream "InputStream" bodies on HTTP/2 and HTTP/3
+      - new @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()" function that sends an
+        HTTP/1.x response with a streamed message body framed as its headers declare
+      - @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" sets \c "Connection: close" when the
+        request requires the connection to be closed, whatever the handler returned
 
     - @ref huerestclientintro "HueRestClient" module
       - fixed platform-generated connection URLs by declaring \c DefaultConnectionUrl
@@ -2067,6 +2084,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         silent-peer detection, with corrected async heartbeat timing
 
     - @ref websockethandlerintro "WebSocketHandler" module
+      - an HTTP/1.0 opening handshake is rejected with a 400 response
+        (<a href="https://www.rfc-editor.org/rfc/rfc6455#section-4.2.1">RFC 6455 section 4.2.1</a>); a server must
+        ignore the \c Upgrade header of an HTTP/1.0 request
+        (<a href="https://www.rfc-editor.org/rfc/rfc9110#section-7.8">RFC 9110 section 7.8</a>)
       - added optional AsyncAPI 3.0 validation support for WebSocket messages, including handler-level
         \c asyncapi, \c validator, and \c asyncapi_channel constructor options for applying validation to
         every new connection

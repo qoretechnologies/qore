@@ -322,6 +322,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         addTestCase("max_queue_size drop during setup window", \maxQueueSizeDropsDuringSetupWindowTest());
         addTestCase("H2/H3 stream backpressure drops slow client", \streamBackpressureDropsTest());
         addTestCase("idle_timeout closes idle connection", \idleTimeoutTest());
+        addTestCase("HTTP/1.0 opening handshake is rejected", \http10HandshakeTest());
 
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
@@ -426,7 +427,7 @@ class WebSocketHandlerTest inherits QUnit::Test {
         s.connectSSL("localhost:" + linfo.port);
 
         hash<auto> info;
-        s.sendHTTPMessage("GET", "/", "1.0", hdr, NOTHING, \info);
+        s.sendHTTPMessage("GET", "/", "1.1", hdr, NOTHING, \info);
         hash<auto> rh = s.readHTTPHeader();
         assertEq(101, rh.status_code);
         assertEq(ws_get_response_key(key), rh."sec-websocket-accept");
@@ -1140,6 +1141,50 @@ class WebSocketHandlerTest inherits QUnit::Test {
             ++retries;
         }
         return !h.getConnectionIds();
+    }
+
+    #! the opening handshake must be an HTTP/1.1 or higher request (RFC 6455 section 4.2.1)
+    http10HandshakeTest() {
+        foreach hash<auto> i in (
+                {"version": "1.0", "connection": "Upgrade", "close": True},
+                {"version": "1.0", "connection": "keep-alive, Upgrade", "close": False},
+            ) {
+            string label = sprintf("HTTP/%s with Connection: %s", i.version, i.connection);
+            Socket s();
+            s.connect("127.0.0.1:" + port, 10s);
+            hash<auto> resp = sendHandshake(s, i.version, i.connection);
+            assertEq(400, resp.status_code, label);
+            assertEq(NOTHING, resp.upgrade, label + ": Upgrade header");
+            assertRegex("requires HTTP/1\\.1 or higher", s.recv(resp."content-length".toInt(), 10s),
+                label + ": body");
+            if (i.close) {
+                # an HTTP/1.0 request without the keep-alive option requires the server to close the connection
+                string err;
+                try {
+                    err = sprintf("received %y", s.recv(1, 10s));
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex.err;
+                }
+                assertEq("SOCKET-CLOSED", err, label + ": connection closed");
+            }
+        }
+
+        # the same handshake over HTTP/1.1 switches protocols
+        Socket s();
+        s.connect("127.0.0.1:" + port, 10s);
+        on_exit s.close();
+        hash<auto> resp = sendHandshake(s, "1.1", "Upgrade");
+        assertEq(101, resp.status_code);
+        assertEq("websocket", resp.upgrade.lwr());
+        # the example key and accept value from RFC 6455 section 1.3
+        assertEq("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=", resp."sec-websocket-accept");
+    }
+
+    private static hash<auto> sendHandshake(Socket s, string version, string connection) {
+        s.send(sprintf("GET / HTTP/%s\r\nHost: localhost\r\nConnection: %s\r\nUpgrade: websocket\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", version,
+            connection));
+        return s.readHTTPHeader(10s);
     }
 
     #! a connection with no inbound activity for the idle timeout is closed to reclaim resources

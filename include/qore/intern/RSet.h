@@ -589,6 +589,15 @@ public:
 
     DLLLOCAL ~RSetHelper();
 
+    //! Returns true if the scan was not made because it was deferred; see RObject::checkDeferScan()
+    /** A deferred scan is made when the object's last real reference is released, from that object, so it only
+        repairs what can be reached from there then.  A caller that changed a recursive set the object does not
+        belong to must scan from that set itself when this returns true; see LValueHelper::objectRemoved().
+    */
+    DLLLOCAL bool deferred() const {
+        return scan_deferred;
+    }
+
     //! Reports a value referenced by the node being scanned; always returns false
     DLLLOCAL bool checkNode(AbstractQoreNode* n);
 
@@ -671,6 +680,8 @@ private:
     bool need_exclusive = false;
     // set when the scan found a recursive set that it has to assign, in either mode
     bool changed = false;
+    // set when the scan was not made because the object has real references; see deferred()
+    bool scan_deferred = false;
     //! Set when this pass registered a notification with the owner of a lock it could not take
     /** A scan that gives up asks the constructor to roll back and retry, and the retry only makes progress
         because notifier.wait() blocks until the owner of the lock releases it.  Every path that abandons a

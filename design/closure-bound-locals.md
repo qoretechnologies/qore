@@ -34,7 +34,7 @@ own thread: `\var` and closure capture are evaluated in the frame, and every oth
 - the reference count is one,
 - that reference is the frame's (`frame_owned`, set when the entry that created the variable is pushed and cleared
   before that entry releases its reference - `ThreadClosureVariableStack::releaseEntry()`), and
-- the variable is in no recursive set and has no deferred scan.
+- the variable is in no recursive set (a scan deferred while the frame holds it does not count; see below).
 
 Then no other thread can reach the variable and nothing on the heap refers to it. It is read and written like a
 plain local variable:
@@ -61,12 +61,51 @@ Why the check cannot go stale while the frame uses the variable:
   release in `RObject::tryFastDeref()` and the locked one in `RObject::deref()` alike). When the frame reads one, every
   access that the holders of the released references made - under the lock - happened before, and so did the frame's
   own flag being cleared, which is stored before its release.
-- The recursive-set exclusion covers the collector: with no set and no deferred scan, a temporary reference taken
-  through a watch is released by the lock-free path, which does not read the value.
+- The recursive-set exclusion covers the collector: with no set, a temporary reference taken through a watch is
+  released by the lock-free path, which does not read the value; a deferred scan is left to the frame's own release
+  while the frame holds its real reference.
 
 Accesses that other code makes without the variable's methods still lock (`finalize()`, which program teardown runs
 after all threads have left, and the interpreter's closure-environment fast paths in `lib/QoreIRInterpreter.cpp`).
 Taking the lock is always correct; only skipping it needs the proof above.
+
+## While the frame holds the variable, a scan started at it is deferred
+
+A write that is not frame-exclusive still makes the variable the scan root: a write through a `\var` argument (the
+reference holds a second reference to the variable), and a write while a closure that captured the variable exists.
+Such a scan walks the whole graph reachable from the value. A variable that holds a context hash with shared objects
+in it, written through `\ctx` by the helpers of a loop, then walks the shared graph several times per iteration and
+contends with every thread using that graph for the r-section of each of its objects.
+
+None of those scans can find anything to collect while the frame holds the variable. The frame's reference is not an
+edge of the object graph, so no recursive set can account for it: every set through the variable sees
+`references > rcount` and `RSet::canDelete()` keeps it. A plain local variable in the same position makes no scan at
+all.
+
+The frame's reference is therefore a *real* reference (`RObject::rrefs`, see `dgc.md`, "The rrefs deferral"):
+
+- `ThreadClosureVariableStack::instantiate()` sets `rrefs` to one along with `frame_owned`, before any other code can
+  see the variable.
+- `ThreadClosureVariableStack::releaseEntry()` releases it with `ClosureVarValue::deref(xsink, true)`, a real
+  dereference. The last real reference is always released under `rlck` (`RObject::tryFastDeref()` declines it), so
+  the release waits for any recursive-set invalidation in progress.
+- While `rrefs` is non-zero, `RObject::checkDeferScan()` defers every scan started at the variable, whichever thread
+  makes the write, and invalidates any recursive set that a scan started elsewhere recorded for it, as it does for an
+  object. A dereference by another holder takes no deferred scan either: `RObject::deref()` only hands it to the
+  dereference that finds no real reference left.
+- The frame's release takes the deferred scan. If other references remain - a closure or a stored reference kept the
+  variable - `ClosureVarValue::deref()` makes it once, even when the variable is in no recursive set yet, and then
+  decides collection with the set it found. A cycle made through the variable while the frame held it, such as a
+  closure stored in the variable's own value, is collected then. If no other reference remains, the variable is
+  deleted and the scan is not needed.
+
+A scan started at an object still enters the variable when it reaches it through an edge, as it enters an object with
+real references; that is how a write storing `\var` or a closure in an object or container finds the cycle it makes.
+
+A deferred scan does not end frame exclusivity. While `frame_owned` is set, `rrefs` is one, and `RObject::deref()`
+hands a deferred scan only to the dereference that releases the last real reference, so no other dereference reads
+the value for it. Once the frame again holds the only reference, its accesses skip the lock as before, and the scan
+still waits for the frame's release.
 
 ## What is not done: avoiding the heap variable
 
@@ -80,7 +119,9 @@ else holds it.
 ## Regression coverage
 
 - `examples/test/qore/vars/closure-bound-locals/closure-bound-locals.qtest`: scan counts (debug builds) for a
-  variable used only by its frame, written through a reference, captured by a closure and released again; cycles
-  made through such a variable after skipped scans are collected; closures whose frame has returned called by
+  variable used only by its frame, written through a reference, captured by a closure and released again; the objects
+  those scans entered, which is none while the frame holds the variable and one walk of the graph when the frame
+  releases a variable that a closure kept; cycles made through such a variable after skipped scans, while the frame
+  held it (directly and through a reference argument) and after the frame returned are collected; closures whose frame has returned called by
   several threads; in this program, each execution mode and a compiled module.
 - ThreadSanitizer, with a module-free driver doing the same across threads, reports no race.

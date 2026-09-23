@@ -48,6 +48,7 @@ enum qore_var_t {
 #include "qore/intern/qore_var_rwlock_priv.h"
 #include "qore/vector_set"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -525,6 +526,8 @@ private:
     bool removal_object_reported = false;
     //! set when a value removed from an object needs a recursive-reference scan; see objectRemoved()
     bool removal_object_scan = false;
+    //! objects other than \a robj that a value needing a scan was removed from; each holds a weak reference
+    std::vector<RObject*> removal_objects;
 
     // recursive delta: change to recursive reference count
     int rdt = 0;
@@ -646,6 +649,14 @@ public:
         references it counts as internal are gone, and the next dereference of a member can collect the set
         although its objects are still referenced from outside it.  The object a value was removed from is
         therefore the scan root when the path supplies none.
+
+        When the path does supply a root, the scan made from it enters the object and repairs its set, unless that
+        scan is deferred because the root has real references: a method's \c self, or a closure-bound variable
+        that its frame still holds.  A deferred scan is made from the root when its last real reference is
+        released, which is too late for the set the removal changed: a dereference of one of its members in the
+        meantime reads the references the set still counts as internal and collects objects that are referenced
+        from outside it.  Such an object is therefore recorded in \a removal_objects, and the destructor scans
+        from it when the scan of the root was deferred.
     */
     DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
@@ -653,6 +664,12 @@ public:
             removal_object_scan = true;
             if (!robj) {
                 robj = &obj;
+            } else if (&obj != robj
+                && std::find(removal_objects.begin(), removal_objects.end(), &obj) == removal_objects.end()) {
+                // the object stays allocated until the destructor has scanned from it; the reference is taken
+                // only once the entry that releases it is recorded
+                removal_objects.push_back(&obj);
+                obj.tRef();
             }
         }
     }

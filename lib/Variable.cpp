@@ -609,7 +609,8 @@ LValueHelper::LValueHelper(ExceptionSink* xsink) : vl(xsink) {
 }
 
 LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::move(o.tvec)), lvid_set(o.lvid_set),
-        ocvec(std::move(o.ocvec)), before(o.before), rdt(o.rdt), robj(o.robj),
+        ocvec(std::move(o.ocvec)), before(o.before), removal_objects(std::move(o.removal_objects)), rdt(o.rdt),
+        robj(o.robj),
         buffer_lvalue(o.buffer_lvalue), buffer_lvalue_index(o.buffer_lvalue_index),
         buffer_lvalue_value(o.buffer_lvalue_value), val(o.val), typeInfo(o.typeInfo) {
     o.buffer_lvalue = nullptr;
@@ -723,11 +724,28 @@ LValueHelper::~LValueHelper() {
 #ifdef DEBUG
             ++lvalue_scan_count;
 #endif
-            RSetHelper rsh(*robj, vl.xsink);
+            bool deferred;
+            {
+                RSetHelper rsh(*robj, vl.xsink);
+                deferred = rsh.deferred();
+            }
+            // the scan of the root would have repaired the sets of the objects that values were removed from; a
+            // deferred scan is made too late for them, so they are scanned now; see objectRemoved()
+            if (deferred) {
+                for (RObject* o : removal_objects) {
+#ifdef DEBUG
+                    ++lvalue_scan_count;
+#endif
+                    RSetHelper rsh(*o, vl.xsink);
+                }
+            }
         }
         if (obj_ref) {
             robj->tDeref();
         }
+    }
+    for (RObject* o : removal_objects) {
+        o->tDeref();
     }
 }
 
@@ -3427,16 +3445,17 @@ void ClosureVarValue::ref() const {
     references.fetch_add(1, std::memory_order_relaxed);
 }
 
-void ClosureVarValue::deref(ExceptionSink* xsink) {
+void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
     // NOTE: do not access val here without holding rml; val may be modified concurrently
     // by another thread that holds a reference to this ClosureVarValue
-    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p\n", this,
-        references.load(), references.load() - 1, rcount, rset.load(std::memory_order_relaxed));
+    printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p refs: %d -> %d rcount: %d rset: %p real: %d\n",
+        this, references.load(), references.load() - 1, rcount, rset.load(std::memory_order_relaxed), real);
 
     // Fast path: a captured variable in no recursive set has nothing for this dereference to decide, so the
     // reference is released with one atomic operation and no lock; see RObject::tryFastDeref().  A variable shared
-    // between closures is dereferenced whenever one of them goes out of scope.
-    int fast = tryFastDeref(false);
+    // between closures is dereferenced whenever one of them goes out of scope.  The frame's real reference is never
+    // released here, as it is the last real reference.
+    int fast = tryFastDeref(real);
     if (fast > 0) {
         return;
     }
@@ -3446,17 +3465,19 @@ void ClosureVarValue::deref(ExceptionSink* xsink) {
     bool do_del = false;
     {
         // if the fast path released the last reference, the helper only registers this dereference in progress
-        robject_dereference_helper qodh(this, false, !fast);
+        robject_dereference_helper qodh(this, real, !fast);
         ref_copy = qodh.getRefs();
 
         if (!ref_copy) {
             do_del = true;
         }
-        // The loop below takes the rsection EXCLUSIVELY, so it is only entered for a variable in a recursive set: a
-        // variable in none has nothing to decide (rcount is zero whenever rset is null, see RObject::rset, and
-        // ref_copy is non-zero here).  The fast path above already declined for this dereference, but a set can
-        // have been released since.  See design/dgc.md, "A dereference that has nothing to decide takes no lock".
-        else if (rset.load(std::memory_order_acquire)) {
+        // The loop below takes the rsection EXCLUSIVELY, so it is only entered for a variable in a recursive set, or
+        // for the dereference that releases the frame's real reference when a scan was deferred while the frame held
+        // the variable: a variable in no set with no deferred scan has nothing to decide (rcount is zero whenever
+        // rset is null, see RObject::rset, and ref_copy is non-zero here).  The fast path above already declined
+        // for this dereference, but a set can have been released since.  See design/dgc.md, "A dereference that
+        // has nothing to decide takes no lock", and design/closure-bound-locals.md.
+        else if (rset.load(std::memory_order_acquire) || qodh.hasDeferredScan()) {
             while (true) {
                 {
                     QoreRSectionLocker al(rml);
@@ -3465,34 +3486,35 @@ void ClosureVarValue::deref(ExceptionSink* xsink) {
 #endif
 
                     RSet* rs = rset.load(std::memory_order_relaxed);
-                    if (!rs) {
-                        // a variable in no recursive set has no recursive references either
-                        assert(!rcount);
-                        if (ref_copy == rcount) {
-                            do_del = true;
-                        }
-                        break;
-                    }
                     if (!qodh.deferredScan()) {
+                        if (!rs) {
+                            // a variable in no recursive set has no recursive references either
+                            assert(!rcount);
+                            break;
+                        }
                         int rc = rs->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
                         if (rc == 1) {
-                            printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive reference; deleting value\n", this);
+                            printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive "
+                                "reference; deleting value\n", this);
                             do_del = true;
                             break;
                         }
-                        if (!rc)
+                        if (!rc) {
                             break;
+                        }
                         assert(rc == -1);
                     }
                 }
                 if (!qodh.doScan()) {
-                return;
+                    return;
                 }
-                // need to recalculate references
+                // need to recalculate references: a scan deferred while the frame held the variable is made here,
+                // after which the loop decides collection with the set it found
                 RSetHelper rsh(*this, xsink);
             }
-            if (do_del)
+            if (do_del) {
                 qodh.willDelete();
+            }
         }
     }
 

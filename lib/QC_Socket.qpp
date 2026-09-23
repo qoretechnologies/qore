@@ -257,57 +257,6 @@ private:
     bool done = false;
 };
 
-class SocketExecHttp2ServerStreamPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL SocketExecHttp2ServerStreamPollOperation(QoreSocketObject* sock, int32_t stream_id,
-            const char* mname)
-            : sock(sock), stream_id(stream_id), mname(mname) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        output = -1;
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (done) {
-            return nullptr;
-        }
-
-        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
-        if (!priv->hasH2SessionForAsyncPoll()) {
-            output = -1;
-        } else if (priv->isH2ServerSessionForAsyncPoll() && stream_id > 0) {
-            output = stream_id;
-        } else {
-            xsink->raiseException("HTTP2-ERROR",
-                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
-            output = -1;
-        }
-        done = true;
-        return nullptr;
-    }
-
-    DLLLOCAL virtual QoreValue getOutput() const override {
-        return static_cast<int64>(output);
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "http2-server-stream-checked" : "checking-http2-server-stream";
-    }
-
-private:
-    QoreSocketObject* sock;
-    int32_t stream_id;
-    std::string mname;
-    int32_t output = -1;
-    bool done = false;
-};
-
 static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
         const char* owner_name, const char* goal, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -341,17 +290,6 @@ static int socket_exec_check_http1_allowed(QoreObject* self, QoreSocketObject* s
     ValueHolder rv(socket_exec_poll_output(self, s, new SocketExecHttp1AllowedPollOperation(s, mname),
         mname, "http1-checked", xsink), xsink);
     return *xsink ? -1 : 0;
-}
-
-static int32_t socket_exec_get_http2_server_stream(QoreObject* self, QoreSocketObject* s, int32_t stream_id,
-        const char* mname, ExceptionSink* xsink) {
-    ValueHolder rv(socket_exec_poll_output(self, s,
-        new SocketExecHttp2ServerStreamPollOperation(s, stream_id, mname), mname,
-        "http2-server-stream-checked", xsink), xsink);
-    if (*xsink) {
-        return -1;
-    }
-    return rv->isNothing() ? -1 : static_cast<int32_t>(rv->getAsBigInt());
 }
 
 static int socket_exec_send_binary(QoreObject* self, QoreSocketObject* s, BinaryNode* data,
@@ -454,26 +392,8 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
         return -1;
     }
 
-    int32_t stream_id = priv->getH2ActiveThreadStreamId();
-    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
-    if (*xsink) {
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponse", xsink)) {
         return -1;
-    }
-    if (stream_id > 0) {
-        QoreString status_line(s->getEncoding());
-        priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
-
-        SimpleRefHolder<BinaryNode> body_bin;
-        if (size && data) {
-            body_bin = new BinaryNode;
-            body_bin->append(data, size);
-        }
-
-        s->ref();
-        return socket_exec_send_poll(self, s,
-            new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin, false,
-                true),
-            timeout_ms, xsink, NB_ALL);
     }
 
     QoreString hdr(s->getEncoding());
@@ -736,19 +656,11 @@ static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketO
         return -1;
     }
 
-    int32_t stream_id = priv->getH2ActiveThreadStreamId();
-    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponseWithCallback", xsink);
-    if (*xsink) {
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponseWithCallback", xsink)) {
         return -1;
     }
 
     QoreString hdr(s->getEncoding());
-    if (stream_id > 0) {
-        priv->getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
-        xsink->raiseException("HTTP2-ERROR",
-            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
-        return -1;
-    }
     if (priv->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version, headers,
             QORE_SOURCE_SOCKET)) {
         return -1;
@@ -758,6 +670,25 @@ static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketO
         return -1;
     }
     return socket_exec_send_http_chunked_body_callback(self, s, send_callback, timeout_ms, xsink);
+}
+
+static int socket_exec_send_http_response_header(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers, int timeout_ms,
+        ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    // a response header without a message body is an HTTP/1 message: HTTP/2 has no such message
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponseHeader", xsink)) {
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    priv->getSendHttpResponseHeaderBlock(hdr, info, code, desc, http_version, headers, QORE_SOURCE_SOCKET);
+    return socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink);
 }
 
 static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
@@ -775,16 +706,7 @@ static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSoc
         return -1;
     }
 
-    int32_t stream_id = priv->getH2ActiveThreadStreamId();
-    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
-    if (*xsink) {
-        return -1;
-    }
-    if (stream_id > 0) {
-        QoreString status_line(s->getEncoding());
-        priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
-        xsink->raiseException("HTTP2-ERROR",
-            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPResponse", xsink)) {
         return -1;
     }
 
@@ -2800,7 +2722,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int s
     - If \c getState() returns \c "stream-complete": \c getOutput() returns a hash with \c "hdr" and \c "info" keys
     - If \c getState() returns \c "timeout": the idle timeout expired
 
-    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR invalid status code
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR invalid status code, a non-I/O-thread-safe
+    InputStream, or a negative content length
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
@@ -2823,6 +2746,13 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
         return QoreValue();
     }
 
+    // the Content-Length header is built from content_length, and the body is sent until that many bytes are sent
+    if (content_length < 0) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
+            "the content length must not be negative; got " QLLD, content_length);
+        return QoreValue();
+    }
+
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
     hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
@@ -2841,6 +2771,14 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     int64 now_ms = now_s * 1000 + us / 1000;
     int64 deadline_ms = now_ms + idle_timeout;
 
+    // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
+    // the poll operation constructor can access it (e.g. getPollableDescriptor); this is done before any reference
+    // is taken, so on error the holder releases the InputStream and there is nothing else to release
+    body->reassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
     // Take ownership of InputStream
     InputStream* body_ptr = body.release();
     // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
@@ -2848,14 +2786,6 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHe
     QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
     body_obj->ref();
     s->ref();
-
-    // The InputStream may already be unassigned (from doResponse async capture);
-    // reassign it to this thread so the constructor can access it (e.g. getPollableDescriptor)
-    body_ptr->reassignThread(xsink);
-    if (*xsink) {
-        body_obj->deref(xsink);
-        return QoreValue();
-    }
 
     // Create the fused poll operation
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -2936,18 +2866,20 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
     int64 now_ms = now_s * 1000 + us / 1000;
     int64 deadline_ms = now_ms + idle_timeout;
 
+    // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
+    // the poll operation constructor can access it (e.g. getPollableDescriptor); this is done before any reference
+    // is taken, so on error the holder releases the InputStream and there is nothing else to release
+    body->reassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
     InputStream* body_ptr = body.release();
     // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
     // while the C++ poll operation holds the InputStreamWrapper private data
     QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
     body_obj->ref();
     s->ref();
-
-    body_ptr->reassignThread(xsink);
-    if (*xsink) {
-        body_obj->deref(xsink);
-        return QoreValue();
-    }
 
     // Create fused poll operation with chunked=true, content_length=-1
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -2987,7 +2919,8 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeade
 
     @return an @ref Qore::AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
 
-    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR invalid status code
+    @throw SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR invalid status code, a non-I/O-thread-safe
+    InputStream, or a negative content length
     @throw HTTP-STREAM-ERROR raised during polling if the InputStream provides fewer bytes than
     Content-Length (truncated stream), or if poll() on a pollable InputStream fd fails
 
@@ -3010,6 +2943,13 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
         return QoreValue();
     }
 
+    // the Content-Length header is built from content_length, and the body is sent until that many bytes are sent
+    if (content_length < 0) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
+            "the content length must not be negative; got " QLLD, content_length);
+        return QoreValue();
+    }
+
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
     hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
@@ -3022,20 +2962,20 @@ AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int stat
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
     result->append(hdr.c_str(), hdr.size());
 
+    // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
+    // the poll operation constructor can access it (e.g. getPollableDescriptor); this is done before any reference
+    // is taken, so on error the holder releases the InputStream and there is nothing else to release
+    body->reassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
     // Take ownership of InputStream
     InputStream* body_ptr = body.release();
     // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
     QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
     body_obj->ref();
     s->ref();
-
-    // The InputStream may already be unassigned (from doResponse async capture);
-    // reassign it to this thread so the constructor can access it (e.g. getPollableDescriptor)
-    body_ptr->reassignThread(xsink);
-    if (*xsink) {
-        body_obj->deref(xsink);
-        return QoreValue();
-    }
 
     // Create the non-fused poll operation
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -3109,16 +3049,18 @@ AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(i
     SimpleRefHolder<BinaryNode> result(new BinaryNode);
     result->append(hdr_str.c_str(), hdr_str.size());
 
+    // The InputStream may already be unassigned (from doResponse async capture); reassign it to this thread so
+    // the poll operation constructor can access it (e.g. getPollableDescriptor); this is done before any reference
+    // is taken, so on error the holder releases the InputStream and there is nothing else to release
+    body->reassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
     InputStream* body_ptr = body.release();
     QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
     body_obj->ref();
     s->ref();
-
-    body_ptr->reassignThread(xsink);
-    if (*xsink) {
-        body_obj->deref(xsink);
-        return QoreValue();
-    }
 
     // Non-fused chunked send: content_length=-1, deadline=0, fused=false, chunked=true
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -5368,6 +5310,60 @@ nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_description->c_str(),
         http_version->c_str(), headers, send_callback, timeout_ms, xsink);
+}
+
+//! Sends the status line and header of an HTTP response exactly as given; the caller sends any message body
+/** Unlike the other methods that send HTTP responses, this method adds neither a \c Content-Length nor a
+    \c Transfer-Encoding header; the caller frames any message body according to the headers given, and sends it
+    afterwards with methods such as @ref Qore::Socket::send2() "Socket::send2()", for example:
+    - with a \c Content-Length header: exactly that many bytes
+    - with neither header: a message body delimited by closing the connection, as required for a message body of
+      unknown length in a response to an HTTP/1.0 request (RFC 9112 section 6.3); in this case send a
+      \c "Connection: close" header and close the connection after the message body
+
+    @par Example:
+    @code{.py}
+sock.sendHTTPResponseHeader(200, "OK", "1.1", {"Content-Type": "text/plain", "Connection": "close"});
+while (*binary data = input_stream.read(65536)) {
+    sock.send2(data);
+}
+sock.close();
+    @endcode
+
+    @par Events:
+    @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
+
+    @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
+    @param status_description the descriptive text for the status code
+    @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
+    string to be sent)
+    @param headers a hash of headers to send (key-value pairs); a list value sends one header line for each element
+    @param info An optional reference to an lvalue that can accept a hash that will be used as an output variable with
+    the following hash key:
+    - \c response-uri: The response URI as sent in the output message
+    @param timeout_ms the timeout in milliseconds (1/1000 second); If no timeout is passed or is negative, then the
+    call will not time out and will not return until all the data has been sent or the remote end closes the
+    connection. Note that like all %Qore functions and methods taking timeout values, a
+    @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes,
+    etc.)
+
+    @throw SOCKET-SENDHTTPRESPONSE-STATUS-ERROR raised if the status_code (first argument) is < 100 or > 599
+    @throw SOCKET-NOT-OPEN the socket is not connected
+    @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
+    @throw SOCKET-SEND-ERROR send failed
+    @throw HTTP2-ERROR the socket has an HTTP/2 session; a response header without a message body is an HTTP/1 message
+
+    @since %Qore 3.0
+*/
+nothing Socket::sendHTTPResponseHeader(softint status_code, string status_description, string http_version,
+        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    if (check_response_code(status_code, xsink)) {
+        return QoreValue();
+    }
+
+    OptHashRefHelper ohrh(info, xsink);
+    socket_exec_send_http_response_header(self, s, *ohrh, status_code, status_description->c_str(),
+        http_version->c_str(), headers, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message body in chunked transfer encoding

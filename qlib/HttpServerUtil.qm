@@ -142,6 +142,10 @@ module HttpServerUtil {
       percent-encoded until parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()"
     - added @ref HttpServer::mask_sensitive_url_query_values() "mask_sensitive_url_query_values()" so HTTP server
       diagnostics can log request targets without exposing authentication secrets in query parameters
+    - @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" sets \c "Connection: close" when the
+      request requires the connection to be closed after the response, whatever the handler returned
+    - added @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()" to send an HTTP/1.x
+      response with a streamed message body framed as the response headers declare
 
     @subsection httputil1_5 HttpServerUtil 1.5
     - added extension points to @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator" for
@@ -446,6 +450,10 @@ public hashdecl HttpResponseInfo {
     *InputStream chunked_body;
 
     #! set this key to @ref True "True" if the connection should be unconditionally closed when the handler returns
+    /** @ref False "False" does not keep open a connection that the request requires to be closed after the
+        response: an HTTP/1.0 request without the \c keep-alive connection option, or a request with the \c close
+        option (RFC 9112 section 9.3)
+    */
     softbool close = False;
 
     #! set this key to a hash of extra header information to be returned with the response
@@ -489,6 +497,10 @@ public hashdecl HttpResponseInfo {
         with this callback instead of sending the body directly. This preserves per-chunk record boundaries
         required by protocols like DataStream.
 
+        A response to an HTTP/1.0 request cannot use chunked transfer encoding (RFC 9112 section 6.1): unless a
+        \c Content-Length header is given, the data is sent as-is and the connection is closed after the message
+        body (see @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()").
+
         @since HttpServerUtil 2.1
 
         @see send_timeout
@@ -521,6 +533,10 @@ public hashdecl HttpHandlerResponseInfo {
     auto body;
 
     #! set this key to @ref True "True" if the connection should be unconditionally closed when the handler returns
+    /** @ref False "False" does not keep open a connection that the request requires to be closed after the
+        response: an HTTP/1.0 request without the \c keep-alive connection option, or a request with the \c close
+        option (RFC 9112 section 9.3)
+    */
     softbool close = False;
 
     #! set this key to a hash of extra header information to be returned with the response
@@ -570,6 +586,10 @@ public hashdecl HttpHandlerResponseInfo {
     /** When set, the response-sending code calls @ref Qore::Socket::sendHTTPResponseWithCallback() "sendHTTPResponseWithCallback()"
         with this callback instead of sending the body directly. This preserves per-chunk record boundaries
         required by protocols like DataStream.
+
+        A response to an HTTP/1.0 request cannot use chunked transfer encoding (RFC 9112 section 6.1): unless a
+        \c Content-Length header is given, the data is sent as-is and the connection is closed after the message
+        body (see @ref HttpServer::http_send_streamed_response() "http_send_streamed_response()").
 
         @since HttpServerUtil 2.1
 
@@ -976,13 +996,18 @@ public *hash<auto> sub http_canonicalize_reply_header_names(*hash<auto> hdr) {
 #! helper function for setting HTTP response headers
 /** The names of the response header fields in @ref HttpServerManagedHeaderNames are converted to their canonical
     case with http_canonicalize_reply_header_names() before they are checked
+
+    Unless \a rv already has a \c Connection header, a \c "Connection: close" header is set if either \a rv or
+    \a cx has a true \c close key, and \c "Connection: Keep-Alive" otherwise; \c cx.close is set for requests that
+    require the connection to be closed after the response (see @ref httpserverutil_request_context)
 */
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
     rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
         if (!rv.hdr.Connection) {
-            if (rv.close) { # RFC 2616 section 14.10 is "close" in all lower-case
+            # the server closes the connection if the request requires it, whatever the handler returned
+            if (rv.close || cx.close) { # RFC 2616 section 14.10 is "close" in all lower-case
                 rv.hdr.Connection = "close";
             } else {
                 rv.hdr.Connection = "Keep-Alive";
@@ -1035,6 +1060,94 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
         if (re != "iso-8859-1" && re != "latin1" && re != "latin-1") {
             rv.hdr."Content-Type" += ";charset=" + cx."response-encoding";
         }
+    }
+}
+
+#! Sends an HTTP/1.x response with a message body that a callback provides, on the calling thread
+/** The message body is framed as the response headers in \a hdr declare:
+    - \c "Transfer-Encoding: chunked": each value that \a send_callback returns is sent as one chunk; a hash return
+      value gives the trailers of the message
+    - \c Content-Length: the message body must have exactly that length
+    - neither header: the message body is delimited by closing the connection (RFC 9112 section 6.3), as required for
+      a message body of unknown length in a response to an HTTP/1.0 request, where \c Transfer-Encoding must not be
+      sent (RFC 9112 section 6.1); the caller must close the connection after this call returns and should send a
+      \c "Connection: close" header
+
+    @par Example:
+    @code{.py}
+# stream a file export to the client in 64 KiB blocks; chunked transfer encoding requires an HTTP/1.1 request, so
+# the response to an HTTP/1.0 request is delimited by closing the connection; "request_hdr" is the request header
+# hash returned by Socket::readHTTPHeader()
+FileInputStream export("/var/exports/orders.csv");
+hash<auto> hdr = {"Content-Type": "text/csv"};
+bool close_after = request_hdr.http_version == "1.0";
+if (close_after) {
+    hdr.Connection = "close";
+} else {
+    hdr."Transfer-Encoding" = "chunked";
+}
+http_send_streamed_response(sock, 200, "OK", hdr, auto sub () { return export.read(65536); }, 30s);
+if (close_after) {
+    sock.close();
+}
+    @endcode
+
+    @param sock the socket connected to the client
+    @param code the HTTP status code
+    @param status_message the HTTP status message
+    @param hdr the response headers
+    @param send_callback returns each block of the message body as a string or binary value (a string is sent as-is,
+    without an encoding conversion), and @ref nothing, \c NULL, or an empty value when the message body is complete;
+    a hash return value also completes the message body, and gives its trailers when chunked transfer encoding is used
+    @param send_timeout the timeout for each send operation; a negative value means no timeout
+
+    @throw HTTP-STREAM-ERROR the message body is longer or shorter than the \c Content-Length header
+    @throw SOCKET-CALLBACK-ERROR \a send_callback returned a value of an unsupported type
+
+    @since HttpServerUtil 1.6
+*/
+public nothing sub http_send_streamed_response(Socket sock, int code, string status_message, hash<auto> hdr,
+        code send_callback, timeout send_timeout = -1) {
+    hdr = http_canonicalize_reply_header_names(hdr);
+    if (hdr."Transfer-Encoding" =~ /\bchunked\b/i) {
+        sock.sendHTTPResponseWithCallback(send_callback, code, status_message, "1.1", hdr, send_timeout);
+        return;
+    }
+
+    sock.sendHTTPResponseHeader(code, status_message, "1.1", hdr, NOTHING, send_timeout);
+    *int remaining = exists hdr."Content-Length" ? int(hdr."Content-Length") : NOTHING;
+    while (True) {
+        auto chunk = send_callback();
+        switch (chunk.typeCode()) {
+            case NT_STRING:
+            case NT_BINARY:
+                break;
+            case NT_HASH:
+            case NT_NOTHING:
+            case NT_NULL:
+                # trailers can only be sent with chunked transfer encoding
+                chunk = NOTHING;
+                break;
+            default:
+                throw "SOCKET-CALLBACK-ERROR", sprintf("HTTP response data callback returned type %y; expecting "
+                    "one of: \"string\", \"binary\", \"hash\", \"nothing\" (or \"NULL\")", chunk.type());
+        }
+        if (!exists chunk || !chunk.size()) {
+            break;
+        }
+        binary data = binary(chunk);
+        if (exists remaining) {
+            if (data.size() > remaining) {
+                throw "HTTP-STREAM-ERROR", sprintf("the message body is longer than its Content-Length of %d bytes",
+                    int(hdr."Content-Length"));
+            }
+            remaining -= data.size();
+        }
+        sock.send2(data, send_timeout);
+    }
+    if (remaining) {
+        throw "HTTP-STREAM-ERROR", sprintf("the message body ended %d bytes short of its Content-Length of %d bytes",
+            remaining, int(hdr."Content-Length"));
     }
 }
 
@@ -3348,7 +3461,9 @@ public class AbstractHttpRequestHandler {
         @param body always @ref nothing in the inline path; retained for
         compatibility with handleRequest() when used as a fallback
 
-        @return response hash with keys: code, body, hdr
+        @return response hash with keys: code, body, hdr; the message body must be a string or binary value, as
+        the inline path cannot send a streamed message body; any other message body or an exception is answered
+        with a 500 response, and the connection is closed
 
         @since HttpServerUtil 1.4
     */
