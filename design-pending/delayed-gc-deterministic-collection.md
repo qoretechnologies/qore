@@ -328,11 +328,17 @@ set is held, everything destroyed once it is released.
 | registry growth with `@=` | 200 | 200 | 200 |
 | confirming scan of an open cycle, holder in a list | 500 | 500 | 500 |
 | server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 10,484 | 12,142 | 9,172 |
+| 10 requests releasing their references to a set member from outside the set, after a scan made while they held it | 30 | 30 | 30 |
 
 The server shape rebuilds the controller's recursive set twice per request (200 sets for 100 requests): the
 registration and the removal are made in the controller's own methods, the deferral discards the set, and the
 scan made when the method's real reference goes must rebuild it with the r-sections of the whole graph held
 exclusively. This is the contention measured in qorus-core's request threads.
+
+The release shape rescans the whole set on every release although the set is unchanged: `RSet::canDelete()`
+cannot tell an outside holder letting go from an internal reference dropped without invalidating the set, and
+rescans whenever a member's count falls below the one the last scan recorded. This is the object-destruction scan
+cost measured in qorus-core after `6aa593e80`.
 
 The compiled tiers diverge on the registry shapes because a compiled assignment
 (`qore_rt_lv_path_assign()`) borrows the value and takes references of its own, releasing them after the

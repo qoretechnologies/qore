@@ -123,6 +123,16 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "server-release-scans": 1,
             "server-release-walked": 3,
             "server-release-sets": 0,
+
+            # requests releasing their references to a member of a recursive set from outside it: the set is
+            # unchanged, but each release rescans it, because the member's count falls below the one recorded by
+            # the scan made while the requests held it (RSet::canDelete(), scan_refs)
+            "release-scans": 0,
+            "release-walked": 30,
+            "release-sets": 0,
+            "release-release-scans": 1,
+            "release-release-walked": 0,
+            "release-release-sets": 0,
         };
 
         #! the scan counters of the compiled tiers that differ from the AST interpreter's (ExpectedScanCounts)
@@ -193,6 +203,9 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "server-op-dtors": 100,
             "server-dtors": 9,
             "server-leaf-dtors": 100,
+            "release-held-dtors": 0,
+            "release-dtors": 2,
+            "release-leaf-dtors": 11,
         };
 
         #! the execution modes that the worker is run in

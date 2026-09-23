@@ -192,6 +192,21 @@ public class Controller {
     }
 }
 
+#! A request that holds a shared object while it is served; counted as a value when it is destroyed
+public class Request {
+    public {
+        Node shared;
+    }
+
+    constructor(Node shared) {
+        self.shared = shared;
+    }
+
+    destructor() {
+        ++Leaf::destroyed;
+    }
+}
+
 #! The destructions counted so far; the difference between two tallies is what a check destroyed
 class Tally {
     public {
@@ -400,6 +415,28 @@ sub server_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters>
     release = new Counters();
 }
 
+#! a cycle held by a list and by requests: a scan made while they hold it, then the requests end one by one
+/** Each request that ends releases a reference to a member of the recursive set from outside it, which leaves the
+    set as it was; the counts are what that costs.
+*/
+sub release_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    list<Node> l = (new Node(),);
+    make_cycle(l[0]);
+    list<Request> reqs = ();
+    for (int i = 0; i < 10; ++i) {
+        reqs += new Request(l[0]);
+    }
+    # a write scanned while the requests hold the set
+    l[0].x = new Leaf();
+    Counters c();
+    while (reqs) {
+        pop reqs;
+    }
+    c.record(\rv, "release");
+    rv."release-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! runs one check and records what releasing its set cost and destroyed
 sub run(reference<hash<string, int>> rv, string shape,
         code<nothing(reference<hash<string, int>>, Tally, reference<*Counters>)> check) {
@@ -472,6 +509,7 @@ public hash<string, int> sub get_results() {
     run(\rv, "registry-opaque", \registry_opaque_writes());
     run(\rv, "confirm", \confirm_writes());
     run(\rv, "server", \server_writes());
+    run(\rv, "release", \release_writes());
     return rv;
 }
 }
