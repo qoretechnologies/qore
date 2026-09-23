@@ -284,29 +284,6 @@ public:
         return nullptr;
     }
 
-    DLLLOCAL cvv_vec_t* getAll() const {
-        cvv_vec_t* cv = 0;
-        Block* w = curr;
-        while (w) {
-            int p = w->pos;
-            while (p) {
-                --p;
-                ClosureVarValue* cvv = w->var[p].cvv;
-                // skip frame boundaries
-                if (!cvv) {
-                    continue;
-                }
-                if (!cv) {
-                    cv = new cvv_vec_t;
-                }
-                cv->push_back(cvv->refSelf());
-            }
-            w = w->prev;
-        }
-        //printd(5, "ThreadClosureVariableStack::getAll() this: %p cv: %p size: %d\n", this, cv, cv ? cv->size() : 0);
-        return cv;
-    }
-
     DLLLOCAL void pushFrameBoundary() {
         ++frame_count;
         //printd(5, "ThreadClosureVariableStack::pushFrameBoundary(): fc:%d\n", frame_count);

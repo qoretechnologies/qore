@@ -87,10 +87,10 @@ public:
         if (!cvec) {
             return;
         }
-        // cvec was captured via thread_get_all_closure_vars() when the closure was created; it
-        // holds every CVV that was on cvstack at that moment (top→bottom). For BACKGROUND-thread
-        // invocations the worker cvstack is empty and we must push every captured CVV to restore
-        // the lexical environment. For SAME-thread invocations the captured CVVs are already on
+        // cvec was captured via thread_get_closure_vars_for_vlist() when the closure was created; it
+        // holds the CVVs of the variables the closure uses, including those used only by closures
+        // nested in it. For BACKGROUND-thread invocations the worker cvstack is empty and we must push
+        // every captured CVV to restore the lexical environment. For SAME-thread invocations the captured CVVs are already on
         // cvstack and re-pushing them causes aliasing in name-based lookup: a caller-frame CVV
         // can shadow the current frame's own CVV with the same name (e.g. a recursive function
         // whose local is captured via `\var` into a closure — the nested call's own local is
@@ -156,12 +156,11 @@ public:
             closure_env(n_closure->getVList()), cvec(cv), class_ctx(class_ctx) {
         //printd(5, "QoreClosureBase::QoreClosureBase() this: %p closure: %p\n", this, closure);
         closure->ref();
-        // thread_get_all_closure_vars() ref'd every CVV in cv; closure_env
+        // thread_get_closure_vars_for_vlist() ref'd every CVV in cv; closure_env
         // additionally ref'd each CVV that's in its cmap (subset of cv).
         // That duplicate ref on cmap-members masks cycles from the rsection
         // scan (which walks only cmap), so drop it here. The remaining cvec
-        // refs cover CVVs captured for lexical scope but not referenced by
-        // the closure body.
+        // refs cover CVVs of the vlist that closure_env does not hold.
         if (cvec) {
             for (cvv_vec_t::iterator i = cvec->begin(), e = cvec->end(); i != e; ++i) {
                 if (closure_env.hasVar(*i)) {

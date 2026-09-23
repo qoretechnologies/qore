@@ -1,0 +1,172 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file background-capture-checks.qi checks for the variables a closure run by a background thread captures
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** A closure run with \c background captures the closure-bound variables it uses, as any other closure does.  It
+    used to capture every closure-bound variable on the thread's closure-variable stack, of every frame, so a thread
+    kept the values of the variables of the frame that started it, and of all its callers, until the thread ended.
+
+    Each check keeps its thread running on a Counter until it has recorded what it measures, so no result depends on
+    how long a thread takes to end.
+
+    The checks are included in the main program of the worker that runs them in each execution mode, and in
+    BackgroundCaptureChecks.qm for the compiled (AOT) run.
+*/
+public namespace BackgroundCaptureChecks {
+#! An object whose destruction is counted
+public class Tracked {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Tracked::destroyed;
+    }
+}
+
+#! An object that starts a background closure using one of its members
+public class Holder {
+    public {
+        int n = 5;
+    }
+
+    #! returns the member as read by a background thread
+    int readInThread() {
+        int got;
+        Counter finished(1);
+        background sub () {
+            got = n;
+            finished.dec();
+        }();
+        finished.waitForZero();
+        return got;
+    }
+}
+
+#! starts a thread that uses none of the frame's closure-bound variables and waits until it is running
+sub spawn_unreferenced(Counter started, Counter gate, Counter finished) {
+    Tracked o();
+    # makes o closure-bound
+    code c = Tracked sub () { return o; };
+    background sub () {
+        on_exit finished.dec();
+        started.dec();
+        gate.waitForZero();
+    }();
+    started.waitForZero();
+}
+
+#! starts a thread from a callee, so the variable is only in a caller's frame
+sub spawn_from_callee(Counter started, Counter gate, Counter finished) {
+    Tracked o();
+    code c = Tracked sub () { return o; };
+    spawn_plain(started, gate, finished);
+}
+
+#! starts a thread that uses no variable of its callers
+sub spawn_plain(Counter started, Counter gate, Counter finished) {
+    background sub () {
+        on_exit finished.dec();
+        started.dec();
+        gate.waitForZero();
+    }();
+    started.waitForZero();
+}
+
+#! starts a thread that uses the frame's variable
+sub spawn_referenced(Counter started, Counter gate, Counter finished) {
+    Tracked o();
+    background sub () {
+        on_exit finished.dec();
+        started.dec();
+        gate.waitForZero();
+        Tracked x = o;
+        remove x;
+    }();
+    started.waitForZero();
+}
+
+#! returns the objects destroyed once the function starting a thread returned, while the thread still runs
+int sub destroyed_while_running(code<nothing(Counter, Counter, Counter)> spawn) {
+    Counter started(1);
+    Counter gate(1);
+    Counter finished(1);
+    int before = Tracked::destroyed;
+    spawn(started, gate, finished);
+    int rv = Tracked::destroyed - before;
+    gate.dec();
+    finished.waitForZero();
+    return rv;
+}
+
+#! returns the value a thread read from a captured variable and the value it left there
+hash<string, int> sub shared_value() {
+    int v = 1;
+    int seen;
+    Counter started(1);
+    Counter gate(1);
+    Counter finished(1);
+    background sub () {
+        on_exit finished.dec();
+        started.dec();
+        gate.waitForZero();
+        seen = v;
+        v = 3;
+    }();
+    started.waitForZero();
+    v = 2;
+    gate.dec();
+    finished.waitForZero();
+    return {"shared-seen": seen, "shared-final": v};
+}
+
+#! returns the value a closure nested in a background closure read from a variable only it uses
+int sub nested_value() {
+    int w = 7;
+    int seen;
+    Counter finished(1);
+    background sub () {
+        on_exit finished.dec();
+        code<int()> inner = int sub () { return w; };
+        seen = inner();
+    }();
+    finished.waitForZero();
+    return seen;
+}
+
+#! Returns the result of each check
+public hash<string, int> sub get_results() {
+    hash<string, int> rv = {
+        # released when the frame that started the thread returns
+        "unreferenced-released": destroyed_while_running(\spawn_unreferenced()),
+        # released when the caller of the function that started the thread returns
+        "caller-released": destroyed_while_running(\spawn_from_callee()),
+        # kept while the thread can still use it
+        "referenced-released": destroyed_while_running(\spawn_referenced()),
+        "nested-value": nested_value(),
+        "method-value": (new Holder()).readInThread(),
+    };
+    rv += shared_value();
+    return rv;
+}
+}

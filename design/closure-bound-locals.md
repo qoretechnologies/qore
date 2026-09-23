@@ -17,7 +17,13 @@ that holds a shared object - a table, a listener, a connection - contends with e
 - The frame that created it, through its entry on the thread's closure-variable stack
   (`ThreadClosureVariableStack::instantiate()`). The entry holds a reference until the variable goes out of scope.
 - A reference to it: `ClosureVarValue::getReference()` returns a `VarRefImmediateNode` that holds a reference.
-- A closure that captured it: the closure's environment holds a reference.
+- A closure that captured it: the closure's environment holds a reference. A closure captures the variables it
+  uses, including those used only by closures nested in it (`thread_get_closure_vars_for_vlist()`); that is also
+  true of a closure run with `background` (`QoreClosureParseNode::evalBackground()`). Background closures used to
+  capture the thread's whole closure-variable stack, so a thread kept every closure-bound variable of the frame that
+  started it, and of all its callers, until it ended;
+  `examples/test/qore/closures/background-capture/background-capture.qtest` checks that they are released when
+  those frames return, in each execution mode and from a compiled module.
 - The closure-variable stack of a thread that runs such a closure (`CVecInstantiator`): each entry holds a
   reference.
 - The collector, through an edge (the reference or closure above, when it is stored in the heap), or through the

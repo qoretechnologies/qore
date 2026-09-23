@@ -205,12 +205,11 @@ QoreValue QoreClosureParseNode::exec(const QoreClosureBase& closure_base, QorePr
 }
 
 QoreClosureBase* QoreClosureParseNode::evalBackground(ExceptionSink* xsink) const {
-    // Always use thread_get_all_closure_vars() to properly share/sync closure variables
-    // with background threads. The optimization using thread_get_closure_vars_for_vlist()
-    // breaks variable capture by not properly transferring current values to the new thread.
-    // Closure variables are designed to be thread-safe and shared, so we need the proven
-    // approach that ensures the background thread sees current values.
-    cvv_vec_t* cvv = thread_get_all_closure_vars();
+    // Capture only the variables the closure uses, as evalClosure() does.  The closure holds a reference to each
+    // ClosureVarValue, which is shared with the frame that started the thread, so both see each other's changes.
+    // Capturing the thread's whole closure-variable stack instead kept every closure-bound variable of the frame
+    // that started the thread, and of all its callers, alive until the thread ended.
+    cvv_vec_t* cvv = thread_get_closure_vars_for_vlist(getVList());
 
     if (in_method) {
         QoreObject* o;
