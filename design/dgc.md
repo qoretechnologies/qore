@@ -797,3 +797,8 @@ anything.
   holder has real references: every deferred scan discards the set recorded for the holder.
 - `examples/test/qore/misc/dgc-deref-fast-path.qtest` — dereferences outside a recursive set take no
   r-section, dereferences inside one still do, and cycles formed around shared values are still collected.
+- `examples/test/qore/misc/dgc-scan-avoidance/dgc-scan-avoidance.qtest` — the scans made by member writes to a
+  recursive set held in each common way (plain local, method call, closure-bound local, non-root member, list,
+  registry, opaque registry, long-lived holder), per execution mode and from a compiled module, each paired with
+  its collection. The checks are included in the worker's main program, because code in a module loaded from
+  source does not take the execution mode given on the command line.

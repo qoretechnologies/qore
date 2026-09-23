@@ -1,9 +1,6 @@
 # Delayed GC with Deterministic Collection
 
-**Status:** Design. **Recommendation: do not start until the baseline in §8 is re-measured.**
-Every number that motivates this work was taken against a collector that was skipping scans
-it should have made (fixed in `db56d0ecc`), so the cost this proposal claims to remove is
-not currently known.
+**Status:** Design. The baseline in §8 was re-measured on the corrected collector on 2026-09-23.
 
 **What it would enable:** removing `QoreParseOptions::ALLOW_OPAQUE_REFERENCES` and making
 `@=` an ordinary part of the language, because a cycle held by an opaque edge would no
@@ -270,34 +267,83 @@ legacy 64-bit mask, so the option escapes positive-option discipline. A child Pr
 grant itself `@=` where it is correctly refused `:=`. Verified empirically; unrelated to
 this design, and worth its own issue.
 
-## 8. Cost, and why the numbers must be re-taken
+## 8. Cost on the corrected collector
+
+Re-measured on 2026-09-23 against `develop` at `6ba8a893c`, i.e. after `db56d0ecc` (scans that were being
+skipped are made again) and `6aa593e80` (a closure-bound local's frame holds a real reference).
+
+### Registry register/unregister (release build, wall-clock)
+
+A hub holds 2,000 entries in a hash, each entry points back at the hub, and the hub is reached through a
+static class variable holding one of its entries, so a write at the hub is rooted at an object with no real
+reference. One operation registers a new entry under a fresh key and removes it again. Three runs each:
+
+| assignment | threads | mode | ops/s | objects walked per op (debug build) |
+|---|---|---|---|---|
+| `=` | 1 | tiered (default) | 198 - 268 | 8,006 |
+| `=` | 1 | ast | 190 - 218 | 7,966 |
+| `=` | 8 | tiered (default) | 848 - 924 | 250 |
+| `=` | 8 | ast | 630 - 746 | — |
+| `@=` | 1 | tiered (default) | 34,105 - 50,421 | 2 |
+| `@=` | 1 | ast | 50,196 - 71,659 | 2 |
+| `@=` | 8 | tiered (default) | 40,043 - 45,435 | — |
+| `@=` | 8 | ast | 42,634 - 46,818 | — |
+
+What the numbers say:
+
+- `=` still walks the whole registry per registration and per removal - about four objects per entry, per
+  operation - so the ~200x gap between `=` and `@=` stands on the corrected collector. The original 162
+  ops/s (6,005 objects per registration) is the same order.
+- `@=` does not scale: eight threads do no more work than one. Every copy and release of an opaque value takes
+  the one global `opaque_lock` (§7), and this benchmark copies the value on each registration.
+- With eight threads, scans of the same root are coalesced (a scan runs at most once per generation), so the
+  objects walked per operation drop to ~250 while throughput rises only ~3.5x.
+
+### Scan counts by shape (debug build, 100 writes; `examples/test/qore/misc/dgc-scan-avoidance`)
+
+Objects walked by the scans the writes made. Every shape also asserts collection: nothing destroyed while the
+set is held, everything destroyed once it is released.
+
+| shape | ast | ir / jit / tiered | aot |
+|---|---|---|---|
+| plain local root | 0 | 0 | 0 |
+| `self` writes in a method, root held by a list | 9 | 6 | 9 |
+| closure-bound local root | 303 | 303 | 303 |
+| non-root member (`root.peer.x`), root in a local | 300 | 300 | 300 |
+| root held only by a list | 303 | 303 | 303 |
+| registry growth, hub in a local | 0 | 10,300 | 10,300 |
+| registry growth, hub held only by its own cycle | 5,150 | 25,748 | 15,450 |
+| registry removal, same | 15,049 | 15,149 | 15,049 |
+| registry growth with `@=` | 200 | 200 | 200 |
+| confirming scan of an open cycle, holder in a list | 500 | 500 | 500 |
+| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 10,484 | 12,142 | 9,172 |
+
+The server shape rebuilds the controller's recursive set twice per request (200 sets for 100 requests): the
+registration and the removal are made in the controller's own methods, the deferral discards the set, and the
+scan made when the method's real reference goes must rebuild it with the r-sections of the whole graph held
+exclusively. This is the contention measured in qorus-core's request threads.
+
+The compiled tiers diverge on the registry shapes because a compiled assignment
+(`qore_rt_lv_path_assign()`) borrows the value and takes references of its own, releasing them after the
+assignment; the first plain dereference of a new object makes the scan its constructor deferred, and in the
+compiled tiers that happens once the entry is already linked into the registry, so each registration walks
+it. The AST interpreter hands the value over and the deferred scan waits. Code built with `%modern` runs
+tiered by default and qlib is shipped AOT, so the compiled columns are the ones production code pays.
+
+### Other quantities
 
 | quantity | value | source |
 |---|---|---|
-| scan cost | ~1 µs per node walked | 6,005 nodes at 162 ops/s, `6f090ef43` |
+| scan cost | ~1 µs per node walked | 6,005 nodes at 162 ops/s, `6f090ef43`; consistent with the table above |
 | leak per stranded object | ~1.2 kB | measured during `db56d0ecc` |
 | registry memory | ~80 B per distinct target | `std::map` node; 2,000 targets ≈ 160 kB |
 | trigger hot-path cost | one relaxed atomic load | by analogy with `qore_dgc_node_watch_count` |
 
-The headline argument is the ratio. A 2,000-entry registry at 100 registrations/s costs
-roughly 600 ms of scan per second synchronously — which is what the 162 ops/s ceiling
-means — against ~0.6 ms/s with `@=` plus a pass every ten seconds.
-
-**Why this is not yet trustworthy.** Those figures predate two changes that move the
-baseline in opposite directions:
-
-- `db56d0ecc` restored scans that were being skipped, so incremental growth of a container
-  now costs what it always should have. Measured on the repro: objects entered by scans went
-  from `n+1` to roughly `n²/2` — the same as an *open* component, which can never be marked
-  closed and therefore never had the discount.
-- `6aa593e80` made the frame's reference to a closure-bound local a real reference
-  specifically so scans of it are deferred, after a Qorus PoC spent ~90% of its time parked
-  in `RSetHelper`. Deferral is now a performance mechanism, not only a correctness one,
-  which enlarges the population of objects whose scans are deferred.
-
-Re-measure the registry cost on the corrected collector before deciding anything. It is
-entirely possible the honest post-fix numbers narrow the justification to "makes `@=` safe
-to ungate", which is a great deal of machinery for one operator.
+The justification for this proposal therefore still holds on the corrected collector: a registry held with
+`=` costs a walk of the registry per operation, and `@=` removes it. The same numbers show that the synchronous
+collector can recover part of that cost on its own, without a background thread: a registry reached through a
+real-referenced member of its own cycle is live, so an insertion there needs no walk (set-level pinning), and
+the compiled tiers should not make a deferred scan before the value they are assigning is in place.
 
 ## 9. Open questions
 
