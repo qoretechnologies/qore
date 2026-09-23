@@ -278,6 +278,12 @@
     destroyed.  Grant this permission only to code that can show the values it assigns this way do not
     reference their holder back.
 
+    @note This option gives more freedom rather than less, like
+    @ref allow-weak-references "%allow-weak-references": a @ref Qore::Program "Program" whose parse options
+    are locked cannot set it for itself, with this parse directive, Qore::Program::setParseOptions() or the
+    @ref Qore::Program "Program" constructor; it can only receive it from the Program that creates it.  A user
+    module may set it for its own code.
+
     @see
     - @ref opaque_assignment_operator
 

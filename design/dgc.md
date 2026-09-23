@@ -760,6 +760,12 @@ anything.
 
 1. **Count survivors.** Instrument `qore_object_private` ctor/dtor with an atexit dump. For each surviving object, also print `references`, `rrefs`, whether `rset` is non-null, and `rcount`. (See `lib/QoreObject.cpp` around the `qo_register`/`qo_unregister` hooks used during the H2-connection-manager leak investigation.)
 2. **Find the blocking member.** For any rset whose objects aren't collecting, look for a member where `references > rcount`. That's the object holding an "external" (DGC-invisible) ref.
+6. `QoreParseOptions::ALLOW_OPAQUE_REFERENCES` is a positive option (`QoreParseOptions::POSITIVE_OPTIONS`): a
+   Program whose parse options are locked cannot give it to itself — not with the directive,
+   `setParseOptions()` or the Program constructor — and only receives it from the Program that creates it. The
+   legacy integer mask `PO_POSITIVE_OPTIONS` cannot hold an extended option, so code enforcing the rule must use
+   the full-width mask; `examples/test/qore/classes/Program/positive-options.qtest` checks every positive option.
+   A module's Program is not locked, so a module may enable the option for its own code.
 3. **Trace the ref.** Grep the C++ code that interacts with the leaked class for `->ref()` / `->deref()` pairs. A ref taken on a `QoreObject*` stored as a raw pointer with no corresponding internal-member slot is the bug.
 4. **Fix at the C++ layer.** Either move the ref into a `private:internal` member (Pattern A) or provide a `scanMembers` (Pattern B). Never push cycle-breaking responsibility into `.qc` / `.qm` code — that violates the platform guarantee.
 

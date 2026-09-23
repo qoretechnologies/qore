@@ -328,6 +328,25 @@ public:
     */
     DLLEXPORT static const QoreParseOptions ALLOW_OPAQUE_REFERENCES;
 
+    //! mask of all options allowing for more freedom (instead of less), including extended options
+    /** A Program whose parse options are locked may only inherit these options from its parent; it cannot set them
+        itself.  The legacy integer mask \c PO_POSITIVE_OPTIONS cannot hold extended options, so code enforcing the
+        rule must use this mask: it adds \c ALLOW_OPAQUE_REFERENCES.
+        @since %Qore 3.0
+    */
+    DLLEXPORT static const QoreParseOptions POSITIVE_OPTIONS;
+
+    //! mask of all options that have no effect on code access or code safety, including extended options
+    /** The legacy integer mask \c PO_FREE_OPTIONS cannot hold extended options; this mask adds the extended options
+        that only select language behavior: \c BROKEN_SOFT_TYPES, \c BROKEN_AUTO_CAST, \c FP_FAST_MATH, the
+        streaming-operator options, \c STREAMING_ANY, \c NO_STREAM_FUSION, \c NO_CHAR_TYPE, \c NO_STRING_INDEX_CHAR
+        and \c NEGATIVE_OFFSETS.  The other extended options are restrictions (\c NO_CLASS_DEFS,
+        \c NO_CONSTANT_DEFS, \c NO_NAMESPACE_DEFS, \c NO_NEW, \c NO_MODULE_PATH_DIRECTIVES, and the style
+        restriction \c NO_SUMMARIZE), except \c ALLOW_OPAQUE_REFERENCES, which is in \c POSITIVE_OPTIONS.
+        @since %Qore 3.0
+    */
+    DLLEXPORT static const QoreParseOptions FREE_OPTIONS;
+
 private:
     int64 lo;  //!< bits 0-63 (compatible with legacy int64 parse options)
     int64 hi;  //!< bits 64-127 (extended parse options)

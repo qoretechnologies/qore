@@ -898,14 +898,6 @@ public:
 
     DLLLOCAL void startThread(ExceptionSink& xsink);
 
-    // returns significant parse options to drop
-    DLLLOCAL QoreParseOptions checkDeserializeParseOptions(const QoreParseOptions& po) {
-        if (pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS) {
-            return 0;
-        }
-        return pwo.parse_options & ~po & ~PO_FREE_STYLE_OPTIONS;
-    }
-
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
     DLLLOCAL void applyParseOptionImplications() {
         if ((pwo.parse_options & PO_MODERN) == PO_MODERN) {
@@ -981,7 +973,8 @@ public:
     DLLLOCAL bool checkSetParseOptions(const QoreParseOptions& po) {
         // only return an error if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
-        return (((po & PO_FREE_OPTIONS) != po) && po_locked && (!po_allow_restrict || (po & PO_POSITIVE_OPTIONS)));
+        return (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
+            && (!po_allow_restrict || (po & QoreParseOptions::POSITIVE_OPTIONS)));
     }
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
@@ -2209,7 +2202,7 @@ public:
         assert(xsink);
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
-        if (((po & PO_FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
+        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
@@ -2233,7 +2226,8 @@ public:
     DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
         // only raise the exception if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
-        if (((po & PO_FREE_OPTIONS) != po) && po_locked && (!po_allow_restrict || (po & PO_POSITIVE_OPTIONS))) {
+        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
+            && (!po_allow_restrict || (po & QoreParseOptions::POSITIVE_OPTIONS))) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
@@ -2245,7 +2239,7 @@ public:
     DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
-        if (((po & PO_FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
+        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
@@ -2571,20 +2565,20 @@ public:
 
     // returns the mask of domain options not met in the current program
     DLLLOCAL QoreParseOptions parseAddDomain(const QoreParseOptions& n_dom) {
-        assert(!(n_dom & PO_FREE_OPTIONS));
+        assert(!(n_dom & QoreParseOptions::FREE_OPTIONS));
         QoreParseOptions rv;
 
         // handle negative and positive options separately / differently
-        QoreParseOptions pos = (n_dom & PO_POSITIVE_OPTIONS);
+        QoreParseOptions pos = (n_dom & QoreParseOptions::POSITIVE_OPTIONS);
         if (pos) {
-            QoreParseOptions p_tmp = pwo.parse_options & PO_POSITIVE_OPTIONS;
+            QoreParseOptions p_tmp = pwo.parse_options & QoreParseOptions::POSITIVE_OPTIONS;
             // make sure all positive arguments are set
             if ((pos & p_tmp) != pos) {
                 rv = ((pos & p_tmp) ^ pos);
                 pend_dom |= pos;
             }
         }
-        QoreParseOptions neg = (n_dom & ~QoreParseOptions(PO_POSITIVE_OPTIONS));
+        QoreParseOptions neg = (n_dom & ~QoreParseOptions::POSITIVE_OPTIONS);
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
             pend_dom |= neg;

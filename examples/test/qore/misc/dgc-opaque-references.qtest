@@ -53,10 +53,10 @@ public class DgcOpaqueReferencesTest inherits QUnit::Test {
             ("%new-style\nsub t() { hash<auto> h; hash<auto> i = {}; h{\"a\"} @= i; }",
                 "opaque-not-allowed"));
 
-        # the same code parses and runs once the option is set
-        Program allowed(PO_DEFAULT);
+        # the same code parses and runs once the parent grants the option; a Program whose parse options are locked
+        # cannot grant it to itself with the parse directive
+        Program allowed(new ParseOptions("allow-opaque-references"));
         allowed.parse("%new-style\n"
-            "%allow-opaque-references\n"
             "our string result;\n"
             "sub t() { hash<auto> h; hash<auto> i = {\"k\": 1}; h{\"a\"} @= i; result = h.a.type(); }\n"
             "", "opaque-allowed");
@@ -168,9 +168,8 @@ public class DgcOpaqueReferencesTest inherits QUnit::Test {
         int destroyed = 0;
         code report = sub () { ++destroyed; };
 
-        Program p(PO_DEFAULT);
+        Program p(new ParseOptions("allow-opaque-references"));
         p.parse("%new-style\n"
-            "%allow-opaque-references\n"
             "our code report;\n"
             "class N {\n"
             "    public { auto other; }\n"
@@ -201,9 +200,8 @@ public class DgcOpaqueReferencesTest inherits QUnit::Test {
             code report = sub () { ++destroyed; };
             string make = kind == "hash" ? "hash<auto> c = {}; c{\"back\"} = a;" : "list<auto> c = (a,);";
 
-            Program p(PO_DEFAULT);
+            Program p(new ParseOptions("allow-opaque-references"));
             p.parse("%new-style\n"
-                "%allow-opaque-references\n"
                 "our code report;\n"
                 "class N {\n"
                 "    public { auto other; }\n"
@@ -238,9 +236,8 @@ public class DgcOpaqueReferencesTest inherits QUnit::Test {
 
         # the shared hash references the child object and the child references the hash opaquely,
         # so the cycle survives until teardown and the registry entry is still live then
-        Program p(PO_DEFAULT);
+        Program p(new ParseOptions("allow-opaque-references"));
         p.parse("%new-style\n"
-            "%allow-opaque-references\n"
             "our hash<auto!> shared;\n"
             "our code report;\n"
             "class Child {\n"

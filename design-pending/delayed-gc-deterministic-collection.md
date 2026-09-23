@@ -271,6 +271,10 @@ this design, and worth its own issue.
 
 Re-measured on 2026-09-23 against `develop` at `6ba8a893c`, i.e. after `db56d0ecc` (scans that were being
 skipped are made again) and `6aa593e80` (a closure-bound local's frame holds a real reference).
+**Fixed 2026-09-23:** the positive and free options are enforced with the full-width masks
+`QoreParseOptions::POSITIVE_OPTIONS` and `QoreParseOptions::FREE_OPTIONS`; a locked child is refused
+`allow-opaque-references` by every route.
+
 
 ### Registry register/unregister (release build, wall-clock)
 

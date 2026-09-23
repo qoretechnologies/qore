@@ -29,6 +29,7 @@
 */
 
 #include <qore/QoreParseOptions.h>
+#include <qore/Restrictions.h>
 
 // Extended option constants (bits 64+)
 const QoreParseOptions QoreParseOptions::NO_CLASS_DEFS(0, 1LL << 0);       // bit 64
@@ -68,3 +69,30 @@ const QoreParseOptions QoreParseOptions::NO_STREAMING_OPERATORS(
         | (1LL << 15)  // NO_TAKEWHILE
         | (1LL << 16)  // NO_TAKEUNTIL
         | (1LL << 17)); // NO_FIND_MODIFIERS
+
+// Full-width option masks.  They are built from bit values rather than from the constants above: the order in which
+// static objects are initialized is only defined within one translation unit, and these may be read while other
+// translation units initialize.
+const QoreParseOptions QoreParseOptions::POSITIVE_OPTIONS(
+    PO_POSITIVE_OPTIONS,
+    (1LL << 24)); // ALLOW_OPAQUE_REFERENCES
+const QoreParseOptions QoreParseOptions::FREE_OPTIONS(
+    PO_FREE_OPTIONS,
+    (1LL << 4)          // BROKEN_SOFT_TYPES
+        | (1LL << 7)    // FP_FAST_MATH
+        | (1LL << 8)    // NO_ITERATE
+        | (1LL << 9)    // NO_FIRST
+        | (1LL << 10)   // NO_ANY_OPERATOR
+        | (1LL << 11)   // NO_ALL_OPERATOR
+        | (1LL << 12)   // NO_COUNT
+        | (1LL << 13)   // NO_TAKE
+        | (1LL << 14)   // NO_DROP
+        | (1LL << 15)   // NO_TAKEWHILE
+        | (1LL << 16)   // NO_TAKEUNTIL
+        | (1LL << 17)   // NO_FIND_MODIFIERS
+        | (1LL << 18)   // NO_STREAM_FUSION
+        | (1LL << 19)   // STREAMING_ANY
+        | (1LL << 20)   // NO_CHAR_TYPE
+        | (1LL << 21)   // NO_STRING_INDEX_CHAR
+        | (1LL << 22)   // NEGATIVE_OFFSETS
+        | (1LL << 23)); // BROKEN_AUTO_CAST
