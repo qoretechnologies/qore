@@ -41,6 +41,7 @@
 #include "qore/intern/QC_Datasource.h"
 #include "qore/intern/QC_DatasourcePool.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_Program.h"
 #include "qore/intern/DatasourcePool.h"
 #include "qore/intern/ManagedDatasource.h"
 #include "qore/intern/SqlMutationContext.h"
@@ -4711,6 +4712,87 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 }
 
 #ifdef DEBUG
+namespace {
+//! holds one exiting thread in ThreadProgramData::del() between unlisting a Program and releasing it
+struct ProgramReleaseHold {
+    std::mutex m;
+    std::condition_variable cond;
+    //! the thread to hold; 0 if not armed
+    int tid = 0;
+    //! the Program to hold the thread at; only compared, never dereferenced
+    QoreProgram* pgm = nullptr;
+    //! the thread is waiting in the hook
+    bool held = false;
+    //! the thread may continue
+    bool released = false;
+};
+
+ProgramReleaseHold program_release_hold;
+
+void dbg_hold_program_release(int tid, QoreProgram* pgm) {
+    ProgramReleaseHold& h = program_release_hold;
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.tid || tid != h.tid || pgm != h.pgm || h.held) {
+        return;
+    }
+    h.held = true;
+    h.cond.notify_all();
+    h.cond.wait(l, [&h]() { return h.released; });
+    h.tid = 0;
+    h.pgm = nullptr;
+    h.held = false;
+    h.released = false;
+    h.cond.notify_all();
+}
+}
+
+//! arms a hold of the current thread at its exit, after it unlists the given Program and before it releases it
+/** @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_program_release_at_thread_exit(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    ReferenceHolder<QoreProgram> pgm(static_cast<QoreProgram*>(obj->getReferencedPrivateData(CID_PROGRAM,
+        xsink)), xsink);
+    if (!pgm) {
+        return QoreValue();
+    }
+    ProgramReleaseHold& h = program_release_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.tid) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a Program release hold is already armed for TID %d", h.tid);
+        return QoreValue();
+    }
+    h.tid = q_gettid();
+    h.pgm = *pgm;
+    ThreadProgramData::dbg_after_unlist.store(dbg_hold_program_release);
+    return QoreValue();
+}
+
+//! waits for the armed thread to reach the hold; returns False if it did not within the timeout
+static QoreValue f_dbg_wait_program_release_held(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ProgramReleaseHold& h = program_release_hold;
+    std::unique_lock<std::mutex> l(h.m);
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return h.held; });
+}
+
+//! lets the held thread continue and waits until it has left the hook; returns False on timeout
+static QoreValue f_dbg_continue_program_release(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    int64 timeout_ms = get_param_value(params, 0).getAsBigInt();
+    ProgramReleaseHold& h = program_release_hold;
+    std::unique_lock<std::mutex> l(h.m);
+    if (!h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "no thread is held for a Program release");
+        return QoreValue();
+    }
+    h.released = true;
+    h.cond.notify_all();
+    return h.cond.wait_for(l, std::chrono::milliseconds(timeout_ms), [&h]() { return !h.held; });
+}
+
 //! returns the argument stored in inline short string storage
 /** Whether a string value uses inline short string storage or a heap QoreStringNode depends on the
     execution mode that produced it, which makes the representation awkward to pin down from a
@@ -4883,6 +4965,12 @@ void init_debug_functions(QoreNamespace& qns) {
         QC_ABSTRACTDATASOURCE->getTypeInfo(), QORE_PARAM_NO_ARG, "ds",
         stringTypeInfo, QORE_PARAM_NO_ARG, "op_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "when");
+    qns.addBuiltinVariant("dbg_hold_program_release_at_thread_exit", f_dbg_hold_program_release_at_thread_exit,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1, QC_PROGRAM->getTypeInfo(), QORE_PARAM_NO_ARG, "pgm");
+    qns.addBuiltinVariant("dbg_wait_program_release_held", f_dbg_wait_program_release_held, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
+    qns.addBuiltinVariant("dbg_continue_program_release", f_dbg_continue_program_release, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, boolTypeInfo, 1, bigIntTypeInfo, QORE_PARAM_NO_ARG, "timeout_ms");
     qns.addBuiltinVariant("dbg_make_short_string", f_dbg_make_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,

@@ -36,6 +36,7 @@
 
 class RuntimeConfig;
 
+#include <atomic>
 #include <vector>
 #include <set>
 #include <map>
@@ -1378,6 +1379,15 @@ public:
          delete this;
    }
    DLLLOCAL int gettid();
+
+#ifdef DEBUG
+   //! debug-only hook run by del() for each Program after it leaves the set and before its reference is released
+   /** Called with the thread's TID and the Program.  Tests use it to drop a Program's last reference from
+       another thread at exactly the point where this thread holds the last dependency reference.
+   */
+   typedef void (*dbg_after_unlist_t)(int tid, QoreProgram* pgm);
+   DLLLOCAL static std::atomic<dbg_after_unlist_t> dbg_after_unlist;
+#endif
 };
 
 class ThreadFrameBoundaryHelper {

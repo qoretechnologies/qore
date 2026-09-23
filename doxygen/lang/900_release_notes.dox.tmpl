@@ -3275,6 +3275,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - Fixed an exception thrown by the default value expression of an omitted argument being reported as
       unhandled instead of being raised to the caller; the call then proceeded and the function body ran without
       the parameter's default value
+    - Fixed a crash when a thread exited while another thread deleted a
+      @ref Qore::Program "Program" the exiting thread had run code in: the exiting thread released its reference
+      to the @ref Qore::Program "Program" before removing its thread-local data from it, and when that reference
+      was the last one, it read the deleted @ref Qore::Program "Program"
     - Fixed @ref Qore::CFLAGS omitting the macOS deployment target the library was built for; a program compiled
       against the library with those flags targeted an older macOS than the library, and the linker warned about it
     - Fixed derived types such as \c list<hash<X>>, \c hash<string, X>, \c softlist<X>, \c reference<X>, union

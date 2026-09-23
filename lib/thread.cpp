@@ -896,12 +896,28 @@ void ThreadProgramData::del(ExceptionSink* xsink) {
             pgm_set.erase(i);
         }
         //printd(5, "ThreadProgramData::del() this: %p pgm: %p\n", this, pgm);
+#ifdef DEBUG
+        {
+            dbg_after_unlist_t hook = dbg_after_unlist.load();
+            if (hook) {
+                hook(td->tid, pgm);
+            }
+        }
+#endif
+        // the dependency reference keeps the Program alive for endThread(); once the Program is no longer in
+        // pgm_set, its own teardown cannot release this reference, so it can be the last one
+        bool ended = !qore_program_private::get(*pgm)->endThread(this, xsink);
         pgm->depDeref();
         // only dereference the current object if the thread was deleted from the program
-        if (!qore_program_private::get(*pgm)->endThread(this, xsink))
+        if (ended) {
             deref();
+        }
     }
 }
+
+#ifdef DEBUG
+std::atomic<ThreadProgramData::dbg_after_unlist_t> ThreadProgramData::dbg_after_unlist{nullptr};
+#endif
 
 int ThreadProgramData::gettid() {
     return td->tid;

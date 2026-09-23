@@ -1,0 +1,158 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ThreadExitProgramReleaseTest
+
+#! a thread exiting while another thread deletes a Program the exiting thread has run code in
+/** At exit, a thread removes each Program it has thread-local data in from its own list and then releases the
+    dependency reference it holds on it.  Once the Program is off that list, the Program's own teardown can no
+    longer release that reference for the thread, so it can be the last one.  The thread released it first and
+    then used the Program to remove its thread-local data, reading a deleted Program, and the process crashed.
+
+    The debug build holds the exiting thread between the two steps while the main thread deletes the Program, so
+    the thread's reference is the last one on every run.  The race runs in a child process so that a crash fails
+    an assertion rather than the test run.
+*/
+class ThreadExitProgramReleaseTest inherits QUnit::Test {
+    public {
+        #! milliseconds to wait for each step of the child
+        const StepTimeout = 60000;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("ThreadExitProgramReleaseTest", "1.0") {
+        qore_bin = ENV.QORE_EXECUTABLE ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("deleting a Program while a thread that ran code in it exits", \deleteDuringThreadExit());
+        addTestCase("a thread exits after a Program it ran code in was deleted", \deleteBeforeThreadExit());
+        addTestCase("a hold for another Program does not hold the thread", \holdForOtherProgram());
+        addTestCase("hold usage errors", \holdErrors());
+        set_return_value(main());
+    }
+
+    #! the exiting thread holds the last reference to the Program
+    deleteDuringThreadExit() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the thread exit hold requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+t.parse(\"our int calls = 0; int sub f() { return ++calls; }\", \"t\");
+Counter armed(1);
+background sub () {
+    call_function(\"dbg_hold_program_release_at_thread_exit\", t);
+    armed.dec();
+    # gives the thread thread-local data in t
+    t.callFunction(\"f\");
+}();
+armed.waitForZero();
+bool held = call_function(\"dbg_wait_program_release_held\", " + StepTimeout + ");
+# the thread has unlisted t; this drops every reference except the thread's dependency reference
+delete t;
+bool deleted = !exists t;
+bool continued = call_function(\"dbg_continue_program_release\", " + StepTimeout + ");
+printf(\"held=%y deleted=%y continued=%y\\n\", held, deleted, continued);
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("held=True deleted=True continued=True", r.output,
+            sprintf("the thread was held while the Program was deleted: %s", r.output));
+    }
+
+    #! the Program is deleted before the thread exits, so its teardown removes the thread's data first
+    deleteBeforeThreadExit() {
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+t.parse(\"our int calls = 0; int sub f() { return ++calls; }\", \"t\");
+Counter called(1);
+Counter gone(1);
+int rv;
+background sub () {
+    rv = t.callFunction(\"f\");
+    called.dec();
+    gone.waitForZero();
+}();
+called.waitForZero();
+delete t;
+gone.dec();
+printf(\"rv=%d deleted=%y\\n\", rv, !exists t);
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("rv=1 deleted=True", r.output, sprintf("the thread ran code in the Program: %s", r.output));
+    }
+
+    #! a hold armed for one Program lets the thread release every other Program without stopping
+    holdForOtherProgram() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the thread exit hold requires a debug build");
+        }
+        hash<auto> r = runChild("%modern
+%no-child-restrictions
+
+Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+t.parse(\"int sub f() { return 1; }\", \"t\");
+Program other(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+Counter armed(1);
+background sub () {
+    call_function(\"dbg_hold_program_release_at_thread_exit\", other);
+    armed.dec();
+    t.callFunction(\"f\");
+}();
+armed.waitForZero();
+# the thread never has data in the other Program, so it is never held
+bool held = call_function(\"dbg_wait_program_release_held\", 200);
+printf(\"held=%y\\n\", held);
+if (held) {
+    # a wrongly held thread would otherwise keep the child from exiting
+    call_function(\"dbg_continue_program_release\", 200);
+}
+# disarm the hold by re-arming it in this thread for a Program this thread never releases
+try {
+    call_function(\"dbg_hold_program_release_at_thread_exit\", other);
+    printf(\"rearm=ok\\n\");
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"rearm=%s\\n\", ex.err);
+}
+");
+        assertEq("0", r.rc, sprintf("the child exits normally: %s", r.output));
+        assertRegex("held=False", r.output, sprintf("the thread was not held: %s", r.output));
+        assertRegex("rearm=DBG-ARGUMENT-ERROR", r.output,
+            sprintf("an unused hold stays armed and a second one is refused: %s", r.output));
+    }
+
+    #! continuing without a held thread is an error
+    holdErrors() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the thread exit hold requires a debug build");
+        }
+        assertThrows("DBG-ARGUMENT-ERROR", "no thread is held",
+            sub () { call_function("dbg_continue_program_release", 100); });
+        assertFalse(call_function("dbg_wait_program_release_held", 0), "no thread is held without a hold");
+    }
+
+    private hash<auto> runChild(string code) {
+        TmpDir tmp("qore-thread-exit-program-release-");
+        string script = tmp.path + "/child.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write(code);
+        f.close();
+        string output = backquote(sprintf("%s %s 2>&1; echo \"rc=$?\"", qore_bin, script));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        return {"rc": rc[0], "output": output};
+    }
+}
