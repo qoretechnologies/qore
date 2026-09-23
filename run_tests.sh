@@ -14,6 +14,8 @@ print_usage () {
   echo
   echo "Environment variables:"
   echo "  QORE_TEST_OPTS           Additional options to pass to qore (e.g., '-penable-debug')."
+  echo "  TEST_TIMEOUT             Seconds a single test may run before it is killed (default: 300); a test"
+  echo "                           declares its own budget with a '# test-timeout: <seconds>' comment."
   echo "  CI_NODE_INDEX            Shard index (1-based) for parallel test execution."
   echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
@@ -399,6 +401,9 @@ PASSED_TEST_COUNT=0
 FAILED_TEST_COUNT=0
 
 # Run single test with timeout (default 300s = 5 minutes).
+# A test that legitimately needs more time than the default declares its own budget with a
+# "# test-timeout: <seconds>" comment on its own line; the default still guards every other test, so a
+# test that hangs is still reported quickly.
 # Use gtimeout on macOS (GNU coreutils), timeout on Linux.
 TEST_TIMEOUT=${TEST_TIMEOUT:-300}
 if command -v timeout >/dev/null 2>&1; then
@@ -420,15 +425,21 @@ for test in $TESTS; do
         echo "-------------------------------------"
     fi
 
+    # the test's own budget, if it declares one
+    THIS_TEST_TIMEOUT=`sed -n 's/^[	 ]*#[	 ]*test-timeout:[	 ]*\([0-9][0-9]*\).*/\1/p' "$test" 2>/dev/null | head -1`
+    if [ -z "$THIS_TEST_TIMEOUT" ]; then
+        THIS_TEST_TIMEOUT=$TEST_TIMEOUT
+    fi
+
     if [ $MEASURE_TIME -eq 1 ]; then
         if [ -n "$TIMEOUT_CMD" ]; then
-            eval $TIMEOUT_CMD $TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            eval $TIMEOUT_CMD $THIS_TEST_TIMEOUT $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
             eval $TIME_CMD $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
     else
         if [ -n "$TIMEOUT_CMD" ]; then
-            $TIMEOUT_CMD $TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
+            $TIMEOUT_CMD $THIS_TEST_TIMEOUT $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         else
             $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT
         fi
@@ -437,7 +448,7 @@ for test in $TESTS; do
 
     # GNU timeout returns 124; busybox timeout (Alpine) returns 143 (128+SIGTERM)
     if [ $test_exit -eq 124 ] || [ $test_exit -eq 143 ]; then
-        echo "TIMEOUT: test exceeded ${TEST_TIMEOUT}s limit"
+        echo "TIMEOUT: test exceeded ${THIS_TEST_TIMEOUT}s limit"
     fi
 
     if [ $test_exit -eq 0 ]; then

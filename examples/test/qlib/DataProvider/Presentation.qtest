@@ -1,6 +1,13 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# "the checked-in Qore source catalog is synchronized" verifies every checked-in catalog of every provider in
+# every locale against the catalog generated from the provider metadata; the checked-in catalogs are ~750 MB, so
+# the case alone takes ~3 minutes on an idle development machine and several times that on a loaded CI runner
+# sharing the host with the other test shards.  The default per-test budget is for finding hangs, not for work
+# this size.
+# test-timeout: 2400
+
 # Copyright 2026 Qore Technologies, s.r.o.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
