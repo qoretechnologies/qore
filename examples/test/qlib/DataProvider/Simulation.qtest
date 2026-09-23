@@ -89,6 +89,41 @@ class MultiActionSimulationProvider inherits AbstractDataProvider {
     }
 }
 
+#! A readable table provider, empty or holding one row
+class TableSimulationProvider inherits AbstractDataProvider {
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "TableSimulationProvider",
+            "supports_read": True,
+            "supports_create": True,
+        };
+        *hash<auto> row;
+    }
+
+    constructor(*hash<auto> row) {
+        self.row = row;
+    }
+
+    string getName() {
+        return "table-simulation";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private *hash<auto> searchFirstRecordImpl(hash<auto> where_cond, *hash<auto> search_options) {
+        return row;
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "invoice_number": new QoreDataField("invoice_number", "the invoice", StringType),
+            "amount": new QoreDataField("amount", "the amount", IntType),
+        };
+    }
+}
+
 class DataProviderSimulationTest inherits QUnit::Test {
     constructor() : Test("DataProviderSimulationTest", "1.0", \ARGV) {
         addTestCase("default request simulation records and returns example data",
@@ -99,8 +134,19 @@ class DataProviderSimulationTest inherits QUnit::Test {
             \testRegisteredActionSimulationShape());
         addTestCase("volatile fields default to none",
             \testDefaultVolatileFields());
+        addTestCase("an empty table's example record is generated from its record type",
+            \testEmptyTableExampleRecord());
 
         set_return_value(main());
+    }
+
+    testEmptyTableExampleRecord() {
+        # an empty table has no first record to use as its example
+        hash<auto> generated = new TableSimulationProvider().getExampleRecordData();
+        assertEq(("amount", "invoice_number"), sort(keys generated));
+        # a table with a row uses that row
+        assertEq({"invoice_number": "INV-1", "amount": 7},
+            new TableSimulationProvider({"invoice_number": "INV-1", "amount": 7}).getExampleRecordData());
     }
 
     testDefaultRequestSimulation() {

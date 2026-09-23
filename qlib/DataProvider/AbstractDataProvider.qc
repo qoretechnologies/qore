@@ -7749,7 +7749,14 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private hash<auto> getExampleRecordDataImpl() {
         try {
-            return searchFirstRecord({});
+            # an empty table has no first record; the generated data below is
+            # its example.  (Returning the missing record here violated the
+            # return type outside this try block, so the fallback was never
+            # reached and simulating a write to an empty table failed.)
+            *hash<auto> first = searchFirstRecord({});
+            if (first) {
+                return first;
+            }
         } catch (hash<ExceptionInfo> ex) {
             # searchFirstRecord() is unsupported or failed (e.g. a provider
             # without a record search implementation); log and fall back to

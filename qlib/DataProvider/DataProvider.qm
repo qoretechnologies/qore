@@ -1354,6 +1354,9 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_8 DataProvider v3.8
+    - simulating a write to an empty table works: the table's example record falls back to data generated from its
+      record type instead of failing with a runtime type error, so a simulated test step can create a record in a
+      table that has no rows yet
     - the default bulk record adapter appends each field value as one column cell; a list-valued field
       previously had its elements concatenated into the column, so a block of records with nested lists
       reported more column values than records and was rejected as malformed
