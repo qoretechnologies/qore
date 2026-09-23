@@ -1024,27 +1024,31 @@ Mapper mapv(DataMap);
                 structured_output = True;
                 continue;
             }
+            # the normalized output option hash; not written back through the iterator element, as
+            # "h" is a KeyValueInfo<T> whose value type is the output hash's value type
+            hash<auto> oh;
             switch (h.value.typeCode()) {
                 case NT_STRING:
-                    h.value = {"desc": h.value};
-                    # fall down to next case
+                    oh = {"desc": h.value};
+                    break;
                 case NT_HASH:
+                    oh = h.value;
                     break;
                 default:
                     throw "OUTPUT-OPTION-ERROR", sprintf("\"output\" key %y value has type %y (value %y); "
                         "expecting \"hash\"", h.key, h.value.type(), h.value);
             }
-            foreach string k in (keys h.value) {
+            foreach string k in (keys oh) {
                 if (!OutputKeys{k}) {
                     throw "OUTPUT-OPTION-ERROR", sprintf("\"output\" key %y hash has unknown key %y (valid keys: "
                         "%y)", h.key, k, keys OutputKeys);
                 }
             }
 
-            output_data.addField(new QoreDataField(h.key, h.value.desc,
-                Mapper::getOutputType(h.value, mapv{h.key}.typeCode() == NT_HASH ? mapv{h.key} : NOTHING,
-                    global_options, exists h.value.default_value),
-                h.value.default_value));
+            output_data.addField(new QoreDataField(h.key, oh.desc,
+                Mapper::getOutputType(oh, mapv{h.key}.typeCode() == NT_HASH ? mapv{h.key} : NOTHING,
+                    global_options, exists oh.default_value),
+                oh.default_value));
         }
         return output_data.getFields();
     }

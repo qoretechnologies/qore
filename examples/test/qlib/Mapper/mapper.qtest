@@ -595,6 +595,7 @@ public class MapperTest inherits QUnit::Test {
         addTestCase("Test mapFieldType", \testMapperMapFieldType());
         addTestCase("Dot test", \dotTest());
         addTestCase("field length test", \testFieldLength());
+        addTestCase("typed output hash test", \typedOutputHashTest());
         set_return_value(main());
     }
 
@@ -976,6 +977,31 @@ public class MapperTest inherits QUnit::Test {
                 "out2": "input-1-2-ctx",
             }, h);
         }
+    }
+
+    typedOutputHashTest() {
+        # the output option's value type is inferred as *string; normalizing the string descriptions to hashes
+        # must not be written back through the typed hash's iterator
+        hash<string, *string> o = {"a": "desc a", "b": NOTHING};
+        hash<string, AbstractDataField> h = Mapper::getOutputFromHash(o);
+        assertEq(("a", "b"), keys h);
+        assertEq("desc a", h.a.getDescription());
+        assertEq(NOTHING, h.b.getDescription());
+        assertEq("auto", h.b.getType().getName());
+
+        hash<string, hash<auto>> ho = {"x": {"desc": "desc x", "type": "int"}};
+        h = Mapper::getOutputFromHash(ho);
+        assertEq("desc x", h.x.getDescription());
+        assertEq("int", h.x.getType().getBaseTypeName());
+
+        # a typed hash with a string description and an unknown key is still rejected
+        hash<string, hash<string, string>> bad = {"y": {"desc": "desc y", "unknown": "z"}};
+        assertThrows("OUTPUT-OPTION-ERROR", "unknown key", \Mapper::getOutputFromHash(), bad);
+
+        # a mapper whose output option is a typed hash of string descriptions
+        hash<string, *string> output = {"out1": "output 1", "out2": NOTHING};
+        Mapper m({"out1": "in1", "out2": "in2"}, {"output": output});
+        assertEq({"out1": 1, "out2": 2}, m.mapData({"in1": 1, "in2": 2}));
     }
 
     hashOutputTest() {
