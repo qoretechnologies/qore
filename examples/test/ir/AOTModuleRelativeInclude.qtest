@@ -1,0 +1,137 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTModuleRelativeIncludeTest
+
+#! Tests that compiling a module resolves a relative %include against the module's directory
+/** Loading a module from source resolves a relative \c %include against the directory of the module file, so the
+    compiled module must be built from the same file.  Compiling looked the file up in the current directory
+    instead, so a module that includes a sibling file could only be compiled from its own directory, and a file of
+    the same name in the current directory was silently compiled in its place.
+*/
+class AOTModuleRelativeIncludeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTModuleRelativeIncludeTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        # the checks run in other directories, so a path to the binary must be absolute; a bare name is looked up
+        # in the PATH
+        if (qore_bin =~ /\//) {
+            qore_bin = realpath(qore_bin);
+        }
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        if (is_dir(libqore_dir)) {
+            libqore_dir = realpath(libqore_dir);
+        }
+
+        addTestCase("absolute module path from another directory", \absolutePathFromOtherDir());
+        addTestCase("relative module path from its parent directory", \relativePathFromParentDir());
+        addTestCase("a file of the same name in the current directory is not included", \cwdDecoyIgnored());
+        addTestCase("a missing include file fails the compilation", \missingIncludeFails());
+
+        set_return_value(main());
+    }
+
+    absolutePathFromOtherDir() {
+        TmpDir tmp("qore-aot-rel-include-");
+        string src_dir = makeModule(tmp.path, "module");
+        string cwd = makeDir(tmp.path + DirSep + "elsewhere");
+        string qmod_dir = makeDir(tmp.path + DirSep + "qmod");
+
+        string out = compile(cwd, src_dir + DirSep + "RelInc.qm", qmod_dir);
+        assertTrue(is_file(qmod_dir + DirSep + "RelInc.qmod"), "compiled module: " + out);
+        assertEq("module", run(qmod_dir, tmp.path));
+    }
+
+    relativePathFromParentDir() {
+        TmpDir tmp("qore-aot-rel-include-");
+        makeModule(tmp.path, "module");
+        string qmod_dir = makeDir(tmp.path + DirSep + "qmod");
+
+        string out = compile(tmp.path, "src" + DirSep + "RelInc.qm", qmod_dir);
+        assertTrue(is_file(qmod_dir + DirSep + "RelInc.qmod"), "compiled module: " + out);
+        assertEq("module", run(qmod_dir, tmp.path));
+    }
+
+    cwdDecoyIgnored() {
+        TmpDir tmp("qore-aot-rel-include-");
+        string src_dir = makeModule(tmp.path, "module");
+        string cwd = makeDir(tmp.path + DirSep + "elsewhere");
+        writeInclude(cwd, "decoy");
+        string qmod_dir = makeDir(tmp.path + DirSep + "qmod");
+
+        string out = compile(cwd, src_dir + DirSep + "RelInc.qm", qmod_dir);
+        assertTrue(is_file(qmod_dir + DirSep + "RelInc.qmod"), "compiled module: " + out);
+        # the compiled module must match the module loaded from source
+        assertEq("module", run(qmod_dir, tmp.path));
+        assertEq("module", run(src_dir, cwd));
+    }
+
+    missingIncludeFails() {
+        TmpDir tmp("qore-aot-rel-include-");
+        string src_dir = makeModule(tmp.path, "module");
+        unlink(src_dir + DirSep + "relinc-value.qi");
+        string cwd = makeDir(tmp.path + DirSep + "elsewhere");
+        string qmod_dir = makeDir(tmp.path + DirSep + "qmod");
+
+        string out = compile(cwd, src_dir + DirSep + "RelInc.qm", qmod_dir);
+        assertFalse(is_file(qmod_dir + DirSep + "RelInc.qmod"), "no module compiled");
+        assertRegex("relinc-value\\.qi", out);
+    }
+
+    #! creates a module in <dir>/src that includes a sibling file returning \a value; returns the source directory
+    private string makeModule(string dir, string value) {
+        string src_dir = makeDir(dir + DirSep + "src");
+        File f();
+        f.open2(src_dir + DirSep + "RelInc.qm", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("module RelInc {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"relative include test\";\n"
+            "    author = \"Qore\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "\n"
+            "%include relinc-value.qi\n");
+        writeInclude(src_dir, value);
+        return src_dir;
+    }
+
+    #! writes the included file, whose function returns \a value
+    private writeInclude(string dir, string value) {
+        File f();
+        f.open2(dir + DirSep + "relinc-value.qi", O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(sprintf("public namespace RelInc {\n"
+            "public string sub value() {\n"
+            "    return %y;\n"
+            "}\n"
+            "}\n", value));
+    }
+
+    private string makeDir(string path) {
+        mkdir(path);
+        return path;
+    }
+
+    #! compiles the module in the given working directory and returns the compiler output
+    private string compile(string cwd, string qm_path, string qmod_dir) {
+        return backquote(sprintf("cd %s && QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s "
+            "2>&1", cwd, libqore_dir, libqore_dir, qore_bin, qmod_dir + DirSep + "RelInc.qmod", qm_path));
+    }
+
+    #! loads the module from \a module_dir in the given working directory and returns what its function returns
+    private string run(string module_dir, string cwd) {
+        return backquote(sprintf("cd %s && LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b -ne "
+            "'%%requires RelInc\nprint(RelInc::value());' 2>&1", cwd, libqore_dir, module_dir, qore_bin));
+    }
+}

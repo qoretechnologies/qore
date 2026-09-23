@@ -25519,6 +25519,13 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         error = "failed to create QoreProgram for module parsing";
         return false;
     }
+    // Resolve %include (and other script-relative paths) against the module's own directory, as
+    // loading the module from source does (ModuleManager sets the script path the same way); without
+    // it, a relative %include is looked up in the current directory.  The label is not a file when
+    // the source was given on the command line.
+    if (label && aotFileExists(label)) {
+        qpgm->setScriptPath(label);
+    }
 
     // Set up module context for the parser (must be QoreUserModuleDefContextHelper
     // because the parser static_casts to it)
