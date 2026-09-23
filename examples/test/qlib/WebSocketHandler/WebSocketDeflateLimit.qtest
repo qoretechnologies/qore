@@ -1,0 +1,317 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for permessage-deflate (RFC 7692) on the WebSocket server:
+    - the server requires clients to compress each message on its own (client_no_context_takeover)
+    - messages that end with a sync flush, as browsers send them, are decompressed
+    - a message whose decompressed size exceeds the maximum message size closes the connection with 1009,
+      over HTTP/1.1 and HTTP/2
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+
+%exec-class WebSocketDeflateLimitTest
+
+#! echoes each message back
+class EchoWsConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    gotMessage(string msg) {
+        send("ECHO:" + msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+#! a WebSocket handler with permessage-deflate that records its errors
+class DeflateWsHandler inherits WebSocketHandler {
+    public {
+        Queue errs();
+    }
+
+    constructor(*hash<auto> opts) : WebSocketHandler(NOTHING, {"extensions": ("permessage-deflate",)} + opts) {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWsConnection(self);
+    }
+
+    logError(string fmt) {
+        errs.push(vsprintf(fmt, argv));
+        logArgs(LoggerLevel::ERROR, fmt, argv);
+    }
+}
+
+class WebSocketDeflateLimitTest inherits QUnit::Test {
+    private {
+        # the maximum message size of the limited handler
+        const MaxMessageSize = 64 * 1024;
+
+        # messages as a browser sends them with client_no_context_takeover: each is compressed on its own and ends
+        # with a sync flush whose trailing 0x00 0x00 0xff 0xff is removed (RFC 7692 section 7.2.1)
+        const ClientMessages = (
+            ("first message from a browser", <4acb2c2a2e51c84d2d2e4e4c4f55482bcacf554854482aca2f2f4e2d0200>),
+            ("second message from a browser", <2a4e4dcecf4b51c84d2d2e4e4c4f55482bcacf554854482aca2f2f4e2d0200>),
+        );
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        Logger logger;
+        HttpServer server;
+        int port;
+        int tls_port;
+        DeflateWsHandler limited;
+        DeflateWsHandler unlimited;
+    }
+
+    constructor() : Test("WebSocketDeflateLimitTest", "1.0") {
+        addTestCase("negotiation", \negotiationTest());
+        addTestCase("messages ending with a sync flush", \syncFlushTest());
+        addTestCase("maximum message size over HTTP/1.1", \http1LimitTest());
+        addTestCase("default maximum decompressed message size", \defaultLimitTest());
+        addTestCase("maximum message size over HTTP/2", \http2LimitTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("ws-deflate-limit-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        limited = new DeflateWsHandler({"logger": logger, "max_message_size": MaxMessageSize});
+        unlimited = new DeflateWsHandler({"logger": logger});
+        server.setHandler("limited", "/small", NOTHING, limited);
+        server.setHandler("unlimited", "/default", NOTHING, unlimited);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    # opens a WebSocket connection with permessage-deflate on a raw socket and returns the response headers
+    private hash<auto> openRaw(Socket s, string path) {
+        s.connect("localhost:" + port);
+        hash<auto> hdr = {
+            "Host": "localhost:" + port,
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+            "Sec-WebSocket-Key": get_random_string(16).toBase64(),
+            "Sec-WebSocket-Version": "13",
+            "Sec-WebSocket-Extensions": "permessage-deflate; client_max_window_bits",
+        };
+        hash<auto> info;
+        s.sendHTTPMessage("GET", path, "1.1", hdr, NOTHING, \info);
+        hash<auto> rh = s.readHTTPHeader(10s);
+        assertEq(101, rh.status_code, "the WebSocket handshake succeeds");
+        return rh;
+    }
+
+    # sends a compressed text message as a client does
+    private static sendCompressed(Socket s, binary payload) {
+        s.send(ws_encode_message(payload, WSOP_Text, True, True, WS_RSV1));
+    }
+
+    # reads a message and returns it decompressed
+    private static string readText(Socket s) {
+        hash<WsMsgInfo> h = ws_read_message(s, 10s);
+        if (h.rsv1) {
+            return inflate_raw_to_string(binary(h.msg) + <0000ffff>, "utf-8");
+        }
+        return h.msg;
+    }
+
+    # asserts that the server closes the connection with 1009 (Message Too Big)
+    private assertTooBig(Socket s, DeflateWsHandler handler) {
+        hash<WsMsgInfo> h = ws_read_message(s, 30s);
+        assertEq(WSOP_Close, h.op, "the server closes the connection");
+        assertEq(WSCC_MessageTooBig, h.close, "with 1009 (Message Too Big)");
+        assertRegex("exceeds the maximum message size", handler.errs.get(30s));
+    }
+
+    negotiationTest() {
+        Socket s();
+        on_exit s.close();
+        hash<auto> rh = openRaw(s, "/small");
+        assertRegex("permessage-deflate", rh."sec-websocket-extensions");
+        assertRegex("client_no_context_takeover", rh."sec-websocket-extensions");
+    }
+
+    syncFlushTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/small");
+        foreach list<auto> m in (ClientMessages) {
+            sendCompressed(s, m[1]);
+            assertEq("ECHO:" + m[0], readText(s));
+        }
+    }
+
+    http1LimitTest() {
+        {
+            Socket s();
+            on_exit s.close();
+            openRaw(s, "/small");
+            # at the limit
+            string msg = strmul("x", MaxMessageSize - 5);
+            sendCompressed(s, deflate_raw(msg));
+            assertEq("ECHO:" + msg, readText(s));
+        }
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/small");
+        # the compressed frame is small, but the message decompresses to much more than the limit
+        binary payload = deflate_raw(strmul("x", MaxMessageSize * 16));
+        assertLt(MaxMessageSize, payload.size(), "the compressed frame is within the limit");
+        sendCompressed(s, payload);
+        assertTooBig(s, limited);
+    }
+
+    # returns raw DEFLATE data that decompresses to the given number of spaces, without holding the decompressed
+    # data; the zlib stream of a transform without its 2-byte header and 4-byte trailer
+    private static binary makeRawBomb(int size) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_ZLIB));
+        binary chunk = binary(strmul(" ", 1024 * 1024));
+        for (int i = 0; i < size / chunk.size(); ++i) {
+            tos.write(chunk);
+        }
+        tos.close();
+        binary data = bos.getData();
+        return data.substr(2, data.size() - 6);
+    }
+
+    defaultLimitTest() {
+        Socket s();
+        on_exit s.close();
+        openRaw(s, "/default");
+        # a handler without a maximum message size limits decompressed messages to the default of the extension
+        sendCompressed(s, makeRawBomb(PerMessageDeflateExtension::DefaultMaxMessageSize + 1024 * 1024));
+        assertTooBig(s, unlimited);
+    }
+
+    http2LimitTest() {
+        Queue msgs();
+        WebSocketClient wsc(sub (*data msg) {
+            msgs.push(msg);
+        }, {
+            "url": sprintf("wss://localhost:%d/small", tls_port),
+            "logger": logger,
+            "http_version": "2.0",
+            "ssl_verify_cert": False,
+            "extensions": (new PerMessageDeflateExtension(),),
+            "timeout": 30000,
+        });
+        on_exit delete wsc;
+        wsc.connect();
+        if (!wsc.isHttp2()) {
+            testSkip("HTTP/2 was not negotiated");
+        }
+        assertTrue(wsc.hasPerMessageDeflate());
+
+        # a compressed message within the limit is echoed
+        string msg = strmul("y", 4096);
+        wsc.send(msg);
+        assertEq("ECHO:" + msg, msgs.get(30s));
+
+        # a message that decompresses to more than the limit closes the connection
+        wsc.send(strmul("z", MaxMessageSize * 16));
+        assertRegex("exceeds the maximum message size", limited.errs.get(30s));
+        assertNothing(msgs.get(30s), "the connection is closed");
+    }
+}

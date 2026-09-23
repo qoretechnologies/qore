@@ -970,6 +970,16 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         - \c server_max_window_bits: the maximum window bits for the server (8-15)
         - \c client_max_window_bits: the maximum window bits for the client (8-15)
 
+        Each message is compressed and decompressed on its own, so no context is taken over from one message to
+        the next in either direction: a client always offers \c server_no_context_takeover and rejects a response
+        without it, and a server always answers with \c client_no_context_takeover, which RFC 7692 section 7.1.1.2
+        allows even if the client did not offer it.  A message may end with a sync flush, as browsers send them,
+        or with a final block.
+
+        A decompressed message is limited to a maximum size (see setMaxMessageSize()); decompression stops as
+        soon as the limit is exceeded, so a small compressed message that expands to a huge one cannot exhaust
+        memory.
+
         @par Thread Safety
         Each connection should have its own extension instance.
 
@@ -991,6 +1001,13 @@ hash<WsMsgInfo> h = ws_read_message(sock);
 
             #! Trailing bytes to remove from deflate output per RFC 7692 section 7.2.1
             const DeflateTrailer = <0000ffff>;
+
+            #! Default maximum size in bytes of a decompressed message (128 MiB)
+            /** @see setMaxMessageSize()
+
+                @since WebSocketUtil 1.6
+            */
+            const DefaultMaxMessageSize = 128 * 1024 * 1024;
         }
 
         private {
@@ -1017,6 +1034,9 @@ hash<WsMsgInfo> h = ws_read_message(sock);
 
             #! True if we are the client side
             bool is_client = True;
+
+            #! Maximum size in bytes of a decompressed message; 0 = the default, negative = no limit
+            int max_message_size = 0;
         }
 
         #! Creates a new PerMessageDeflateExtension with default settings
@@ -1025,11 +1045,14 @@ hash<WsMsgInfo> h = ws_read_message(sock);
 
         #! Creates a PerMessageDeflateExtension with custom settings
         /** @param opts a hash with optional keys:
-                - \c server_no_context_takeover: request server to not reuse compression context
+                - \c server_no_context_takeover: request server to not reuse compression context; this is always
+                  requested, as each message is decompressed on its own
                 - \c client_no_context_takeover: offer to not reuse client compression context
                 - \c client_max_window_bits: the client's maximum window bits (8-15)
                 - \c server_max_window_bits: request server's maximum window bits (8-15)
                 - \c compression_threshold: minimum message size for compression
+                - \c max_message_size: the maximum size in bytes of a decompressed message; see
+                  setMaxMessageSize()
         */
         constructor(hash<auto> opts) {
             if (opts.server_no_context_takeover) {
@@ -1054,6 +1077,38 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             if (opts.compression_threshold) {
                 compression_threshold = opts.compression_threshold.toInt();
             }
+            if (exists opts.max_message_size) {
+                max_message_size = opts.max_message_size.toInt();
+            }
+        }
+
+        #! Sets the maximum size in bytes of a decompressed message
+        /** Decompression stops as soon as a message would exceed the limit, and the message is rejected with a
+            \c WEBSOCKET-MESSAGE-TOO-BIG exception, so that a small compressed message that expands to a huge one (a
+            "decompression bomb") cannot exhaust memory; a WebSocket server closes the connection with status code
+            1009 (Message Too Big).  A maximum message size that the peer passes in the transformation context, as
+            @ref WebSocketHandler::WebSocketHandler "WebSocketHandler" does with its \c max_message_size option,
+            takes precedence.
+
+            @param size the maximum size in bytes; \c 0 means
+            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "DefaultMaxMessageSize"; a
+            negative value means no limit
+
+            @since WebSocketUtil 1.6
+        */
+        setMaxMessageSize(int size) {
+            max_message_size = size;
+        }
+
+        #! Returns the maximum size in bytes of a decompressed message
+        /** @return the maximum size in bytes of a decompressed message; \c 0 means
+            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize "DefaultMaxMessageSize"; a
+            negative value means no limit
+
+            @since WebSocketUtil 1.6
+        */
+        int getMaxMessageSize() {
+            return max_message_size;
         }
 
         #! Returns the extension name
@@ -1075,9 +1130,8 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             if (request_client_no_context_takeover) {
                 offer += "; client_no_context_takeover";
             }
-            if (request_server_no_context_takeover) {
-                offer += "; server_no_context_takeover";
-            }
+            # each message is decompressed on its own, so the server must not refer to earlier messages
+            offer += "; server_no_context_takeover";
             if (offer_client_max_window_bits) {
                 offer += "; client_max_window_bits";
             }
@@ -1128,6 +1182,12 @@ hash<WsMsgInfo> h = ws_read_message(sock);
                 }
             }
 
+            # each message is decompressed on its own; a server that accepts the offer must confirm that it does not
+            # refer to earlier messages (RFC 7692 section 7.1.1.1)
+            if (!server_no_context_takeover) {
+                return False;
+            }
+
             setActive(True);
             return True;
         }
@@ -1146,8 +1206,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
                             response += "; server_no_context_takeover";
                             break;
                         case "client_no_context_takeover":
-                            client_no_context_takeover = True;
-                            response += "; client_no_context_takeover";
+                            # always included below
                             break;
                         case "server_max_window_bits":
                             if (param.value) {
@@ -1173,6 +1232,11 @@ hash<WsMsgInfo> h = ws_read_message(sock);
                     }
                 }
             }
+
+            # each message is decompressed on its own, so the client must not refer to earlier messages; a server
+            # may require this even if the client did not offer it (RFC 7692 section 7.1.1.2)
+            client_no_context_takeover = True;
+            response += "; client_no_context_takeover";
 
             setActive(True);
             return response;
@@ -1222,7 +1286,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             }
 
             # Decompress the message; convert back to string for text frames
-            binary decompressed = decompressData(msg);
+            binary decompressed = decompressData(msg, ctx.max_message_size);
             if (ctx.op == WSOP_Text) {
                 return decompressed.toString("UTF-8");
             }
@@ -1276,6 +1340,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
             ext.request_client_no_context_takeover = request_client_no_context_takeover;
             ext.offer_client_max_window_bits = offer_client_max_window_bits;
             ext.compression_threshold = compression_threshold;
+            ext.max_message_size = max_message_size;
             return ext;
         }
 
@@ -1306,16 +1371,31 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         #! Decompresses data using raw INFLATE for RFC 7692 compliance
         /** Uses the inflate_raw_to_binary() function which expects raw DEFLATE input.
             Per RFC 7692 section 7.2.2, appends 0x00 0x00 0xff 0xff before decompression.
+
+            @param msg the compressed message
+            @param peer_max_size the maximum message size of the peer, if any; takes precedence over the maximum
+            message size of the extension when positive
+
+            @throw WEBSOCKET-MESSAGE-TOO-BIG the decompressed message exceeds the maximum message size
+            @throw WEBSOCKET-EXTENSION-ERROR the message cannot be decompressed
         */
-        private data decompressData(data msg) {
+        private data decompressData(data msg, *int peer_max_size) {
             binary input = msg.typeCode() == NT_STRING ? binary(msg) : msg;
 
             # RFC 7692 section 7.2.2: append 0x00 0x00 0xff 0xff before decompression
             input += DeflateTrailer;
 
+            int max_size = peer_max_size > 0 ? peer_max_size : (max_message_size ?: DefaultMaxMessageSize);
+            if (max_size < 0) {
+                max_size = 0;
+            }
             try {
-                return inflate_raw_to_binary(input);
+                return inflate_raw_to_binary(input, max_size);
             } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "DECOMPRESSION-LIMIT-EXCEEDED") {
+                    throw "WEBSOCKET-MESSAGE-TOO-BIG", sprintf("the decompressed permessage-deflate message exceeds "
+                        "the maximum message size of %d bytes", max_size);
+                }
                 throw "WEBSOCKET-EXTENSION-ERROR",
                     sprintf("permessage-deflate decompression failed: %s: %s", ex.err, ex.desc);
             }

@@ -434,8 +434,21 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 "rsv2": h.rsv2,
                 "rsv3": h.rsv3,
                 "fin": True,
+                # the limit applies to a decompressed message too
+                "max_message_size": exists handler ? call_object_method(handler, "getMaxMessageSize") : 0,
             };
-            call_object_method(wsc, "applyIncomingExtensions", \msg, ext_ctx);
+            try {
+                call_object_method(wsc, "applyIncomingExtensions", \msg, ext_ctx);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "WEBSOCKET-MESSAGE-TOO-BIG") {
+                    rethrow;
+                }
+                if (handler) {
+                    handler.logError("WebSocket message rejected: %s", ex.desc);
+                }
+                sendClose(WSCC_MessageTooBig);
+                return;
+            }
             call_object_method(wsc, "validateIncomingMessage", \msg);
             # Wrap user-code dispatch in the handler's thread-local save/restore
             # so any framework context (e.g. Qorus service-context tld) is
