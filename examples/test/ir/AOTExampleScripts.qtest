@@ -46,8 +46,10 @@ class AOTExampleScriptsTest inherits QUnit::Test {
         string qore_bin = ENV.QORE_BINARY ?? ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
         *string build_dir = realpath(ENV.QORE_BUILD_DIR ?? ENV.QORE_LIBDIR
             ?? (ENV.LIBQORE_BINARY ? dirname(ENV.LIBQORE_BINARY) : dirname(qore_bin)));
-        *string expected = realpath(source_root + "/build");
-        if (!exists expected || !is_dir(expected)) {
+        # realpath() raises an exception for a path that does not exist
+        string default_build = source_root + "/build";
+        *string expected = is_dir(default_build) ? realpath(default_build) : NOTHING;
+        if (!exists expected) {
             skip_reason = sprintf("the examples/aot scripts use %s/build, which does not exist", source_root);
         } else if (build_dir != expected) {
             skip_reason = sprintf("the examples/aot scripts test %s, not the build under test %y", expected,
