@@ -225,15 +225,7 @@ backend.chatStream(history,
             if (resp.tool_calls) {
                 list<hash<auto>> tool_call_deltas = ();
                 foreach hash<ChatToolCall> tc in (resp.tool_calls) {
-                    push tool_call_deltas, {
-                        "index": $#,
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": make_json(tc.arguments ?? {}),
-                        },
-                    };
+                    push tool_call_deltas, {"index": $#} + chatToolCallToOpenAi(tc);
                 }
                 terminal_raw.choices[0].delta.tool_calls = tool_call_deltas;
             }
@@ -337,6 +329,26 @@ backend.chatStream(history,
         };
     }
 
+    #! Renders a @ref ChatToolCall as an OpenAI-shaped tool call
+    /** The provider reasoning signature is carried as a \c thought_signature sibling of \c function,
+        the shape the callback gateway returns it in; a Gemini call replayed without it is rejected.
+        OpenAI-family providers ignore the extra key.
+    */
+    private static hash<auto> chatToolCallToOpenAi(hash<ChatToolCall> tc) {
+        hash<auto> rv = {
+            "id": tc.id,
+            "type": "function",
+            "function": {
+                "name": tc.name,
+                "arguments": make_json(tc.arguments ?? {}),
+            },
+        };
+        if (tc.thought_signature.val()) {
+            rv.thought_signature = tc.thought_signature;
+        }
+        return rv;
+    }
+
     #! Builds an OpenAI-shaped chat-completions request body
     private hash<auto> buildOpenAiChatBody(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools,
@@ -368,14 +380,7 @@ backend.chatStream(history,
             if (msg.tool_calls) {
                 list<auto> tc_list = ();
                 foreach hash<ChatToolCall> tc in (msg.tool_calls) {
-                    push tc_list, {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": make_json(tc.arguments ?? {}),
-                        },
-                    };
+                    push tc_list, chatToolCallToOpenAi(tc);
                 }
                 api_msg.tool_calls = tc_list;
             }
@@ -472,6 +477,10 @@ backend.chatStream(history,
                     "id": tc.id,
                     "name": tc.function.name,
                     "arguments": args,
+                    "thought_signature": tc.thought_signature.typeCode() == NT_STRING
+                            && tc.thought_signature.val()
+                        ? tc.thought_signature
+                        : NOTHING,
                 };
             }
         }
