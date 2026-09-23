@@ -16058,12 +16058,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb(const char* class_path,
         const char* variant_sig, const QoreTypeInfo* object_type_info, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
     const QoreClass* qc = class_path && *class_path
-        ? qore_aot_resolve_class_ref(getProgram(), class_path, false) : nullptr;
+        ? qore_aot_resolve_class_ref(pgm, class_path, false) : nullptr;
     if (!qc) {
         xsink->raiseException("AOT-ERROR",
             "cannot resolve class '%s' for AOT new object call",
             class_path && *class_path ? class_path : "<missing>");
+        return toBits(QoreValue());
+    }
+    // the class was not bound at parse time, so neither were the sandboxing and abstract-class checks
+    if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
         return toBits(QoreValue());
     }
     const AbstractQoreFunctionVariant* variant =
@@ -16097,12 +16102,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_by_path_nb_consume_args(const char* class_path,
         const char* variant_sig, const QoreTypeInfo* object_type_info, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
     const QoreClass* qc = class_path && *class_path
-        ? qore_aot_resolve_class_ref(getProgram(), class_path, false) : nullptr;
+        ? qore_aot_resolve_class_ref(pgm, class_path, false) : nullptr;
     if (!qc) {
         xsink->raiseException("AOT-ERROR",
             "cannot resolve class '%s' for AOT new object call",
             class_path && *class_path ? class_path : "<missing>");
+        clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+        return toBits(QoreValue());
+    }
+    // the class was not bound at parse time, so neither were the sandboxing and abstract-class checks
+    if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
         clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
     }
@@ -16119,13 +16130,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot(QoreAOTContext* ctx,
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
     const QoreClass* qc = target.qc;
+    bool by_name = false;
     if (!qc && target.class_path && *target.class_path) {
         qc = qore_aot_resolve_class_ref(ctx->pgm, target.class_path, false);
+        by_name = true;
     }
     if (!qc) {
         xsink->raiseException("AOT-ERROR",
             "cannot resolve class '%s' for AOT new object call target slot %d",
             target.class_path && *target.class_path ? target.class_path : "<missing>", slot);
+        return toBits(QoreValue());
+    }
+    // a class resolved by name here (a build-group class deferred at parse time) was not checked when parsed
+    if (by_name && qore_class_private::runtimeCheckInstantiateClassByName(*qc,
+            getProgram() ? getProgram() : ctx->pgm, xsink)) {
         return toBits(QoreValue());
     }
     ClassOnlySubstitutionHelper class_context(target.class_ctx);
@@ -16138,13 +16156,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
     const QoreClass* qc = target.qc;
+    bool by_name = false;
     if (!qc && target.class_path && *target.class_path) {
         qc = qore_aot_resolve_class_ref(ctx->pgm, target.class_path, false);
+        by_name = true;
     }
     if (!qc) {
         xsink->raiseException("AOT-ERROR",
             "cannot resolve class '%s' for AOT new object call target slot %d",
             target.class_path && *target.class_path ? target.class_path : "<missing>", slot);
+        clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
+        return toBits(QoreValue());
+    }
+    // a class resolved by name here (a build-group class deferred at parse time) was not checked when parsed
+    if (by_name && qore_class_private::runtimeCheckInstantiateClassByName(*qc,
+            getProgram() ? getProgram() : ctx->pgm, xsink)) {
         clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
     }

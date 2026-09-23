@@ -87,10 +87,7 @@ static QoreObject* create_object_intern(QoreProgram* pgm, const QoreStringNode* 
         return nullptr;
     }
 
-    if (pgm->getParseOptions() & qc->getDomain())
-        xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow access to the '%s' class", qc->getName());
-
-    if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+    if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
         return nullptr;
     }
 

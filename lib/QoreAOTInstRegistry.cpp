@@ -2011,6 +2011,9 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
             }
         } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
             qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+            if (!qc && vrn->isDynamicObjectConstruct()) {
+                class_path = vrn->getDynamicClassName().c_str();
+            }
         }
         if (qc) {
             class_path_storage = qc->getNamespacePath();
@@ -2023,7 +2026,11 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
     ctx.writer.writeStringRef(class_path);
     // Variant signature for disambiguation (empty string if no variant)
     std::string variant_sig;
-    if (ni->variant) {
+    if (ni->dynamic_class) {
+        // a class deferred at parse time has no variant; the deferred-constructor marker the expression slots
+        // already use tells the reader to resolve the class by name, and check it, each time the object is made
+        variant_sig = QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT;
+    } else if (ni->variant) {
         auto* sig = ni->variant->getSignature();
         if (sig) {
             variant_sig = "(";
@@ -2095,7 +2102,12 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
     }
     const QoreClass* qc = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
-    if (class_path && *class_path) {
+    // a class deferred at parse time is not bound here: it is resolved by name, and checked against the Program's
+    // sandboxing restrictions, each time the object is made, as in every other execution mode
+    const bool dynamic_class = variant_sig && !strcmp(variant_sig, QORE_AOT_DEFERRED_CREATE_OBJECT_SLOT);
+    if (dynamic_class) {
+        variant_sig = nullptr;
+    } else if (class_path && *class_path) {
         qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && variant_sig && *variant_sig) {
             // Resolve variant by walking the constructor's variants
@@ -2124,6 +2136,7 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
     }
     auto* ni = new QoreIRNewObjectInstruction(qc, variant, QoreValue(), object_type_info,
         class_path, variant_sig);
+    ni->dynamic_class = dynamic_class;
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     ni->result = QoreIRValue(result_id);
     ni->operands = operands;

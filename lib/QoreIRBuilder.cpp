@@ -310,6 +310,10 @@ static void qore_ir_populate_new_object_target(QoreIRNewObjectInstruction* inst)
     if (inst->variant_sig.empty()) {
         inst->variant_sig = qore_ir_new_object_variant_signature(variant);
     }
+    // a build-group class deferred at parse time is resolved by name, and checked, each time the object is made
+    if (!inst->qc && !dynamic_class_path.empty() && inst->class_path == dynamic_class_path) {
+        inst->dynamic_class = true;
+    }
 }
 
 QoreIRSwitchRegexMatchInstruction::~QoreIRSwitchRegexMatchInstruction() {

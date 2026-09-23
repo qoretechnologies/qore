@@ -4808,26 +4808,40 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             const QoreClass* qc = nullptr;
             const AbstractQoreFunctionVariant* variant = nullptr;
             const QoreTypeInfo* object_type_info = nullptr;
+            // a build-group class deferred at parse time; see QoreIRInvokeInstruction::invoke_key_name
+            const char* dynamic_class_path = inv->invoke_key_name.empty() ? nullptr : inv->invoke_key_name.c_str();
             if (inv->expr.hasNode()) {
                 if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                         inv->expr.getInternalNode())) {
                     qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                     variant = vrn->getVariant();
                     object_type_info = vrn->getTypeInfo();
+                    if (!qc && !dynamic_class_path && vrn->isDynamicObjectConstruct()) {
+                        dynamic_class_path = vrn->getDynamicClassName().c_str();
+                    }
                 } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(
                         inv->expr.getInternalNode())) {
                     qc = scoped->oc;
                     variant = scoped->getVariant();
                     object_type_info = scoped->getObjectTypeInfo();
-                    if (!qc && scoped->isDynamicObjectConstruct()) {
-                        qc = qore_aot_resolve_class_ref(getProgram(),
-                            scoped->getDynamicClassName().c_str(), false);
+                    if (!qc && !dynamic_class_path && scoped->isDynamicObjectConstruct()) {
+                        dynamic_class_path = scoped->getDynamicClassName().c_str();
                     }
                 } else if (auto* nocn = dynamic_cast<const NewObjectCallNode*>(
                         inv->expr.getInternalNode())) {
                     qc = nocn->getClass();
                     variant = nocn->getVariant();
                     object_type_info = nocn->getObjectTypeInfo();
+                }
+            }
+            if (dynamic_class_path) {
+                // an AOT artifact's expression may have bound the class when it was loaded, but the class is
+                // resolved by name, and checked, every time the object is made, as in every other execution mode
+                QoreProgram* pgm = getProgram();
+                variant = nullptr;
+                qc = qore_aot_resolve_class_ref(pgm, dynamic_class_path, false);
+                if (qc && qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
+                    return QoreValue();
                 }
             }
             if (!qc) {
@@ -9528,9 +9542,12 @@ load_local_done:
             }
             case QoreIROpcode::NewObject: {
                 auto* no_inst = static_cast<QoreIRNewObjectInstruction*>(inst);
-                const QoreClass* qc = no_inst->qc;
-                const AbstractQoreFunctionVariant* variant = no_inst->variant;
-                if (!qc && no_inst->expr.hasNode()) {
+                // a build-group class deferred at parse time is never bound to the instruction: it is resolved by
+                // class_path, and checked, every time the object is made
+                bool dynamic_class = no_inst->dynamic_class;
+                const QoreClass* qc = dynamic_class ? nullptr : no_inst->qc;
+                const AbstractQoreFunctionVariant* variant = dynamic_class ? nullptr : no_inst->variant;
+                if (!qc && !dynamic_class && no_inst->expr.hasNode()) {
                     const AbstractQoreNode* node = no_inst->expr.getInternalNode();
                     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
                         qc = no->getClass();
@@ -9542,11 +9559,16 @@ load_local_done:
                         no_inst->object_type_info = scoped->getObjectTypeInfo();
                         if (!qc && scoped->isDynamicObjectConstruct()) {
                             no_inst->class_path = scoped->getDynamicClassName();
+                            dynamic_class = true;
                         }
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                         variant = vrn->getVariant();
                         no_inst->object_type_info = vrn->getTypeInfo();
+                        if (!qc && vrn->isDynamicObjectConstruct()) {
+                            no_inst->class_path = vrn->getDynamicClassName();
+                            dynamic_class = true;
+                        }
                     }
                     if (qc) {
                         no_inst->qc = qc;
@@ -9554,12 +9576,20 @@ load_local_done:
                     }
                 }
                 if (!qc && !no_inst->class_path.empty()) {
-                    qc = qore_aot_resolve_class_ref(getProgram(), no_inst->class_path.c_str(), false);
-                    if (qc) {
+                    QoreProgram* pgm = getProgram();
+                    qc = qore_aot_resolve_class_ref(pgm, no_inst->class_path.c_str(), false);
+                    // the class was not bound at parse time, so neither were the sandboxing and abstract-class
+                    // checks; a class bound here once is not resolved again, but a deferred class always is
+                    if (qc && qore_class_private::runtimeCheckInstantiateClassByName(*qc, pgm, xsink)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    if (qc && !dynamic_class) {
                         no_inst->qc = qc;
                     }
                 }
-                if (qc && !variant && !no_inst->variant_sig.empty()) {
+                if (qc && !variant && !dynamic_class && !no_inst->variant_sig.empty()) {
                     variant = qore_ir_find_constructor_variant_by_aot_signature(
                         qc, no_inst->variant_sig.c_str());
                     if (variant) {

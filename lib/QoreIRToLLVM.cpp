@@ -16606,7 +16606,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const QoreClass* qc = nullptr;
                     const AbstractQoreFunctionVariant* variant = nullptr;
                     const QoreTypeInfo* object_type_info = nullptr;
-                    std::string dynamic_class_path;
+                    // a build-group class deferred at parse time; see QoreIRInvokeInstruction::invoke_key_name
+                    std::string dynamic_class_path = inv->invoke_key_name;
                     if (auto* new_obj = dynamic_cast<const NewObjectCallNode*>(
                             inv->expr.getInternalNode())) {
                         qc = new_obj->getClass();
@@ -16617,7 +16618,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         qc = scoped_obj->oc;
                         variant = scoped_obj->getVariant();
                         object_type_info = scoped_obj->getObjectTypeInfo();
-                        if (!qc && scoped_obj->isDynamicObjectConstruct()) {
+                        if (!qc && dynamic_class_path.empty() && scoped_obj->isDynamicObjectConstruct()) {
                             dynamic_class_path = scoped_obj->getDynamicClassName();
                         }
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
@@ -16625,9 +16626,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                         variant = vrn->getVariant();
                         object_type_info = vrn->getTypeInfo();
+                        if (!qc && dynamic_class_path.empty() && vrn->isDynamicObjectConstruct()) {
+                            dynamic_class_path = vrn->getDynamicClassName();
+                        }
                     }
                     object_type_info = specializeType(object_type_info);
-                    if (!qc && !dynamic_class_path.empty()) {
+                    // a deferred class is never baked into the code, even when an AOT artifact's expression bound
+                    // it at load time: the by-path helper resolves it by name, and checks it, every time
+                    if (!dynamic_class_path.empty()) {
                         llvm::Value* class_path = qore_ir_create_global_string_ptr(builder, dynamic_class_path);
                         llvm::Value* variant_sig = qore_ir_create_global_string_ptr(builder, "");
                         llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,
@@ -25523,8 +25529,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             module, llvm_func, inst);
                 }
             } else {
-                // JIT mode: bake qc/variant as constants (valid within the same program).
-                if (!noinst->qc && !noinst->class_path.empty()) {
+                // JIT mode: bake qc/variant as constants (valid within the same program).  A class deferred at
+                // parse time is never baked: the by-path helper resolves it by name, and checks it, every time.
+                if ((!noinst->qc || noinst->dynamic_class) && !noinst->class_path.empty()) {
                     llvm::Value* class_path = qore_ir_create_global_string_ptr(builder, noinst->class_path);
                     llvm::Value* variant_sig = qore_ir_create_global_string_ptr(builder, noinst->variant_sig);
                     llvm::Value* object_type_ptr = llvm::ConstantInt::get(i64_type,

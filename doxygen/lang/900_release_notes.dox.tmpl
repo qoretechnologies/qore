@@ -3298,6 +3298,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - Fixed an unqualified call reference to a private static method of the current class (e.g.
       <tt>\\check()</tt> instead of <tt>\\MyClass::check()</tt>) failing with \c RUNTIME-OVERLOAD-ERROR when called
       from outside the class; the unqualified form now captures the class context like the qualified form
+    - Fixed declaring a variable with an implied constructor call (<tt>MyClass obj(args)</tt>) in code compiled
+      to a <tt>.qo</tt> object separately from the file declaring the class: with a debugger attached, the
+      construction failed with an \c IR-AST-FALLBACK-ERROR exception or bypassed the
+      @ref Qore::Program "Program"'s sandboxing restrictions.  Such a construction now behaves identically in
+      every execution mode, and a class excluded by the Program's sandboxing restrictions always raises
+      \c CREATE-OBJECT-ERROR
     - Fixed \c return inside a @ref foreach "foreach" statement iterating a reference
       (<tt>foreach x in (\\list)</tt>) truncating the referenced list to the elements already iterated; the
       unvisited elements are now kept unchanged, as with \c break.  An exception raised in the loop (including

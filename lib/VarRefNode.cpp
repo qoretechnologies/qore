@@ -691,12 +691,7 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
                 raiseUnresolvedDynamicClass(dynamic_class_name, xsink);
                 return QoreValue();
             }
-            if (getProgram()->getParseOptions() & qc->getDomain()) {
-                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
-                    "access to the '%s' class", qc->getName());
-                return QoreValue();
-            }
-            if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+            if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, getProgram(), xsink)) {
                 return QoreValue();
             }
             return qc->execConstructor(args, xsink);
@@ -765,12 +760,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                 raiseUnresolvedDynamicClass(dynamic_class_name, xsink);
                 return QoreValue();
             }
-            if (getProgram()->getParseOptions() & qc->getDomain()) {
-                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
-                    "access to the '%s' class", qc->getName());
-                return QoreValue();
-            }
-            if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+            if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, getProgram(), xsink)) {
                 return QoreValue();
             }
             value = qc->execConstructor(args, xsink);

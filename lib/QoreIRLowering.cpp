@@ -5731,6 +5731,10 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             QoreIRBasicBlock* handler = exception_stack.back();
             auto* inst = builder.createInvoke(expr, operands, normal_block, handler, scoped_obj->loc);
             inst->invoke_opcode = QoreIROpcode::NewObject;
+            if (!scoped_obj->oc && scoped_obj->isDynamicObjectConstruct()) {
+                // resolved by name, and checked, each time the object is made; see invoke_key_name
+                inst->invoke_key_name = scoped_obj->getDynamicClassName();
+            }
             builder.setBlock(normal_block);
             return inst->result;
         }
@@ -6174,9 +6178,14 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
     if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
         // Check if this is a class constructor (VRN_OBJECT)
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
-        if (qc) {
+        // VRN_DYNAMIC_OBJECT: a build-group class deferred by an AOT source parse; it is constructed exactly like a
+        // class bound at parse time, except that the class is resolved by name - and checked against the Program's
+        // sandboxing restrictions - each time the object is made
+        const bool dynamic_object = !qc && vrn->isDynamicObjectConstruct();
+        if (qc || dynamic_object) {
             // VRN_OBJECT: construct object using NewObject opcode, then store to variable.
-            // No-AST path: lower each constructor arg as a separate IR instruction.
+            // No-AST path: lower each constructor arg as a separate IR instruction; parseArgsVariant() has moved
+            // the args of both kinds of constructions into getArgs().
             std::vector<QoreIRValue> operands;
             if (!lowerCallArgs(vrn->getParseArgs(), vrn->getArgs(), operands, error)) {
                 return QoreIRValue();
@@ -6191,6 +6200,9 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                 QoreIRBasicBlock* handler = exception_stack.back();
                 auto* inst = builder.createInvoke(expr, operands, normal_block, handler, var->loc);
                 inst->invoke_opcode = QoreIROpcode::NewObject;
+                if (dynamic_object) {
+                    inst->invoke_key_name = vrn->getDynamicClassName();
+                }
                 builder.setBlock(normal_block);
                 obj_val = inst->result;
             } else {
@@ -6328,7 +6340,7 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             return construct_val;
         }
 
-        // Non-hashdecl types (complex hash/list): construct + store via VrnConstruct
+        // Remaining constructions (e.g. an AOT-deferred hashdecl): construct + store via VrnConstruct
         QoreIRValue construct_val;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
