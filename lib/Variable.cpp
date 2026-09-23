@@ -711,6 +711,17 @@ LValueHelper::~LValueHelper() {
         static_var_lvalue_value = QoreValue();
     }
 
+    // Whether the write removed no value that a recursive set can count: then its scan can be handed to a member
+    // of the root's set that has real references (RObject::deferScanToPinnedMember()).  Decided before the removed
+    // values are released: a value that needs a scan qualifies only if it is an object in no recursive set.
+    bool insertion_only = removal_objects.empty();
+    for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); insertion_only && i != e; ++i) {
+        if (needs_scan(*i) && ((*i)->getType() != NT_OBJECT
+            || qore_object_private::get(*static_cast<QoreObject*>(*i))->rset.load(std::memory_order_acquire))) {
+            insertion_only = false;
+        }
+    }
+
     delete lvid_set;
 
     if (robj) {
@@ -724,8 +735,13 @@ LValueHelper::~LValueHelper() {
                 // the root's set does not count an edge this write added until a scan has followed its edges
                 // again; see RObject::edgesAdded()
                 robj->edgesAdded();
-                RSetHelper rsh(*robj, vl.xsink);
-                deferred = rsh.deferred();
+                if (insertion_only && robj->deferScanToPinnedMember()) {
+                    // no value was removed, so there are no other objects to scan either
+                    deferred = false;
+                } else {
+                    RSetHelper rsh(*robj, vl.xsink);
+                    deferred = rsh.deferred();
+                }
             }
             // the scan of the root would have repaired the sets of the objects that values were removed from; a
             // deferred scan is made too late for them, so they are scanned now; see objectRemoved()

@@ -328,6 +328,20 @@ public:
 
     //! Marks the object's recursive set stale, and not closed, instead of invalidating it; see RSet::markStale()
     DLLLOCAL void markRSetStale();
+
+    //! Hands the scan of a write at this object to a member of its recursive set that has real references
+    /** Called instead of a scan after a write that removed no value counted by a recursive set.  While a member
+        of the set has real references, every member is live: the member reaches all of them.  Its scan is deferred
+        to the release of its last real reference, and that scan starts inside the set and reaches this object and
+        whatever the write added to it, as the write removed no edge between members.  The set is marked stale
+        until then (checkDeferScan()).
+
+        @return true if the scan was handed over; false if the object is in no set, has real references itself
+        (its own scan is deferred), or no member of its set has real references, and the caller scans as usual
+
+        See design/dgc.md, "A write inside a set that a real reference holds".
+    */
+    DLLLOCAL bool deferScanToPinnedMember();
     DLLLOCAL void removeInvalidateRSetIntern();
 
     //! Takes this object's recursive set out of the closed state, so that scans enter it again
@@ -544,6 +558,12 @@ public:
         return stale.load(std::memory_order_acquire);
     }
 
+    //! Returns a member other than \a exclude that has real references, with a weak reference, or nullptr
+    /** Returns nullptr also when a member's values can change without a scan (Pattern B private data): a write at
+        such a set is always scanned.  See RObject::deferScanToPinnedMember().
+    */
+    DLLLOCAL RObject* findPinnedMember(RObject* exclude);
+
     //! Advanced when an edge is added whose target objects cannot be found to mark them; see edgesUnchangedSinceScan()
     DLLLOCAL static std::atomic<unsigned> untracked_edge_epoch;
 
@@ -631,6 +651,11 @@ protected:
     std::atomic<unsigned> scan_epoch{0};
     //! true while a scan of one of the members is deferred; see markStale()
     std::atomic_bool stale{false};
+    //! the member last found with real references; see findPinnedMember().  The members of a set do not change,
+    //! and the set holds a weak reference to each of them
+    std::atomic<RObject*> pinned{nullptr};
+    //! whether a write inside the set may be handed to a member (-1: not checked yet); see findPinnedMember()
+    std::atomic<int8_t> pin_eligible{-1};
 
     // called with the write lock held
     DLLLOCAL void invalidateIntern() {

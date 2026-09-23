@@ -323,7 +323,7 @@ destroyed once it is released. All execution modes and the AOT module now walk t
 | plain local root | 0 | 0 | 0 |
 | `self` writes in a method, root held by a list | 3 | 3 | 3 |
 | closure-bound local root (the frame lends its object a real reference) | 0 | 0 | 0 |
-| non-root member (`root.peer.x`), root in a local | 300 | 300 | 300 |
+| non-root member (`root.peer.x`), root in a local (the scan is handed to the root, Phase 3) | 0 | 0 | 0 |
 | root held only by a list | 300 | 300 | 300 |
 | registry growth, hub in a local | 0 | 0 | 0 |
 | registry growth, hub held only by its own cycle | 5,150 | 5,150 | 5,150 |

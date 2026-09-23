@@ -667,6 +667,23 @@ sub queue_ref_writes(reference<hash<string, int>> rv, Tally t, reference<*Counte
     release = new Counters();
 }
 
+#! a write inside the set that replaces an edge between two of its members, while a local variable holds the root
+/** The first write takes the peer's reference to the root out of the set, which a scan made later from the root
+    would not see: such a write is never handed to the member with real references, and it is scanned; the cycle
+    it breaks is collected when the root is released.
+*/
+sub pinned_cut_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root();
+    make_cycle(root);
+    Counters c();
+    for (int i = 0; i < Writes; ++i) {
+        root.peer.peer = new Leaf();
+    }
+    c.record(\rv, "pinned-cut");
+    rv."pinned-cut-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! the edge that closes the cycle is replaced while a list holds the root
 /** The value replaced - the root - still has a reference, from the list, after the edge to it is gone.  Released
     before the scan that repairs the set, it was compared with the set's count of references from inside it, which
@@ -695,6 +712,22 @@ sub cut_api_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters
     l[0].peer.x = new Leaf();
     c.record(\rv, "cut-api");
     rv."cut-api-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! writes inside the set that close a new cycle back to the root, while a local variable holds the root
+/** Each write replaces an object that refers back to the root: the scans are handed to the root, whose scan when
+    the local variable releases it finds the last cycle and collects it.
+*/
+sub pinned_close_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root();
+    make_cycle(root);
+    Counters c();
+    for (int i = 0; i < Writes; ++i) {
+        root.peer.x = new Request(root);
+    }
+    c.record(\rv, "pinned-close");
+    rv."pinned-close-held-dtors" = Tally::cycleSince(t);
     release = new Counters();
 }
 
@@ -770,6 +803,46 @@ sub concurrent_marks_intern(reference<hash<string, int>> rv, Tally t, int thread
     remove MarkTarget::l;
 }
 
+#! several threads write inside a set that a local variable of this frame holds
+/** The writes are handed to the root, which the frame holds with a real reference, whichever thread makes them;
+    the set is collected once the frame releases it.  Returns the objects of the set destroyed while it was held
+    (\c held-dtors) and once it was released (\c dtors), and the values written that were released
+    (\c leaf-dtors).
+*/
+public hash<string, int> sub concurrent_pinned(int threads) {
+    hash<string, int> rv = {};
+    Tally t();
+    concurrent_pinned_intern(\rv, t, threads);
+    rv.dtors = Tally::cycleSince(t);
+    rv."leaf-dtors" = Leaf::destroyed - t.leaf;
+    return rv;
+}
+
+#! the set written by the threads of concurrent_pinned(); held here for the reason given for ConcurrentTarget
+class PinTarget {
+    public {
+        static *Node peer;
+    }
+}
+
+sub concurrent_pinned_intern(reference<hash<string, int>> rv, Tally t, int threads) {
+    Node root();
+    make_cycle(root);
+    PinTarget::peer = root.peer;
+    Counter done(threads);
+    for (int i = 0; i < threads; ++i) {
+        background sub () {
+            on_exit done.dec();
+            for (int j = 0; j < Writes; ++j) {
+                PinTarget::peer.x = new Leaf();
+            }
+        }();
+    }
+    done.waitForZero();
+    remove PinTarget::peer;
+    rv."held-dtors" = Tally::cycleSince(t);
+}
+
 #! the cycle written by the threads of concurrent_writes()
 /** It is held here, and the threads only reach it through this class, so that a thread holds no reference to it of
     its own when it signals that it is done: a closure keeps what it captured until the thread's function has
@@ -821,6 +894,8 @@ public hash<string, int> sub get_results() {
     run(\rv, "marked", \marked_writes());
     run(\rv, "queue-cycle", \queue_cycle_writes());
     run(\rv, "queue-ref", \queue_ref_writes());
+    run(\rv, "pinned-cut", \pinned_cut_writes());
+    run(\rv, "pinned-close", \pinned_close_writes());
     run(\rv, "cut-list", \cut_list_writes());
     if (have_scan_count()) {
         run(\rv, "cut-api", \cut_api_writes());

@@ -111,12 +111,13 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "closure-remove-release-walked": 0,
             "closure-remove-release-sets": 0,
 
-            # a write to a member other than the root scans from that member, which has no real reference
+            # a write to a member other than the root: the member has no real reference, but the root, in the same
+            # set, has one from the local variable, so the scan is handed to the root and made when it is released
             "member-scans": 100,
-            "member-walked": 300,
-            "member-sets": 1,
+            "member-walked": 0,
+            "member-sets": 0,
             "member-release-scans": 1,
-            "member-release-walked": 0,
+            "member-release-walked": 3,
             "member-release-sets": 0,
 
             # a set held only by a list: every write walks the set
@@ -213,6 +214,24 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "queue-ref-release-scans": 1,
             "queue-ref-release-walked": 9,
             "queue-ref-release-sets": 1,
+
+            # a write that replaces an edge between two members of the set is never handed to a member with real
+            # references: it is scanned (the first write cuts the cycle, so there is no set to hand the later ones to)
+            "pinned-cut-scans": 100,
+            "pinned-cut-walked": 200,
+            "pinned-cut-sets": 0,
+            "pinned-cut-release-scans": 1,
+            "pinned-cut-release-walked": 0,
+            "pinned-cut-release-sets": 0,
+
+            # writes that close new cycles back to the root are handed to the root, whose scan when released finds
+            # the last one
+            "pinned-close-scans": 200,
+            "pinned-close-walked": 0,
+            "pinned-close-sets": 0,
+            "pinned-close-release-scans": 1,
+            "pinned-close-release-walked": 3,
+            "pinned-close-release-sets": 1,
 
             # the edge that closes the cycle is replaced while a list holds the root
             "cut-list-scans": 2,
@@ -322,6 +341,12 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "queue-ref-held-dtors": 0,
             "queue-ref-dtors": 2,
             "queue-ref-leaf-dtors": 0,
+            "pinned-cut-held-dtors": 0,
+            "pinned-cut-dtors": 2,
+            "pinned-cut-leaf-dtors": 100,
+            "pinned-close-held-dtors": 0,
+            "pinned-close-dtors": 2,
+            "pinned-close-leaf-dtors": 100,
             # nothing is collected while the list holds the root; both are once it is released
             "cut-list-held-dtors": 0,
             "cut-list-dtors": 2,
@@ -347,6 +372,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         addTestCase("checks in this program", \testInProgram());
         addTestCase("concurrent writes", \testConcurrentWrites());
         addTestCase("concurrent marks", \testConcurrentMarks());
+        addTestCase("concurrent pinned writes", \testConcurrentPinned());
         addTestCase("each execution mode", \testExecModes());
         addTestCase("compiled module", \testCompiledModule());
 
@@ -374,6 +400,14 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         assertEq(0, rv."held-dtors", "no object collected while the set is held");
         assertEq(2 + Threads * DgcScanAvoidanceChecks::Writes, rv."dtors",
             "every object of the set, including every member added by a push, collected once it is released");
+    }
+
+    #! several threads write inside a set that a local variable of the frame holds
+    testConcurrentPinned() {
+        hash<string, int> rv = DgcScanAvoidanceChecks::concurrent_pinned(Threads);
+        assertEq(0, rv."held-dtors", "no object collected while the set is held");
+        assertEq(2, rv."dtors", "every object of the set collected once it is released");
+        assertEq(Threads * DgcScanAvoidanceChecks::Writes, rv."leaf-dtors", "every value written released");
     }
 
     testExecModes() {

@@ -326,6 +326,30 @@ Debug builds count the scans started by lvalue operations per thread (`dbg_get_l
 `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
 execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
 
+### A write inside a set that a real reference holds
+
+A write at an object X that has no real reference itself scans from X, which walks X's whole recursive set - in
+`root.peer.x = v`, with `root` held by a local variable, every write walks the set of `root` and `peer`. But if a
+member P of X's set has real references, every member is live: P reaches all of them. And when the write removed
+no edge between members, P still reaches X after it, and so reaches whatever the write added. The write's scan is
+therefore handed to P (`RObject::deferScanToPinnedMember()`): P's scan is deferred as if P had been written
+(`checkDeferScan()`, which also marks the set stale), and it is made when P's last real reference goes, starting
+inside the set and reaching X and the new values. Until then the set is kept, as any stale set is.
+
+- The write qualifies only if it removed nothing that a recursive set can count: every value it replaced or
+  removed either needs no scan or is an object in no recursive set, and no value was removed from another object
+  (`objectRemoved()`). This is decided in `~LValueHelper` before the removed values are released. A write that
+  replaces an edge between members (`root.peer.peer = ...`) is scanned as before: P might no longer reach X.
+- P is found under X's r-section, which keeps X's set in place, among the members of the set with real references
+  (`RSet::findPinnedMember()`, which caches the last one found - the members of a set never change, and the set
+  holds a weak reference to each), and is held with a weak reference while its scan is deferred. `checkDeferScan()`
+  checks its real references again under its lock: if the last one has just gone, the write scans as usual.
+- A set with an object whose values can change without a scan (Pattern B private data) never hands a write over.
+
+The `member` shape in `examples/test/qore/misc/dgc-scan-avoidance` goes from 300 objects walked to 0, and one scan
+of the set when the root is released; `pinned-cut` (a write that cuts the cycle is scanned), `pinned-close` (writes
+that close new cycles back to the root, found by the root's scan) and `concurrent pinned writes` cover the rules.
+
 ### Closed recursive sets: the region a scan does not enter
 
 A scan costs time linear in the graph reachable from its root, so a short-lived object that merely references a

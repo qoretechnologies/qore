@@ -670,6 +670,66 @@ void RObject::markRSetStale() {
     }
 }
 
+bool RObject::deferScanToPinnedMember() {
+    if (q_disable_gc || !rset.load(std::memory_order_acquire) || rrefs.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    RObject* pin;
+    {
+        // the rsection keeps the object's set in place while a member is found; the member is held with a weak
+        // reference after it is released
+        QoreSafeRSectionReadLocker sl(rml);
+        sl.acquireRSection();
+        RSet* rs = rset.load(std::memory_order_relaxed);
+        if (!rs) {
+            return false;
+        }
+        pin = rs->findPinnedMember(this);
+    }
+    if (!pin) {
+        return false;
+    }
+    // checks the real references again under the member's lock: if its last one has just gone, nothing is deferred
+    // and the caller scans
+    bool deferred = pin->checkDeferScan() != 0;
+    pin->tDeref();
+    return deferred;
+}
+
+RObject* RSet::findPinnedMember(RObject* exclude) {
+    QoreAutoRWReadLocker al(rwl);
+    if (!valid) {
+        return nullptr;
+    }
+    int8_t eligible = pin_eligible.load(std::memory_order_relaxed);
+    if (eligible < 0) {
+        eligible = 1;
+        for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
+            if ((*i)->valuesCanChangeWithoutScan()) {
+                eligible = 0;
+                break;
+            }
+        }
+        pin_eligible.store(eligible, std::memory_order_relaxed);
+    }
+    if (!eligible) {
+        return nullptr;
+    }
+    RObject* p = pinned.load(std::memory_order_relaxed);
+    if (p && p != exclude && p->rrefs.load(std::memory_order_relaxed) > 0) {
+        p->tRef();
+        return p;
+    }
+    for (rset_t::iterator i = begin(), e = end(); i != e; ++i) {
+        if (*i != exclude && (*i)->rrefs.load(std::memory_order_relaxed) > 0) {
+            pinned.store(*i, std::memory_order_relaxed);
+            (*i)->tRef();
+            return *i;
+        }
+    }
+    return nullptr;
+}
+
 void RObject::removeInvalidateRSet() {
     QoreAutoVarRWWriteLocker al(rml);
     removeInvalidateRSetIntern();
