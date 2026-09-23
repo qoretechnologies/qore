@@ -312,22 +312,23 @@ What the numbers say:
 
 ### Scan counts by shape (debug build, 100 writes; `examples/test/qore/misc/dgc-scan-avoidance`)
 
-Objects walked by the scans the writes made. Every shape also asserts collection: nothing destroyed while the
+Objects walked by the scans the writes made, with the compiled tiers handing a dead assigned value over to the lvalue
+(Phase 0b) and a closure-bound local's frame lending its object a real reference (Phase 2). Every shape also asserts collection: nothing destroyed while the
 set is held, everything destroyed once it is released.
 
 | shape | ast | ir / jit / tiered | aot |
 |---|---|---|---|
 | plain local root | 0 | 0 | 0 |
 | `self` writes in a method, root held by a list | 9 | 6 | 9 |
-| closure-bound local root | 303 | 303 | 303 |
+| closure-bound local root (the frame lends its object a real reference) | 0 | 0 | 0 |
 | non-root member (`root.peer.x`), root in a local | 300 | 300 | 300 |
 | root held only by a list | 303 | 303 | 303 |
-| registry growth, hub in a local | 0 | 10,300 | 10,300 |
-| registry growth, hub held only by its own cycle | 5,150 | 25,748 | 15,450 |
+| registry growth, hub in a local | 0 | 0 | 0 |
+| registry growth, hub held only by its own cycle | 5,150 | 15,448 | 5,150 |
 | registry removal, same | 15,049 | 15,149 | 15,049 |
 | registry growth with `@=` | 200 | 200 | 200 |
 | confirming scan of an open cycle, holder in a list | 500 | 500 | 500 |
-| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 10,484 | 12,142 | 9,172 |
+| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 10,500 | 10,500 | 7,530 |
 | 10 requests releasing their references to a set member from outside the set, after a scan made while they held it | 30 | 30 | 30 |
 
 The server shape rebuilds the controller's recursive set twice per request (200 sets for 100 requests): the

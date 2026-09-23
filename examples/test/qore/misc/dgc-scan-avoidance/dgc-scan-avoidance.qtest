@@ -49,13 +49,66 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "method-release-walked": 0,
             "method-release-sets": 0,
 
-            # a closure-bound local variable holds its object without a real reference: every write walks the set
+            # a closure-bound local variable: while its frame holds it, the frame lends the object it holds a real
+            # reference, as a plain local variable does, so the scans are deferred to the release
             "closure-scans": 100,
-            "closure-walked": 303,
-            "closure-sets": 1,
+            "closure-walked": 0,
+            "closure-sets": 0,
             "closure-release-scans": 1,
-            "closure-release-walked": 0,
-            "closure-release-sets": 0,
+            "closure-release-walked": 3,
+            "closure-release-sets": 1,
+
+            # the closure outlives the frame of the variable holding the cycle: the frame's release ends the lent
+            # reference, and the scan deferred by the writes is made then, while the closure keeps the set
+            "closure-outlives-scans": 102,
+            "closure-outlives-walked": 5,
+            "closure-outlives-sets": 2,
+            "closure-outlives-release-scans": 1,
+            "closure-outlives-release-walked": 0,
+            "closure-outlives-release-sets": 0,
+
+            # another thread replaces the variable's value through a closure: the old cycle is collected by the
+            # scan made when it is released, and the writes to the new one are deferred like the frame's own
+            "closure-thread-scans": 100,
+            "closure-thread-walked": 0,
+            "closure-thread-sets": 0,
+            "closure-thread-release-scans": 1,
+            "closure-thread-release-walked": 3,
+            "closure-thread-release-sets": 1,
+
+            # several threads write through a closure while the frame holds the variable: every write is deferred,
+            # whichever thread makes it (the counts are summed over the threads)
+            "closure-concurrent-scans": 100,
+            "closure-concurrent-walked": 0,
+            "closure-concurrent-sets": 0,
+            "closure-concurrent-release-scans": 1,
+            "closure-concurrent-release-walked": 3,
+            "closure-concurrent-release-sets": 1,
+
+            # an exception unwinds the frame: the lent reference ends and the cycle is collected
+            "closure-exception-scans": 102,
+            "closure-exception-walked": 5,
+            "closure-exception-sets": 2,
+            "closure-exception-release-scans": 1,
+            "closure-exception-release-walked": 0,
+            "closure-exception-release-sets": 0,
+
+            # a variable passed by reference is closure-bound; writes through the reference are deferred too
+            "closure-ref-arg-scans": 100,
+            "closure-ref-arg-walked": 0,
+            "closure-ref-arg-sets": 0,
+            "closure-ref-arg-release-scans": 1,
+            "closure-ref-arg-release-walked": 3,
+            "closure-ref-arg-release-sets": 1,
+
+            # the variable is removed while its frame holds it: the value leaves with its real reference, which is
+            # removed when the value is released, and the scan deferred by the writes collects the cycle then
+            "closure-remove-scans": 100,
+            "closure-remove-walked": 3,
+            "closure-remove-sets": 1,
+            "closure-remove-release-scans": 1,
+            "closure-remove-release-walked": 0,
+            "closure-remove-release-sets": 0,
 
             # a write to a member other than the root scans from that member, which has no real reference
             "member-scans": 100,
@@ -115,7 +168,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             # operation per request inside its own methods: each deferral discards the controller's set and the
             # scan made when the method returns rebuilds it - two sets and several walks of its graph per request
             "server-scans": 300,
-            "server-walked": 10484,
+            "server-walked": 10500,
             "server-sets": 200,
             "server-release-scans": 1,
             "server-release-walked": 3,
@@ -143,7 +196,9 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "method-walked": 6,
             "registry-cycle-walked": 15448,
             "registry-cycle-unregister-walked": 15149,
-            "server-walked": 10500,
+            # removing a closure-bound variable writes it through an lvalue helper, whose scan the frame's real
+            # reference to the variable defers
+            "closure-remove-scans": 101,
         };
 
         #! the scan counters of each execution mode that differ from ExpectedScanCounts
@@ -153,7 +208,9 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "tiered": CompiledScanCounts,
             # the compiled module
             "aot": {
-                "server-walked": 7514,
+                "server-walked": 7530,
+                # as in the IR tiers (CompiledScanCounts)
+                "closure-remove-scans": 101,
             },
         };
 
@@ -169,6 +226,25 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "closure-read": 1,
             "closure-dtors": 2,
             "closure-leaf-dtors": 100,
+            "closure-outlives-held-dtors": 0,
+            "closure-outlives-dtors": 2,
+            "closure-outlives-leaf-dtors": 100,
+            "closure-thread-held-dtors": 2,
+            "closure-thread-dtors": 4,
+            "closure-thread-leaf-dtors": 100,
+            "closure-concurrent-held-dtors": 0,
+            "closure-concurrent-dtors": 2,
+            "closure-concurrent-leaf-dtors": 100,
+            "closure-exception-caught": 1,
+            "closure-exception-unwound-dtors": 2,
+            "closure-exception-dtors": 2,
+            "closure-exception-leaf-dtors": 100,
+            "closure-ref-arg-held-dtors": 0,
+            "closure-ref-arg-dtors": 2,
+            "closure-ref-arg-leaf-dtors": 100,
+            "closure-remove-held-dtors": 2,
+            "closure-remove-dtors": 2,
+            "closure-remove-leaf-dtors": 100,
             "member-held-dtors": 0,
             "member-dtors": 2,
             "member-leaf-dtors": 100,

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -125,8 +125,16 @@ public:
     // true if assigned to a closure
     bool is_closure : 1;
 
+    //! true while a closure-bound variable's frame lends a real reference to the object the variable holds
+    /** A local variable marks the object it holds with a real reference (check_lvalue_object_in_out()), which
+        defers the recursive-reference scans started at that object.  A closure-bound variable does so only while the
+        frame that created it holds it (lendRealReference() / revokeRealReference()): afterwards the variable's
+        reference to its value can be part of a cycle.  See design/closure-bound-locals.md.
+    */
+    bool closure_lent : 1;
+
     DLLLOCAL QoreLValue() : type(QV_Node), fixed_type(false), assigned(false), static_assignment(false),
-            is_closure(false) {
+            is_closure(false), closure_lent(false) {
 #ifdef DEBUG
         v.n = 0;
 #endif
@@ -134,7 +142,7 @@ public:
     }
 
     DLLLOCAL QoreLValue(valtype_t t) : type(t), fixed_type(t != QV_Node), assigned(false), static_assignment(false),
-            is_closure(false) {
+            is_closure(false), closure_lent(false) {
 #ifdef DEBUG
         if (t == QV_Node)
             v.n = 0;
@@ -143,7 +151,8 @@ public:
     }
 
     // fixed_type is assigned in set()
-    DLLLOCAL QoreLValue(const QoreTypeInfo* typeInfo) : assigned(false), static_assignment(false), is_closure(false) {
+    DLLLOCAL QoreLValue(const QoreTypeInfo* typeInfo) : assigned(false), static_assignment(false), is_closure(false),
+            closure_lent(false) {
 #ifdef DEBUG
         type = QV_Bool;
 #endif
@@ -151,7 +160,8 @@ public:
     }
 
     DLLLOCAL QoreLValue(const QoreLValue<U>& old) : type(old.type), fixed_type(old.fixed_type),
-            assigned(old.assigned), static_assignment(false), is_closure(old.is_closure) {
+            assigned(old.assigned), static_assignment(false), is_closure(old.is_closure),
+            closure_lent(false) {
         if (!assigned)
             return;
         switch (old.type) {
@@ -162,7 +172,7 @@ public:
             case QV_Value: v.qv = old.v.qv; break;
             case QV_Node:
                 v.n = old.v.n ? old.v.n->refSelf() : nullptr;
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(v.n, nullptr);
                 break;
             default: assert(false);
@@ -191,6 +201,7 @@ public:
         assigned = false;
         static_assignment = false;
         is_closure = false;
+        closure_lent = false;
         // Always clear the node pointer to ensure destructor assertion doesn't fail
         v.n = 0;
     }
@@ -198,6 +209,43 @@ public:
     DLLLOCAL void setClosure() {
         assert(!is_closure);
         is_closure = true;
+    }
+
+    //! Returns true if the object this lvalue holds is marked with a real reference while it holds it
+    DLLLOCAL bool tracksRealRefs() const {
+        return !is_closure || closure_lent;
+    }
+
+    //! Marks the object a closure-bound variable holds, now and after each assignment, with a real reference
+    /** Called by the frame that creates the variable, before any other code can see it.
+    */
+    DLLLOCAL void lendRealReference() {
+        assert(is_closure);
+        assert(!closure_lent);
+        closure_lent = true;
+        if (assigned && type == QV_Node && v.n) {
+            check_lvalue_object_in_out(v.n, nullptr);
+        }
+    }
+
+    //! Ends lendRealReference(): values are no longer marked
+    /** Called with the variable's write lock held when the frame releases the variable.  The mark on the object held
+        now is not removed here: removing an object's last real reference can wait for an invalidation of its
+        recursive set, which can need the variable's lock.  The object is returned with a new reference instead, and
+        the caller removes the mark (qore_object_private::unsetRealReference()) after releasing the lock.
+
+        @return the object held, referenced, whose real reference the caller must remove; nullptr if none
+    */
+    DLLLOCAL QoreObject* revokeRealReference() {
+        if (!closure_lent) {
+            return nullptr;
+        }
+        closure_lent = false;
+        if (assigned && type == QV_Node && v.n && v.n->getType() == NT_OBJECT) {
+            v.n->ref();
+            return static_cast<QoreObject*>(v.n);
+        }
+        return nullptr;
     }
 
     DLLLOCAL valtype_t getOptimizedType() const {
@@ -317,7 +365,7 @@ public:
                 AbstractQoreNode* rv = v.n;
                 v.i = i;
                 type = QV_Int;
-                if (!is_closure) {
+                if (tracksRealRefs()) {
                     check_lvalue_object_in_out(nullptr, rv);
                 }
                 return rv;
@@ -376,7 +424,7 @@ public:
                 AbstractQoreNode* rv = v.n;
                 v.f = f;
                 type = QV_Float;
-                if (!is_closure) {
+                if (tracksRealRefs()) {
                     check_lvalue_object_in_out(nullptr, rv);
                 }
                 return rv;
@@ -445,7 +493,7 @@ public:
                 AbstractQoreNode* rv = v.n;
                 v.n = n;
                 type = QV_Node;
-                if (!is_closure)
+                if (tracksRealRefs())
                 check_lvalue_object_in_out(nullptr, rv);
                 return rv;
             }
@@ -491,7 +539,7 @@ public:
             case QV_Enum: return QoreValue::makeEnum(v.em);
             case QV_Value: return getInlineValue();
             case QV_Node:
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 return QoreValue(v.n);
             default: assert(false);
@@ -623,7 +671,7 @@ public:
             return;
 
         if (type == QV_Node && v.n) {
-            if (!is_closure)
+            if (tracksRealRefs())
                 check_lvalue_object_in_out(nullptr, v.n);
             v.n->deref(xsink);
         }
@@ -688,7 +736,7 @@ public:
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 rv = v.n;
             }
@@ -722,7 +770,7 @@ public:
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 rv = v.n;
             }
@@ -756,7 +804,7 @@ public:
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 rv = v.n;
             }
@@ -824,6 +872,9 @@ public:
                 if (n.is_closure) {
                     assert(!is_closure);
                     is_closure = true;
+                    // a value marked with a real reference moves with its mark, which this lvalue removes when it
+                    // releases the value
+                    closure_lent = n.closure_lent;
                 }
                 v.n = n.v.n;
                 n.v.n = val.takeNode();
@@ -855,6 +906,9 @@ public:
                 if (n.is_closure) {
                     assert(!is_closure);
                     is_closure = true;
+                    // a value marked with a real reference moves with its mark, which this lvalue removes when it
+                    // releases the value
+                    closure_lent = n.closure_lent;
                 }
                 v.n = n.v.n;
                 n.v.n = nullptr;
@@ -939,7 +993,7 @@ public:
         }
         type = QV_Node;
         v.n = n;
-        if (!is_closure)
+        if (tracksRealRefs())
             check_lvalue_object_in_out(v.n, nullptr);
         return 0;
     }
@@ -967,7 +1021,7 @@ public:
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
-                if (!is_closure) {
+                if (tracksRealRefs()) {
                     check_lvalue_object_in_out(nullptr, v.n);
                 }
                 rv = v.n;
@@ -1008,7 +1062,7 @@ public:
             if (type != QV_Node) {
                 type = QV_Node;
             }
-            if (!is_closure) {
+            if (tracksRealRefs()) {
                 check_lvalue_object_in_out(v.n, nullptr);
             }
         } else if (val.isNull()) {
@@ -1076,7 +1130,7 @@ public:
                     return 0;
                 }
                 case QV_Node: {
-                    if (!is_closure)
+                    if (tracksRealRefs())
                         check_lvalue_object_in_out(n, v.n);
                     AbstractQoreNode* rv = v.n;
                     v.n = n;
@@ -1092,7 +1146,7 @@ public:
         AbstractQoreNode* rv;
         if (assigned) {
             if (type == QV_Node) {
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 rv = v.n;
             }
@@ -1105,7 +1159,7 @@ public:
         }
 
         v.n = n;
-        if (!is_closure)
+        if (tracksRealRefs())
             check_lvalue_object_in_out(v.n, nullptr);
         if (type != QV_Node)
             type = QV_Node;
@@ -1675,7 +1729,7 @@ public:
             case QV_Value:
                 return getInlineValue();
             case QV_Node:
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 return v.n;
             default:
@@ -1691,7 +1745,7 @@ public:
             assigned = false;
             if (static_assignment)
                 static_assignment = false;
-            if (type == QV_Node && !is_closure)
+            if (type == QV_Node && tracksRealRefs())
                 check_lvalue_object_in_out(nullptr, v.n);
         }
     }
@@ -1714,7 +1768,7 @@ public:
             case QV_Value:
                 return for_del ? QoreValue() : getInlineValue();
             case QV_Node:
-                if (!is_closure)
+                if (tracksRealRefs())
                     check_lvalue_object_in_out(nullptr, v.n);
                 return v.n;
             default:

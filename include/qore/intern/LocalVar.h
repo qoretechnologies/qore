@@ -466,6 +466,20 @@ public:
         return VarValueBase::finalize();
     }
 
+    //! Lends a real reference from the creating frame to the object the variable holds; see ThreadClosureVariableStack
+    /** Called before any other code can see the variable.
+    */
+    DLLLOCAL void lendFrameReference() {
+        val.lendRealReference();
+    }
+
+    //! Ends lendFrameReference() when the creating frame releases the variable
+    /** The real reference on the object held is removed after the variable's lock is released; see
+        QoreLValue::revokeRealReference().  A scan the object deferred is made by its next dereference, or by the scan
+        made from the variable when the frame releases its real reference to it.
+    */
+    DLLLOCAL void revokeFrameReference(ExceptionSink* xsink);
+
     //! Clears the variable's value under the write lock
     /** Unlike finalize(), this does not set the finalized flag — it just clears the value.
         Used at block scope exit to trigger timely destruction without popping the cvstack.

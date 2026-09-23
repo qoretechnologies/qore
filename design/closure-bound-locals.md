@@ -107,6 +107,42 @@ hands a deferred scan only to the dereference that releases the last real refere
 the value for it. Once the frame again holds the only reference, its accesses skip the lock as before, and the scan
 still waits for the frame's release.
 
+## While the frame holds the variable, the object it holds has a real reference
+
+The deferral above covers scans rooted at the variable. A write to the object the variable holds - `root.x = v`
+through a closure, a `\var` argument or the frame itself - starts its scan at that object, and before this change the
+object had no real reference from the variable: `check_lvalue_object_in_out()` marks the object held by a local
+variable, and a closure-bound variable (`QoreLValue::is_closure`) skipped it, because after the frame has returned the
+variable's reference to its value can be part of a cycle. Each such write therefore walked the whole graph reachable
+from the object, where the same write to a plain local variable's object is deferred to its release.
+
+While the frame holds the variable that reasoning does not apply: the frame's real reference to the variable already
+means that nothing reached through the variable can be collected, so the variable's reference to its value is not a
+graph edge any scan could complete a set through. The frame therefore *lends* the variable's value the real reference
+a plain local variable gives:
+
+- `ThreadClosureVariableStack::instantiate()` calls `ClosureVarValue::lendFrameReference()` along with setting
+  `rrefs`, before any other code can see the variable. `QoreLValue::lendRealReference()` sets `closure_lent` and marks
+  the object held now.
+- While `closure_lent` is set, `QoreLValue::tracksRealRefs()` is true, and every assignment, removal and release of
+  the value marks and unmarks it as it does for a plain local variable, whichever thread makes the change (a closure
+  called by another thread, a `\var` argument, `remove` or `delete`).
+- A value moved out of the variable keeps its mark: `QoreLValue::assignSetTakeInitial()`, which `remove` and `delete`
+  use to take the value into the helper's own lvalue, copies `closure_lent` along with `is_closure`, so the helper
+  removes the mark when it releases the value. Without that the object kept a real reference forever and its cycle
+  was never collected.
+- `ThreadClosureVariableStack::releaseEntry()` calls `ClosureVarValue::revokeFrameReference()` before it clears
+  `frame_owned`. `QoreLValue::revokeRealReference()` clears `closure_lent` under the variable's write lock and
+  returns the object held, referenced; its mark is removed (`qore_object_private::unsetRealReference()`) after the
+  lock is released, because removing an object's last real reference can wait for an invalidation of its recursive
+  set, and that can need the variable's lock. The dereference that follows takes the scan the writes deferred: when
+  a closure still holds the variable, it finds the cycle kept through it; when nothing does, the frame's own release
+  then collects it.
+
+A closure that outlives the frame, or an exception that unwinds it, ends the lending the same way: the release is the
+frame's, whatever made it leave. The writes made while the frame held the variable walked nothing; the one scan they
+deferred is made then.
+
 ## What is not done: avoiding the heap variable
 
 A referenced local could be kept in the frame when the parser can prove that no reference to it ever leaves the
@@ -124,4 +160,9 @@ else holds it.
   releases a variable that a closure kept; cycles made through such a variable after skipped scans, while the frame
   held it (directly and through a reference argument) and after the frame returned are collected; closures whose frame has returned called by
   several threads; in this program, each execution mode and a compiled module.
+- `examples/test/qore/misc/dgc-scan-avoidance/dgc-scan-avoidance.qtest`: writes to the object a closure-bound
+  variable holds walk nothing while the frame holds it - made by the frame, through a `\var` argument, and by several
+  threads through a closure - and the cycle is collected when it is released; a closure that outlives the frame, an
+  exception that unwinds it, another thread replacing the value, and `remove` of the variable while the frame holds
+  it; in each execution mode and a compiled module.
 - ThreadSanitizer, with a module-free driver doing the same across threads, reports no race.

@@ -3380,6 +3380,19 @@ const void* ClosureVarValue::getLValueId() const {
     return this;
 }
 
+void ClosureVarValue::revokeFrameReference(ExceptionSink* xsink) {
+    QoreObject* obj;
+    {
+        QoreSafeVarRWWriteLocker sl(rml);
+        obj = val.revokeRealReference();
+    }
+    if (obj) {
+        // after the variable's lock is released; see QoreLValue::revokeRealReference()
+        qore_object_private::get(*obj)->unsetRealReference();
+        obj->deref(xsink);
+    }
+}
+
 int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
     if (read_only && !initial_assignment) {
         lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",

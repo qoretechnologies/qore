@@ -79,7 +79,11 @@ last `realDeref()` drops `rrefs` to 0. If a `realRef()` is leaked, the external 
 The frame that creates a closure-bound local variable holds a real reference to it until the variable goes out of
 scope (`ThreadClosureVariableStack::instantiate()` / `releaseEntry()`), since a frame is never part of a cycle. A
 write to the variable through a `\var` argument, or while a closure holds it, therefore defers its scan to the
-frame's release; see `closure-bound-locals.md`.
+frame's release; see `closure-bound-locals.md`. For the same reason the frame lends the object the variable holds
+the real reference a plain local variable gives its object (`QoreLValue::closure_lent`, set by
+`ClosureVarValue::lendFrameReference()` and cleared by `revokeFrameReference()` when the frame releases the
+variable), so a write to that object - by the frame, through a `\var` argument, or by another thread through a
+closure - is deferred as well.
 
 A deferred scan is replayed by the first dereference that finds no real reference left while other references
 remain. A constructor that writes to its members defers such a scan on the new object (its `self` holds a real

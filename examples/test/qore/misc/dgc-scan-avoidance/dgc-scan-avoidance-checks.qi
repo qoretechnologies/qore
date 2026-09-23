@@ -437,6 +437,147 @@ sub release_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters
     release = new Counters();
 }
 
+#! returns a closure that keeps a closure-bound variable holding a cycle; the frame that created it has returned
+code sub make_cycle_keeper() {
+    Node root();
+    make_cycle(root);
+    for (int i = 0; i < Writes; ++i) {
+        root.x = new Leaf();
+    }
+    return auto sub () { return root; };
+}
+
+#! a closure outlives the frame of the closure-bound variable holding a cycle: the cycle is kept while the closure
+#! is, and collected when it goes
+sub closure_outlives_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Counters c();
+    code keeper = make_cycle_keeper();
+    c.record(\rv, "closure-outlives");
+    rv."closure-outlives-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! another thread replaces the value of a closure-bound variable through a closure while the frame holds it
+sub closure_thread_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root();
+    make_cycle(root);
+    code set = sub (Node n) { root = n; };
+    Counters c();
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        Node n();
+        make_cycle(n);
+        set(n);
+        # the thread's own reference to the new cycle is released here, before it signals
+        remove n;
+    }();
+    done.waitForZero();
+    for (int i = 0; i < Writes; ++i) {
+        root.x = new Leaf();
+    }
+    c.record(\rv, "closure-thread");
+    # the first cycle was replaced and is unreachable: collected while the frame still holds the variable
+    rv."closure-thread-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! several threads write the cycle held by a closure-bound variable through a closure while the frame holds it
+/** Each write is deferred by the reference the frame lends to the object the variable holds, whichever thread
+    makes it, so the counts do not depend on how the threads interleave.  The scan counters are per thread: each
+    thread records its own, and the sum is reported.
+*/
+sub closure_concurrent_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root();
+    make_cycle(root);
+    code write = sub () {
+        root.x = new Leaf();
+    };
+    int threads = 4;
+    Counter done(threads);
+    Mutex m();
+    hash<string, int> sum = {};
+    for (int i = 0; i < threads; ++i) {
+        background sub () {
+            on_exit done.dec();
+            Counters c();
+            for (int j = 0; j < Writes / threads; ++j) {
+                write();
+            }
+            hash<string, int> counts = {};
+            c.record(\counts, "closure-concurrent");
+            m.lock();
+            on_exit m.unlock();
+            foreach hash<auto> ci in (counts.pairIterator()) {
+                sum{ci.key} += ci.value;
+            }
+        }();
+    }
+    done.waitForZero();
+    rv += sum;
+    rv."closure-concurrent-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! raises from a frame holding a closure-bound variable that holds a cycle
+sub throw_with_cycle() {
+    Node root();
+    make_cycle(root);
+    code get = auto sub () { return root; };
+    for (int i = 0; i < Writes; ++i) {
+        root.x = new Leaf();
+    }
+    throw "CHECK-ERROR";
+}
+
+#! an exception unwinds the frame of a closure-bound variable holding a cycle
+sub closure_exception_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Counters c();
+    try {
+        throw_with_cycle();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."closure-exception-caught" = ex.err == "CHECK-ERROR" ? 1 : 0;
+    }
+    c.record(\rv, "closure-exception");
+    # nothing holds the cycle once the frame is unwound: it is collected then
+    rv."closure-exception-unwound-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! writes to the object held by a variable through a reference argument
+sub write_through_ref(reference<Node> r) {
+    for (int i = 0; i < Writes; ++i) {
+        r.x = new Leaf();
+    }
+}
+
+#! a local variable passed by reference (so closure-bound) holding a cycle, written through the reference
+sub closure_ref_arg_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root();
+    make_cycle(root);
+    Counters c();
+    write_through_ref(\root);
+    c.record(\rv, "closure-ref-arg");
+    rv."closure-ref-arg-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! a closure-bound variable holding a cycle is removed while its frame holds it
+sub closure_remove_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root();
+    make_cycle(root);
+    code get = auto sub () { return root; };
+    Counters c();
+    for (int i = 0; i < Writes; ++i) {
+        root.x = new Leaf();
+    }
+    # the cycle is unreachable once removed, and must be collected at once: the variable no longer holds it
+    remove root;
+    c.record(\rv, "closure-remove");
+    rv."closure-remove-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! runs one check and records what releasing its set cost and destroyed
 sub run(reference<hash<string, int>> rv, string shape,
         code<nothing(reference<hash<string, int>>, Tally, reference<*Counters>)> check) {
@@ -510,6 +651,12 @@ public hash<string, int> sub get_results() {
     run(\rv, "confirm", \confirm_writes());
     run(\rv, "server", \server_writes());
     run(\rv, "release", \release_writes());
+    run(\rv, "closure-outlives", \closure_outlives_writes());
+    run(\rv, "closure-thread", \closure_thread_writes());
+    run(\rv, "closure-concurrent", \closure_concurrent_writes());
+    run(\rv, "closure-exception", \closure_exception_writes());
+    run(\rv, "closure-ref-arg", \closure_ref_arg_writes());
+    run(\rv, "closure-remove", \closure_remove_writes());
     return rv;
 }
 }
