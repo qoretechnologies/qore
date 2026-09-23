@@ -129,6 +129,18 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - added a limit on the size of a decompressed request body: a request body with a \c Content-Encoding is
+      decompressed only up to @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" (128 MiB) or
+      the configured \c max_decoded_body_size (or the \c max_request_body_size when set), and a larger body
+      receives HTTP 413 (Content Too Large); before, a small compressed body could expand to an unbounded size in
+      memory before any size limit applied (a "decompression bomb")
+      - added the \c max_decoded_body_size listener option, the
+        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
+        "AbstractHttpRequestHandler::max_decoded_body_size" handler override,
+        @ref HttpServer::AbstractHttpRequestHandler::decodeRequestBody()
+        "AbstractHttpRequestHandler::decodeRequestBody()",
+        and a \c max_size parameter to
+        @ref HttpServer::AbstractHttpRequestHandler::decodeBody() "AbstractHttpRequestHandler::decodeBody()"
     - added @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()" and
       @ref HttpServer::HttpServerManagedHeaderNames "HttpServerManagedHeaderNames";
       @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" now recognizes the header fields that it
@@ -265,6 +277,20 @@ public const date<relative> DefaultTimeout = 30s;  # recvs timeout after 30 seco
 
 #! read timeout in ms
 public const date<relative> ReadTimeout = DefaultTimeout;
+
+#! default maximum size in bytes of a decompressed request body (128 MiB)
+/** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; this limit applies
+    when neither a maximum decoded body size nor a maximum request body size is configured.
+
+    @see
+    - @ref HttpServer::HttpServerOptionInfo::max_decoded_body_size "HttpServerOptionInfo::max_decoded_body_size"
+    - @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size "HttpListenerOptionInfo::max_decoded_body_size"
+    - @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
+      "AbstractHttpRequestHandler::max_decoded_body_size"
+
+    @since HttpServerUtil 1.6
+*/
+public const int DefaultMaxDecodedBodySize = 128 * 1024 * 1024;
 
 #! maximum X.509 and private key file length
 /** there is no real maximum size for these files, however an upper limit is used here to ensure that
@@ -731,6 +757,27 @@ public hashdecl HttpListenerOptionInfo {
         @since HttpServer 1.6
     */
     int max_request_body_size = 0;
+
+    #! Maximum size in bytes of a decompressed request body for this listener
+    /** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; a body whose
+        decompressed size exceeds this value receives HTTP 413 (Content Too Large) and the connection is closed.
+        Decompression stops as soon as the limit is exceeded, so a small compressed body that expands to a huge one
+        (a "decompression bomb") never allocates more than the limit.
+
+        - a positive value is the limit
+        - \c 0 (the default) uses the server's limit
+          (@ref HttpServer::HttpServerOptionInfo::max_decoded_body_size "HttpServerOptionInfo::max_decoded_body_size");
+          if the server sets none either, the effective \c max_request_body_size of the listener is used, or
+          @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" if there is no such limit
+        - a negative value means no limit
+
+        A handler can override the limit with
+        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
+        "AbstractHttpRequestHandler::max_decoded_body_size".
+
+        @since HttpServerUtil 1.6
+    */
+    int max_decoded_body_size = 0;
 
     #! If True, skip bind/listen (for QUIC listeners that use a separate UDP socket)
     /** @since HttpServer 1.6
@@ -1397,6 +1444,19 @@ public class HttpListenerInterface inherits AbstractLogger {
     #! Removes a dedicated socket handler from the listener
     removeExternalDedicatedSocket(softstring id) {
         throw "UNIMPLEMENTED";
+    }
+
+    #! Returns the maximum size in bytes of a decompressed request body for this listener
+    /** @return the maximum size in bytes of a decompressed request body; a negative value means no limit; this
+        implementation returns @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize"
+
+        @see @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size
+        "HttpListenerOptionInfo::max_decoded_body_size"
+
+        @since HttpServerUtil 1.6
+    */
+    int getMaxDecodedBodySize() {
+        return DefaultMaxDecodedBodySize;
     }
 
     #! Returns a hash of extra headers to be added to all responses from this listener
@@ -2936,6 +2996,19 @@ public class AbstractHttpRequestHandler {
         */
         bool decompress_to_string = True;
 
+        #! maximum size in bytes of a decompressed request body for this handler
+        /** A request body whose decompressed size exceeds this value receives HTTP 413 (Content Too Large).
+
+            - a positive value is the limit, and overrides the limit of the listener
+            - \c 0 (the default) uses the limit of the listener; see
+              @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size
+              "HttpListenerOptionInfo::max_decoded_body_size"
+            - a negative value means no limit
+
+            @since HttpServerUtil 1.6
+        */
+        int max_decoded_body_size = 0;
+
         #! if the handler supports streaming requests/responses with chunked data
         bool stream;
 
@@ -3476,7 +3549,7 @@ public class AbstractHttpRequestHandler {
             *data body) {
         # classic, non-streaming interface
         if (!stream) {
-            auto rv = handleRequest(cx, hdr, body ?? getMessageBody(s, hdr, body));
+            auto rv = handleRequest(cx, hdr, body ?? getMessageBody(s, hdr, body, True, listener));
             switch (rv.typeCode()) {
                 case NT_HASH: {
                     hash<auto!> hrv = rv;
@@ -3507,32 +3580,96 @@ public class AbstractHttpRequestHandler {
     }
 
     #! decodes a message body with content-encoding
-    static data decodeBody(string content_encoding, binary body, *string string_encoding) {
+    /** @param content_encoding the content encoding of the body
+        @param body the encoded body
+        @param string_encoding the character encoding of a string return value; if not given, the body is decoded to
+        a binary value
+        @param max_size the maximum size in bytes of the decoded body; \c 0 or a negative value means no limit
+
+        @return the decoded body
+
+        @throw UNSUPPORTED-CONTENT-ENCODING the content encoding is not supported
+        @throw DECOMPRESSION-LIMIT-EXCEEDED the decoded body exceeds \a max_size
+
+        @since HttpServerUtil 1.6 added the \a max_size parameter
+    */
+    static data decodeBody(string content_encoding, binary body, *string string_encoding, int max_size = 0) {
+        if (max_size < 0) {
+            max_size = 0;
+        }
         switch (content_encoding) {
             case "br":
                 return string_encoding
-                    ? unbrotli_to_string(binary(body), string_encoding)
-                    : unbrotli_to_binary(body);
+                    ? unbrotli_to_string(body, string_encoding, max_size)
+                    : unbrotli_to_binary(body, max_size);
             case "zstd":
                 return string_encoding
-                    ? unzstd_to_string(binary(body), string_encoding)
-                    : unzstd_to_binary(body);
+                    ? unzstd_to_string(body, string_encoding, max_size)
+                    : unzstd_to_binary(body, max_size);
             case "deflate":
             case "x-deflate":
                 return string_encoding
-                    ? uncompress_to_string(binary(body), string_encoding)
-                    : uncompress_to_binary(body);
+                    ? uncompress_to_string(body, string_encoding, max_size)
+                    : uncompress_to_binary(body, max_size);
             case "gzip":
             case "x-gzip":
-                return string_encoding ? gunzip_to_string(binary(body), string_encoding) : gunzip_to_binary(body);
+                return string_encoding
+                    ? gunzip_to_string(body, string_encoding, max_size)
+                    : gunzip_to_binary(body, max_size);
             case "bzip2":
             case "x-bzip2":
-                return string_encoding ? bunzip2_to_string(binary(body), string_encoding) : bunzip2_to_binary(body);
+                return string_encoding
+                    ? bunzip2_to_string(body, string_encoding, max_size)
+                    : bunzip2_to_binary(body, max_size);
             case "identity":
                 return string_encoding ? binary_to_string(body, string_encoding) : body;
         }
         throw "UNSUPPORTED-CONTENT-ENCODING", sprintf("don't know how to handle content-encoding %y",
             content_encoding);
+    }
+
+    #! decodes a request body with content-encoding, limiting the size of the decoded body
+    /** @param content_encoding the content encoding of the body
+        @param body the encoded body
+        @param string_encoding the character encoding of a string return value; if not given, the body is decoded to
+        a binary value
+        @param max_size the maximum size in bytes of the decoded body; a negative value means no limit
+
+        @return the decoded body
+
+        @throw UNSUPPORTED-CONTENT-ENCODING the content encoding is not supported
+        @throw HTTP-BODY-TOO-LARGE the decoded body exceeds \a max_size; the server answers this error with HTTP 413
+        (Content Too Large)
+
+        @since HttpServerUtil 1.6
+    */
+    static data decodeRequestBody(string content_encoding, binary body, *string string_encoding, int max_size) {
+        try {
+            return AbstractHttpRequestHandler::decodeBody(content_encoding, body, string_encoding, max_size);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "DECOMPRESSION-LIMIT-EXCEEDED") {
+                throw "HTTP-BODY-TOO-LARGE", sprintf("the request body with Content-Encoding %y exceeds the maximum "
+                    "decoded body size of %d bytes", content_encoding, max_size);
+            }
+            rethrow;
+        }
+    }
+
+    #! Returns the maximum size in bytes of a decompressed request body for this handler
+    /** @param listener the listener that received the request; if not given, the listener's limit is taken to be
+        @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize"
+
+        @return the maximum size in bytes of a decompressed request body; a negative value means no limit
+
+        @see @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size "max_decoded_body_size"
+
+        @since HttpServerUtil 1.6
+    */
+    int getMaxDecodedBodySize(*HttpListenerInterface listener) {
+        if (max_decoded_body_size) {
+            return max_decoded_body_size;
+        }
+        return listener ? listener.getMaxDecodedBodySize() : DefaultMaxDecodedBodySize;
     }
 
     #! encodes a message body with content-encoding
@@ -3556,7 +3693,21 @@ public class AbstractHttpRequestHandler {
     }
 
     #! optionally retrieves and post-processes any message body
-    *data getMessageBody(Socket s, hash<auto> hdr, *data body, bool decode = True) {
+    /** @param s the socket of the request
+        @param hdr the request headers
+        @param body the request body, if already read
+        @param decode if the body should be decompressed according to its content encoding
+        @param listener the listener that received the request, which gives the maximum size of a decompressed body
+        unless the handler sets one; see getMaxDecodedBodySize()
+
+        @return the request body
+
+        @throw HTTP-BODY-TOO-LARGE the decompressed body exceeds the maximum size
+
+        @since HttpServerUtil 1.6 added the \a listener parameter
+    */
+    *data getMessageBody(Socket s, hash<auto> hdr, *data body, bool decode = True,
+            *HttpListenerInterface listener) {
         if (!body && hdr."transfer-encoding" == "chunked") {
             hdr += (hdr."content-encoding"
                 ? s.readHTTPChunkedBodyBinary(timeout_ms)
@@ -3564,9 +3715,10 @@ public class AbstractHttpRequestHandler {
             body = remove hdr.body;
         }
 
-        if (decode && body && hdr."content-encoding" && decompress)
-            body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
-                decompress_to_string ? s.getEncoding() : NOTHING);
+        if (decode && body && hdr."content-encoding" && decompress) {
+            body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body,
+                decompress_to_string ? s.getEncoding() : NOTHING, getMaxDecodedBodySize(listener));
+        }
 
         return body;
     }

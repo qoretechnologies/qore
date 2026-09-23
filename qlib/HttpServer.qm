@@ -179,6 +179,16 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - a request body with a \c Content-Encoding is decompressed only up to a maximum size, and a larger body receives
+      HTTP 413 (Content Too Large); decompression stops as soon as the limit is exceeded, so a small compressed body
+      that expands to a huge one (a "decompression bomb") can no longer exhaust the memory of the server.  The limit
+      is the new \c max_decoded_body_size server option
+      (@ref HttpServer::HttpServerOptionInfo::max_decoded_body_size "HttpServerOptionInfo::max_decoded_body_size",
+      @ref HttpServer::HttpServer::setMaxDecodedBodySize() "HttpServer::setMaxDecodedBodySize()"), listener option,
+      or handler setting, the \c max_request_body_size of the listener when none is set, and otherwise
+      @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" (128 MiB)
+    - fixed an automatically created HTTP/3 (QUIC) listener ignoring the \c max_request_body_size of its TCP
+      listener; HTTP/3 requests were limited by the server option only
     - a listener added with a service or port and no address listens on all interfaces in both address families
       with one dual-stack socket, so a client reaches it through any address of the host, including \c ::1, which
       \c "localhost" resolves to first; it was bound on the IPv4 wildcard address only, so such a client could
@@ -603,6 +613,27 @@ public hashdecl HttpServerOptionInfo {
     */
     int max_request_body_size = 0;
 
+    #! Maximum size in bytes of a decompressed request body
+    /** A request body with a \c Content-Encoding is decompressed before it is passed to the handler; a body whose
+        decompressed size exceeds this value receives HTTP 413 (Content Too Large) and the connection is closed.
+        Decompression stops as soon as the limit is exceeded, so a small compressed body that expands to a huge one
+        (a "decompression bomb") never allocates more than the limit.
+
+        - a positive value is the limit
+        - \c 0 (the default) uses the effective \c max_request_body_size of the listener, or
+          @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" if there is no such limit
+        - a negative value means no limit
+
+        A listener can override the limit with
+        @ref HttpServer::HttpListenerOptionInfo::max_decoded_body_size "HttpListenerOptionInfo::max_decoded_body_size",
+        and a handler with
+        @ref HttpServer::AbstractHttpRequestHandler::max_decoded_body_size
+        "AbstractHttpRequestHandler::max_decoded_body_size".
+
+        @since HttpServer 1.7
+    */
+    int max_decoded_body_size = 0;
+
     #! Enable automatic HTTP/3 (QUIC) listener creation for TLS listeners
     /** When \c True (the default), QUIC listeners are automatically created alongside TLS TCP listeners.
         The server advertises HTTP/3 availability via the \c Alt-Svc response header.
@@ -850,6 +881,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Maximum HTTP request body size in bytes (0 = unlimited)
         int max_request_body_size = 0;
 
+        #! Maximum size in bytes of a decompressed request body (0 = default, negative = unlimited)
+        int max_decoded_body_size = 0;
+
         #! Enable automatic HTTP/3 (QUIC) listener creation
         bool enable_h3 = True;
 
@@ -1088,6 +1122,28 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
     */
     setMaxRequestBodySize(int size) {
         max_request_body_size = size;
+    }
+
+    #! Returns the maximum size in bytes of a decompressed request body
+    /** @return the maximum size in bytes of a decompressed request body; \c 0 means that the default applies (see
+        @ref HttpServer::HttpServerOptionInfo::max_decoded_body_size "HttpServerOptionInfo::max_decoded_body_size");
+        a negative value means no limit
+
+        @since HttpServer 1.7
+    */
+    int getMaxDecodedBodySize() {
+        return max_decoded_body_size;
+    }
+
+    #! Sets the maximum size in bytes of a decompressed request body
+    /** @param size the maximum size in bytes of a decompressed request body; \c 0 means that the default applies
+        (see @ref HttpServer::HttpServerOptionInfo::max_decoded_body_size
+        "HttpServerOptionInfo::max_decoded_body_size"); a negative value means no limit
+
+        @since HttpServer 1.7
+    */
+    setMaxDecodedBodySize(int size) {
+        max_decoded_body_size = size;
     }
 
     #! add a new supported HTTP method
@@ -1422,6 +1478,8 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
             "key": opts.key,
             "ssl_verify_flags": opts.ssl_verify_flags,
             "get_remote_certs": opts.get_remote_certs,
+            "max_request_body_size": opts.max_request_body_size,
+            "max_decoded_body_size": opts.max_decoded_body_size,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -2632,6 +2690,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             setTtl(effective_ttl);
         }
         max_request_body_size = opts.max_request_body_size ?? 0;
+        max_decoded_body_size = opts.max_decoded_body_size ?? 0;
         enable_h3 = opts.enable_h3 ?? True;
         alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
         # Initialize async I/O
@@ -2896,6 +2955,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         "node": q_node,
                         "family": q_family,
                         "alt_svc_max_age": info.alt_svc_max_age,
+                        # the QUIC listener enforces the same body size limits as its TCP listener
+                        "max_request_body_size": info.max_request_body_size,
+                        "max_decoded_body_size": info.max_decoded_body_size,
                     };
                     if (info.additional_info) {
                         quic_opts.additional_info = info.additional_info;
@@ -3713,10 +3775,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     rv = ah;
                 } else {
-                    # decode body if applicable
-                    if (body && hdr."content-encoding" && handler.decompress)
-                        body = AbstractHttpRequestHandler::decodeBody(hdr."content-encoding", body,
-                            handler.decompress_to_string ? s.getEncoding() : NOTHING);
+                    # decode body if applicable; a decoded body that is too large raises HTTP-BODY-TOO-LARGE,
+                    # which is answered with 413
+                    if (body && hdr."content-encoding" && handler.decompress) {
+                        body = AbstractHttpRequestHandler::decodeRequestBody(hdr."content-encoding", body,
+                            handler.decompress_to_string ? s.getEncoding() : NOTHING,
+                            handler.getMaxDecodedBodySize(listener));
+                    }
 
                     hash<auto!> hrv = handler.handleRequest(listener, s, cx, hdr, body);
                     if (hrv.hasKey("raw_response")) {
@@ -5123,6 +5188,26 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             rv = serv.getMaxRequestBodySize();
         }
         return rv;
+    }
+
+    #! Returns the effective maximum size in bytes of a decompressed request body for this listener
+    /** Returns the listener-specific limit if set, otherwise the server-level limit if set, otherwise the effective
+        maximum request body size of the listener if set, otherwise
+        @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize".
+
+        @return the maximum size in bytes of a decompressed request body; a negative value means no limit
+
+        @since HttpServer 1.7
+    */
+    int getMaxDecodedBodySize() {
+        int rv = opts.max_decoded_body_size ?? 0;
+        if (!rv) {
+            rv = serv.getMaxDecodedBodySize();
+        }
+        if (!rv) {
+            rv = getMaxRequestBodySize();
+        }
+        return rv ?: DefaultMaxDecodedBodySize;
     }
 
     #! Returns the SSL certificate object if configured
