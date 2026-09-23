@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class LValueAssignOwnershipTest
+
+#! Tests that every execution tier agrees with the AST interpreter on who owns a value assigned to an lvalue path
+/** Compiled code may hand the value assigned to an lvalue path (a hash key, a list element, an object member) over to
+    the lvalue instead of copying a reference to it when the value is not used again.  That changes when values are
+    released, which in Qore is when destructors run, so each check reports the values held and the objects destroyed,
+    and every tier and a compiled module must report exactly what the AST interpreter does.  The checks are in
+    lvalue-assign-ownership-checks.qi; see there for what each one does.
+*/
+class LValueAssignOwnershipTest inherits QUnit::Test {
+    public {
+        #! the results of the AST interpreter
+        const Expected = {
+            # 10 objects held by a hash, destroyed with it
+            "hash-objects": "10",
+            # 9 overwritten while the holder lived, then 11 in all
+            "member-overwrite": "911",
+            # the result and the lvalue hold the same object; removing the lvalue's leaves the result's
+            "result-used": "1101",
+            # the constant is never changed by an assignment that took it
+            "constant-value": "20010",
+            "loop-invariant": "\"xy|xy|xy|xy|xy\"",
+            # an assignment refused at run time releases the value it was given once, before the handler runs:
+            # a key the hash's type does not declare, and a value a member of self refuses
+            "navigation-error": "11",
+            "self-member-type-error": "11",
+            # a weak reference to a new object does not keep it
+            "weak-assign": "1",
+            # an opaque reference keeps it until the hash goes
+            "opaque-assign": "1",
+            "self-member": "6",
+            "cycle-write": "11",
+            "container-write": "\"{a: {x: 1, y: 2}, b: [1, 2, 3]}\"",
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("LValueAssignOwnershipTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("lvalue-assign-ownership-worker.q", get_script_dir(),
+                "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-lvalue-assign-ownership-");
+        string qmod_path = tmp.path + DirSep + "LValueAssignOwnershipChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "LValueAssignOwnershipChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("lvalue-assign-ownership-module-worker.q", tmp.path));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir,
+            module_dir, qore_bin, opts, worker));
+    }
+
+    #! compares the "name=value" lines printed by the worker with the expected results
+    private checkWorkerOutput(string label, string out) {
+        hash<string, string> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(.*)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1];
+        }
+        assertEq(sort(keys Expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (Expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

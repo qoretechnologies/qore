@@ -23,10 +23,8 @@
     change that raises one is a regression.
 
     The scan counters are checked in each execution mode and from a compiled module, since each engine has its own
-    lvalue code: the AST interpreter hands an assigned value over to the lvalue, while the compiled tiers
-    (<tt>qore_rt_lv_path_assign()</tt>) take references of their own and release them after the assignment, which
-    makes a scan deferred on the value (by the constructor that created it) happen once the value is already
-    linked into the graph.  The collection checks also run in this program.
+    lvalue code (see CompiledScanCounts for where they still differ).  The collection checks also run in this
+    program.
 */
 class DgcScanAvoidanceTest inherits QUnit::Test {
     public {
@@ -75,8 +73,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "list-release-walked": 0,
             "list-release-sets": 0,
 
-            # a registry held by a local variable: the growth is scanned once, at the release (in the compiled tiers,
-            # each registration walks the registry; see CompiledScanCounts)
+            # a registry held by a local variable: the growth is scanned once, at the release
             "registry-local-scans": 200,
             "registry-local-walked": 0,
             "registry-local-sets": 0,
@@ -135,20 +132,18 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "release-release-sets": 0,
         };
 
-        #! the scan counters of the compiled tiers that differ from the AST interpreter's (ExpectedScanCounts)
-        /** A compiled assignment releases its own references to the value after the assignment, and the first
-            plain dereference of a new object makes the scan its constructor deferred - after the object has been
-            linked into the registry, so each registration walks the registry.
+        #! the scan counters of the IR tiers that differ from the AST interpreter's (ExpectedScanCounts)
+        /** A compiled assignment hands a value it does not use again over to the lvalue, as the AST interpreter does,
+            so the scan a new object's constructor deferred is not made when the object is linked in.  What is left
+            are the temporary references the IR takes to objects on the lvalue path (the registry's hub, for
+            example): releasing each one below the reference count a scan recorded rescans the set (see the
+            "release" shape).
         */
         const CompiledScanCounts = {
             "method-walked": 6,
-            "registry-local-walked": 10300,
-            "registry-local-sets": 100,
-            "registry-local-release-walked": 200,
-            "registry-local-release-sets": 0,
-            "registry-cycle-walked": 25748,
+            "registry-cycle-walked": 15448,
             "registry-cycle-unregister-walked": 15149,
-            "server-walked": 12142,
+            "server-walked": 10500,
         };
 
         #! the scan counters of each execution mode that differ from ExpectedScanCounts
@@ -158,12 +153,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "tiered": CompiledScanCounts,
             # the compiled module
             "aot": {
-                "registry-local-walked": 10300,
-                "registry-local-sets": 100,
-                "registry-local-release-walked": 200,
-                "registry-local-release-sets": 0,
-                "registry-cycle-walked": 15450,
-                "server-walked": 9172,
+                "server-walked": 7514,
             },
         };
 

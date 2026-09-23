@@ -2190,6 +2190,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     local_cleanup_allocas.clear();
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
+    value_def_block.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
@@ -10281,6 +10282,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Compute remaining use counts for each register and identify registers
     // that are only used as DotEval bases (safe for _for_call variant).
     operand_remaining_uses.clear();
+    value_def_block.clear();
     immediate_closure_creates.clear();
     known_function_call_refs.clear();
     stored_closure_capture_allocas.clear();
@@ -10478,6 +10480,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             for (const auto& op : inst_ptr->operands) {
                 operand_remaining_uses[op.id]++;
                 value_operand_users[op.id].push_back(inst_ptr->opcode);
+            }
+            if (inst_ptr->result.isValid()) {
+                value_def_block[inst_ptr->result.id] = block.get();
             }
             if (inst_ptr->opcode == QoreIROpcode::ToBool
                     && inst_ptr->operands.size() == 1) {
@@ -30527,43 +30532,109 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result_val;
             switch (inst->opcode) {
                 case QoreIROpcode::LValuePathAssign: {
-                    auto* rhs_val = getVal(inst->operands[0].id, error);
+                    uint32_t rhs_id = inst->operands[0].id;
+                    auto* rhs_val = getVal(rhs_id, error);
                     if (!rhs_val) { return false; }
-                    llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    llvm::Value* rhs_boxed = boxValue(rhs_val, rhs_id);
+                    // The value is handed over to the lvalue instead of borrowed when this function owns it
+                    // (it has a cleanup slot), this is its last use, it is not a weak-reference load, and it is
+                    // defined in this block - the use counts are static, so a value defined before a loop and used
+                    // once in it would otherwise be handed over on the first iteration.  The helper then owns the
+                    // value in every case, including when the assignment fails, so the cleanup slot is cleared
+                    // before the call.  See qore_rt_lv_path_assign_consume().
+                    bool consume = false;
+                    {
+                        auto alloca_it = invoke_alloca_map.find(rhs_id);
+                        auto uses_it = operand_remaining_uses.find(rhs_id);
+                        auto def_it = value_def_block.find(rhs_id);
+                        if (alloca_it != invoke_alloca_map.end()
+                                && nanboxed_values.count(rhs_id)
+                                && (uses_it == operand_remaining_uses.end() || uses_it->second <= 1)
+                                && !weak_load_result_ids.count(rhs_id)
+                                && def_it != value_def_block.end()
+                                && def_it->second == current_lowering_block_) {
+                            llvm::Value* ca = alloca_it->second;
+                            if (!ca) {
+                                ca = promoteSsaEntryToAlloca(rhs_id, module, llvm_func);
+                            }
+                            if (ca) {
+                                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+                                consume = true;
+                            }
+                        }
+                    }
+                    // the result of a statement-form assignment is invalid: the helper returns no reference
+                    int32_t flags = inst->result.isValid() ? 0 : QORE_RT_ASSIGN_RESULT_UNUSED;
                     if (direct_self_mutation) {
-                        auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i64_type, i32_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction(
-                            "qore_rt_self_member_assign", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_self_member_assign_throwing", ft);
-                        // the mode itself, not a boolean: qore_rt_self_member_assign() reads
-                        // this as an AssignmentMode, and collapsing Opaque onto Weak here is what
-                        // made '@=' on a self member give up ownership in compiled code
-                        result_val = emitMaybeInvoke(fn, fn_throwing,
-                            {direct_member_ptr, rhs_boxed,
-                             llvm::ConstantInt::get(i32_type,
-                                static_cast<int32_t>(path_inst->mode)), xsink_arg},
-                            module, llvm_func, inst);
+                        // the mode itself, not a boolean: the helper reads this as an AssignmentMode, and
+                        // collapsing Opaque onto Weak here is what made '@=' on a self member give up ownership
+                        // in compiled code
+                        llvm::Value* mode_val = llvm::ConstantInt::get(i32_type,
+                            static_cast<int32_t>(path_inst->mode));
+                        if (consume) {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, i32_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_self_member_assign_consume", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_self_member_assign_consume_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {direct_member_ptr, rhs_boxed, mode_val,
+                                 llvm::ConstantInt::get(i32_type, flags), xsink_arg},
+                                module, llvm_func, inst);
+                        } else {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction(
+                                "qore_rt_self_member_assign", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_self_member_assign_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {direct_member_ptr, rhs_boxed, mode_val, xsink_arg},
+                                module, llvm_func, inst);
+                        }
                     } else if (aot_slots) {
-                        auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_aot", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_lv_path_assign_aot_throwing", ft);
-                        result_val = emitMaybeInvoke(fn, fn_throwing,
-                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
-                             dyn_array, rhs_boxed, xsink_arg},
-                            module, llvm_func, inst);
+                        if (consume) {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i64_type, i32_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_consume_aot", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_lv_path_assign_consume_aot_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                                 dyn_array, rhs_boxed, llvm::ConstantInt::get(i32_type, flags), xsink_arg},
+                                module, llvm_func, inst);
+                        } else {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_aot", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_lv_path_assign_aot_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                                 dyn_array, rhs_boxed, xsink_arg},
+                                module, llvm_func, inst);
+                        }
                     } else {
-                        auto ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, i64_type, ptr_type}, false);
-                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign", ft);
-                        auto fn_throwing = module.getOrInsertFunction(
-                            "qore_rt_lv_path_assign_throwing", ft);
-                        result_val = emitMaybeInvoke(fn, fn_throwing,
-                            {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg},
-                            module, llvm_func, inst);
+                        if (consume) {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i64_type, i32_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_consume", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_lv_path_assign_consume_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {inst_ptr_val, dyn_array, rhs_boxed, llvm::ConstantInt::get(i32_type, flags),
+                                 xsink_arg},
+                                module, llvm_func, inst);
+                        } else {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i64_type, ptr_type}, false);
+                            auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign", ft);
+                            auto fn_throwing = module.getOrInsertFunction(
+                                "qore_rt_lv_path_assign_throwing", ft);
+                            result_val = emitMaybeInvoke(fn, fn_throwing,
+                                {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg},
+                                module, llvm_func, inst);
+                        }
                     }
                     break;
                 }

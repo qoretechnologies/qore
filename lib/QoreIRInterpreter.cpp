@@ -12479,12 +12479,29 @@ load_local_done:
                 std::vector<LVPathStep> path_copy = patchLVPathLocal(path_inst);
                 ensureLValuePathRootLocal(path_inst);
 
+                // The value is handed over to the lvalue instead of borrowed when its slot owns it (it has a
+                // cleanup entry) and this is its only use, in the block defining it, and it is not a borrowed
+                // weak-reference temporary - as compiled code does; see qore_rt_lv_path_assign_consume().
+                // Handing it over keeps a dereference with no real reference from happening once the value is
+                // linked into the graph, which would make a scan that its constructor deferred.
+                uint32_t rhs_id = path_inst->operands[0].id;
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
-                ValueHolder val_holder(val.refSelf(), xsink);
+                bool consume = val.hasNode()
+                    && rhs_id < value_use_counts.size() && value_use_counts[rhs_id] == 1
+                    && !(rhs_id < cross_block_slots.size() && cross_block_slots[rhs_id])
+                    && !(rhs_id < return_protected_slots.size() && return_protected_slots[rhs_id])
+                    && weak_load_temp_slots.find(rhs_id) == weak_load_temp_slots.end()
+                    && removeAllCleanupEntries(cleanup, rhs_id);
+                if (consume) {
+                    // the value's reference now belongs to val_holder below
+                    values[rhs_id] = QoreValue();
+                }
+                ValueHolder val_holder(consume ? val : val.refSelf(), xsink);
                 QoreValue assign_val = val;
                 ValueHolder eval_holder(xsink);
                 qore_type_t val_type = val.getType();
                 bool assignment_failed = false;
+                bool assign_eval = false;
                 if (path_inst->mode != AssignmentMode::Weak
                         && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
                     eval_holder = val.eval(xsink);
@@ -12492,6 +12509,7 @@ load_local_done:
                         assignment_failed = true;
                     } else {
                         assign_val = *eval_holder;
+                        assign_eval = true;
                     }
                 }
 
@@ -12503,10 +12521,13 @@ load_local_done:
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         assignment_failed = true;
-                    } else if (lvh.assign(assign_val.refSelf(), "<lvalue>",
-                            true, path_inst->mode)) {
+                    } else if (lvh.assign(consume
+                                ? (assign_eval ? eval_holder.release() : val_holder.release())
+                                : assign_val.refSelf(),
+                            "<lvalue>", true, path_inst->mode)) {
+                        // LValueHelper::assign() owns the value on failure as well
                         assignment_failed = true;
-                    } else {
+                    } else if (path_inst->result.isValid()) {
                         res = lvh.getReferencedValue();
                     }
                 }

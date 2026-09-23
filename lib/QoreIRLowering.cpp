@@ -7298,6 +7298,14 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                 for (auto& dv : dyn_vals) {
                     path_inst->operands.push_back(dv);
                 }
+                // When the value of the assignment is not used (an expression statement), invalidate the result,
+                // as for remove and delete: the tiers then neither reference the value for a result nor keep it,
+                // and hand the assigned value over to the lvalue when nothing else uses it
+                if (!assign->needsReturnValue()) {
+                    QoreIRValue rv = path_inst->result;
+                    path_inst->result = QoreIRValue();
+                    return rv;
+                }
                 return path_inst->result;
             }
         }

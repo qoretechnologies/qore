@@ -347,6 +347,12 @@ compiled tiers that happens once the entry is already linked into the registry, 
 it. The AST interpreter hands the value over and the deferred scan waits. Code built with `%modern` runs
 tiered by default and qlib is shipped AOT, so the compiled columns are the ones production code pays.
 
+Since then the compiled tiers hand a value they do not use again over to the lvalue (`design/dgc.md`, "The rrefs
+deferral"): registry growth with the hub in a local walks 0 objects in every tier, the AOT module matches the AST
+interpreter on the registry shapes, and the server shape walks 10,500 (ir/jit/tiered) and 7,514 (aot). The IR tiers
+still walk 15,448 on the registry held only by its cycle: they take temporary references to the hub on the path,
+and releasing them rescans the set - the release shape again.
+
 ### Other quantities
 
 | quantity | value | source |

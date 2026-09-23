@@ -1,0 +1,268 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file lvalue-assign-ownership-checks.qi checks of assignments to lvalue paths that each execution tier must agree on
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%allow-weak-references
+%allow-opaque-references
+
+/** Compiled code may hand the value assigned to an lvalue path over to the lvalue instead of copying a reference
+    to it, when the value is not used again.  Each check reports values that show who owns what afterwards - the
+    values held, and the objects destroyed - and the test requires every execution tier and a compiled module to
+    report exactly what the AST interpreter reports.  Every check runs in its own function, so that the values it
+    creates are released before the next one starts.
+*/
+public namespace LValueAssignOwnership {
+#! an object that counts its destructions
+public class Tracked {
+    public {
+        auto v;
+        auto peer;
+        int n = 0;
+
+        static int destroyed = 0;
+    }
+
+    constructor(auto v) {
+        self.v = v;
+    }
+
+    destructor() {
+        ++Tracked::destroyed;
+    }
+
+    #! writes a new object into a member of self, as a constructor or method storing a child does
+    setChild(int i) {
+        peer = new Tracked(i);
+    }
+}
+
+#! returns an object from a call, so that the value assigned is a call result
+Tracked sub make(auto v) {
+    return new Tracked(v);
+}
+
+#! objects written to a hash in a loop: each is held by the hash only
+int sub hash_objects() {
+    int d0 = Tracked::destroyed;
+    {
+        hash<auto> h = {};
+        for (int i = 0; i < 10; ++i) {
+            h{"k" + i} = new Tracked(i);
+        }
+        if (h.k7.v != 7 || h.size() != 10) {
+            return -1;
+        }
+    }
+    return Tracked::destroyed - d0;
+}
+
+#! call results written to object members, overwriting each other
+int sub member_overwrite() {
+    int d0 = Tracked::destroyed;
+    int during;
+    {
+        Tracked holder(0);
+        for (int i = 0; i < 10; ++i) {
+            holder.peer = make(i);
+        }
+        during = Tracked::destroyed - d0;
+        if (holder.peer.v != 9) {
+            return -1;
+        }
+    }
+    # 9 overwritten while the holder lived, then the holder and the last value
+    return during * 100 + (Tracked::destroyed - d0);
+}
+
+#! the result of the assignment is used: the value is held by the lvalue and by the result
+int sub result_used() {
+    int d0 = Tracked::destroyed;
+    int same;
+    {
+        hash<auto> h = {};
+        Tracked r = (h.a = new Tracked(1));
+        same = (r == h.a) ? 1 : 0;
+        remove h.a;
+        # the result still holds the object
+        same += (Tracked::destroyed == d0) ? 10 : 0;
+    }
+    return same * 100 + (Tracked::destroyed - d0);
+}
+
+#! a constant list assigned repeatedly: the constant must never be handed over or changed
+int sub constant_value() {
+    hash<auto> h = {};
+    for (int i = 0; i < 5; ++i) {
+        h{"k" + i} = (1, 2, 3);
+        h{"k" + i} += i;
+    }
+    # every assignment got the constant's value, not a list another iteration changed
+    int sum = 0;
+    foreach string k in (keys h) {
+        sum += h{k}.size() * 1000 + h{k}.last();
+    }
+    return sum;
+}
+
+#! a value computed once before a loop and assigned in every iteration
+string sub loop_invariant(string a, string b) {
+    hash<auto> h = {};
+    for (int i = 0; i < 5; ++i) {
+        h{"k" + i} = a + b;
+    }
+    return foldl $1 + "|" + $2, h.values();
+}
+
+#! a typed hash with a single key
+public hashdecl OwnershipDecl {
+    int a = 1;
+}
+
+#! assigns a new object to a key the hash's type does not declare; the assignment is not in a try block, so compiled
+#! code hands the value over to the assignment, which must release it when the key is refused
+sub assign_to_undeclared_key(hash<OwnershipDecl> h, string key) {
+    h{key} = new Tracked(1);
+}
+
+#! an object that fails to be assigned because the key is refused: it is released once, before the handler runs
+int sub navigation_error() {
+    int d0 = Tracked::destroyed;
+    hash<OwnershipDecl> h();
+    try {
+        # a key only known at run time
+        assign_to_undeclared_key(h, "no_" + "such");
+    } catch (hash<ExceptionInfo> ex) {
+        return (Tracked::destroyed - d0) * 10 + (ex.err ? 1 : 0);
+    }
+    return -1;
+}
+
+#! returns an object as auto, so that a type error is only found when it is assigned
+auto sub make_untyped() {
+    return new Tracked(2);
+}
+
+#! an object with a typed member
+public class TypedHolder {
+    public {
+        int m = 0;
+    }
+
+    #! assigns a value that the member's type refuses
+    setBad() {
+        m = make_untyped();
+    }
+}
+
+#! a method assigning a value to a member of self that refuses its type: it is released once, by the assignment
+int sub self_member_type_error() {
+    int d0 = Tracked::destroyed;
+    TypedHolder h();
+    try {
+        h.setBad();
+    } catch (hash<ExceptionInfo> ex) {
+        return (Tracked::destroyed - d0) * 10 + (ex.err == "RUNTIME-TYPE-ERROR" ? 1 : 0);
+    }
+    return -1;
+}
+
+#! a weak assignment of a new object: nothing else holds it, so it is destroyed
+int sub weak_assign() {
+    int d0 = Tracked::destroyed;
+    hash<auto> h = {};
+    h.a := new Tracked(1);
+    return Tracked::destroyed - d0;
+}
+
+#! an opaque assignment of a new object: the hash owns it
+int sub opaque_assign() {
+    int d0 = Tracked::destroyed;
+    int during;
+    {
+        hash<auto> h = {};
+        h.a @= new Tracked(1);
+        during = Tracked::destroyed - d0;
+        if (h.a.v != 1) {
+            return -1;
+        }
+    }
+    return during * 100 + (Tracked::destroyed - d0);
+}
+
+#! a method storing a new object in a member of self
+int sub self_member() {
+    int d0 = Tracked::destroyed;
+    {
+        Tracked t(0);
+        for (int i = 0; i < 5; ++i) {
+            t.setChild(i);
+        }
+        if (t.peer.v != 4) {
+            return -1;
+        }
+    }
+    return Tracked::destroyed - d0;
+}
+
+#! a new object that references its holder, written to the holder: a cycle collected when released
+int sub cycle_write() {
+    int d0 = Tracked::destroyed;
+    {
+        list<Tracked> l = (new Tracked(0),);
+        for (int i = 0; i < 5; ++i) {
+            Tracked child(i);
+            child.peer = l[0];
+            l[0].peer = new Tracked(child);
+        }
+    }
+    return Tracked::destroyed - d0;
+}
+
+#! a fresh container assigned to a hash key and then changed through the key
+string sub container_write() {
+    hash<auto> h = {};
+    h.a = {"x": 1};
+    h.a.y = 2;
+    h.b = (1, 2);
+    h.b += 3;
+    return sprintf("%y", h);
+}
+
+#! Returns the result of every check
+public hash<string, auto> sub get_results() {
+    return {
+        "hash-objects": hash_objects(),
+        "member-overwrite": member_overwrite(),
+        "result-used": result_used(),
+        "constant-value": constant_value(),
+        "loop-invariant": loop_invariant("x", "y"),
+        "navigation-error": navigation_error(),
+        "self-member-type-error": self_member_type_error(),
+        "weak-assign": weak_assign(),
+        "opaque-assign": opaque_assign(),
+        "self-member": self_member(),
+        "cycle-write": cycle_write(),
+        "container-write": container_write(),
+    };
+}
+}

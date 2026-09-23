@@ -81,6 +81,20 @@ scope (`ThreadClosureVariableStack::instantiate()` / `releaseEntry()`), since a 
 write to the variable through a `\var` argument, or while a closure holds it, therefore defers its scan to the
 frame's release; see `closure-bound-locals.md`.
 
+A deferred scan is replayed by the first dereference that finds no real reference left while other references
+remain. A constructor that writes to its members defers such a scan on the new object (its `self` holds a real
+reference), so the new object must not be dereferenced again after it has been linked into a graph, or the replay
+walks that whole graph: a registry adding one entry per operation would walk the registry each time. The AST
+interpreter hands an assigned value over to the lvalue; the compiled tiers do the same for an lvalue path when the
+value is not used again (`qore_rt_lv_path_assign_consume()` / `qore_rt_self_member_assign_consume()` in
+`lib/JITRuntime.cpp`, the IR interpreter's `LValuePathAssign`): the value's reference passes to the assignment,
+which owns it on failure as well, and a statement-form assignment has no result, so no reference is taken for one.
+The value is handed over only when it has a cleanup slot of its own, this is its only use, it is not a weak-reference
+load, and it is defined in the same block as the assignment - the use counts are static, so a value defined before a
+loop and used once in its body would otherwise be handed over on the first iteration.
+`examples/test/ir/lvalue-assign-ownership/lvalue-assign-ownership.qtest` checks that every tier releases values
+exactly as the AST interpreter does.
+
 A scan initiated at another object still traverses a reachable object's members under its r-section lock,
 including when that object has real references. Skipping those edges can omit a live owner of a shared
 container from a recursive set: the container's one physical reference to an object behind it can then look

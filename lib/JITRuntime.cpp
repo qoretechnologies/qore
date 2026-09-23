@@ -447,14 +447,17 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot) },
     { "qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot) },
     { "qore_rt_self_member_assign", reinterpret_cast<void*>(&qore_rt_self_member_assign) },
+    { "qore_rt_self_member_assign_consume", reinterpret_cast<void*>(&qore_rt_self_member_assign_consume) },
     { "qore_rt_self_member_compound", reinterpret_cast<void*>(&qore_rt_self_member_compound) },
     { "qore_rt_self_member_update", reinterpret_cast<void*>(&qore_rt_self_member_update) },
     { "qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign) },
+    { "qore_rt_lv_path_assign_consume", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume) },
     { "qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound) },
     { "qore_rt_lv_path_unary", reinterpret_cast<void*>(&qore_rt_lv_path_unary) },
     { "qore_rt_lv_path_binary_mut", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut) },
     { "qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary) },
     { "qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot) },
+    { "qore_rt_lv_path_assign_consume_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_consume_aot) },
     { "qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot) },
     { "qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot) },
     { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
@@ -12603,6 +12606,86 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     return toBits(lvh.getReferencedValue());
 }
 
+//! Assigns a value that the caller hands over to an lvalue; see qore_rt_lv_path_assign_consume()
+/** The value's reference belongs to this function from the start: it is handed to the lvalue, or released here if
+    the assignment is not made.  Returns the value now held by the lvalue with a new reference, or nothing if the
+    caller does not use the result (\c QORE_RT_ASSIGN_RESULT_UNUSED).
+*/
+static uint64_t qore_rt_assign_consumed(LValueHelper& lvh, QoreValue val, AssignmentMode mode, int32_t flags,
+        const char* desc, ExceptionSink* xsink) {
+    ValueHolder val_holder(val, xsink);
+    qore_type_t val_type = val.getType();
+    if (mode != AssignmentMode::Weak
+            && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
+        // a weak reference is assigned as the value it refers to; the weak reference itself is released here
+        ValueHolder eval_holder(val.eval(xsink), xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        if (lvh.assign(eval_holder.release(), desc, true, mode)) {
+            return toBits(QoreValue());
+        }
+    } else if (lvh.assign(val_holder.release(), desc, true, mode)) {
+        // LValueHelper::assign() owns the value on failure as well
+        return toBits(QoreValue());
+    }
+    if (flags & QORE_RT_ASSIGN_RESULT_UNUSED) {
+        return toBits(QoreValue());
+    }
+    return toBits(lvh.getReferencedValue());
+}
+
+//! Assigns to an lvalue path, taking over the caller's reference to the value
+/** qore_rt_lv_path_assign() borrows the value: it takes references of its own, and the caller releases its
+    reference after the assignment.  When the caller does not use the value again it can hand it over instead, as
+    the AST interpreter does; besides saving the reference operations, that keeps a dereference with no real
+    reference from happening after the value has been linked into the graph, which makes a scan that the value's
+    constructor deferred (design/dgc.md, "The rrefs deferral").
+
+    @param inst the lvalue path instruction
+    @param dyn_vals the dynamic operands of the path
+    @param rhs_bits the value, whose reference now belongs to this function in every case
+    @param flags \c QORE_RT_ASSIGN_RESULT_UNUSED if the caller does not use the result
+    @param xsink for exceptions
+
+    @return the value assigned with a new reference, or nothing on error or if the result is unused
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
+    // owns the value from here on, whatever happens
+    ValueHolder val_holder(fromBits(rhs_bits), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    std::vector<LVPathStep> path_copy;
+    patchLVPath(path_copy, inst, dyn_vals);
+
+    LValueHelper lvh(xsink);
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        // released after the lvalue's locks, as the helper releases them in its destructor first
+        lvh.saveTemp(val_holder.release());
+        return toBits(QoreValue());
+    }
+    return qore_rt_assign_consumed(lvh, val_holder.release(), inst->mode, flags, "<lvalue>", xsink);
+}
+
+//! Assigns to a member of self, taking over the caller's reference to the value; see qore_rt_lv_path_assign_consume()
+extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign_consume(const char* member_name, uint64_t rhs_bits,
+        int32_t mode_raw, int32_t flags, ExceptionSink* xsink) {
+    // owns the value from here on, whatever happens
+    ValueHolder val_holder(fromBits(rhs_bits), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    LValueHelper lvh(xsink);
+    if (qore_rt_get_self_member_lvalue(member_name, lvh, xsink)) {
+        lvh.saveTemp(val_holder.release());
+        return toBits(QoreValue());
+    }
+    return qore_rt_assign_consumed(lvh, val_holder.release(), static_cast<AssignmentMode>(mode_raw), flags,
+        "<self member assign>", xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_self_member_assign(
         const char* member_name, uint64_t rhs_bits, int32_t mode_raw,
         ExceptionSink* xsink) {
@@ -14017,6 +14100,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_aot(
     return qore_rt_lv_path_assign(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_consume_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        // the value belongs to this function whatever happens
+        fromBits(rhs_bits).discard(xsink);
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath assign: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
+    return qore_rt_lv_path_assign_consume(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, flags, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
@@ -14073,6 +14170,16 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assi
         ExceptionSink* xsink) {
     uint64_t result = qore_rt_self_member_assign(
         member_name, rhs_bits, mode_raw, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_self_member_assign_consume_throwing(
+        const char* member_name, uint64_t rhs_bits, int32_t mode_raw, int32_t flags,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_self_member_assign_consume(member_name, rhs_bits, mode_raw, flags, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -14171,6 +14278,16 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_t
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_assign(inst, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_consume_throwing(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_consume(inst, dyn_vals, rhs_bits, flags, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -14277,6 +14394,16 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_a
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
     uint64_t result = qore_rt_lv_path_assign_aot(ctx, slot, dyn_vals, rhs_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_lv_path_assign_consume_aot_throwing(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, int32_t flags, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_lv_path_assign_consume_aot(ctx, slot, dyn_vals, rhs_bits, flags, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

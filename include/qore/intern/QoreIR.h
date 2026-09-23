@@ -1643,6 +1643,10 @@ enum class LVTernaryOp : uint8_t {
 //! expression tree, enabling compact AOT serialization (no EXPR_TREE blob).
 //! At runtime, LValueHelper::navigatePath() walks the steps to acquire locks,
 //! handle COW, and set up the lvalue target using the same protocol as doLValue().
+//! flag for the consuming lvalue assignment helpers (qore_rt_lv_path_assign_consume() and
+//! qore_rt_self_member_assign_consume()): the caller does not use the result of the assignment
+#define QORE_RT_ASSIGN_RESULT_UNUSED 1
+
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
 public:
     QoreIRLValuePathInstruction(QoreIROpcode op)
