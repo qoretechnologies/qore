@@ -17314,7 +17314,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 bool runtime_check = false;
                 if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                         inv->expr.getInternalNode())) {
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(vrn->getTypeInfo()));
+                    if (vrn->isDynamicHashDeclConstruct()) {
+                        hd_path = vrn->getDynamicHashDeclName();
+                    } else {
+                        hd = QoreTypeInfo::getUniqueReturnHashDecl(specializeType(vrn->getTypeInfo()));
+                    }
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(
                         inv->expr.getInternalNode())) {
@@ -17417,12 +17421,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 {ptr_type, ptr_type, i64_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper,
                             {aot_ctx_arg, hd_path_str, hash_boxed, rtcheck, xsink_arg});
+                } else if (!hd) {
+                    // JIT: a hashdecl deferred at parse time is resolved by path in the current Program each time;
+                    // there is no AOT context to cache it in
+                    llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
+                    auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash_by_path",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {hd_path_str, hash_boxed, rtcheck, xsink_arg});
                 } else {
                     // JIT: direct pointer is valid within the same process
-                    if (!hd) {
-                        error = "NewHashDeclFromHash JIT invoke cannot resolve deferred hashdecl metadata";
-                        return false;
-                    }
                     llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(hd));
                     llvm::Value* hd_as_ptr = builder->CreateIntToPtr(hd_ptr, ptr_type);
@@ -26549,9 +26557,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
                     construct_flags);
             llvm::Value* result;
-            if (aot_mode || !nhdfh_inst->hd) {
-                // AOT and source-stripped debug IR resolve hashdecls by
-                // namespace path because compile-time pointers are not stable.
+            if (!aot_mode && !nhdfh_inst->hd) {
+                // JIT: a hashdecl that is not bound to the instruction (deferred at parse time, or not loaded when
+                // the IR was deserialized) is resolved by path in the current Program each time; there is no AOT
+                // context to cache it in
+                if (nhdfh_inst->hd_path.empty()) {
+                    error = "NewHashDeclFromHash is missing hashdecl path";
+                    return false;
+                }
+                llvm::Value* hd_path_str = builder->CreateGlobalString(nhdfh_inst->hd_path, "hd_path");
+                auto nhdfhp_ft = llvm::FunctionType::get(i64_type,
+                        {ptr_type, i64_type, i32_type, ptr_type}, false);
+                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash_by_path", nhdfhp_ft);
+                auto helper_throwing = module.getOrInsertFunction(
+                        "qore_rt_new_hash_decl_from_hash_by_path_throwing", nhdfhp_ft);
+                result = emitMaybeInvoke(helper, helper_throwing,
+                        {hd_path_str, hash_boxed, rtcheck, xsink_arg},
+                        module, llvm_func, inst);
+            } else if (aot_mode) {
+                // AOT resolves hashdecls by namespace path because compile-time pointers are not stable.
                 std::string hd_path = !nhdfh_inst->hd_path.empty()
                     ? nhdfh_inst->hd_path
                     : (nhdfh_inst->hd ? qore_get_aot_serializable_type_path(nhdfh_inst->hd->getTypeInfo()) : "");

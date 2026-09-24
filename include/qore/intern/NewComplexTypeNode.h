@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -119,10 +119,14 @@ public:
             typeInfo(hd ? hd->getTypeInfo() : nullptr), runtime_check(runtime_check) {
     }
 
+    //! Creates a construction of an AOT build-group hashdecl deferred at parse time
+    /** The hashdecl is resolved by name when the hash is constructed; the initializer's keys could not be checked
+        against it when parsed, so they are always checked then.
+    */
     DLLLOCAL NewHashDeclNode(const QoreProgramLocation* loc, const char* dynamic_hashdecl_name,
             const QoreTypeInfo* typeInfo, QoreParseListNode* a)
             : ParseNode(loc, NT_SCOPE_REF), hd(nullptr), args(a), typeInfo(typeInfo),
-            dynamic_hashdecl_name(dynamic_hashdecl_name ? dynamic_hashdecl_name : ""), runtime_check(false) {
+            dynamic_hashdecl_name(dynamic_hashdecl_name ? dynamic_hashdecl_name : ""), runtime_check(true) {
     }
 
     DLLLOCAL virtual ~NewHashDeclNode() {

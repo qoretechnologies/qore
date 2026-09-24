@@ -321,39 +321,42 @@ static const AbstractQoreFunctionVariant* qore_ir_find_constructor_variant_by_ao
     return nullptr;
 }
 
+//! Resolves a hashdecl that is not bound to the instruction by its path in the current Program
+/** @return the hashdecl, or nullptr if \a xsink has been raised
+*/
+static const TypedHashDecl* resolveHashDeclByPath(const std::string& hd_path, ExceptionSink* xsink) {
+    assert(xsink);
+    if (hd_path.empty()) {
+        xsink->raiseException("HASHDECL-ERROR",
+            "cannot resolve hashdecl for NewHashDeclFromHash: missing serialized path");
+        return nullptr;
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        xsink->raiseException("HASHDECL-ERROR",
+            "cannot resolve hashdecl '%s': no program context", hd_path.c_str());
+        return nullptr;
+    }
+    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path.c_str());
+    if (!hd) {
+        std::string error;
+        QoreAOTTypeResolver resolver(pgm);
+        const QoreTypeInfo* ti = resolver.resolve(hd_path.c_str(), error);
+        ti = qore_substitute_type_params_if_needed(ti);
+        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    }
+    if (!hd) {
+        xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'", hd_path.c_str());
+    }
+    return hd;
+}
+
 static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
         const QoreIRNewHashDeclFromHashInstruction& inst, ExceptionSink* xsink) {
     if (inst.hd) {
         return inst.hd;
     }
-    if (inst.hd_path.empty()) {
-        if (xsink) {
-            xsink->raiseException("HASHDECL-ERROR",
-                "cannot resolve hashdecl for NewHashDeclFromHash: missing serialized path");
-        }
-        return nullptr;
-    }
-    QoreProgram* pgm = getProgram();
-    if (!pgm) {
-        if (xsink) {
-            xsink->raiseException("HASHDECL-ERROR",
-                "cannot resolve hashdecl '%s': no program context", inst.hd_path.c_str());
-        }
-        return nullptr;
-    }
-    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, inst.hd_path.c_str());
-    if (!hd) {
-        std::string error;
-        QoreAOTTypeResolver resolver(pgm);
-        const QoreTypeInfo* ti = resolver.resolve(inst.hd_path.c_str(), error);
-        ti = qore_substitute_type_params_if_needed(ti);
-        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-    }
-    if (!hd && xsink) {
-        xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
-            inst.hd_path.c_str());
-    }
-    return hd;
+    return resolveHashDeclByPath(inst.hd_path, xsink);
 }
 
 static QoreHashNode* makeImplicitHashForLValueType(const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
@@ -4919,9 +4922,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             if (inv->expr.hasNode()) {
                 auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
                 if (vrn) {
-                    const QoreTypeInfo* runtime_type_info
-                        = qore_substitute_type_params_if_needed(vrn->getTypeInfo());
-                    hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
+                    if (vrn->isDynamicHashDeclConstruct()) {
+                        hd_path = vrn->getDynamicHashDeclName();
+                    } else {
+                        const QoreTypeInfo* runtime_type_info
+                            = qore_substitute_type_params_if_needed(vrn->getTypeInfo());
+                        hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
+                    }
                     runtime_check = vrn->getRuntimeCheck();
                 } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(inv->expr.getInternalNode())) {
                     if (nhd->hd) {
@@ -4934,35 +4941,22 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     runtime_check = nhd->runtime_check;
                 }
             }
-            if (!hd && !hd_path.empty()) {
-                QoreProgram* pgm = getProgram();
-                if (pgm) {
-                    hd = qore_aot_resolve_hashdecl_path(pgm, hd_path.c_str());
-                    if (!hd) {
-                        std::string error;
-                        QoreAOTTypeResolver resolver(pgm);
-                        const QoreTypeInfo* ti = resolver.resolve(hd_path.c_str(), error);
-                        ti = qore_substitute_type_params_if_needed(ti);
-                        hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
-                    }
-                }
+            // the hash is never constructed with its declaration's defaults alone because the target is missing
+            if (!hd && !(hd = resolveHashDeclByPath(hd_path, xsink))) {
+                return QoreValue();
             }
-            if (hd) {
-                const QoreHashNode* init = nullptr;
-                if (hash_val.getType() != NT_NOTHING) {
-                    if (hash_val.getType() != NT_HASH) {
-                        xsink->raiseException("HASHDECL-INIT-ERROR",
-                            "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead",
-                            hd->getName(), hash_val.getTypeName());
-                        return QoreValue();
-                    }
-                    init = hash_val.get<const QoreHashNode>();
+            const QoreHashNode* init = nullptr;
+            if (hash_val.getType() != NT_NOTHING) {
+                if (hash_val.getType() != NT_HASH) {
+                    xsink->raiseException("HASHDECL-INIT-ERROR",
+                        "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead",
+                        hd->getName(), hash_val.getTypeName());
+                    return QoreValue();
                 }
-                QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(init,
-                    runtime_check, xsink);
-                return result ? QoreValue(result) : QoreValue();
+                init = hash_val.get<const QoreHashNode>();
             }
-            return QoreValue();
+            QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(init, runtime_check, xsink);
+            return result ? QoreValue(result) : QoreValue();
         }
 
         case QoreIROpcode::LoadConstant: {
@@ -10053,19 +10047,23 @@ load_local_done:
             case QoreIROpcode::NewHashDeclFromHash: {
                 auto* nhdfh_inst = static_cast<QoreIRNewHashDeclFromHashInstruction*>(inst);
                 QoreValue hash_val = getIRValue(values, inst->operands[0]);
-                const QoreHashNode* init = hash_val.getType() == NT_HASH
-                    ? hash_val.get<const QoreHashNode>() : nullptr;
                 const TypedHashDecl* hd = resolveNewHashDeclFromHashTarget(*nhdfh_inst, xsink);
-                if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
                 if (!hd) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
+                // as in every other execution mode, an initializer that is not a hash is an error, not ignored
+                if (hash_val.getType() != NT_NOTHING && hash_val.getType() != NT_HASH) {
+                    xsink->raiseException("HASHDECL-INIT-ERROR",
+                        "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead",
+                        hd->getName(), hash_val.getTypeName());
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                const QoreHashNode* init = hash_val.getType() == NT_HASH
+                    ? hash_val.get<const QoreHashNode>() : nullptr;
                 QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(
                     init, nhdfh_inst->runtime_check, xsink);
                 if (xsink && *xsink) {

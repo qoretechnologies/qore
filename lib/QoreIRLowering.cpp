@@ -6223,10 +6223,11 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
         // serialization instead of baking pre-evaluated values into the AST.
         const QoreTypeInfo* runtime_type_info = qore_substitute_type_params_if_needed(vrn->getTypeInfo());
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(runtime_type_info);
-        if (hd && vrn->isHashDeclConstruct()) {
-            // Undo ast_delegate_count: hashdecl args are fully lowered via IR,
-            // not delegated to AST evaluation
-            --ast_delegate_count;
+        // VRN_DYNAMIC_HASHDECL: a build-group hashdecl deferred by an AOT source parse; it is constructed exactly
+        // like a hashdecl bound at parse time, except that the hashdecl is resolved by name each time the hash is
+        // made
+        const bool dynamic_hashdecl = vrn->isDynamicHashDeclConstruct();
+        if ((hd && vrn->isHashDeclConstruct()) || dynamic_hashdecl) {
             const QoreParseListNode* pargs = vrn->getParseArgs();
             QoreIRValue hash_val;
             if (pargs && !pargs->empty()) {
@@ -6257,6 +6258,9 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                 inst->invoke_opcode = QoreIROpcode::NewHashDeclFromHash;
                 builder.setBlock(normal_block);
                 construct_val = inst->result;
+            } else if (dynamic_hashdecl) {
+                construct_val = builder.createNewHashDeclFromHash(vrn->getDynamicHashDeclName().c_str(), nullptr,
+                    vrn->getRuntimeCheck(), hash_val, var->loc)->result;
             } else {
                 construct_val = builder.createNewHashDeclFromHash(hd,
                     vrn->getRuntimeCheck(), hash_val, var->loc)->result;
@@ -6342,7 +6346,7 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             return construct_val;
         }
 
-        // Remaining constructions (e.g. an AOT-deferred hashdecl): construct + store via VrnConstruct
+        // Remaining constructions: construct + store via VrnConstruct
         QoreIRValue construct_val;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");

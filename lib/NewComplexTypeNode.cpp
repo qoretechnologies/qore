@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -48,18 +48,6 @@ static std::string qore_new_complex_aot_deferred_hashdecl_type_path(const QoreTy
     std::string path = qore_get_aot_serializable_type_path(typeInfo);
     return (!strncmp(path.c_str(), "hash<", 5) || !strncmp(path.c_str(), "*hash<", 6))
         ? path : std::string();
-}
-
-static int qore_parse_init_hashdecl_args(QoreParseListNode* args, QoreParseContext& parse_context) {
-    if (!args) {
-        return 0;
-    }
-
-    QoreParseListNodeParseInitHelper helper(args);
-    while (helper.next()) {
-        helper.parseInit(parse_context);
-    }
-    return helper.hasError() ? -1 : 0;
 }
 
 int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -118,9 +106,11 @@ int ParseNewComplexTypeNode::parseInitImpl(QoreValue& val, QoreParseContext& par
                     parse_context.typeInfo)).empty()) {
             ReferenceHolder<> holder(this, nullptr);
             const QoreTypeInfo* returnTypeInfo = parse_context.typeInfo;
-            if (qore_parse_init_hashdecl_args(args, parse_context) && !err) {
-                err = -1;
-            }
+            // the initializer is checked as for a hashdecl bound at parse time, except for its keys, which are
+            // checked when the hash is constructed (the NewHashDeclNode sets runtime_check for this form)
+            parse_context.typeInfo = nullptr;
+            QoreValue arg{};
+            qore_hash_private::parseInitHashInitialization(loc, parse_context, args, arg, err);
             parse_context.typeInfo = returnTypeInfo;
             val = new NewHashDeclNode(loc, hashdecl_path.c_str(), returnTypeInfo, takeArgs());
             return err;

@@ -1727,8 +1727,9 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             // Create a NewHashDeclNode with no args (args handled by native code)
+            // the parse's key check is not serialized, so the keys are always checked when the hash is made
             NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd,
-                static_cast<QoreParseListNode*>(nullptr), false);
+                static_cast<QoreParseListNode*>(nullptr), true);
             return toBitsNB(QoreValue(nhd));
         }
 
@@ -4661,7 +4662,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                             call_args->deref(nullptr);
                             call_args = nullptr;
                         }
-                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, false);
+                        // the parse's key check is not serialized, so the keys are always checked when the
+                        // hash is made
+                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, true);
                         ctx->exprs[i] = toBitsNB(QoreValue(nhd));
                     } else {
                         printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);

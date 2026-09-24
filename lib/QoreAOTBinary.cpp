@@ -3519,7 +3519,8 @@ static std::string qoreAOTHashDeclDefaultDynamicName(const std::string& path, bo
 static QoreValue qoreAOTMakeHashDeclDefaultNode(QoreProgram* pgm, const std::string& path,
         QoreParseListNode* parse_args) {
     if (const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, path.c_str())) {
-        return QoreValue(new NewHashDeclNode(&loc_builtin, hd, parse_args, false));
+        // the parse's key check is not serialized, so the keys are always checked when the hash is made
+        return QoreValue(new NewHashDeclNode(&loc_builtin, hd, parse_args, true));
     }
 
     bool or_nothing = false;
@@ -5017,7 +5018,8 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                     }
                     return QoreValue();
                 }
-                NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, parse_args, false);
+                // the parse's key check is not serialized, so the keys are always checked when the hash is made
+                NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, parse_args, true);
                 return QoreValue(nhd);
             }
             // kind 0 or 1: resolve complex list/hash type. Use the AOT

@@ -2242,7 +2242,8 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
         }
         call_args->deref(nullptr);
     }
-    NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, false);
+    // the parse's key check is not serialized, so the keys are always checked when the hash is made
+    NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, true);
     return QoreValue(nhd);
 }
 

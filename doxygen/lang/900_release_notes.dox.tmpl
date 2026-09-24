@@ -3315,6 +3315,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       @ref Qore::Program "Program"'s sandboxing restrictions.  Such a construction now behaves identically in
       every execution mode, and a class excluded by the Program's sandboxing restrictions always raises
       \c CREATE-OBJECT-ERROR
+    - Fixed declaring a variable with an implied typed hash constructor (<tt>hash<MyHashDecl> h({...})</tt>) in
+      code compiled to a <tt>.qo</tt> object separately from the file declaring the hashdecl: with a debugger
+      attached, the hash was silently created with the hashdecl's default values instead of the initializer's, or
+      the construction failed with an \c IR-AST-FALLBACK-ERROR exception.  The initializer of such a construction
+      (and of <tt>new hash<MyHashDecl>(...)</tt>) is now checked when parsed like any other typed hash initializer,
+      and an unknown key raises \c HASHDECL-INIT-ERROR when the hash is created instead of being silently ignored
     - Fixed \c return inside a @ref foreach "foreach" statement iterating a reference
       (<tt>foreach x in (\\list)</tt>) truncating the referenced list to the elements already iterated; the
       unvisited elements are now kept unchanged, as with \c break.  An exception raised in the loop (including
