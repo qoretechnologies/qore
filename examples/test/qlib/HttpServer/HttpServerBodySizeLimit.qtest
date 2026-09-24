@@ -56,6 +56,46 @@ class BodyEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! HTTP/2 body-streaming handler that reads the body through the body queue and reports how the body ended
+class StreamingLimitHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives one hash per request: the byte count read and the value that ended the body
+        Queue results();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        Queue body_queue(-1);
+        cx."header-info".register_body_queue(body_queue);
+        int size = 0;
+        while (True) {
+            auto chunk = body_queue.get(30s);
+            if (!(chunk instanceof binary)) {
+                results.push({"size": size, "end": chunk});
+                if (chunk.typeCode() == NT_HASH) {
+                    return makeResponse(413, chunk.desc);
+                }
+                return makeResponse(200, sprintf("%d", size));
+            }
+            size += chunk.size();
+        }
+    }
+}
+
+#! HTTP/2 body-streaming handler that answers without reading the request body
+class EarlyResponseHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(401, "early", {"Content-Type": "text/plain"});
+    }
+}
+
 #! WebSocket connection that echoes messages back
 class EchoWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
@@ -112,6 +152,11 @@ class HttpServerBodySizeLimitTest inherits QUnit::Test {
         HttpServer mUnlimitedServer;
         int mUnlimitedPort;
         string mUnlimitedUrl;
+        # HTTPS listener on the unlimited server for HTTP/2 tests
+        string mUnlimitedSslUrl;
+
+        # HTTP/2 body-streaming handler on the limited server
+        StreamingLimitHandler mStreamingLimitHandler();
 
         Logger mLogger;
 
@@ -199,6 +244,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \asyncHttp2BodyOverLimitTest());
         addTestCase("async: HTTP/2 body under limit succeeds",
             \asyncHttp2BodyUnderLimitTest());
+        addTestCase("async: HTTP/2 oversized bodies on one connection get 413",
+            \asyncHttp2OversizedBodiesOneConnectionTest());
+        addTestCase("async: HTTP/2 streaming handler gets the body-too-large error",
+            \asyncHttp2StreamingHandlerLimitTest());
+        addTestCase("async: HTTP/2 response before the complete request",
+            \asyncHttp2EarlyResponseTest());
 
         # Server-level configuration tests
         addTestCase("server setMaxRequestBodySize",
@@ -257,6 +308,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "max_message_size": WsMessageSizeLimit,
         });
         mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+        mAsyncServer.setHandler("stream-limit", "/stream-limit", NOTHING, mStreamingLimitHandler, NOTHING, False);
 
         mAsyncServer.waitForAsyncIo();
 
@@ -268,8 +320,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mUnlimitedServer = new HttpServer(unlimited_opts);
         mUnlimitedServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
         mUnlimitedServer.setDefaultHandler("echo", new BodyEchoHandler());
+        mUnlimitedServer.setHandler("early", "/early", NOTHING, new EarlyResponseHandler(), NOTHING, False);
         mUnlimitedPort = mUnlimitedServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         mUnlimitedUrl = "http://localhost:" + mUnlimitedPort;
+        mUnlimitedSslUrl = "https://localhost:" + mUnlimitedServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mUnlimitedServer.waitForAsyncIo();
     }
 
     globalTearDown() {
@@ -290,12 +349,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         return c;
     }
 
-    private HTTPClient getHttp2Client(*int timeout_ms) {
+    #! returns a client for HTTP/2 tests; @p h2_only keeps it on HTTP/2 instead of following the server's Alt-Svc
+    #! advertisement to HTTP/3 after the first response
+    private HTTPClient getHttp2Client(*int timeout_ms, *string url, *bool h2_only) {
         HTTPClient c({
-            "url": mAsyncSslUrl,
+            "url": url ?? mAsyncSslUrl,
             "ssl_verify_cert": False,
             "timeout": timeout_ms ?? 10000,
-        });
+        } + (h2_only ? {"http_version": "2.0"} : {}));
         c.connect();
         return c;
     }
@@ -486,7 +547,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # HTTP/2 Tests
     # ================================================================
 
-    #! HTTP/2: body over limit should be rejected (RST_STREAM)
+    #! HTTP/2: a body over the limit is answered with 413
     asyncHttp2BodyOverLimitTest() {
         HTTPClient c = getHttp2Client();
         on_exit c.disconnect();
@@ -494,23 +555,85 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         c.setErrorPassthru(True);
 
         binary body = binary(strmul("K", BodySizeLimit + 1));
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "HTTP/2: body over limit should return 413");
+        assertTrue(c.isHttp2Active(), "the request was sent with HTTP/2");
+    }
 
-        # The HTTP/2 body is sent as DATA frames; the server should RST_STREAM
-        # when the accumulated size exceeds the limit. The client may see:
-        # - A socket/protocol error (RST_STREAM received)
-        # - A 413 response (if the server sends one before RST)
-        # - A connection error
-        bool got_error = False;
-        try {
+    #! HTTP/2: bodies far over the limit are answered with 413, and the connection stays usable
+    /** Each body is larger than the flow control window, so it arrives faster than the handler thread reads it; the
+        server must answer every request with 413 instead of resetting the stream, and must ask the client to stop
+        sending the rest of the body after the response, so the next request on the same connection works.
+    */
+    asyncHttp2OversizedBodiesOneConnectionTest() {
+        HTTPClient c = getHttp2Client(30000, NOTHING, True);
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("M", 1024 * 1024));
+        for (int i = 0; i < 3; ++i) {
             hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
-            if (resp.status_code >= 400) {
-                got_error = True;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # RST_STREAM or protocol error expected
-            got_error = True;
+            assertEq(413, resp.status_code, sprintf("request %d: body over limit returns 413", i));
+            assertTrue(c.isHttp2Active(), sprintf("request %d: sent with HTTP/2", i));
         }
-        assertTrue(got_error, "HTTP/2: body over limit should be rejected");
+
+        binary small = binary(strmul("S", BodySizeLimit - 1));
+        hash<auto> resp = c.send(small, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "a body under the limit on the same connection succeeds");
+        assertEq(small, resp.body, "the body under the limit is echoed");
+        assertTrue(c.isHttp2Active(), "the connection is still HTTP/2");
+    }
+
+    #! HTTP/2: a body-streaming handler gets an error, not the end of the body, when the body exceeds the limit
+    asyncHttp2StreamingHandlerLimitTest() {
+        HTTPClient c = getHttp2Client(30000, NOTHING, True);
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("T", 1024 * 1024));
+        hash<auto> resp = c.send(body, "POST", "/stream-limit", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "the streaming handler answers the oversized body with 413");
+        assertTrue(c.isHttp2Active(), "the request was sent with HTTP/2");
+
+        hash<auto> result = mStreamingLimitHandler.results.get(10s);
+        assertEq("HTTP-BODY-TOO-LARGE", result.end.err, "the body ends with the body-too-large error");
+        assertGt(BodySizeLimit, result.size, "the bytes buffered when the limit was exceeded are delivered first");
+        assertLt(body.size(), result.size, "the rest of the body is discarded");
+
+        # a body under the limit ends normally
+        binary small = binary(strmul("U", BodySizeLimit - 1));
+        resp = c.send(small, "POST", "/stream-limit", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "a body under the limit is read to its end");
+        assertEq(string(small.size()), resp.body, "the handler read the whole body");
+        result = mStreamingLimitHandler.results.get(10s);
+        assertNothing(result.end, "a complete body ends with NOTHING");
+        assertEq(small.size(), result.size, "all bytes of the body were delivered");
+    }
+
+    #! HTTP/2: a response sent before the complete request reaches the client, and the connection stays usable
+    /** The server has no body size limit, and the handler answers without reading the body, so the client is still
+        sending when the response is complete; the server asks it to stop with RST_STREAM(NO_ERROR), which the
+        client must not treat as an error (RFC 9113 section 8.1).
+    */
+    asyncHttp2EarlyResponseTest() {
+        HTTPClient c = getHttp2Client(30000, mUnlimitedSslUrl, True);
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("E", 4 * 1024 * 1024));
+        for (int i = 0; i < 3; ++i) {
+            hash<auto> resp = c.send(body, "POST", "/early", {"Content-Type": "application/octet-stream"});
+            assertEq(401, resp.status_code, sprintf("request %d: the early response is received", i));
+            assertEq("early", resp.body, sprintf("request %d: the early response body is received", i));
+            assertTrue(c.isHttp2Active(), sprintf("request %d: sent with HTTP/2", i));
+        }
+
+        hash<auto> resp = c.send(binary("x"), "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "the connection is usable after the early responses");
+        assertEq(binary("x"), resp.body, "the body is echoed");
     }
 
     #! HTTP/2: body under limit should succeed

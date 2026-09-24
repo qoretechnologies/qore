@@ -724,9 +724,9 @@ public hashdecl HttpListenerOptionInfo {
     bool sync = True;
 
     #! Maximum HTTP request body size in bytes (0 = unlimited)
-    /** Requests with Content-Length exceeding this value, or chunked/HTTP/2 bodies
-        that grow beyond this value, receive HTTP 413 (Content Too Large) and the
-        connection is closed.
+    /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
+        that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
+        is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends.
 
         @since HttpServer 1.6
     */
@@ -2137,6 +2137,11 @@ public class AbstractStreamRequest {
                         }
                         rethrow;
                     }
+                    if (chunk.typeCode() == NT_HASH) {
+                        # the body exceeds the maximum request body size (HTTP-BODY-TOO-LARGE); the server
+                        # answers the exception with 413
+                        throw chunk.err, chunk.desc;
+                    }
                     if (!(chunk instanceof binary)) {
                         # NOTHING sentinel → END_STREAM
                         break;
@@ -2386,6 +2391,10 @@ public class AbstractStreamRequest {
                 chunk = s.readQuicStreamDataBlock(session_id, sid, timeout_ms);
             } else {
                 auto c = body_queue.get(timeout_ms);
+                if (c.typeCode() == NT_HASH) {
+                    # the inbound data exceeds the maximum request body size (HTTP-BODY-TOO-LARGE)
+                    throw c.err, c.desc;
+                }
                 if (c instanceof binary) {
                     chunk = c;
                 }
@@ -3038,7 +3047,8 @@ public class AbstractHttpRequestHandler {
                 } else {
                     # HTTP/2: register a Queue via the header_info closure; the
                     # I/O thread pushes binary DATA chunks and a NOTHING sentinel
-                    # at END_STREAM.
+                    # at END_STREAM, or a hash with "err" and "desc" keys instead
+                    # of the sentinel if the body exceeds the maximum size.
                     code<nothing(Queue)> register_body_queue
                         = cx."header-info".register_body_queue;
                     Queue body_queue(-1);
@@ -3052,6 +3062,10 @@ public class AbstractHttpRequestHandler {
                                 break;
                             }
                             rethrow;
+                        }
+                        if (chunk.typeCode() == NT_HASH) {
+                            # the body exceeds the server's maximum request body size
+                            return makeResponse(413, chunk.desc);
                         }
                         if (!(chunk instanceof binary)) {
                             break;  # NOTHING sentinel = END_STREAM

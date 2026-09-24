@@ -239,7 +239,11 @@ public namespace HttpServerAsyncIo {
           no body); when \c True, \c body_streaming is \c False and there is no body to read
         - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread
         - \c register_body_queue: only present in \c body_streaming mode — a closure that takes an
-          unlimited @ref Qore::Thread::Queue "Queue" and connects it to the I/O thread's stream reader
+          unlimited @ref Qore::Thread::Queue "Queue" and connects it to the I/O thread's stream reader; the
+          I/O thread pushes one binary value per inbound DATA chunk, and ends the body with either
+          @ref nothing (END_STREAM) or, if the buffered body exceeds the maximum request body size, a hash
+          with \c err (\c "HTTP-BODY-TOO-LARGE") and \c desc keys; the rest of such a body is discarded,
+          and the server resets the stream with \c NO_ERROR once the response is sent (RFC 9113 section 8.1)
 
         For HTTP/3 connections, \c header_info contains:
         - \c http3: \c True for HTTP/3 requests

@@ -758,6 +758,26 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
             data_ready_streams.push_back(stream_id);
         }
 
+        // An oversized request body ends with an error instead of the NOTHING sentinel, so a consumer can never
+        // take the part it received for the complete body; the bytes buffered when the limit was exceeded were
+        // drained above, so a consumer that counts them sees more than the limit before the error
+        if (!info.frame_state && sock->isHttp2StreamBodyTooLargeForAsyncPoll(stream_id)) {
+            ReferenceHolder<QoreHashNode> err(new QoreHashNode(autoTypeInfo), xsink);
+            err->setKeyValue("err", new QoreStringNode("HTTP-BODY-TOO-LARGE"), xsink);
+            err->setKeyValue("desc", new QoreStringNodeMaker("HTTP/2 request body on stream %d exceeds the "
+                "maximum request body size", stream_id), xsink);
+            info.queue->push(xsink, err.release());
+            if (*xsink) {
+                return;
+            }
+            if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                    stream_id) == data_ready_streams.end()) {
+                data_ready_streams.push_back(stream_id);
+            }
+            completed.push_back(stream_id);
+            continue;
+        }
+
         // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
         // Also check socket-level closure: for CONNECT streams (WebSocket tunnels),
         // nghttp2 doesn't detect TCP closure — it only processes HTTP/2 frames.

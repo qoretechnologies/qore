@@ -5859,6 +5859,11 @@ bool QoreSocketObject::isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) 
     return !h2 || h2->isStreamRemoteClosed(stream_id);
 }
 
+bool QoreSocketObject::isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 && h2->isStreamBodyTooLarge(stream_id);
+}
+
 std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {

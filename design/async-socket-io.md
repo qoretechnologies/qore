@@ -587,6 +587,40 @@ When `getOutput()` returns NOTHING (because a RST'd stream was filtered or the r
 `handleHttp2RequestReady()` in `HttpAsyncSocketIoController.qc` continues reading on the connection rather
 than closing it. This allows the HTTP/2 connection to remain active for subsequent streams.
 
+## HTTP/2 Server: Responses Before the Complete Request
+
+A server can answer a request before the client has sent all of it: an error found in the headers, a handler that
+does not read the body, or a body over `max_request_body_size`.  The client must receive that response, so the
+server never resets such a stream before the response is out.
+
+### Request body over the limit
+
+`Http2Session::onDataChunkRecvCallback()` compares the undelivered body buffered in `Http2StreamInfo::body` (not the
+total received) with `max_body_size`.  When it is exceeded, the stream is marked `body_too_large`: the buffered bytes
+are kept, so every consumer sees more than the limit, and later DATA is discarded while flow control is still
+credited.  The stream is **not** reset.  A reset there would discard the 413 the handler thread sends, and
+`REFUSED_STREAM` tells the client that the request was not processed and can be retried (RFC 9113 section 8.7);
+with a handler thread slower than the client it was the common outcome, not a corner case.
+
+Consumers learn about the overflow from the body queue: `Http2PollOperationPriv::drainStreamQueues()` ends the
+stream with a hash `{"err": "HTTP-BODY-TOO-LARGE", "desc": ...}` instead of the `NOTHING` end-of-body sentinel, so a
+streaming consumer can never take a truncated body for a complete one.  `HttpServer` answers it with 413;
+`AbstractStreamRequest` and interactive streams raise it.  Extended CONNECT tunnels are the exception: tunnel data
+is not a request that is answered, so an overflowing tunnel is still reset.
+
+### Stopping the client after the response
+
+`Http2Session::onFrameSendCallback()` calls `stopRequestAfterResponse()` for every server HEADERS or DATA frame
+with END_STREAM.  If the client has not sent END_STREAM on the stream, it submits `RST_STREAM(NO_ERROR)`, which
+asks the client to stop sending without error (RFC 9113 section 8.1).  Submitting it from the send callback, after
+the frame that ends the response has been written, is what makes it safe: it can never cancel a response that is
+still queued.  Extended CONNECT streams are excluded, as each side of a tunnel closes independently.
+
+Without it, a client keeps uploading a body nobody reads, and after `cleanupStream()` the server discards that DATA
+crediting only the connection window.  `examples/test/qlib/HttpServer/HttpServerHttp2StopRequest.qtest` checks the
+frames on the wire; `HttpClient`-based tests cannot see the difference, because the client reads the response while
+it is still sending.
+
 ## Platform-Specific Fixes
 
 ### macOS accept() O_NONBLOCK Inheritance

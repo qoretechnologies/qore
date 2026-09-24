@@ -1,0 +1,294 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP/2 server behavior when the response is complete before the request (RFC 9113 section 8.1): the server asks
+    the client to stop sending with RST_STREAM(NO_ERROR) after the response, and only then.  The tests speak raw
+    HTTP/2 frames over a cleartext (prior knowledge) connection, so they see every frame the server sends and control
+    exactly which request frames are sent.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerHttp2StopRequestTest
+
+#! answers without reading the request body
+class EarlyResponseHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(401, "early", {"Content-Type": "text/plain"});
+    }
+}
+
+#! answers with the size of the request body, which the server buffers before calling the handler
+class BodySizeHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, sprintf("%d", body ? body.size() : 0), {"Content-Type": "text/plain"});
+    }
+}
+
+#! an HTTP/2 frame received from the server
+hashdecl H2Frame {
+    int type;
+    int flags;
+    int sid;
+    binary payload;
+}
+
+class HttpServerHttp2StopRequestTest inherits QUnit::Test {
+    public {
+        const DATA = 0;
+        const HEADERS = 1;
+        const RST_STREAM = 3;
+        const SETTINGS = 4;
+        const PING = 6;
+        const GOAWAY = 7;
+
+        const END_STREAM = 0x1;
+        const ACK = 0x1;
+        const END_HEADERS = 0x4;
+
+        #! the maximum request body size of the server
+        const BodySizeLimit = 1024;
+
+        #! the size of each DATA frame sent; three of them fit in the initial flow control window
+        const ChunkSize = 16000;
+    }
+
+    private {
+        HttpServer server;
+        int port;
+    }
+
+    constructor() : Test("HttpServerHttp2StopRequestTest", "1.0") {
+        addTestCase("early response to an incomplete request is followed by RST_STREAM(NO_ERROR)",
+            \earlyResponseTest());
+        addTestCase("413 for an incomplete oversized request is followed by RST_STREAM(NO_ERROR)",
+            \oversizedRequestTest());
+        addTestCase("a response to a complete request is not followed by RST_STREAM", \completeRequestTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("h2-stop-request-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "max_request_body_size": BodySizeLimit,
+        });
+        server.setHandler("early", "/early", NOTHING, new EarlyResponseHandler(), NOTHING, False);
+        server.setHandler("size", "/size", NOTHING, new BodySizeHandler(), NOTHING, False);
+        port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "http_version": "h2c",
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    earlyResponseTest() {
+        Socket s = connect();
+        on_exit s.close();
+
+        # the request body is never completed
+        sendRequest(s, 1, "/early", False);
+        for (int i = 0; i < 3; ++i) {
+            s.send(frame(DATA, 0, 1, binary(strmul("x", ChunkSize))));
+        }
+        list<hash<H2Frame>> frames = readResponse(s, 1);
+        assertStopAfterResponse(frames, 1);
+
+        # DATA that the client sends before it receives the reset is ignored, and the connection stays usable
+        s.send(frame(DATA, 0, 1, binary(strmul("y", ChunkSize))));
+        sendRequest(s, 3, "/size", True);
+        frames = readResponse(s, 3);
+        assertNoStop(s, frames, 3);
+    }
+
+    oversizedRequestTest() {
+        Socket s = connect();
+        on_exit s.close();
+
+        # the body exceeds the limit, and the request is never completed
+        sendRequest(s, 1, "/size", False);
+        for (int i = 0; i < 3; ++i) {
+            s.send(frame(DATA, 0, 1, binary(strmul("x", ChunkSize))));
+        }
+        list<hash<H2Frame>> frames = readResponse(s, 1);
+        assertStopAfterResponse(frames, 1);
+
+        # a request under the limit on the same connection gets its response, not a reset
+        sendRequest(s, 3, "/size", False);
+        s.send(frame(DATA, END_STREAM, 3, binary(strmul("z", BodySizeLimit - 1))));
+        frames = readResponse(s, 3);
+        assertNoStop(s, frames, 3);
+    }
+
+    completeRequestTest() {
+        Socket s = connect();
+        on_exit s.close();
+
+        # the request is complete before the response: there is nothing to stop
+        sendRequest(s, 1, "/early", False);
+        s.send(frame(DATA, END_STREAM, 1, binary(strmul("x", ChunkSize))));
+        list<hash<H2Frame>> frames = readResponse(s, 1);
+        assertNoStop(s, frames, 1);
+    }
+
+    #! asserts that the frames of the stream are a complete response followed by RST_STREAM(NO_ERROR)
+    private assertStopAfterResponse(list<hash<H2Frame>> frames, int sid) {
+        list<hash<H2Frame>> stream = getStreamFrames(frames, sid);
+        assertEq(HEADERS, stream[0].type, "the response starts with HEADERS");
+        assertEq(0, stream[0].flags & END_STREAM, "the response has a body");
+        assertEq(DATA, stream[1].type, "the response body is sent");
+        assertEq(END_STREAM, stream[1].flags & END_STREAM, "the response body ends the response");
+        assertEq(3, stream.size(), "one frame follows the complete response");
+        assertEq(RST_STREAM, stream[2].type, "the complete response is followed by RST_STREAM");
+        if (stream[2].type == RST_STREAM) {
+            assertEq(0, getErrorCode(stream[2]), "the stream is reset with NO_ERROR");
+        }
+        assertEq((), (select frames, $1.type == GOAWAY), "the connection is not closed");
+    }
+
+    #! asserts that the stream got a complete response, and that no RST_STREAM follows it
+    /** A PING sent after the response is received marks the end of what the server sent for the stream: the server
+        writes a reset of the stream together with the frame that ends the response, so a reset would arrive before
+        the PING's acknowledgement.
+    */
+    private assertNoStop(Socket s, list<hash<H2Frame>> frames, int sid) {
+        list<hash<H2Frame>> stream = getStreamFrames(frames, sid);
+        assertEq(HEADERS, stream[0].type, "the response starts with HEADERS");
+        assertEq(END_STREAM, stream.last().flags & END_STREAM, "the response is complete");
+
+        s.send(frame(PING, 0, 0, binary("stoptest")));
+        while (True) {
+            hash<H2Frame> f = readFrame(s);
+            if (f.type == PING && (f.flags & ACK) && f.payload == binary("stoptest")) {
+                break;
+            }
+            assertFalse(f.type == RST_STREAM && f.sid == sid, "the stream is not reset after its response");
+            assertNeq(GOAWAY, f.type, "the connection is not closed");
+        }
+    }
+
+    #! returns the response and reset frames of the stream; flow control frames are left out
+    private static list<hash<H2Frame>> getStreamFrames(list<hash<H2Frame>> frames, int sid) {
+        return select frames, $1.sid == sid && ($1.type == HEADERS || $1.type == DATA || $1.type == RST_STREAM);
+    }
+
+    #! reads frames until the stream ends with its response or a reset; returns all frames read
+    private list<hash<H2Frame>> readResponse(Socket s, int sid) {
+        list<hash<H2Frame>> rv;
+        bool response_complete;
+        while (True) {
+            hash<H2Frame> f = readFrame(s);
+            rv += f;
+            if (f.type == GOAWAY) {
+                break;
+            }
+            if (response_complete && f.type == PING && (f.flags & ACK) && f.payload == binary("response")) {
+                break;
+            }
+            if (f.sid != sid) {
+                continue;
+            }
+            if (f.type == RST_STREAM) {
+                break;
+            }
+            if ((f.type == DATA || f.type == HEADERS) && (f.flags & END_STREAM)) {
+                response_complete = True;
+                # the reset of an incomplete request is written together with the end of the response; a PING
+                # makes sure that it has been read, without waiting for a frame that may never come
+                s.send(frame(PING, 0, 0, binary("response")));
+                continue;
+            }
+        }
+        return rv;
+    }
+
+    #! connects and sends the connection preface
+    private Socket connect() {
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", port), 10s);
+        s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + frame(SETTINGS, 0, 0, binary()));
+        return s;
+    }
+
+    #! sends a POST request's HEADERS frame; the header block uses no dynamic table and no Huffman coding
+    private sendRequest(Socket s, int sid, string path, bool end_stream) {
+        # :method POST (static index 3), :scheme http (static index 6), :path and :authority as literals with
+        # indexed names (static indexes 4 and 1)
+        binary block = <8386> + <04> + byte(path.size()) + binary(path)
+            + <01> + byte(9) + binary("localhost");
+        s.send(frame(HEADERS, END_HEADERS | (end_stream ? END_STREAM : 0), sid, block));
+    }
+
+    #! reads one frame; acknowledges the server's SETTINGS
+    private hash<H2Frame> readFrame(Socket s) {
+        binary h = s.recvBinary(9, 10s);
+        int len = (get_byte(h, 0) << 16) | (get_byte(h, 1) << 8) | get_byte(h, 2);
+        hash<H2Frame> f = <H2Frame>{
+            "type": get_byte(h, 3),
+            "flags": get_byte(h, 4),
+            "sid": ((get_byte(h, 5) & 0x7f) << 24) | (get_byte(h, 6) << 16) | (get_byte(h, 7) << 8)
+                | get_byte(h, 8),
+            "payload": len ? s.recvBinary(len, 10s) : binary(),
+        };
+        if (f.type == SETTINGS && !(f.flags & ACK)) {
+            s.send(frame(SETTINGS, ACK, 0, binary()));
+        }
+        return f;
+    }
+
+    #! returns the error code of an RST_STREAM frame
+    private static int getErrorCode(hash<H2Frame> f) {
+        return (get_byte(f.payload, 0) << 24) | (get_byte(f.payload, 1) << 16) | (get_byte(f.payload, 2) << 8)
+            | get_byte(f.payload, 3);
+    }
+
+    #! returns a serialized frame
+    private static binary frame(int type, int flags, int sid, binary payload) {
+        return parse_hex_string(sprintf("%06x%02x%02x%08x", payload.size(), type, flags, sid)) + payload;
+    }
+
+    #! returns a single byte
+    private static binary byte(int b) {
+        @assert(b >= 0 && b < 128);
+        return parse_hex_string(sprintf("%02x", b));
+    }
+}

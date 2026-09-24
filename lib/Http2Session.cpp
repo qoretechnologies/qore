@@ -1615,6 +1615,12 @@ bool Http2Session::isStreamRemoteClosed(int32_t stream_id) const {
     return nghttp2_session_get_stream_remote_close(session, stream_id) == 1;
 }
 
+bool Http2Session::isStreamBodyTooLarge(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    return it != streams.end() && it->second->body_too_large;
+}
+
 void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -1762,7 +1768,37 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
             fflush(stderr);
         }
     }
+    if (h2 && h2->is_server && (frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_DATA)
+            && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        h2->stopRequestAfterResponse(frame->hd.stream_id);
+    }
     return 0;
+}
+
+void Http2Session::stopRequestAfterResponse(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    // RFC 9113 section 8.1: a server that sends a complete response before the client has sent its complete
+    // request asks the client to stop sending with RST_STREAM(NO_ERROR) after the response, and a client must not
+    // discard the response because of it.  Without it, the client keeps sending a request body that nobody reads
+    // (and that is discarded without crediting the stream's flow control window once the stream is cleaned up),
+    // and a client that sends its whole request before reading the response never reads it.  The reset is sent
+    // only now that the frame carrying END_STREAM has been written, so it cannot cancel any part of the response.
+    // Extended CONNECT tunnels are excluded: each side closes its half of a tunnel independently.
+    if (!session || nghttp2_session_get_stream_remote_close(session, stream_id) != 0) {
+        // the client has sent its complete request, or the stream is already closed
+        return;
+    }
+    auto it = streams.find(stream_id);
+    if (it != streams.end() && it->second->is_connect) {
+        return;
+    }
+    printd(5, "Http2Session::stopRequestAfterResponse() stream %d: response sent before the complete request; "
+        "sending RST_STREAM(NO_ERROR)\n", stream_id);
+    int rv = nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_NO_ERROR);
+    if (rv) {
+        printd(1, "Http2Session::stopRequestAfterResponse() stream %d: nghttp2_submit_rst_stream() failed: %s\n",
+            stream_id, nghttp2_strerror(rv));
+    }
 }
 
 ssize_t Http2Session::sendCallback(nghttp2_session* session, const uint8_t* data,
@@ -2005,7 +2041,11 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
     } else {
         stream = h2->getOrCreateStream(stream_id);
     }
-    if (stream) {
+    if (stream && stream->body_too_large) {
+        // the request is answered with an error; the rest of the body is discarded, and the flow control credit
+        // below keeps the peer sending until it receives the response and the RST_STREAM(NO_ERROR) that follows it
+        printd(5, "onDataChunkRecvCallback: discarding %zu bytes of oversized body on stream %d\n", len, stream_id);
+    } else if (stream) {
         stream->body.insert(stream->body.end(), data, data + len);
         printd(5, "onDataChunkRecvCallback stream body_size now=%zu\n", stream->body.size());
         // Check body size against limit
@@ -2013,11 +2053,24 @@ int Http2Session::onDataChunkRecvCallback(nghttp2_session* session, uint8_t flag
                 && (int64)stream->body.size() > stream->max_body_size) {
             printd(1, "onDataChunkRecvCallback: body too large (%zu > " QLLD ") stream %d\n",
                 stream->body.size(), stream->max_body_size, stream_id);
-            // Send RST_STREAM with REFUSED_STREAM
-            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
-                NGHTTP2_REFUSED_STREAM);
-            stream->body.clear();
-            return 0;
+            if (stream->is_connect) {
+                // tunnel data is not a request body that is answered; the tunnel is reset
+                nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
+                    NGHTTP2_REFUSED_STREAM);
+                stream->body.clear();
+                return 0;
+            }
+            // A request stream is not reset here: a reset would discard the error response the server sends, and
+            // REFUSED_STREAM would tell the client that the request is safe to retry (RFC 9113 section 8.7).  The
+            // buffered bytes are kept, so every consumer sees a body larger than the limit and answers it.
+            stream->body_too_large = true;
+            // a stream that is dispatched with its complete body is dispatched now instead of when the client
+            // finishes sending a body that is discarded; a stream dispatched on its headers is completed with an
+            // error by the consumer draining its body
+            if (!stream->dispatched && !h2->headers_only_mode) {
+                stream->body_complete = true;
+                h2->markStreamComplete(stream_id);
+            }
         }
     }
     // With auto-window-update enabled on the client (see init()), nghttp2 emits
