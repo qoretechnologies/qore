@@ -24,6 +24,9 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         const TypedApp = "QoreTestTypedApp";
         const RemovedApp = "QoreTestRemovedApp";
         const AllApp = "QoreTestAllApp";
+        # apps whose option types are stored as one graph per app
+        const GraphApp = "QoreTestGraphApp";
+        const BrokenGraphApp = "QoreTestBrokenGraphApp";
 
         const ConnectionAlternative = {
             "connection_alternative": {
@@ -39,6 +42,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         addTestCase("a removed app has no actions", \removedAppHasNoActions());
         addTestCase("restoring all apps keeps restored apps", \restoringAllAppsKeepsRestoredApps());
         addTestCase("reading the index omits unrestorable actions", \readIndexOmitsUnrestorableActions());
+        addTestCase("an app's option types are restored as one graph", \appTypeGraph());
+        addTestCase("an unrestorable app type graph omits actions with options", \unrestorableAppTypeGraph());
 
 %ifndef NoYaml
         string dir = make_tmp_dir();
@@ -68,7 +73,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
 %endif
     }
 
-    #! Writes an index where every app has one restorable and one unrestorable action
+    #! Writes an index in the earlier per-option format where every app has one restorable and one unrestorable
+    #! action, and apps with per-app type graphs
     private writeIndex() {
         # types are restored in the ProviderIndexUtil module's program, so only module classes can be restored
         HashDataType type("QoreTestIndexedType");
@@ -87,7 +93,8 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
                     "app": app,
                     "action": "restorable",
                     "short_desc": "restorable action",
-                    "output_type": restorable,
+                    # output types from earlier indexes are ignored, so this does not affect the action
+                    "output_type": unrestorable,
                     "options": {
                         "legacy": {
                             "display_name": "Legacy",
@@ -100,16 +107,31 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
                     "app": app,
                     "action": "unrestorable",
                     "short_desc": "unrestorable action",
-                    "output_type": unrestorable,
                     "options": {
                         "webhook": {
                             "display_name": "Webhook",
                             "short_desc": "webhook destination",
-                            "type": restorable,
+                            "type": unrestorable,
                         },
                     },
                     "metadata": ConnectionAlternative,
                 },
+            };
+        }
+
+        # both actions of each graph app refer to the same type, which the graph stores once
+        binary graph = Serializable::serialize({"first": {"x": type}, "second": {"y": type}});
+        hash<string, binary> actiontypemap = {
+            GraphApp: compress(graph),
+            BrokenGraphApp: compress(parse_hex_string(replace(graph.toHex(), "HashDataType".toHex(),
+                "HashDataTypX".toHex()))),
+        };
+        foreach string app in ((GraphApp, BrokenGraphApp)) {
+            appinfomap{app} = {"name": app};
+            actioninfomap{app} = {
+                "first": {"app": app, "action": "first", "options": {"x": {"display_name": "X"}}},
+                "second": {"app": app, "action": "second", "options": {"y": {"display_name": "Y"}}},
+                "plain": {"app": app, "action": "plain"},
             };
         }
 
@@ -120,6 +142,7 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
             "appinfomap": appinfomap,
             "actioninfomap": actioninfomap,
             "top_actioninfomap": {},
+            "actiontypemap": actiontypemap,
         }, 0s, {});
     }
 
@@ -164,7 +187,7 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         assertEq(1, actions.size());
         hash<DataProviderActionInfo> action = cast<hash<DataProviderActionInfo>>(actions[0]);
         assertEq("restorable", action.action);
-        assertEq("QoreTestIndexedType", action.output_type.getName());
+        assertEq(NOTHING, action.output_type);
         assertEq("string", action.options.legacy.type.getName());
 
         assertEq(NOTHING, ProviderIndexUtil::tryGetApproximateAppAction(TypedApp, "unrestorable"));
@@ -204,8 +227,28 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
         hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
         foreach string app in ((MetadataApp, TypedApp, RemovedApp, AllApp)) {
             assertEq(("restorable",), keys index.actioninfomap{app}, app);
-            assertEq("QoreTestIndexedType", index.actioninfomap{app}.restorable.output_type.getName(), app);
+            assertEq(NOTHING, index.actioninfomap{app}.restorable.output_type, app);
         }
         assertEq(0, (select keys index.top_actioninfomap, $1 =~ /unrestorable/).size());
+        assertEq(("first", "second", "plain"), keys index.actioninfomap{GraphApp});
+        assertEq(("plain",), keys index.actioninfomap{BrokenGraphApp});
+    }
+
+    appTypeGraph() {
+        checkModules();
+
+        hash<string, hash<auto>> actions = byName(ProviderIndexUtil::tryGetApproximateActionsForApp(GraphApp));
+        assertEq(("first", "second", "plain"), keys actions);
+        assertEq("QoreTestIndexedType", actions.first.options.x.type.getName());
+        # the type both actions refer to is restored once
+        assertTrue(actions.first.options.x.type == actions.second.options.y.type);
+    }
+
+    unrestorableAppTypeGraph() {
+        checkModules();
+
+        assertEq(("plain",), map $1.action, ProviderIndexUtil::tryGetApproximateActionsForApp(BrokenGraphApp));
+        assertEq(("first", "plain", "second"),
+            sort(keys byName(ProviderIndexUtil::tryGetActionMetadataForApp(BrokenGraphApp))));
     }
 }

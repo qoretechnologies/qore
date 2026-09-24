@@ -92,7 +92,9 @@ if (!inlist("t2v", map $1.value, mode_choice.allowed_values)
         || readback.actioninfomap{App}."start-video".options.generate_audio.type.acceptsValue(False) !== False) {
     throw "INSTALL-QUALIFICATION-ERROR", "published choices or boolean false were lost";
 }
-AbstractDataProviderType extras = readback.actioninfomap{App}."get-finetune".output_type.getFields()
+# output types are not indexed; check the registered type's serialization directly
+AbstractDataProviderType extras = Serializable::deserialize(
+    DataProviderActionCatalog::getAppActionEx(App, "get-finetune").output_type.serialize()).getFields()
     .finetune_details.getType();
 hash<auto> ordinary = {"value": {"value": "literal"}, "enabled": False, "count": 0};
 if (extras.acceptsValue(ordinary) != ordinary) {
@@ -104,7 +106,7 @@ if (keyframes.acceptsValue((0.0, "https://example.org/image.png")) != (0.0, "htt
     throw "INSTALL-QUALIFICATION-ERROR", "published positional keyframes lost their structure";
 }
 AbstractDataProviderType media = Serializable::deserialize(
-    readback.actioninfomap{App}."generate-image".output_type.serialize());
+    DataProviderActionCatalog::getAppActionEx(App, "generate-image").output_type.serialize());
 hash<auto> completed = {"status": "Ready", "id": "installed-fixture", "cost": number("1.5"),
     "result": {"sample": "https://delivery.eu1.bfl.ai/fixture.png", "seed": 0},
     "media": {"data": binary("typed fixture"), "content_type": "image/png", "width": 64, "height": 64}};

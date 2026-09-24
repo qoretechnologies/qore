@@ -203,8 +203,12 @@ public class ProviderIndex inherits ProviderIndexUtil {
             # add to app info map
             index.appinfomap{app.name} = app;
             # add to app action info map (skip apps with no actions)
-            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, discovery)) {
+            list<hash<DataProviderActionInfo>> app_actions = DataProviderActionCatalog::getActions(app.name, False);
+            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, app_actions, discovery)) {
                 index.actioninfomap{app.name} = actions;
+            }
+            if (*binary types = serializeAppActionTypes(app.name, app_actions, discovery)) {
+                index.actiontypemap{app.name} = types;
             }
             if (!index.appmap{app.name}) {
                 map index.appmap{app.name}{$1} = True, dependencies;
@@ -277,24 +281,73 @@ public class ProviderIndex inherits ProviderIndexUtil {
     }
 
     #! Get YAML-serializable hash of actions keyed by action name
+    /** Output types are not indexed, and option types are serialized separately by serializeAppActionTypes()
+    */
     private static *hash<string, hash<auto>> getSerializableAppActions(string app,
-            DataProviderDiscoverySession discovery) {
+            list<hash<DataProviderActionInfo>> actions, DataProviderDiscoverySession discovery) {
         hash<string, hash<auto>> rv;
-        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app, False)) {
+        foreach hash<DataProviderActionInfo> action in (actions) {
             try {
-                # Native serialization retains nested fields, unions, binary types, and choice values.
-                # It never executes dynamic type/default/example callbacks; unsupported state fails qualification.
+                # dynamic callbacks cannot be serialized, and no index consumer uses output types
                 rv{action.action} = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
-                    "output_type": action.output_type ? action.output_type.serialize() : NOTHING,
                     "options": getSerializableActionOptions(action.options),
                     "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
                 };
             } catch (hash<ExceptionInfo> ex) {
-                DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-types",
+                DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-metadata",
                     app + "/" + action.action, ex.err, ex.desc, ex.arg, app, action.action);
             }
         }
         return rv;
+    }
+
+    #! Serializes the option types of all of an app's actions as one graph
+    /** Types of one app commonly share objects, such as the %OpenAPI document that all schema-backed types of an
+        app refer to.  Serializing each type separately repeated every shared object in every type; a single graph
+        stores each shared object once, and restoring it shares them again.
+
+        Native serialization retains nested fields, unions, binary types, and choice values.  It never executes
+        dynamic type/default/example callbacks; unsupported state fails qualification.
+
+        @param app the app name
+        @param actions the app's actions
+        @param discovery the discovery session that receives any serialization failure
+
+        @return the zlib-compressed serialized hash of action names to option names to option types; @ref nothing
+        if no action has options or the types cannot be serialized
+    */
+    private static *binary serializeAppActionTypes(string app, list<hash<DataProviderActionInfo>> actions,
+            DataProviderDiscoverySession discovery) {
+        hash<auto> types;
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            if (action.options) {
+                types{action.action} = map {$1.key: $1.value.type}, action.options.pairIterator();
+            }
+        }
+        if (!types) {
+            return;
+        }
+        try {
+            # serialized type graphs compress by more than 10x, and decompressing costs a small fraction of
+            # deserializing them
+            return compress(Serializable::serialize(types));
+        } catch (hash<ExceptionInfo> ex) {
+            # attribute the failure to the actions whose types cannot be serialized
+            bool reported;
+            foreach hash<auto> i in (types.pairIterator()) {
+                try {
+                    Serializable::serialize(i.value);
+                } catch (hash<ExceptionInfo> action_ex) {
+                    DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-types",
+                        app + "/" + i.key, action_ex.err, action_ex.desc, action_ex.arg, app, i.key);
+                    reported = True;
+                }
+            }
+            if (!reported) {
+                DataProviderActionCatalog::reportDiscoveryFailure(discovery, "app", "serialize-action-types", app,
+                    ex.err, ex.desc, ex.arg, app);
+            }
+        }
     }
 
     #! Return apps to include in the index
@@ -316,9 +369,8 @@ public class ProviderIndex inherits ProviderIndexUtil {
 
     #! Get YAML-serializable action options
     private static *hash<auto> getSerializableActionOptions(*hash<auto> options) {
-        return map {$1.key: $1.value + {
-            "type": $1.value.type.serialize(),
-        }}, options.pairIterator();
+        # option types are serialized per app by serializeAppActionTypes()
+        return map {$1.key: $1.value - "type"}, options.pairIterator();
     }
 
     #! Get YAML-serializable data provider info

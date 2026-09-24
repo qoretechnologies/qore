@@ -62,7 +62,9 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
-    - restore complete input and output type graphs from ProviderIndex 1.2, retaining support for legacy indexes
+    - restore complete option type graphs from ProviderIndex 1.2, one graph per app so that objects shared between
+      types are restored once and shared again, retaining support for legacy indexes; output types are not
+      indexed, and output types in earlier indexes are ignored rather than restored
     - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
       and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()",
       which return indexed action metadata without restoring action types, so callers that do not need the types

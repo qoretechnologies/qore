@@ -59,8 +59,12 @@ module ProviderIndex {
     @section providerindex_relnotes Release Notes
 
     @subsection providerindex_v1_2 ProviderIndex v1.2
-    - preserve complete action input and output type graphs through index publication, including media, unions,
-      nested fields, and choices; serialization failures now block publication with structured action evidence
+    - preserve complete action option type graphs through index publication, including media, unions, nested
+      fields, and choices; serialization failures now block publication with structured action evidence
+    - the option types of each app are stored as one zlib-compressed serialized graph, so objects shared between
+      types, such as an %OpenAPI document, are stored once per app instead of once per type; this reduced the index
+      of the largest %OpenAPI-based apps by about 1000 times
+    - action output types are not indexed, since no index consumer uses them
     - indexes written by this version require ProviderIndexUtil 1.2 or later
 
     @subsection providerindex_v1_1 ProviderIndex v1.1

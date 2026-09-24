@@ -18,7 +18,7 @@ class ProviderIndexTypesTest inherits QUnit::Test {
     constructor() : Test("Provider index type preservation", "1.0", \ARGV) {
         directory = make_tmp_dir("provider-index-types-");
         on_exit remove_tree(directory);
-        addTestCase("nested inputs and media outputs survive YAML and index readback", \roundTripTest());
+        addTestCase("nested and media option types survive YAML and index readback", \roundTripTest());
         addTestCase("unserializable type blocks publication with structured evidence", \failureTest());
         set_return_value(main());
     }
@@ -50,21 +50,29 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         action.path = "/typed";
         action.output_type = output;
         action.options = DataProviderActionCatalog::getActionOptionFromFields({
-            "object": new QoreDataField({"name": "object", "type": input})});
+            "object": new QoreDataField({"name": "object", "type": input}),
+            "media": new QoreDataField({"name": "media", "type": output}),
+        });
         DataProviderActionCatalog::registerAction(action);
         auto published = publish();
         assertTrue(published.summary.qualification.complete);
         for (int pass = 0; pass < 2; ++pass) {
-            auto restored = ProviderIndexUtil::readDataProviderIndex().actioninfomap.IndexIdentityFixture.typed;
+            hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
+            auto restored = index.actioninfomap.IndexIdentityFixture.typed;
+            # output types are not indexed; option types are stored once per app
+            assertEq(NOTHING, restored.output_type);
+            assertTrue(exists index.actiontypemap.IndexIdentityFixture);
             auto value = {"value": "ordinary", "enabled": False};
             assertEq(value, restored.options.object.type.acceptsValue(value));
             assertThrows("MISSING-VALUE-ERROR", sub () { restored.options.object.type.acceptsValue({"enabled": False}); });
             assertEq(False, restored.options.object.type.getFields().enabled.getAllowedValues()[0].value);
             assertEq("Disabled", restored.options.object.type.getFields().enabled.getAllowedValues()[0].display_name);
             auto media = {"data": <000102ff>, "seed": 0, "detail": value};
-            assertEq(media, restored.output_type.acceptsValue(media));
-            auto again = Serializable::deserialize(restored.output_type.serialize());
+            assertEq(media, restored.options.media.type.acceptsValue(media));
+            auto again = Serializable::deserialize(restored.options.media.type.serialize());
             assertEq(media, again.acceptsValue(media));
+            # a type shared by the options of the app is restored once and shared again
+            assertTrue(restored.options.object.type == restored.options.media.type.getFields().detail.getType());
         }
     }
     private failureTest() {
@@ -75,7 +83,8 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         action.action = "invalid";
         action.path = "/invalid";
         HashDataType invalid("Unserializable", NOTHING, {"callback": sub () {}});
-        action.output_type = invalid;
+        action.options = DataProviderActionCatalog::getActionOptionFromFields({
+            "invalid": new QoreDataField({"name": "invalid", "type": invalid})});
         DataProviderActionCatalog::registerAction(action);
         bool rejected = False;
         try { publish(); }

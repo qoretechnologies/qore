@@ -95,8 +95,9 @@ hash<auto> ordinary = {"value": {"value": "literal"}, "enabled": False, "count":
 if (extras.acceptsValue(ordinary) != ordinary) {
     throw "INSTALL-QUALIFICATION-ERROR", "published object type interpreted an ordinary value member as a choice";
 }
+# output types are not indexed; check the registered type's serialization directly
 AbstractDataProviderType media = Serializable::deserialize(
-    readback.actioninfomap{App}."get-image-result".output_type.serialize());
+    DataProviderActionCatalog::getAppActionEx(App, "get-image-result").output_type.serialize());
 hash<auto> completed = {"status": "succeeded", "job_id": strmul("a", 64),
     "artifacts": ({"data": binary("typed fixture"), "content_type": "image/png", "seed": 0, "finish_reason": "SUCCESS"},)};
 if (media.acceptsValue(completed) != completed

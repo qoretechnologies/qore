@@ -3745,8 +3745,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - \c qdp and the @ref providerindexintro "ProviderIndex" and
       @ref providerindexutilintro "ProviderIndexUtil" modules
-      - preserve complete action input and output types in published indexes, including nested fields,
-        structured choices, and media/job results; unserializable types block qualified publication
+      - preserve complete action option types in published indexes, including nested fields, structured
+        choices, and media/job results; unserializable types block qualified publication
+      - the option types of each app are stored as one compressed graph, so objects shared between types, such as
+        an %OpenAPI document, are stored and restored once per app instead of once per type; for the largest
+        %OpenAPI-based apps this reduces the index about 1000 times and restoring their types from minutes to
+        seconds
+      - action output types are not indexed, since no index consumer uses them
       - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
         @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
         @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard
