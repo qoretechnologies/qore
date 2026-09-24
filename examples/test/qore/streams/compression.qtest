@@ -8,6 +8,33 @@
 
 %exec-class CompressionStreamTest
 
+#! Returns the given data in one read, and raises an error if it is read again before a condition is met
+class OnceStream inherits InputStream {
+    private {
+        *binary data;
+        code<bool()> may_read_again;
+    }
+
+    constructor(binary data, code<bool()> may_read_again) {
+        self.data = data;
+        self.may_read_again = may_read_again;
+    }
+
+    *binary read(int limit) {
+        if (data) {
+            binary rv = remove data;
+            return rv;
+        }
+        if (!may_read_again()) {
+            throw "READ-AGAIN-ERROR", "the stream was read again before the output of the data read was consumed";
+        }
+    }
+
+    int peek() {
+        return data ? data[0] : -1;
+    }
+}
+
 class SrcStream inherits InputStream {
     public {
         binary data;
@@ -64,6 +91,7 @@ public class CompressionStreamTest inherits QUnit::Test {
         addTestCase("bzip2 decompression input stream", \bzip2DecompressInput());
         addTestCase("bzip2 decompression output stream", \bzip2DecompressOutput());
         addTestCase("decompression algorithm check", \decompressAlgCheck());
+        addTestCase("decompression output is not held back", \decompressDrainTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -298,5 +326,63 @@ public class CompressionStreamTest inherits QUnit::Test {
     private binary modify(binary b) {
         int i = (b[b.size() - 1] + 1) & 255;
         return b.substr(b.size() - 1) + parse_hex_string(sprintf("%02X", i));
+    }
+
+    #! A decompressor that expands a small input to more than one output buffer (as Brotli does, which consumes all
+    #! input at once) releases all of its output without waiting for more input or the end of the stream
+    decompressDrainTest() {
+        string text = strmul("0123456789", 10000);
+        hash<string, binary> compressed = {
+            COMPRESSION_ALG_ZLIB: Qore::compress(text),
+            COMPRESSION_ALG_GZIP: Qore::gzip(text),
+            COMPRESSION_ALG_BZIP2: Qore::bzip2(text),
+            COMPRESSION_ALG_BROTLI: Qore::brotli(text),
+            COMPRESSION_ALG_ZSTD: Qore::zstd(text),
+        };
+        foreach hash<auto> i in (compressed.pairIterator()) {
+            # output stream: the output of the data written is available before the stream is closed
+            BinaryOutputStream bos();
+            TransformOutputStream tos(bos, get_decompressor(i.key));
+            int total = 0;
+            for (int offset = 0; offset < i.value.size(); offset += 10) {
+                tos.write(i.value.substr(offset, 10));
+                total += bos.getData().size();
+            }
+            assertEq(text.size(), total, i.key + " output stream");
+            tos.close();
+
+            # input stream: the output of the data read is returned before the source is read again
+            int received = 0;
+            TransformInputStream tis(new OnceStream(i.value, bool sub () { return received >= text.size(); }),
+                get_decompressor(i.key));
+            binary out;
+            while (received < text.size()) {
+                *binary b = tis.read(4096);
+                if (!b) {
+                    break;
+                }
+                out += b;
+                received += b.size();
+            }
+            assertEq(binary(text), out, i.key + " input stream");
+        }
+
+        # a complete stream whose output fills the last output buffer exactly: the transform is drained after the
+        # end of the stream, which is not extra data
+        text = strmul("0123456789", 4096);
+        compressed = {
+            COMPRESSION_ALG_ZLIB: Qore::compress(text),
+            COMPRESSION_ALG_GZIP: Qore::gzip(text),
+            COMPRESSION_ALG_BZIP2: Qore::bzip2(text),
+            COMPRESSION_ALG_BROTLI: Qore::brotli(text),
+            COMPRESSION_ALG_ZSTD: Qore::zstd(text),
+        };
+        foreach hash<auto> i in (compressed.pairIterator()) {
+            BinaryOutputStream bos();
+            TransformOutputStream tos(bos, get_decompressor(i.key));
+            tos.write(i.value);
+            tos.close();
+            assertEq(binary(text), bos.getData(), i.key + " complete stream");
+        }
     }
 }

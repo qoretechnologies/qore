@@ -64,8 +64,27 @@ public:
         if (outBufCount > 0) {
             return readFromBuffer(ptr, limit);
         }
+        // true if the transform needs more input to make progress
+        bool need_input = false;
         while (true) {
-            if (!eof && inBufSize - bufCount > 0) {
+            // a full output buffer means that the transform can hold more output for the input it has consumed;
+            // it is drained with empty input before more input is read, as reading can block
+            if (drain && !bufCount) {
+                drain = false;
+                std::pair<int64, int64> r = t->apply(buf, 0, outBuf, outBufSize, xsink);
+                if (*xsink) {
+                    return 0;
+                }
+                if (r.second) {
+                    drain = r.second == static_cast<int64>(outBufSize);
+                    outBufCount = r.second;
+                    return readFromBuffer(ptr, limit);
+                }
+            }
+            // more input is read only when the transform has consumed the input it was given or needs more input
+            // to make progress, as reading can block while the transform still has output for the input it has
+            if (!eof && (!bufCount || need_input) && inBufSize - bufCount > 0) {
+                need_input = false;
                 int64 r = is->read(buf + bufCount, inBufSize - bufCount, xsink);
                 if (*xsink) {
                     return 0;
@@ -90,11 +109,16 @@ public:
                 memmove(buf, buf + r.first, bufCount);
             }
             if (r.second) {
+                drain = r.second == static_cast<int64>(outBufSize);
                 outBufCount = r.second;
                 return readFromBuffer(ptr, limit);
             }
             if (!r.first) {
-                //did not produce anything and did not read anything
+                //did not produce anything and did not read anything: more input is needed
+                if (!eof && inBufSize - bufCount > 0) {
+                    need_input = true;
+                    continue;
+                }
                 assert(eof);
                 assert(!bufCount);
                 return 0;
@@ -127,6 +151,8 @@ private:
     size_t bufCount = 0; //!< Actual count of bytes in the buffer.
     size_t outBufCount = 0; //!< Actual count of bytes in the out buffer.
     bool eof = false;
+    //! True if the last output of the transform filled the output buffer, so it can hold more output
+    bool drain = false;
 
     DLLLOCAL int64 readFromBuffer(void *ptr, int64 limit) {
         assert(outBufCount);

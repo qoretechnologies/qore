@@ -3301,6 +3301,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::TransformOutputStream "TransformOutputStream" and
+      @ref Qore::TransformInputStream "TransformInputStream" holding back decompressed data: a decompressor that
+      expands its input to more than one output buffer, as Brotli and Zstd do, kept the rest of the output until
+      the next write or the end of the stream, and a
+      @ref Qore::TransformInputStream "TransformInputStream" read more input, which can block, before returning
+      the output it already had
     - Fixed @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" with a content encoding
       returning only the first event of a compressed stream: each call started a new decompressor and discarded the
       data already received and decompressed, so the next call waited for data that had already arrived; the

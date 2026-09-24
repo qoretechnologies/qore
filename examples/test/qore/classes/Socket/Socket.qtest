@@ -1016,13 +1016,17 @@ class SocketTest inherits QUnit::Test {
         }
 
         # an event that decompresses to more than one output buffer is followed by another event in the same
-        # compressed data
+        # compressed data; Brotli and Zstd consume all input at once and hold the rest of the output, which is read
+        # without waiting for more data
         {
             string big = strmul("x", 200000);
-            Socket client = serveSseStream(gzip("data: " + big + "\n\ndata: after\n\n"));
-            on_exit client.close();
-            assertEq(big, client.readServerSentEvent("gzip", 5s).data);
-            assertEq("after", client.readServerSentEvent("gzip", 5s).data);
+            string text = "data: " + big + "\n\ndata: after\n\n";
+            foreach hash<auto> i in (encoders{"gzip", "br", "zstd"}.pairIterator()) {
+                Socket client = serveSseStream(i.value(text));
+                on_exit client.close();
+                assertEq(big, client.readServerSentEvent(i.key, 5s).data, i.key);
+                assertEq("after", client.readServerSentEvent(i.key, 5s).data, i.key);
+            }
         }
 
         # an unknown content coding

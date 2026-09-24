@@ -136,6 +136,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (state != STATE_OK) {
             xsink->raiseException("ZLIB-ERROR", "invalid zlib stream state");
             return std::make_pair(0, 0);
@@ -187,7 +191,7 @@ public:
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
         if (state == STATE_END) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("ZLIB-ERROR", "Unexpected extra bytes at the end of the compressed data stream");
                 state = STATE_ERROR;
             }
@@ -213,7 +217,8 @@ public:
             xsink->raiseException("ZLIB-ERROR", "Unexpected end of compressed data stream");
             state = STATE_ERROR;
             return std::make_pair(0, 0);
-        } else if (rc != Z_OK) {
+        } else if (rc != Z_OK && (rc != Z_BUF_ERROR || !src)) {
+            // Z_BUF_ERROR means that no progress was possible, as when empty input is given to drain the output
             CompressionErrorHelper::mapZlibError(rc, xsink);
             state = STATE_ERROR;
             return std::make_pair(0, 0);
@@ -262,6 +267,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (state == STATE_END) {
             return std::make_pair(0, 0);
         }
@@ -319,7 +328,7 @@ public:
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
         if (state == STATE_END) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("BZIP2-ERROR", "Unexpected extra bytes at the end of the compressed data stream");
                 state = STATE_ERROR;
             }
@@ -392,6 +401,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (!state) {
             xsink->raiseException("BROTLI-ERROR", "invalid Brotli encoder state");
             return std::make_pair(0, 0);
@@ -440,7 +453,7 @@ public:
         }
 
         if (finished) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("BROTLI-ERROR", "Unexpected extra bytes at the end of compressed data stream");
             }
             return std::make_pair(0, 0);
@@ -516,6 +529,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (!cstream) {
             xsink->raiseException("ZSTD-ERROR", "invalid Zstd compression stream state");
             return std::make_pair(0, 0);
@@ -590,7 +607,7 @@ public:
         }
 
         if (finished) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("ZSTD-ERROR", "Unexpected extra bytes at the end of compressed data stream");
             }
             return std::make_pair(0, 0);
@@ -648,6 +665,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (!initialized) {
             xsink->raiseException("LZ4-ERROR", "invalid LZ4 compressor state");
             return std::make_pair(0, 0);
@@ -693,7 +714,7 @@ public:
         }
 
         if (finished) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("LZ4-ERROR", "Unexpected extra bytes at the end of compressed data stream");
             }
             return std::make_pair(0, 0);
@@ -702,6 +723,11 @@ public:
         if (!src) {
             // No more input, done
             finished = true;
+            return std::make_pair(0, 0);
+        }
+
+        // a block is decompressed as a whole, so empty input produces nothing
+        if (!srcLen) {
             return std::make_pair(0, 0);
         }
 
@@ -844,7 +870,9 @@ int StreamDecoder::next(ExceptionSink* xsink) {
         if (pos < len) {
             return static_cast<unsigned char>(buf[pos++]);
         }
-        if (input.empty()) {
+        // a full output buffer means that the transform can hold more output for the input it has consumed, which
+        // is drained with empty input
+        if (input.empty() && len < buf_size) {
             return -1;
         }
         std::pair<int64, int64> rv = transform->apply(input.data(), input.size(), buf.get(), buf_size, xsink);
