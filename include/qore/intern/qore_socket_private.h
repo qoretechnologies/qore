@@ -163,6 +163,7 @@ class Transform;
 #define GETSOCKOPT_ARG_4 char*
 #define SETSOCKOPT_ARG_4 const char*
 #define SHUTDOWN_ARG SD_BOTH
+#define SHUTDOWN_WR_ARG SD_SEND
 #define QORE_INVALID_SOCKET ((int)INVALID_SOCKET)
 #define QORE_SOCKET_ERROR SOCKET_ERROR
 DLLLOCAL int check_windows_rc(int rc);
@@ -177,6 +178,7 @@ DLLLOCAL int windows_set_errno();
 #define GETSOCKOPT_ARG_4 void*
 #define SETSOCKOPT_ARG_4 void*
 #define SHUTDOWN_ARG SHUT_RDWR
+#define SHUTDOWN_WR_ARG SHUT_WR
 #define QORE_INVALID_SOCKET -1
 #define QORE_SOCKET_ERROR -1
 #endif
@@ -1466,6 +1468,16 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
         CloseLockHelper cl(*this);
         return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_ARG) : 0;
+    }
+
+    //! Shuts down the sending side of the connection only (a half-close); the peer receives the end of the stream
+    /** Data already written is sent before the end of the stream, and data from the peer can still be received.
+
+        @return 0 for success, -1 for an error (see errno)
+    */
+    DLLLOCAL int shutdown_write_direct() {
+        CloseLockHelper cl(*this);
+        return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_WR_ARG) : 0;
     }
 
     //! Returns the HTTP/2 session to mark closed; the reference is read under @ref close_m

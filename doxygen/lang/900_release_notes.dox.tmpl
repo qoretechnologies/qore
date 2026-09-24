@@ -1051,6 +1051,11 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
         to an HTTP/1.0 request
       - @ref Qore::Socket::startPollSendHttp2StreamingResponse() "Socket::startPollSendHttp2StreamingResponse()":
         sends an HTTP/2 response with an @ref Qore::InputStream "InputStream" body via the I/O thread
+      - @ref Qore::Socket::startPollLingeringClose() "Socket::startPollLingeringClose()": closes a connection so
+        that the peer can read everything sent before the close: it shuts down the sending side and discards the
+        data the peer still sends until the peer closes its side, instead of closing with unread data, which makes
+        the system reset the connection and can make the peer discard a final response before reading it; returns a
+        @ref Qore::LingeringCloseInfo "LingeringCloseInfo" hash
       - @ref Qore::Socket::submitHttp2StreamingResponseWithStream() "Socket::submitHttp2StreamingResponseWithStream()":
         hands off an @ref Qore::InputStream "InputStream" to the HTTP/2 I/O thread for incremental DATA frame streaming
       - @ref Qore::Socket::submitQuicStreamingResponseWithStream() "Socket::submitQuicStreamingResponseWithStream()":
@@ -1853,6 +1858,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         requests (<a href="https://www.rfc-editor.org/rfc/rfc9112#section-6.1">RFC 9112 section 6.1</a>): a message
         body of known length is sent with a \c Content-Length, and a streamed message body of unknown length is
         delimited by closing the connection
+      - fixed HTTP/1.x clients sometimes receiving a connection reset instead of the response when the server
+        closed the connection after the response while the client was still sending data that the server did not
+        read, such as the rest of a request body answered with an error, a pipelined request, or the remainder of
+        an HTTP/2 connection preface; the server now closes such connections with a lingering close, bounded by the
+        new \c lingering_close_timeout option
 
     - @ref httpserverutilintro "HttpServerUtil" module
       - cookie-setting support and a refactored, more extensible authentication design

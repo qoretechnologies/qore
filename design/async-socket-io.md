@@ -621,6 +621,45 @@ crediting only the connection window.  `examples/test/qlib/HttpServer/HttpServer
 frames on the wire; `HttpClient`-based tests cannot see the difference, because the client reads the response while
 it is still sending.
 
+## HTTP/1.x Lingering Close
+
+Closing a TCP socket with unread received data makes the kernel send RST instead of FIN (RFC 1122 section
+4.2.2.13), and a client that has not yet read the response when the RST arrives loses it: `recv()` fails with
+`ECONNRESET`.  An HTTP/1.x server closes with unread data whenever it answers before reading everything: an error
+response to a request whose body it does not read, a handler `close` with a pipelined request behind it, or the 501
+for an HTTP/2 connection preface, where the rest of the preface and the client's frames stay unread.  The race is
+wide on a loaded machine (the macOS CI VM has 2 CPUs): 12 of 1800 HTTP/2-client-to-HTTP/1-server requests saw the
+reset under CPU saturation.
+
+`Socket::startPollLingeringClose()` (`SocketLingeringClosePollOperation` in `lib/QoreSocket.cpp`) closes the way
+Apache and nginx do:
+
+1. On TLS, send `close_notify` (`SocketShutdownSslPollState`; the peer's alert is not awaited).
+2. `shutdown(SHUT_WR)`: the client receives the FIN right after the response, so HTTP/1.0 clients that read until
+   the end of the stream finish at once.
+3. Discard everything received, including bytes already in the socket's read buffer, with raw `recv()` (after
+   `close_notify`, the TLS records are not decrypted), until EOF, an error, or the optional byte limit.
+4. Close.  After EOF there is no unread data, so the close sends FIN, not RST.
+
+The operation has no timeout of its own.  `HttpAsyncSocketIoController::lingeringClose()` registers the connection in
+the `LingeringClose` state and submits the operation with the `lingering_close_timeout` server option (default 5s) as
+the controller timeout; a timeout or cancel aborts the operation, which closes the socket
+(`abortNeedsClose()`/`needsCloseOnComplete()`), and is not reported as an error.  Server stop closes lingering
+connections through the usual `cancelAndClose()` sweep.  `lingering_close_timeout: 0` restores the immediate close.
+
+It is used for every HTTP/1.x close after a response in the controller: `result.close` after a handler-thread
+response, the `SendStreamResponse` completion, and the streamed `send_callback`/`InputStream` responses.  A persistent
+connection's dedicated thread, which sends its responses itself, hands a connection that must close to
+`HttpServer::closeConnectionAfterResponse()` (`HttpAsyncSocketIoController::closeConnection()`), in the same way as it
+hands a connection that stays open to `returnConnectionToAsyncIo()`; the initial persistent response returns
+`close` to the controller.  Not covered: a response that a handler wrote to the socket itself outside of a persistent
+session (`processNativeRequest()` returns an empty result, and the socket may still be in the handler's use), and
+HTTP/2 connection closes after GOAWAY.
+
+`examples/test/qore/classes/Socket/SocketLingeringClose.qtest` tests the operation; `HttpServerLingeringClose.qtest`
+tests the server, asserting on the controller's DEBUG record of each lingering close (bytes discarded, whether the
+client closed), because a client cannot distinguish the two closes deterministically.
+
 ## Platform-Specific Fixes
 
 ### macOS accept() O_NONBLOCK Inheritance

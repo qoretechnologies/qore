@@ -277,6 +277,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclSocketPollInfo,
     * hashdeclDatagramInfo,
     * hashdeclQuicGoawayStateInfo,
+    * hashdeclLingeringCloseInfo,
     * hashdeclPipeInfo,
     * hashdeclSseMessageInfo,
     * hashdeclPortRangeInfo,
@@ -1418,6 +1419,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclSocketPollInfo = init_hashdecl_SocketPollInfo(qns);
     hashdeclDatagramInfo = init_hashdecl_DatagramInfo(qns);
     hashdeclQuicGoawayStateInfo = init_hashdecl_QuicGoawayStateInfo(qns);
+    hashdeclLingeringCloseInfo = init_hashdecl_LingeringCloseInfo(qns);
     preinitReadOnlyFileClass();
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);

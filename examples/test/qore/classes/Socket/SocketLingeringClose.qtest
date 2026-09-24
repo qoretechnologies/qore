@@ -1,0 +1,323 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Socket::startPollLingeringClose(): the peer reads everything sent before the close, and the data it sends that
+    was never read is discarded instead of making the system reset the connection.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketLingeringCloseTest
+
+const TestCert = "-----BEGIN PRIVATE KEY-----
+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
+WkEP9QjmvU4tYxLvhP6peBr7PhLJ66A=
+-----END PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+MIIFhTCCA22gAwIBAgIUWg3AaxJ1kKrhwH7TTcGh3Z0yPEwwDQYJKoZIhvcNAQEL
+BQAwUTELMAkGA1UEBhMCQ1oxEzARBgNVBAgMClNvbWUtU3RhdGUxDzANBgNVBAcM
+BlByYWd1ZTENMAsGA1UECgwEUW9yZTENMAsGA1UEAwwEUW9yZTAgFw0yMDAxMzEw
+NjEyMzVaGA8yMTIwMDEwNzA2MTIzNVowUTELMAkGA1UEBhMCQ1oxEzARBgNVBAgM
+ClNvbWUtU3RhdGUxDzANBgNVBAcMBlByYWd1ZTENMAsGA1UECgwEUW9yZTENMAsG
+A1UEAwwEUW9yZTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAOaVbGYM
+fxHEaq0WXutG8DveHNsw6mymmdi45d9m0CD6M7b8c+0Kt7uyyMtuTqHV9SdJ2zJO
+7mEAVgsmaJveLqn3vKjHw8ev3tcH0+4TdN9Dt5ym0dihkLrcfkdW5eSrdLXdNGY3
+o2+A6wdA62yGV7LJtz6f+3tZeMoqAVRLS///byr8koQ1SinmEGZUxaJJLUIbGm8N
+SBSTxW2CdtC2GsHoVF1GYBDwxx8x9gPEM8qAnyVlYl/Z0oU4GSLamtqUnlmxXTRS
+xdhteYVHUSF/mjNMreSv9sG49PFG0BNgaUi4tAIoyxEf9Ro+aWLZVwNkcOxlh4d8
+bVgHCeonLXN16UuvJO8oap4YKOb0yyVa1YzMFU/G8bfWpXc0771FXVwFUNFTyUXc
+C+OrN6UsHXgrxNyWiKaxkbUjCMKn2tx6O5AQ/cGEq6OeVOBZojhiWIR9CKHQOCTW
+gfKMg2B8Yu+VtjLFUoNwD7VC+rp/xo456CrYylAfewYU5ZPWIk+GYH133UwVZs1L
+MZvgs7h0WYYY9ebMpTbLXLkrJypNTYF2aoo6Oc/54LdFhQQA3SRfHJSdeydz4PjZ
+HTT4hj7AG7X/CU8uzHHE1a5McdnLWfFY/3wbu5mz86tMbnQY5yXKML+wCAa95hAc
+qaFrb5CXAHhGeZl4GEvdRLUZUwU+M+omDSu5AgMBAAGjUzBRMB0GA1UdDgQWBBTS
+O+Koh2q4QJgVnFud2cW0n2hxjzAfBgNVHSMEGDAWgBTSO+Koh2q4QJgVnFud2cW0
+n2hxjzAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4ICAQC0n27EM59I
+5fa6vuSvSFpD0yV0YLsPD6P6Qr+WnosgZD1E7Vs84OT1p/QmHHMbzFzAlzRN050C
+FvUNZNYeGGmj+sPrXhc15FI7GKYY5HrF75YQAPfZ0p4kB6VZQA/Y+5t/7dM7tUUQ
+KuIP4KKpSdFrnEH2LQ9xO8LwBRum/2yhOU00GuO/M2wQFmDlWnDE4OphpJCW5zHd
++vDWcvnhFr30IHyBNMxau5ad8vnceHX1WmwQW95zeGQ8sQNxtCjRa/05KnjgnPtj
+Dk9FCsB2Iw35Ebfk6gO9K78cKxAYGcWyKaHfN0Okt0uyLZAd88ogAspM2DB0VbGe
+DnunO/56PjlwRb2oFVltRGioo1HnLJCtUOAaFc1KOlQ/4xqWlSoQ9a1oUtjRrZjP
+H960K/rqBYhDQi/TrdpIRSQheS7zIR+quqcSJPSqxn4r/TEVx/8APm0FSF8p0T56
+Ps1yVuAUWSVAJ0JivVlJTnG6aQ1h1xHCDnvW5PSG0bL0sqeSYZ4Gt55LWaqWToo9
+qibte1W+dyK5IZEpk3f081N6GegIv+ulzcdcedp4oRCtaOUBziqSlZqXXkoiFyQ4
+P1CvlJwL79QntIvjfC5nRMHwMy2wE6Eqt57sFlUnvD25CbbX/TNDSNqXhXQbYaCZ
+I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
+-----END CERTIFICATE-----";
+
+class SocketLingeringCloseTest inherits QUnit::Test {
+    public {
+        #! the response the server sends before closing
+        const Response = "response";
+    }
+
+    constructor() : Test("SocketLingeringCloseTest", "1.0") {
+        addTestCase("unread data is discarded, and the peer reads the response", \unreadDataTest());
+        addTestCase("data sent after the response is discarded", \dataAfterResponseTest());
+        addTestCase("the maximum amount of data to discard", \maxDiscardTest());
+        addTestCase("TLS", \tlsTest());
+        addTestCase("buffered data is discarded", \bufferedDataTest());
+        addTestCase("peer already closed", \peerClosedTest());
+        addTestCase("socket not open", \notOpenTest());
+        set_return_value(main());
+    }
+
+    unreadDataTest() {
+        hash<auto> conn = connect();
+        Socket client = conn.client;
+        Socket server = conn.server;
+        on_exit client.close();
+
+        # the server never reads this data
+        client.send(binary(strmul("x", 65536)));
+        server.send(Response);
+        Queue result = startLingeringClose(server);
+
+        assertEq(Response, client.recv(Response.size(), 10s), "the response is read");
+        assertThrows("SOCKET-CLOSED", \client.recv(), (1, 10s), "the response is followed by the end of the stream");
+        client.close();
+
+        hash<LingeringCloseInfo> info = getResult(result);
+        assertEq(65536, info.discarded, "all unread data was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the peer closed it");
+        assertFalse(info.max_discard_reached);
+        assertFalse(server.isOpen(), "the socket is closed");
+    }
+
+    dataAfterResponseTest() {
+        hash<auto> conn = connect();
+        Socket client = conn.client;
+        Socket server = conn.server;
+        on_exit client.close();
+
+        server.send(Response);
+        Queue result = startLingeringClose(server);
+        assertEq(Response, client.recv(Response.size(), 10s), "the response is read");
+        # the server's sending side is shut down, but it still receives
+        for (int i = 0; i < 3; ++i) {
+            client.send(binary(strmul("y", 20000)));
+        }
+        client.close();
+
+        hash<LingeringCloseInfo> info = getResult(result);
+        assertEq(60000, info.discarded, "the data sent after the response was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the peer closed it");
+    }
+
+    maxDiscardTest() {
+        hash<auto> conn = connect();
+        Socket client = conn.client;
+        Socket server = conn.server;
+        on_exit client.close();
+
+        # the peer never closes its side; the discard limit ends the wait
+        client.send(binary(strmul("z", 100000)));
+        Queue result = startLingeringClose(server, 50000);
+
+        hash<LingeringCloseInfo> info = getResult(result);
+        assertTrue(info.max_discard_reached, "the limit ended the wait");
+        assertGe(50000, info.discarded, "at least the limit was discarded");
+        assertFalse(info.peer_closed, "the peer did not close its side");
+        assertFalse(server.isOpen(), "the socket is closed");
+    }
+
+    tlsTest() {
+        Socket listener();
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        on_exit listener.close();
+        listener.setCertificate(TestCert);
+        listener.setPrivateKey(TestCert);
+        int port = listener.getSocketInfo().port;
+
+        Queue accepted();
+        background sub () {
+            try {
+                accepted.push(listener.acceptSSL(15s));
+            } catch (hash<ExceptionInfo> ex) {
+                accepted.push(ex);
+            }
+        }();
+        Socket client();
+        client.connectSSL(sprintf("127.0.0.1:%d", port), 15s);
+        on_exit client.close();
+        auto a = accepted.get(15s);
+        if (!(a instanceof Socket)) {
+            throw a.err, a.desc;
+        }
+        Socket server = a;
+
+        # the server never reads this data
+        client.send(binary(strmul("t", 32768)));
+        server.send(Response);
+        Queue result = startLingeringClose(server);
+
+        assertEq(Response, client.recv(Response.size(), 10s), "the response is read");
+        # the server's close_notify alert ends the TLS stream
+        assertThrows("SOCKET-CLOSED", \client.recv(), (1, 10s), "the response is followed by the end of the stream");
+        client.close();
+
+        hash<LingeringCloseInfo> info = getResult(result);
+        # the unread records and the client's closing alert, as encrypted on the wire
+        assertGt(32768, info.discarded, "the unread TLS records were discarded");
+        assertTrue(info.peer_closed, "the connection ended when the peer closed it");
+        assertFalse(server.isOpen(), "the socket is closed");
+    }
+
+    bufferedDataTest() {
+        hash<auto> conn = connect();
+        Socket client = conn.client;
+        Socket server = conn.server;
+        on_exit client.close();
+
+        # the server reads the request line and header; the bytes after them are either in the socket's buffer or
+        # still in the system's receive buffer, and are discarded either way
+        client.send("GET / HTTP/1.1\r\nHost: localhost\r\n\r\nextra");
+        hash<auto> hdr = server.readHTTPHeader(10s);
+        assertEq("GET", hdr.method);
+        server.send(Response);
+        Queue result = startLingeringClose(server);
+
+        assertEq(Response, client.recv(Response.size(), 10s), "the response is read");
+        client.close();
+
+        hash<LingeringCloseInfo> info = getResult(result);
+        assertEq(5, info.discarded, "the unread bytes after the header were discarded");
+        assertTrue(info.peer_closed);
+    }
+
+    peerClosedTest() {
+        hash<auto> conn = connect();
+        Socket client = conn.client;
+        Socket server = conn.server;
+
+        client.close();
+        Queue result = startLingeringClose(server);
+
+        hash<LingeringCloseInfo> info = getResult(result);
+        assertEq(0, info.discarded, "there was nothing to discard");
+        assertTrue(info.peer_closed, "the peer had closed its side");
+        assertFalse(server.isOpen(), "the socket is closed");
+    }
+
+    notOpenTest() {
+        Socket s();
+        assertThrows("SOCKET-NOT-OPEN", \s.startPollLingeringClose());
+    }
+
+    #! returns a connected client and server socket pair
+    private hash<auto> connect() {
+        Socket listener();
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        on_exit listener.close();
+        Socket client();
+        client.connect(sprintf("127.0.0.1:%d", listener.getSocketInfo().port), 10s);
+        Socket server = listener.accept(10s);
+        return {"client": client, "server": server};
+    }
+
+    #! drives the lingering close of the socket in a background thread; the Queue receives the result
+    private Queue startLingeringClose(Socket s, int max_discard = 0) {
+        Queue result();
+        AbstractPollOperation<auto> op = s.startPollLingeringClose(max_discard);
+        background sub () {
+            try {
+                # monotonic microseconds
+                int deadline = clock_get_monotonic_us() + 30 * 1000000;
+                while (*hash<SocketPollInfo> info = op.continuePoll()) {
+                    int remaining_ms = (deadline - clock_get_monotonic_us()) / 1000;
+                    if (remaining_ms <= 0 || !Socket::poll((info,), remaining_ms)) {
+                        throw "LINGERING-CLOSE-TIMEOUT", "the lingering close did not complete in time";
+                    }
+                }
+                result.push(op.getOutput());
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        return result;
+    }
+
+    #! returns the result of a lingering close
+    private hash<LingeringCloseInfo> getResult(Queue result) {
+        auto rv = result.get(60s);
+        if (rv instanceof hash<ExceptionInfo>) {
+            throw rv.err, rv.desc;
+        }
+        return rv;
+    }
+}

@@ -112,6 +112,9 @@ module HttpServerAsyncIo {
       @c Socket HTTP/2 methods that wake the owning controller.  All built-in
       response paths (regular, send_callback, InputStream, SSE setup,
       RST_STREAM-on-error) use this convention.
+    - HTTP/1.x connections that the server closes after a response are closed with a lingering close (see
+      @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" option
+      \c lingering_close_timeout), so a client still sending unread data receives the response instead of a reset
     - SSE streams send comment heartbeats by default across HTTP/1.x, HTTP/2,
       and HTTP/3; callers can opt out with the stream's \c setHeartbeat(0)
       method.
@@ -135,6 +138,11 @@ public namespace HttpServerAsyncIo {
 
     #! Default idle connection timeout (75 seconds)
     public const DefaultIdleTimeout = 75s;
+
+    #! Default maximum time to wait for an HTTP/1.x client to close its side after the last response (5 seconds)
+    /** @see HttpAsyncSocketIoController::lingeringClose()
+    */
+    public const DefaultLingeringCloseTimeout = 5s;
 
     #! Default SSE heartbeat interval in milliseconds
     public const DefaultSseHeartbeatIntervalMs = 20000;

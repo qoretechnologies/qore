@@ -718,11 +718,9 @@ public class HttpClientRequestUrlTest inherits QUnit::Test {
             fail("an HTTP/2-required client reached an HTTP/1 server");
         } catch (hash<ExceptionInfo> ex) {
             # the close is reported by whichever layer sees it first; the server answers the preface with 501 and
-            # closes without reading the rest of what the client sent (the remainder of the preface and its
-            # frames), so the kernel resets the connection instead of closing it (RFC 1122 section 4.2.2.13); a
-            # client that has not yet read the 501 and FIN when the reset arrives sees ECONNRESET on recv()
-            assertTrue(ex.err == "HTTP2-CONNECTION-CLOSED" || ex.err == "SOCKET-CLOSED"
-                || (ex.err == "SOCKET-RECV-ERROR" && ex.desc =~ /reset by peer/i),
+            # closes with a lingering close, which discards the rest of the preface and the client's frames instead
+            # of resetting the connection over them, so the client always sees the end of the stream
+            assertTrue(ex.err == "HTTP2-CONNECTION-CLOSED" || ex.err == "SOCKET-CLOSED",
                 sprintf("%s: %s", ex.err, ex.desc));
         }
 

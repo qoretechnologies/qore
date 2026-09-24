@@ -1,0 +1,399 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HttpServer closes an HTTP/1.x connection after a response with a lingering close: the client reads the response
+    and the end of the stream, and whatever it sent that the server did not read is discarded until the client
+    closes its side, instead of making the system reset the connection.  The server's DEBUG log reports how much was
+    discarded and whether the client closed its side, which the client itself cannot observe.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpServerLingeringCloseTest
+
+const TestCert = "-----BEGIN PRIVATE KEY-----
+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
+WkEP9QjmvU4tYxLvhP6peBr7PhLJ66A=
+-----END PRIVATE KEY-----
+-----BEGIN CERTIFICATE-----
+MIIFhTCCA22gAwIBAgIUWg3AaxJ1kKrhwH7TTcGh3Z0yPEwwDQYJKoZIhvcNAQEL
+BQAwUTELMAkGA1UEBhMCQ1oxEzARBgNVBAgMClNvbWUtU3RhdGUxDzANBgNVBAcM
+BlByYWd1ZTENMAsGA1UECgwEUW9yZTENMAsGA1UEAwwEUW9yZTAgFw0yMDAxMzEw
+NjEyMzVaGA8yMTIwMDEwNzA2MTIzNVowUTELMAkGA1UEBhMCQ1oxEzARBgNVBAgM
+ClNvbWUtU3RhdGUxDzANBgNVBAcMBlByYWd1ZTENMAsGA1UECgwEUW9yZTENMAsG
+A1UEAwwEUW9yZTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAOaVbGYM
+fxHEaq0WXutG8DveHNsw6mymmdi45d9m0CD6M7b8c+0Kt7uyyMtuTqHV9SdJ2zJO
+7mEAVgsmaJveLqn3vKjHw8ev3tcH0+4TdN9Dt5ym0dihkLrcfkdW5eSrdLXdNGY3
+o2+A6wdA62yGV7LJtz6f+3tZeMoqAVRLS///byr8koQ1SinmEGZUxaJJLUIbGm8N
+SBSTxW2CdtC2GsHoVF1GYBDwxx8x9gPEM8qAnyVlYl/Z0oU4GSLamtqUnlmxXTRS
+xdhteYVHUSF/mjNMreSv9sG49PFG0BNgaUi4tAIoyxEf9Ro+aWLZVwNkcOxlh4d8
+bVgHCeonLXN16UuvJO8oap4YKOb0yyVa1YzMFU/G8bfWpXc0771FXVwFUNFTyUXc
+C+OrN6UsHXgrxNyWiKaxkbUjCMKn2tx6O5AQ/cGEq6OeVOBZojhiWIR9CKHQOCTW
+gfKMg2B8Yu+VtjLFUoNwD7VC+rp/xo456CrYylAfewYU5ZPWIk+GYH133UwVZs1L
+MZvgs7h0WYYY9ebMpTbLXLkrJypNTYF2aoo6Oc/54LdFhQQA3SRfHJSdeydz4PjZ
+HTT4hj7AG7X/CU8uzHHE1a5McdnLWfFY/3wbu5mz86tMbnQY5yXKML+wCAa95hAc
+qaFrb5CXAHhGeZl4GEvdRLUZUwU+M+omDSu5AgMBAAGjUzBRMB0GA1UdDgQWBBTS
+O+Koh2q4QJgVnFud2cW0n2hxjzAfBgNVHSMEGDAWgBTSO+Koh2q4QJgVnFud2cW0
+n2hxjzAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4ICAQC0n27EM59I
+5fa6vuSvSFpD0yV0YLsPD6P6Qr+WnosgZD1E7Vs84OT1p/QmHHMbzFzAlzRN050C
+FvUNZNYeGGmj+sPrXhc15FI7GKYY5HrF75YQAPfZ0p4kB6VZQA/Y+5t/7dM7tUUQ
+KuIP4KKpSdFrnEH2LQ9xO8LwBRum/2yhOU00GuO/M2wQFmDlWnDE4OphpJCW5zHd
++vDWcvnhFr30IHyBNMxau5ad8vnceHX1WmwQW95zeGQ8sQNxtCjRa/05KnjgnPtj
+Dk9FCsB2Iw35Ebfk6gO9K78cKxAYGcWyKaHfN0Okt0uyLZAd88ogAspM2DB0VbGe
+DnunO/56PjlwRb2oFVltRGioo1HnLJCtUOAaFc1KOlQ/4xqWlSoQ9a1oUtjRrZjP
+H960K/rqBYhDQi/TrdpIRSQheS7zIR+quqcSJPSqxn4r/TEVx/8APm0FSF8p0T56
+Ps1yVuAUWSVAJ0JivVlJTnG6aQ1h1xHCDnvW5PSG0bL0sqeSYZ4Gt55LWaqWToo9
+qibte1W+dyK5IZEpk3f081N6GegIv+ulzcdcedp4oRCtaOUBziqSlZqXXkoiFyQ4
+P1CvlJwL79QntIvjfC5nRMHwMy2wE6Eqt57sFlUnvD25CbbX/TNDSNqXhXQbYaCZ
+I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
+-----END CERTIFICATE-----";
+
+#! captures the server's lingering close log messages
+class LingeringCloseCapture inherits LoggerAppenderWithLayout {
+    public {
+        #! receives each lingering close log message
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /lingering close of/) {
+            messages.push(params);
+        }
+    }
+}
+
+#! answers every request with a body naming its path; the path "close" asks for the connection to be closed
+class PathHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<HttpResponseInfo> rv = makeResponse(200, "path " + hdr.path, {"Content-Type": "text/plain"});
+        # the path is given without its leading slash
+        if (hdr.path == "close") {
+            rv.close = True;
+        }
+        return rv;
+    }
+}
+
+#! makes the connection persistent with a request ending in "start"; a request ending in "end" ends the session
+class PersistentHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr.path =~ /start$/) {
+            setPersistent(True);
+            return makeResponse(200, "started", {"Content-Type": "text/plain"});
+        }
+        return makeResponse(200, isPersistent() ? "persistent" : "not persistent", {"Content-Type": "text/plain"});
+    }
+
+    bool isPersistentSessionEndRequest(hash<auto> hdr) {
+        return hdr.path =~ /end$/;
+    }
+}
+
+class HttpServerLingeringCloseTest inherits QUnit::Test {
+    private {
+        LingeringCloseCapture capture();
+        HttpServer server;
+        int port;
+        int ssl_port;
+
+        #! a server that waits only briefly for the client to close
+        HttpServer short_server;
+        int short_port;
+    }
+
+    constructor() : Test("HttpServerLingeringCloseTest", "1.0") {
+        addTestCase("unread HTTP/2 connection preface", \http2PrefaceTest());
+        addTestCase("handler closes the connection with a pipelined request unread", \pipelinedRequestTest());
+        addTestCase("Connection: close with nothing unread", \nothingUnreadTest());
+        addTestCase("client that does not close its side", \clientDoesNotCloseTest());
+        addTestCase("TLS", \tlsTest());
+        addTestCase("persistent connection: the first request has the close option", \persistentFirstRequestTest());
+        addTestCase("persistent connection: a later request has the close option", \persistentLaterRequestTest());
+        addTestCase("persistent connection: the session end request has the close option",
+            \persistentSessionEndTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("lingering-close-test", LoggerLevel::getLevelDebug());
+        logger.addAppender(capture);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "enable_h3": False,
+        });
+        server.setDefaultHandler("path", new PathHandler());
+        server.setHandler("persist", "/persist", NOTHING, new PersistentHandler(), NOTHING, False);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        ssl_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(TestCert),
+            "key": new SSLPrivateKey(TestCert),
+        }).port;
+
+        short_server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "enable_h3": False,
+            "lingering_close_timeout": 250ms,
+        });
+        short_server.setDefaultHandler("path", new PathHandler());
+        short_port = short_server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        server.waitForAsyncIo();
+        short_server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+        delete short_server;
+    }
+
+    #! the case that failed on macOS CI: an HTTP/1 server answers an HTTP/2 client's connection preface with 501
+    http2PrefaceTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        # the header ends after "PRI * HTTP/2.0\r\n\r\n"; the rest of the preface is never read
+        binary junk = binary(strmul("j", 65536));
+        s.send(binary("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") + junk);
+        hash<auto> resp = readResponse(s);
+        assertEq(501, resp.status_code, "the preface is answered with 501");
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+        # the server still receives, so data sent now does not make it reset the connection
+        s.send(junk);
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(6 + 2 * junk.size(), info.discarded, "all unread data was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    pipelinedRequestTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        string second = "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        s.send("GET /close HTTP/1.1\r\nHost: localhost\r\n\r\n" + second);
+        hash<auto> resp = readResponse(s);
+        assertEq(200, resp.status_code);
+        assertEq("path close", resp.body, "the first request was answered");
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the pipelined request is not answered");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(second.size(), info.discarded, "the pipelined request was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    nothingUnreadTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        s.send("GET /done HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        hash<auto> resp = readResponse(s);
+        assertEq("path done", resp.body);
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(0, info.discarded, "there was nothing to discard");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    #! the server stops waiting after its lingering close timeout
+    clientDoesNotCloseTest() {
+        Socket s = connect(short_port);
+        on_exit s.close();
+
+        s.send("GET /close HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        hash<auto> resp = readResponse(s);
+        assertEq("path close", resp.body);
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+
+        # the client keeps its side open; the server closes when its timeout expires
+        string msg = capture.messages.get(30s);
+        assertRegex("lingering close of .* ended: SOCKET-TIMEOUT", msg, "the wait ended with the timeout");
+    }
+
+    tlsTest() {
+        Socket s();
+        s.connectSSL(sprintf("127.0.0.1:%d", ssl_port), 10s);
+        on_exit s.close();
+
+        s.send("GET /close HTTP/1.1\r\nHost: localhost\r\n\r\n" + strmul("t", 16384));
+        hash<auto> resp = readResponse(s);
+        assertEq("path close", resp.body, "the response is read");
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the TLS stream");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        # the unread record, as encrypted on the wire, and the client's closing alert
+        assertGt(16384, info.discarded, "the unread data was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    #! the response to the request that makes the connection persistent is also its last one
+    persistentFirstRequestTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        string pipelined = "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        s.send("GET /persist/start HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" + pipelined);
+        assertEq("started", readResponse(s).body);
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(pipelined.size(), info.discarded, "the pipelined request was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    #! a request on the persistent connection's dedicated thread closes the connection
+    persistentLaterRequestTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        s.send("GET /persist/start HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("started", readResponse(s).body);
+        s.send("GET /persist/next HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("persistent", readResponse(s).body);
+
+        string pipelined = "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        s.send("GET /persist/last HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" + pipelined);
+        assertEq("persistent", readResponse(s).body);
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(pipelined.size(), info.discarded, "the pipelined request was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    #! the request that ends the persistent session also closes the connection
+    persistentSessionEndTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        s.send("GET /persist/start HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        assertEq("started", readResponse(s).body);
+
+        string pipelined = "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        s.send("GET /persist/end HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" + pipelined);
+        assertEq("OK", readResponse(s).body, "the session end request is answered");
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(pipelined.size(), info.discarded, "the pipelined request was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    #! returns the next completed lingering close logged by the server
+    private hash<auto> getLingeringClose() {
+        string msg = capture.messages.get(30s);
+        *list<string> m = (msg =~ x/complete: discarded ([0-9]+) bytes?; peer closed: (True|False); discard limit reached: (True|False)/);
+        assertEq(3, m.size(), sprintf("the lingering close completed: %y", msg));
+        return {
+            "discarded": m[0].toInt(),
+            "peer_closed": m[1] == "True",
+            "max_discard_reached": m[2] == "True",
+        };
+    }
+
+    private Socket connect(int p) {
+        Socket s();
+        s.connect(sprintf("127.0.0.1:%d", p), 10s);
+        return s;
+    }
+
+    #! reads a response with a Content-Length
+    private hash<auto> readResponse(Socket s) {
+        hash<auto> hdr = s.readHTTPHeader(10s);
+        int len = hdr."content-length".toInt();
+        return {
+            "status_code": hdr.status_code,
+            "body": len ? s.recv(len, 10s) : "",
+        };
+    }
+}
