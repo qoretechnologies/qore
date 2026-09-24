@@ -277,6 +277,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclSocketPollInfo,
     * hashdeclDatagramInfo,
     * hashdeclQuicGoawayStateInfo,
+    * hashdeclLingeringCloseInfo,
     * hashdeclPipeInfo,
     * hashdeclSseMessageInfo,
     * hashdeclPortRangeInfo,
@@ -1067,6 +1068,17 @@ void QoreNamespace::addConstant(const char* cname, QoreValue val, const QoreType
     rns->addConstant(*priv, cname, val, typeInfo);
 }
 
+void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name, QoreValue value,
+        QoreValue compiled_define) {
+    ns.addConstant(name, value);
+    ConstantEntry* ce = qore_ns_private::get(ns)->constant.findEntry(name);
+    assert(ce);
+    std::string path(ns_path);
+    path += "::";
+    path += name;
+    ce->setRuntimeDependent(std::move(path), compiled_define);
+}
+
 QoreNamespace* QoreNamespace::findCreateNamespacePath(const char* nspath) {
     NamedScope nscope(nspath);
     bool is_new = false;
@@ -1407,6 +1419,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     hashdeclSocketPollInfo = init_hashdecl_SocketPollInfo(qns);
     hashdeclDatagramInfo = init_hashdecl_DatagramInfo(qns);
     hashdeclQuicGoawayStateInfo = init_hashdecl_QuicGoawayStateInfo(qns);
+    hashdeclLingeringCloseInfo = init_hashdecl_LingeringCloseInfo(qns);
     preinitReadOnlyFileClass();
     preinitFileClass();
     hashdeclPipeInfo = init_hashdecl_PipeInfo(qns);

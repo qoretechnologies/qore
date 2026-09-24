@@ -105,6 +105,21 @@ struct TypedefEntry {
 //! Map of type aliases
 typedef std::map<std::string, TypedefEntry*> typedef_map_t;
 
+//! Adds a builtin constant whose value depends on the state of the running library
+/** Code referencing the constant reads it from the process it runs in, including AOT-compiled code; see
+    ConstantEntry::setRuntimeDependent().  qpp generates calls to this for constants declared with a
+    <tt>qore_runtime(<value>, <value in compiled code>)</tt> value.
+
+    @param ns the namespace to add the constant to
+    @param ns_path the namespace's fully-qualified path without a leading "::" (ex: "Qore::Option")
+    @param name the name of the constant
+    @param value the constant's value in this process; ownership is taken
+    @param compiled_define the value of the constant's parse define in code compiled ahead of time, where the
+    compiler cannot know the state of the library the code will run with; ownership is taken
+*/
+DLLLOCAL void qore_ns_add_runtime_constant(QoreNamespace& ns, const char* ns_path, const char* name,
+        QoreValue value, QoreValue compiled_define);
+
 class qore_ns_private {
 public:
     const QoreProgramLocation* loc;

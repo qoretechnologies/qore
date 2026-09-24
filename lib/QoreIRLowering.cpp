@@ -5554,7 +5554,9 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         ConstantEntry* ce = rt_const->getConstantEntry();
         if (ce) {
             QoreValue resolved = ce->getReferencedValue();
-            if (!ce->aot_shell_pending && !ce->hasInitExpr() && ce->hasValue()
+            // a runtime-dependent builtin is read in the process the code runs in, so it is never folded
+            // (see ConstantEntry::setRuntimeDependent())
+            if (!ce->aot_shell_pending && !ce->hasInitExpr() && ce->hasValue() && !ce->getRuntimeDependentPath()
                     && !resolved.needsEval()) {
                 qore_type_t resolved_type = resolved.getType();
                 if (resolved.isEnum() || resolved_type == NT_INT || resolved_type == NT_FLOAT

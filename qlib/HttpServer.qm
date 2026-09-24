@@ -221,6 +221,23 @@ log("started listener on %s", lh.desc);
       @ref HttpServer::HttpServer::sendHttpError() "sendHttpError()" sends a streamed error message to an HTTP/1.0
       client with a \c Content-Length, and sends no message body in a response to a \c HEAD request
     - new @ref HttpServer::HttpServer::acceptsHttpMethod() "acceptsHttpMethod()" method
+    - an HTTP/2 request whose body exceeds the maximum request body size is always answered with 413; the stream
+      is no longer reset with \c REFUSED_STREAM (which discarded the response and told the client that the
+      request could be retried) when the body arrived faster than the handler thread read it
+    - an HTTP/2 response sent before the complete request is followed by \c RST_STREAM(NO_ERROR), so the client
+      stops sending a request body that is not read (RFC 9113 section 8.1)
+    - an HTTP/1.x connection that the server closes after a response is closed with a lingering close (see the new
+      \c lingering_close_timeout option in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo"), so a
+      client that is still sending data the server did not read, such as the rest of a request body answered with
+      an error, receives the response instead of a connection reset; the new
+      @ref HttpServer::HttpServer::closeConnectionAfterResponse() "closeConnectionAfterResponse()" method closes a
+      connection in this way after a response sent by a handler thread
+    - the maximum request body size now applies to HTTP/3 listeners as well; a body that exceeded it while it was
+      buffered before dispatch was cleared and the request was dispatched with an empty body; it is now answered
+      with 413, and a streaming read of it fails with \c HTTP-BODY-TOO-LARGE
+    - an HTTP/3 request that the handler finished without reading to its end is followed by
+      \c STOP_SENDING(H3_NO_ERROR) (RFC 9114 section 4.1.2); before, a client that did not finish such a request
+      left the stream half-open, and after 100 of them no other request could be opened on the connection
 
     @subsection http1_6 HttpServer 1.6
     - fixed a regression where @ref HttpServer::HttpServer::listenerStarted() "listenerStarted()" was no longer
@@ -605,9 +622,17 @@ public hashdecl HttpServerOptionInfo {
     int max_idle_handler_threads = 0;
 
     #! Maximum HTTP request body size in bytes (0 = unlimited)
-    /** Requests with Content-Length exceeding this value, or chunked/HTTP/2 bodies
-        that grow beyond this value, receive HTTP 413 (Content Too Large) and the
-        connection is closed.
+    /** Requests with Content-Length exceeding this value, or chunked, HTTP/2, or HTTP/3 bodies
+        that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
+        is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends, and the
+        rest of the body is discarded.  An HTTP/2 client that is still sending the body when the
+        response has been sent is asked to stop with \c RST_STREAM(NO_ERROR) (RFC 9113 section 8.1), and an
+        HTTP/3 client with \c STOP_SENDING(H3_NO_ERROR) (RFC 9114 section 4.1.2).
+
+        A handler that reads the request body as a stream (see
+        @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces a limit on
+        the total body size itself; for such a handler, this value limits the data that the server buffers for it,
+        and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
 
         @since HttpServer 1.6
     */
@@ -668,6 +693,21 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     timeout quic_drain_timeout = 5s;
+
+    #! The maximum time to wait for an HTTP/1.x client to close its side of the connection after the last response
+    /** When the server closes an HTTP/1.x connection after a response, the client may still be sending data that
+        the server did not read: the rest of a request body answered with an error, a pipelined request, or the
+        remainder of an HTTP/2 connection preface.  Closing a connection with unread data makes the system reset it,
+        and the reset can make the client discard the response before reading it.  The server therefore performs a
+        "lingering close": it shuts down its sending side, so the client receives the end of the stream after the
+        response, and discards what the client sends until the client closes its side or this timeout expires.
+
+        A client that reads the response and closes the connection ends the wait at once.  0 closes the connection
+        immediately after the response, without waiting.
+
+        @since HttpServer 1.7
+    */
+    timeout lingering_close_timeout = 5s;
 
     #! Enable HTTP/3 headers-only dispatch mode
     /** When @ref True "True", HTTP/3 (and HTTP/2) requests are dispatched to handlers as
@@ -1498,7 +1538,8 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
             throw "HTTP3-ERROR", "async I/O controller not initialized";
         }
         asyncIo.addQuicListener(udp_sock, asyncTarget, opts.cert, opts.key, http_listener,
-            opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs);
+            opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs,
+            http_listener.getMaxRequestBodySize());
 
         listeners{lid} = http_listener;
         nmap{lname} = lid;
@@ -2584,15 +2625,39 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     */
     returnConnectionToAsyncIo(Socket sock, hash<auto> cx, HttpListener listener) {
         if (asyncIo && asyncTarget) {
-            hash<auto> async_cx = exists cx.peer ? cx : cast<hash>({
-                "peer": cx."peer-info",
-                "socket": cx."socket-info",
-            });
-            if (exists cx{"peer-info-future"}) {
-                async_cx{"peer-info-future"} = cx{"peer-info-future"};
-            }
-            asyncIo.addIdleConnection(sock, listener, async_cx, asyncTarget, ttl);
+            asyncIo.addIdleConnection(sock, listener, getAsyncConnectionContext(cx), asyncTarget, ttl);
         }
+    }
+
+    #! Closes an HTTP/1.x connection after its last response, which the current handler thread sent
+    /** The connection is closed with a lingering close, so the client receives the response even if it is still
+        sending data that the server did not read; see the \c lingering_close_timeout option in
+        @ref HttpServerOptionInfo.
+
+        @param sock the connection's socket; the response must have been sent completely
+        @param cx the connection context
+        @param listener the listener that accepted the connection
+
+        @since HttpServer 1.7
+    */
+    closeConnectionAfterResponse(Socket sock, hash<auto> cx, HttpListener listener) {
+        if (asyncIo && asyncTarget) {
+            asyncIo.closeConnection(sock, listener, getAsyncConnectionContext(cx), asyncTarget);
+        } else {
+            sock.close();
+        }
+    }
+
+    #! Returns the connection context for the async I/O controller from a request context
+    private hash<auto> getAsyncConnectionContext(hash<auto> cx) {
+        hash<auto> async_cx = exists cx.peer ? cx : cast<hash>({
+            "peer": cx."peer-info",
+            "socket": cx."socket-info",
+        });
+        if (exists cx{"peer-info-future"}) {
+            async_cx{"peer-info-future"} = cx{"peer-info-future"};
+        }
+        return async_cx;
     }
 
     #! Waits for async I/O to be ready to accept connections
@@ -2704,6 +2769,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "max_idle_handler_threads": opts.max_idle_handler_threads,
             "quic_drain_timeout": opts.quic_drain_timeout,
             "quic_headers_only": opts.quic_headers_only,
+            "lingering_close_timeout": opts.lingering_close_timeout,
         });
         asyncIo.start();
     }
@@ -3481,6 +3547,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
                 int sid = cx."header-info".stream_id;
                 binary body_data = binary();
+                # set when the body read stops because the body exceeds the maximum size
+                bool hit_max_body = False;
                 if (cx."header-info".http3) {
                     # HTTP/3: use QUIC stream data methods (CV-based; I/O thread stays active)
                     int session_id = cx."header-info".session_id;
@@ -3511,7 +3579,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             }
                             return;
                         }
-                        rethrow;
+                        if (ex.err != "HTTP-BODY-TOO-LARGE") {
+                            rethrow;
+                        }
+                        # the I/O layer stopped reading a body that exceeds the limit; the bytes it buffered
+                        # until then were delivered first
+                        hit_max_body = True;
                     }
                     # NOTE: cleanupQuicStream is called by the controller's on_exit handler
                 } else {
@@ -3530,7 +3603,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     register_body_queue(body_queue);
 
                     bool h2_complete = False;
-                    bool hit_max_body = False;
                     while (True) {
                         auto chunk;
                         try {
@@ -3540,6 +3612,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                                 break;
                             }
                             rethrow;
+                        }
+                        if (chunk.typeCode() == NT_HASH) {
+                            # the I/O layer stopped buffering a body that exceeds the limit; the bytes it
+                            # buffered until then were delivered first, and the rest of the body is discarded
+                            @assert(chunk.err == "HTTP-BODY-TOO-LARGE");
+                            hit_max_body = True;
+                            break;
                         }
                         if (!(chunk instanceof binary)) {
                             # NOTHING sentinel → END_STREAM observed by I/O thread
@@ -3597,7 +3676,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                 }
                 # Apply max body size check
-                if (max_body > 0 && body_data.size() > max_body) {
+                if (hit_max_body || (max_body > 0 && body_data.size() > max_body)) {
                     string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
                         cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
                         body_data.size(), max_body);
@@ -5959,7 +6038,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 return <HttpServerAsyncIo::HttpRequestResultInfo>{};
             }
             if (cx.close || !s.isOpen()) {
-                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+                # the response was sent, and the connection closes after it
+                return s.isOpen()
+                    ? <HttpServerAsyncIo::HttpRequestResultInfo>{"close": True}
+                    : <HttpServerAsyncIo::HttpRequestResultInfo>{};
             }
 
             Queue pq();
@@ -6617,8 +6699,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
                         \cx, cx_listener, phi, info, \close_ack);
-                    if (!is_multiplexed && !end_cx.close && s.isOpen()) {
-                        serv.returnConnectionToAsyncIo(s, end_cx, self);
+                    if (!is_multiplexed && s.isOpen()) {
+                        if (end_cx.close) {
+                            serv.closeConnectionAfterResponse(s, end_cx, self);
+                        } else {
+                            serv.returnConnectionToAsyncIo(s, end_cx, self);
+                        }
                     }
                     return;
                 }
@@ -6737,6 +6823,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 }
 
                 if (!is_multiplexed && (cx.close || !s.isOpen())) {
+                    # the response was sent, and the connection closes after it
+                    if (s.isOpen()) {
+                        serv.closeConnectionAfterResponse(s, cx, self);
+                    }
                     return;
                 }
 

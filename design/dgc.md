@@ -509,6 +509,33 @@ cycle take none, that an object inside one still does, and that cycles built aro
 captured variable are still collected.
 
 
+### A dereference keeps its object allocated until it returns
+
+`RObject::derefDone()` makes a deleting dereference wait for the dereferences of other threads, but not for the
+ones its own thread has in progress further up the stack (`deref_inprogress_own()` in `lib/RSet.cpp`): a
+dereference re-entered on the same thread cannot finish until the inner one returns, so waiting for it would never
+end. A dereference therefore cannot rely on its registration to keep the object allocated. Once it has released its
+own reference, the only thing keeping the object alive is somebody else's reference, and on the same thread that
+reference can go away underneath it:
+
+- the scan it starts holds references on the graph it walks and releases them when it ends
+  (`RSetHelper::releaseHeld()`), and releasing them can dereference this very object;
+- another thread can release the object's other references meanwhile, so that the release on this thread is the
+  last one, the object is deleted, its last weak reference goes away and its memory is freed while the outer
+  dereference still goes on to take its r-section.
+
+Both dereferences of an `RObject` therefore hold a weak reference on their own object for their whole duration:
+`qore_object_private::customDeref()` and `ClosureVarValue::deref()`. A weak reference keeps the object allocated,
+not alive, so this changes nothing about when it is deleted or when its value is released. The closure-bound
+variable's dereference was missing it: a closure that captured a variable and ran on a handler thread released the
+variable's other reference while the frame's release of its own was rescanning, and the frame took the r-section of a
+freed variable (AOT-compiled `HttpServerAsyncIo` on arm64 macOS; `ut_closure_var_deref_rescan_reentry()` in
+`lib/ql_debug.cpp` reproduces it deterministically with a debug hook).
+
+In debug builds `RObject::tDeref()` asserts that it never frees an object with a dereference in progress on the same
+thread (`qore_robject_deref_inprogress_on_this_thread()`), so a dereference path without the guard fails at the free
+rather than at a later use of the freed memory.
+
 ### A scan may be re-entered under a write lock the calling thread already holds
 
 The rollback-and-wait protocol is deadlock-free only while every lock a scan waits on belongs to *another*

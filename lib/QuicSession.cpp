@@ -3065,6 +3065,15 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             (int)isc, (int)cta);
         printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
             stream_id);
+        // The handler is done with the request, so the rest of an unfinished request is never read: ask the
+        // client to stop sending (RFC 9114 section 4.1.2).  H3_NO_ERROR, because the server answers the request
+        // and the client must not discard the response.  Without this, a client that does not finish its request
+        // leaves the stream half-open on both sides, where it counts against the connection's stream limit until
+        // the connection closes: after QUIC_INITIAL_MAX_STREAMS_BIDI such requests, no other request can be
+        // opened on the connection.
+        if (is_server_ && !isc && !it->second->body_complete && !it->second->body_too_large) {
+            stopReadingStreamLocked(stream_id);
+        }
         bool notify_data = false;
         if (it->second->dispatched) {
             dispatched_stream_count_.fetch_sub(1,
@@ -3092,6 +3101,30 @@ void QuicSession::cleanupStream(int64_t stream_id) {
         connect_stream_frame_states_.erase(stream_id);
         connect_stream_data_.erase(stream_id);
     }
+}
+
+void QuicSession::stopReadingStreamLocked(int64_t stream_id) {
+    ASYNC_IO_TRACE("QuicSession::stopReadingStreamLocked session=%lld stream_id=%lld\n",
+        (long long)getSessionId(), (long long)stream_id);
+    if (h3_conn_) {
+        nghttp3_conn_shutdown_stream_read(h3_conn_, stream_id);
+    }
+    if (conn_) {
+        int rv = ngtcp2_conn_shutdown_stream_read(conn_, 0, stream_id, NGHTTP3_H3_NO_ERROR);
+        if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
+            printd(1, "QuicSession::stopReadingStreamLocked() stream_id=" QLLD
+                " ngtcp2_conn_shutdown_stream_read failed: %s\n", stream_id, ngtcp2_strerror(rv));
+            return;
+        }
+        // STOP_SENDING is written on the next I/O cycle
+        pending_write_.store(true, std::memory_order_release);
+    }
+}
+
+bool QuicSession::isStreamBodyTooLarge(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    return it != streams_.end() && it->second->body_too_large;
 }
 
 int QuicSession::resetStream(int64_t stream_id) {
@@ -4503,19 +4536,31 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         // Uses max_request_body_size_ (set via setMaxRequestBodySize(), propagated
         // from HttpServer's max_request_body_size option).  0 = unlimited.
         // Consistent with Http2Session::onDataChunkRecvCallback().
+        if (session->is_server_ && stream->body_too_large) {
+            // the rest of an oversized body is discarded; see below
+            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                  static_cast<uint64_t>(datalen));
+            ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            return 0;
+        }
         if (session->is_server_ && session->max_request_body_size_ > 0
                 && (int64_t)(stream->body.size() + datalen) > session->max_request_body_size_) {
             printd(1, "h3RecvDataCallback: body too large (%zu + %zu > " QLLD ") stream %lld\n",
                 stream->body.size(), datalen, session->max_request_body_size_,
                 (long long)stream_id);
-            stream->body.clear();
+            // The buffered bytes and this chunk are kept, so the request is answered with 413 instead of being
+            // dispatched with a truncated body, and a reader of the stream's data gets HTTP-BODY-TOO-LARGE after
+            // them instead of the end of the body
+            stream->body.insert(stream->body.end(), data, data + datalen);
+            stream->body_too_large = true;
             stream->error_message = "request body exceeded maximum size ("
                 + std::to_string(session->max_request_body_size_) + " bytes)";
             // Notify nghttp3 before ngtcp2 so both layers stay in sync
             nghttp3_conn_shutdown_stream_read(session->h3_conn_, stream_id);
-            // Reset just this stream, not the whole connection
+            // Stop reading just this stream, not the whole connection; the server answers the request, so the
+            // client is asked to stop sending without error (RFC 9114 section 4.1.2)
             int rv = ngtcp2_conn_shutdown_stream_read(session->conn_, 0, stream_id,
-                NGHTTP3_H3_REQUEST_CANCELLED);
+                NGHTTP3_H3_NO_ERROR);
             // Stream may already be closed during shutdown
             if (rv != 0 && rv != NGTCP2_ERR_STREAM_NOT_FOUND) {
                 return NGHTTP3_ERR_CALLBACK_FAILURE;

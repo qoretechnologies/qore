@@ -2571,6 +2571,16 @@ static bool qore_aot_resolve_runtime_constant_path_impl(const RuntimeConstantRef
         return false;
     }
 
+    ConstantEntry* ce = node->getConstantEntry();
+    // a runtime-dependent builtin is always serialized by name, so the loading process resolves it to its own
+    // value; the reverse map cannot name it, since its value has no node, and a partial map may not cover it
+    if (ce) {
+        if (const std::string* rt_path = ce->getRuntimeDependentPath()) {
+            path = *rt_path;
+            return true;
+        }
+    }
+
     if (const_reverse_map) {
         if (const std::string* mapped_path = aotFindConstantReverseMapPath(const_reverse_map, abstract_node)) {
             path = *mapped_path;
@@ -2578,7 +2588,6 @@ static bool qore_aot_resolve_runtime_constant_path_impl(const RuntimeConstantRef
         }
     }
 
-    ConstantEntry* ce = node->getConstantEntry();
     if (!ce) {
         return false;
     }

@@ -778,6 +778,55 @@ static void ut_socket_close_race_releases_descriptor_once(UnitTestCounters& c) {
     close(other[1]);
 }
 
+#ifdef DEBUG
+namespace {
+//! the variable whose other holder releases its reference in ut_closure_var_deref_rescan_reentry()
+ClosureVarValue* ut_rescan_other_holder = nullptr;
+bool ut_rescan_hook_ran = false;
+
+void ut_rescan_release_other(ClosureVarValue* cvv, ExceptionSink* xsink) {
+    if (cvv != ut_rescan_other_holder) {
+        return;
+    }
+    ut_rescan_other_holder = nullptr;
+    ClosureVarValue::dbg_after_rescan.store(nullptr);
+    ut_rescan_hook_ran = true;
+    // the other holder releases its reference while the frame's dereference is still in its loop; this is its last
+    // reference, so the variable is deleted here, on the thread whose dereference is still using it
+    cvv->deref(xsink);
+}
+}
+
+//! Tests that the frame's dereference of a closure-bound variable keeps it allocated while it is still using it
+/** The frame's release of its real reference makes a scan deferred while it held the variable.  If the variable's
+    other holder - a closure that captured it and ran on a handler thread - releases the last reference meanwhile,
+    the variable is deleted by a dereference on the same thread, which RObject::derefDone() does not wait for, and
+    its memory was freed while the frame's dereference still went on to take its rsection: a use-after-free that
+    crashed AOT-compiled HttpServerAsyncIo code on arm64 macOS.  The hook releases the other reference at exactly
+    that point.  RObject::tDeref() asserts that no memory is freed under a dereference in progress on this thread.
+*/
+static void ut_closure_var_deref_rescan_reentry(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    static const char* name = "ut_closure_var_deref_rescan_reentry";
+    QoreValue nval;
+    ClosureVarValue* cvv = thread_instantiate_closure_var(name, autoTypeInfo, nval, false);
+    // the other holder
+    cvv->ref();
+    // a write made while the other holder exists defers its scan to the frame's release
+    UT_ASSERT_EQ(c, -1, cvv->checkDeferScan(), "a scan is deferred while the frame holds the variable");
+
+    ut_rescan_hook_ran = false;
+    ut_rescan_other_holder = cvv;
+    ClosureVarValue::dbg_after_rescan.store(ut_rescan_release_other);
+    // the frame releases its entry and makes the deferred scan
+    thread_uninstantiate_closure_var(&xsink);
+    ClosureVarValue::dbg_after_rescan.store(nullptr);
+    UT_ASSERT(c, ut_rescan_hook_ran, "the other reference is released while the frame's dereference rescans");
+    UT_ASSERT(c, !xsink, "releasing the variable raises no exception");
+    ut_rescan_other_holder = nullptr;
+}
+#endif
+
 //! Fills in a socket address for the network policy tests and returns its size
 static socklen_t ut_net_addr(struct sockaddr_storage& ss, int family, const char* addr, int port) {
     ss = {};
@@ -4695,6 +4744,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
 #ifdef DEBUG
+    ut_closure_var_deref_rescan_reentry(c);
     ut_asyncio_exec_rejects_io_thread(c);
     ut_asyncio_wait_for_processing_rejects_io_thread(c);
 #endif

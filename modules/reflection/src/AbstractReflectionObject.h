@@ -57,4 +57,10 @@ enum qore_modifier_t {
 
 DLLLOCAL int get_access(ClassAccess access);
 
+//! returns the Program used to resolve reflection lookups: the call's RuntimeConfig Program, else the current one
+DLLLOCAL static inline QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {
+    QoreProgram* pgm = runtime_cfg.getProgram();
+    return pgm ? pgm : getProgram();
+}
+
 #endif

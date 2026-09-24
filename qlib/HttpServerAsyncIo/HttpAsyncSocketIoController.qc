@@ -59,6 +59,8 @@ public enum HttpConnectionState : string {
     ResponseDelay = "response_delay",
     #! Reading HTTP/1.x request body (Content-Length or chunked)
     ReadBody = "read_body",
+    #! Closing an HTTP/1.x connection after its last response: waiting for the client to close its side
+    LingeringClose = "lingering_close",
 }
 
 #! HTTP poll operation type
@@ -199,6 +201,9 @@ public class HttpAsyncSocketIoController {
         - \c max_handler_threads: maximum number of handler threads (default 0 = unlimited)
         - \c min_idle_handler_threads: minimum idle handler threads (default 0)
         - \c max_idle_handler_threads: maximum idle handler threads (default 0)
+        - \c lingering_close_timeout: the maximum time to wait for an HTTP/1.x client to close its side of the
+          connection after the last response (default @ref DefaultLingeringCloseTimeout); 0 closes the connection
+          immediately; see @ref lingeringClose()
     */
     constructor(AsyncSocketIoController controller, *LoggerInterface logger,
             hash<auto> opts = {}) {
@@ -831,6 +836,9 @@ public class HttpAsyncSocketIoController {
         @param ssl_verify_flags SSL peer certificate verification flags
         @param ssl_accept_all_certs whether to accept untrusted peer certificates
         @param get_remote_certs whether to capture peer certificates
+        @param max_request_body_size maximum request body size in bytes (0 = unlimited); a body that exceeds it
+        while it is buffered before the request is dispatched is answered with 413, and the client is asked to
+        stop sending it
 
         @note QUIC uses UDP and handles TLS 1.3 as part of the QUIC handshake.
         The socket must already be bound to a UDP port before calling this method.
@@ -838,7 +846,7 @@ public class HttpAsyncSocketIoController {
     addQuicListener(Socket listener, HttpAsyncTarget target, auto cert, auto key,
             HttpServer::HttpListenerInterface http_listener,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
-            bool get_remote_certs = False) {
+            bool get_remote_certs = False, int max_request_body_size = 0) {
         @assert(listener, "listener socket cannot be null");
         @assert(target, "target cannot be null");
         @assert(cert && key, "QUIC requires certificate and key for TLS 1.3");
@@ -882,6 +890,7 @@ public class HttpAsyncSocketIoController {
                 "get_remote_certs": get_remote_certs,
                 "http_listener": http_listener,
                 "socket_info": socket_info,
+                "max_request_body_size": max_request_body_size,
             };
             quic_listener_hash_by_http_listener{http_listener.uniqueHash()} = lhash;
         }
@@ -1589,10 +1598,20 @@ public class HttpAsyncSocketIoController {
         # handler waiting on body data would block HttpServer.stop() for the
         # full body-read timeout in the future graceful-drain or per-stream-
         # cancel scenarios that keep the session alive across an H3 op cancel.
+        # the listener's limit, as for HTTP/1.x and HTTP/2 connections; a controller option applies to listeners
+        # registered without one
+        int max_request_body_size;
+        {
+            AutoReadLock al(m);
+            max_request_body_size = listeners{owner}.max_request_body_size ?? 0;
+        }
+        if (!max_request_body_size) {
+            max_request_body_size = pool_opts.max_request_body_size ?? 0;
+        }
         Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
             pool_opts.quic_headers_only ?? True,
-            pool_opts.max_request_body_size ?? 0);
+            max_request_body_size);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 
@@ -2667,6 +2686,12 @@ public class HttpAsyncSocketIoController {
                 timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
+            case HttpConnectionState::LingeringClose: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                timeout = getLingeringCloseTimeout();
+                break;
+            }
             default:
                 log(LoggerLevel::ERROR, "Unknown connection state %y for %s", cinfo.state, uh);
                 return;
@@ -2781,6 +2806,18 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.ex) {
+            if (orig_state == HttpConnectionState::LingeringClose) {
+                # the client did not close its side in time, or the connection failed: the response was sent,
+                # so this is no error; the aborted operation has closed the socket
+                log(LoggerLevel::DEBUG, "lingering close of %s ended: %s: %s", uh, result.ex.err,
+                    result.ex.desc);
+                {
+                    AutoWriteLock al(m);
+                    remove connections{uh};
+                }
+                try { cinfo.sock.close(); } catch () {}
+                return;
+            }
             # Handle error — but for SSE, timeouts are expected (periodic polling)
             if (orig_state == HttpConnectionState::Sse
                     && (result.ex.err == "SOCKET-POLL-TIMEOUT"
@@ -2998,16 +3035,24 @@ public class HttpAsyncSocketIoController {
                         # header send (SSE events, WS frames)
                         wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 submit failure resume");
                     } else {
-                        # No pending streaming — close connection
-                        try { cinfo.sock.close(); } catch () {}
-                        {
-                            AutoWriteLock al(m);
-                            remove connections{uh};
-                        }
+                        # No pending streaming — the response is complete; close the connection
+                        lingeringClose(uh, cinfo.sock, cinfo.listener, cinfo.cx, cinfo.target, cinfo.ssl);
                     }
                 } else {
                     # Error or unexpected state — close connection
                     handleConnectionClosed(uh, cinfo);
+                }
+                break;
+            }
+            case HttpConnectionState::LingeringClose: {
+                # the operation closed the socket
+                hash<LingeringCloseInfo> info = result.spop.getOutput();
+                log(LoggerLevel::DEBUG, "lingering close of %s complete: discarded %d byte%s; peer closed: %y; "
+                    "discard limit reached: %y", uh, info.discarded, info.discarded == 1 ? "" : "s",
+                    info.peer_closed, info.max_discard_reached);
+                {
+                    AutoWriteLock al(m);
+                    remove connections{uh};
                 }
                 break;
             }
@@ -3031,6 +3076,84 @@ public class HttpAsyncSocketIoController {
                 break;
             }
         }
+    }
+
+    #! Closes an HTTP/1.x connection after its last response, which a handler thread sent, with a lingering close
+    /** For connections that a handler thread owns while it sends the response, such as a persistent connection's
+        dedicated thread; see @ref lingeringClose() for the procedure.
+
+        @param sock the connection's socket; the response must have been sent completely
+        @param listener the listener that accepted the connection
+        @param cx the connection context
+        @param target the callback target
+
+        @since HttpServerAsyncIo 1.0
+    */
+    closeConnection(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx,
+            HttpAsyncTarget target) {
+        lingeringClose(sock.uniqueHash(), sock, listener, cx, target, sock.isSecure());
+    }
+
+    #! Closes an HTTP/1.x connection after its last response so that the client can read the response
+    /** Closing a TCP connection with unread data from the client, such as the rest of a request body that the server
+        did not read, a pipelined request, or the remainder of an HTTP/2 connection preface, makes the system reset
+        the connection, and the reset can make the client discard the response before reading it.  This method
+        instead shuts down the sending side, so the client receives the end of the stream after the response, and
+        discards what the client sends until it closes its side, the lingering close timeout expires, or the server
+        stops; then the socket is closed.
+
+        @param uh the connection's unique hash
+        @param sock the connection's socket; the response must have been sent completely
+        @param listener the listener that accepted the connection
+        @param cx the connection context
+        @param target the callback target
+        @param ssl True if the connection is secure
+
+        @see @ref Qore::Socket::startPollLingeringClose() "Socket::startPollLingeringClose()"
+    */
+    private lingeringClose(string uh, Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx,
+            HttpAsyncTarget target, bool ssl) {
+        if (getLingeringCloseTimeout() <= 0s || !sock.isOpen()) {
+            {
+                AutoWriteLock al(m);
+                remove connections{uh};
+            }
+            try { sock.close(); } catch () {}
+            return;
+        }
+        AbstractPollOperation op;
+        try {
+            op = sock.startPollLingeringClose();
+        } catch (hash<ExceptionInfo> ex) {
+            # the connection is gone
+            log(LoggerLevel::DEBUG, "lingering close of %s not started: %s: %s", uh, ex.err, ex.desc);
+            {
+                AutoWriteLock al(m);
+                remove connections{uh};
+            }
+            try { sock.close(); } catch () {}
+            return;
+        }
+        hash<HttpActiveConnectionInfo> cinfo;
+        {
+            AutoWriteLock al(m);
+            cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                "sock": sock,
+                "listener": listener,
+                "cx": cx,
+                "target": target,
+                "state": HttpConnectionState::LingeringClose,
+                "stream_op": op,
+                "ssl": ssl,
+            };
+        }
+        submitConnectionOp(uh, cinfo);
+    }
+
+    #! Returns the maximum time to wait for an HTTP/1.x client to close its side after the last response
+    private date getLingeringCloseTimeout() {
+        timeout to = pool_opts.lingering_close_timeout ?? DefaultLingeringCloseTimeout;
+        return milliseconds(to);
     }
 
     #! Handles connection errors
@@ -3422,7 +3545,7 @@ public class HttpAsyncSocketIoController {
 
             # Response fully sent.  Either keep-alive or close.
             if (result.close || close_delimited || !result.return_to_idle || !sock.isOpen()) {
-                try { sock.shutdown(); sock.close(); } catch () {}
+                lingeringClose(uh, sock, linfo.listener, cx, target, linfo.ssl ?? False);
                 return;
             }
             timeout ttl = result.ttl ?? DefaultIdleTimeout;
@@ -3595,7 +3718,7 @@ public class HttpAsyncSocketIoController {
                     HttpServer::http_send_streamed_response(sock, result.code, status_msg, result.hdr ?? {},
                         result.send_callback, result.send_timeout ?? -1);
                     if (result.close || isCloseDelimited(result.hdr) || !result.return_to_idle || !sock.isOpen()) {
-                        try { sock.shutdown(); sock.close(); } catch () {}
+                        lingeringClose(uh, sock, linfo.listener, cx, target, linfo.ssl ?? False);
                         return;
                     }
                     addIdleConnection(sock, linfo.listener, cx, target, result.ttl ?? DefaultIdleTimeout);
@@ -3632,7 +3755,8 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.close) {
-            try { sock.close(); } catch () {}
+            # the response was sent by the handler thread
+            lingeringClose(uh, sock, linfo.listener, cx, target, linfo.ssl ?? False);
             return;
         }
 

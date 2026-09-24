@@ -587,6 +587,100 @@ When `getOutput()` returns NOTHING (because a RST'd stream was filtered or the r
 `handleHttp2RequestReady()` in `HttpAsyncSocketIoController.qc` continues reading on the connection rather
 than closing it. This allows the HTTP/2 connection to remain active for subsequent streams.
 
+## HTTP/2 Server: Responses Before the Complete Request
+
+A server can answer a request before the client has sent all of it: an error found in the headers, a handler that
+does not read the body, or a body over `max_request_body_size`.  The client must receive that response, so the
+server never resets such a stream before the response is out.
+
+### Request body over the limit
+
+`Http2Session::onDataChunkRecvCallback()` compares the undelivered body buffered in `Http2StreamInfo::body` (not the
+total received) with `max_body_size`.  When it is exceeded, the stream is marked `body_too_large`: the buffered bytes
+are kept, so every consumer sees more than the limit, and later DATA is discarded while flow control is still
+credited.  The stream is **not** reset.  A reset there would discard the 413 the handler thread sends, and
+`REFUSED_STREAM` tells the client that the request was not processed and can be retried (RFC 9113 section 8.7);
+with a handler thread slower than the client it was the common outcome, not a corner case.
+
+Consumers learn about the overflow from the body queue: `Http2PollOperationPriv::drainStreamQueues()` ends the
+stream with a hash `{"err": "HTTP-BODY-TOO-LARGE", "desc": ...}` instead of the `NOTHING` end-of-body sentinel, so a
+streaming consumer can never take a truncated body for a complete one.  `HttpServer` answers it with 413;
+`AbstractStreamRequest` and interactive streams raise it.  Extended CONNECT tunnels are the exception: tunnel data
+is not a request that is answered, so an overflowing tunnel is still reset.
+
+### Stopping the client after the response
+
+`Http2Session::onFrameSendCallback()` calls `stopRequestAfterResponse()` for every server HEADERS or DATA frame
+with END_STREAM.  If the client has not sent END_STREAM on the stream, it submits `RST_STREAM(NO_ERROR)`, which
+asks the client to stop sending without error (RFC 9113 section 8.1).  Submitting it from the send callback, after
+the frame that ends the response has been written, is what makes it safe: it can never cancel a response that is
+still queued.  Extended CONNECT streams are excluded, as each side of a tunnel closes independently.
+
+Without it, a client keeps uploading a body nobody reads, and after `cleanupStream()` the server discards that DATA
+crediting only the connection window.  `examples/test/qlib/HttpServer/HttpServerHttp2StopRequest.qtest` checks the
+frames on the wire; `HttpClient`-based tests cannot see the difference, because the client reads the response while
+it is still sending.
+
+## HTTP/3 Server: Responses Before the Complete Request
+
+The HTTP/3 counterparts of the HTTP/2 rules above, in `lib/QuicSession.cpp`:
+
+- `cleanupStream()` (the handler is done with the request) calls `stopReadingStreamLocked()` for a request stream
+  whose body the client has not finished: STOP_SENDING with `H3_NO_ERROR` (RFC 9114 section 4.1.2).  Without it, a
+  client that does not finish its request leaves the stream half-open on both sides, and the stream counts against
+  the connection's `QUIC_INITIAL_MAX_STREAMS_BIDI` (100) until the connection closes: the 101st request fails with
+  `HTTP3-CAPACITY-ERROR`.  `HttpServerH3Streaming.qtest` ("early responses to unfinished requests") runs 150 of them
+  on one connection.
+- `max_request_body_size` reaches the HTTP/3 operation per listener (`addQuicListener()`), as it reaches HTTP/1.x and
+  HTTP/2 connections.  Dispatched streams need no I/O-layer check: flow control is extended only as the handler
+  consumes data, which bounds the buffer.  A body buffered before dispatch (all of it with `quic_headers_only`
+  disabled, the part received before dispatch otherwise) that exceeds the limit is marked `body_too_large`: the
+  buffered bytes are kept (so HttpServer answers 413 instead of dispatching an empty body, which the previous code
+  did after clearing them), the rest is not read (STOP_SENDING `H3_NO_ERROR`), and `readQuicStreamDataBlock()`
+  raises `HTTP-BODY-TOO-LARGE` after the buffered bytes.
+
+## HTTP/1.x Lingering Close
+
+Closing a TCP socket with unread received data makes the kernel send RST instead of FIN (RFC 1122 section
+4.2.2.13), and a client that has not yet read the response when the RST arrives loses it: `recv()` fails with
+`ECONNRESET`.  An HTTP/1.x server closes with unread data whenever it answers before reading everything: an error
+response to a request whose body it does not read, a handler `close` with a pipelined request behind it, or the 501
+for an HTTP/2 connection preface, where the rest of the preface and the client's frames stay unread.  The race is
+wide on a loaded machine (the macOS CI VM has 2 CPUs): 12 of 1800 HTTP/2-client-to-HTTP/1-server requests saw the
+reset under CPU saturation.
+
+`Socket::startPollLingeringClose()` (`SocketLingeringClosePollOperation` in `lib/QoreSocket.cpp`) closes the way
+Apache and nginx do:
+
+1. On TLS, send `close_notify` (`SocketShutdownSslPollState`; the peer's alert is not awaited).
+2. `shutdown(SHUT_WR)`: the client receives the FIN right after the response, so HTTP/1.0 clients that read until
+   the end of the stream finish at once.
+3. Discard everything received, including bytes already in the socket's read buffer, with raw `recv()` (after
+   `close_notify`, the TLS records are not decrypted), until EOF, an error, or the optional byte limit.
+4. Close.  After EOF there is no unread data, so the close sends FIN, not RST.
+
+The operation has no timeout of its own.  `HttpAsyncSocketIoController::lingeringClose()` registers the connection in
+the `LingeringClose` state and submits the operation with the `lingering_close_timeout` server option (default 5s) as
+the controller timeout; a timeout or cancel aborts the operation, which closes the socket
+(`abortNeedsClose()`/`needsCloseOnComplete()`), and is not reported as an error.  Server stop closes lingering
+connections through the usual `cancelAndClose()` sweep.  `lingering_close_timeout: 0` restores the immediate close.
+
+It is used for every HTTP/1.x close after a response in the controller: `result.close` after a handler-thread
+response, the `SendStreamResponse` completion, and the streamed `send_callback`/`InputStream` responses.  A persistent
+connection's dedicated thread, which sends its responses itself, hands a connection that must close to
+`HttpServer::closeConnectionAfterResponse()` (`HttpAsyncSocketIoController::closeConnection()`), in the same way as it
+hands a connection that stays open to `returnConnectionToAsyncIo()`; the initial persistent response returns
+`close` to the controller.  A response that a handler writes to the socket itself (an `AbstractStreamRequest`
+returning `reply_sent`) is covered as well: on HTTP/1.x, `handleRequest()` marks it sent and `translateToRequestResult()`
+returns `close` or keep-alive as for any other response.  The empty result that `processNativeRequest()` returns for
+a response "sent directly by the handler" is only reached for HTTP/2 and HTTP/3 streams (the connection stays open),
+and a WebSocket upgrade is a dedicated connection that closes itself.  HTTP/2 connections are not affected: the server
+never closes one after a response (no GOAWAY is sent), and responses travel on streams.
+
+`examples/test/qore/classes/Socket/SocketLingeringClose.qtest` tests the operation; `HttpServerLingeringClose.qtest`
+tests the server, asserting on the controller's DEBUG record of each lingering close (bytes discarded, whether the
+client closed), because a client cannot distinguish the two closes deterministically.
+
 ## Platform-Specific Fixes
 
 ### macOS accept() O_NONBLOCK Inheritance

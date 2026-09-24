@@ -108,6 +108,16 @@ DLLLOCAL void qore_aot_set_body_contract_dep_sink(
 DLLLOCAL const QoreAOTBodyContractDependencyMap*
     qore_aot_get_body_contract_dep_sink();
 
+//! Marks this process as the AOT compiler; call before qore_init()
+/** Code parsed in the compiler runs in other processes.  Where a builtin constant's value depends on the state of
+    the running library, a Program created afterwards gives the constant's parse define the value registered for
+    code compiled ahead of time rather than the compiler's own value; see ConstantEntry::getParseDefineValue().
+*/
+DLLEXPORT void qore_aot_set_compiler_process();
+
+//! Returns true if qore_aot_set_compiler_process() was called in this process
+DLLLOCAL bool qore_aot_is_compiler_process();
+
 //! Set (or clear) the active sibling-source parse flag for the current thread.
 //! Returns the previous value so callers can restore it.
 DLLLOCAL bool qore_aot_set_source_parse_active(bool active);

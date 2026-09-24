@@ -13252,6 +13252,162 @@ QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink)
     return getSocketPollInfoHash(xsink, rc);
 }
 
+SocketLingeringClosePollOperation::SocketLingeringClosePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        int64 max_discard) : SocketPollSocketOperationBase(sock), max_discard(max_discard > 0 ? max_discard : 0) {
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkValid(xsink) || !sock->priv->socket->isOpen()) {
+        phase = Phase::Closed;
+        return;
+    }
+    if (sock->priv->setNonBlock(xsink)) {
+        // the operation cannot be driven; the connection is closed without waiting
+        qore_socket_close_from_controller(sock->priv->socket);
+        phase = Phase::Closed;
+        return;
+    }
+    set_non_block = true;
+    qore_socket_private* qsp = qore_socket_private::get(*sock->priv->socket);
+    if (qsp->ssl) {
+        poll_state.reset(new SocketShutdownSslPollState(xsink, qsp));
+    } else {
+        startDrain();
+    }
+}
+
+QoreHashNode* SocketLingeringClosePollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    if (phase == Phase::Closed) {
+        return nullptr;
+    }
+    if (!sock->priv->socket->isOpen()) {
+        // closed by another thread
+        if (set_non_block) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+        poll_state.reset();
+        phase = Phase::Closed;
+        return nullptr;
+    }
+
+    if (phase == Phase::TlsShutdown) {
+        assert(poll_state);
+        int rc = poll_state->continuePoll(xsink);
+        if (rc > 0) {
+            return getSocketPollInfoHash(xsink, rc);
+        }
+        poll_state.reset();
+        if (rc < 0) {
+            // the alert cannot be sent, because the connection is broken: there is nothing left to wait for
+            xsink->clear();
+            closeSocket();
+            return nullptr;
+        }
+        startDrain();
+        if (phase == Phase::Closed) {
+            return nullptr;
+        }
+    }
+
+    int rc = drain();
+    return rc ? getSocketPollInfoHash(xsink, rc) : nullptr;
+}
+
+void SocketLingeringClosePollOperation::startDrain() {
+    assert(sock->priv->m.trylock());
+    qore_socket_private* qsp = qore_socket_private::get(*sock->priv->socket);
+    phase = Phase::Drain;
+    // data already read from the connection into the socket buffer was not read by the application either
+    if (qsp->buflen) {
+        discarded += qsp->buflen;
+        qsp->buflen = 0;
+        qsp->bufoffset = 0;
+    }
+    // the peer receives the end of the stream after all data sent, while its data can still be received
+    if (qsp->shutdown_write_direct()) {
+        // the connection is no longer connected, e.g. because it was reset by the peer
+        closeSocket();
+    }
+}
+
+int SocketLingeringClosePollOperation::drain() {
+    assert(sock->priv->m.trylock());
+    assert(phase == Phase::Drain);
+    qore_socket_private* qsp = qore_socket_private::get(*sock->priv->socket);
+    char buf[16384];
+    for (unsigned loop = 0; loop < max_nonblock_ops; ++loop) {
+        if (max_discard && discarded >= max_discard) {
+            max_discard_reached = true;
+            closeSocket();
+            return 0;
+        }
+        ssize_t rc = ::recv(qsp->sock, buf, sizeof(buf), 0);
+        if (rc > 0) {
+            discarded += rc;
+            continue;
+        }
+        if (!rc) {
+            // the peer closed its side after reading what was sent: the connection closes without a reset
+            peer_closed = true;
+            closeSocket();
+            return 0;
+        }
+        int e = sock_get_error();
+        if (e == EINTR) {
+            continue;
+        }
+        if (e == EAGAIN
+#ifdef EWOULDBLOCK
+                || e == EWOULDBLOCK
+#endif
+                ) {
+            return SOCK_POLLIN;
+        }
+        // any other error, such as a reset by the peer, ends the connection
+        closeSocket();
+        return 0;
+    }
+    // more data may be available; polling returns immediately in that case
+    return SOCK_POLLIN;
+}
+
+void SocketLingeringClosePollOperation::closeSocket() {
+    assert(sock->priv->m.trylock());
+    if (set_non_block) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+    }
+    qore_socket_close_from_controller(sock->priv->socket);
+    phase = Phase::Closed;
+}
+
+QoreValue SocketLingeringClosePollOperation::getOutput() const {
+    if (phase != Phase::Closed) {
+        return QoreValue();
+    }
+    // the members have plain int and bool values, so initializing and setting them cannot raise an exception
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclLingeringCloseInfo, &xsink), &xsink);
+    h->setKeyValue("discarded", discarded, &xsink);
+    h->setKeyValue("peer_closed", peer_closed, &xsink);
+    h->setKeyValue("max_discard_reached", max_discard_reached, &xsink);
+    assert(!xsink);
+    return h.release();
+}
+
+const char* SocketLingeringClosePollOperation::getStateImpl() const {
+    switch (phase) {
+        case Phase::TlsShutdown:
+            return "tls-close-notify";
+        case Phase::Drain:
+            return "draining";
+        case Phase::Closed:
+            break;
+    }
+    return "closed";
+}
+
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindUnix), name(name),
         has_name(true), reuseaddr(reuseaddr), socktype(SOCK_STREAM),

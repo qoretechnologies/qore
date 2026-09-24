@@ -5372,6 +5372,12 @@ public class DataProviderTest inherits QUnit::Test {
             assertTrue(type2.getFields().size instanceof QoreDataField);
             assertEq("size", type2.getFields().size.getName());
             assertNothing(type2.getFields().size.acceptsValue());
+
+            # the typed hash member must be serializable
+            HashDeclDataType type3 = Serializable::deserialize(type0.serialize());
+            assertEq(type0.getName(), type3.getName());
+            assertEq(keys type0.getFields(), keys type3.getFields());
+            assertEq(1, type3.getFields().size.acceptsValue(1));
         }
 
         {

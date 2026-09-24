@@ -1,0 +1,262 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTRuntimeDependentConstantTest
+
+#! Qore::Option::HAVE_SIGNAL_HANDLING in code compiled ahead of time
+/** The constant depends on how the running library was initialized: it is False in <tt>qore -b</tt>.  The parser
+    replaced every reference to a builtin constant with its value, so qcc froze its own value into everything it
+    compiled: a compiled module loaded into <tt>qore -b</tt> read True, and a qcc started without signal handling
+    would have compiled False into every program.  References to it now resolve by name in the process the code
+    runs in.
+
+    The \c HAVE_SIGNAL_HANDLING parse define is decided when the code is parsed, which for compiled code is in
+    qcc; it follows whether the library supports signal handling there, whatever qcc's own initialization.
+
+    Each case runs its programs in child processes, so both initializations of the library are covered.
+*/
+class AOTRuntimeDependentConstantTest inherits QUnit::Test {
+    public {
+        #! every form of reference, printed on one line
+        const FormsSource = "
+const Have = Option::HAVE_SIGNAL_HANDLING;
+const NotHave = !HAVE_SIGNAL_HANDLING;
+const HaveHash = {\"have\": Option::HAVE_SIGNAL_HANDLING};
+bool sub def(bool b = Option::HAVE_SIGNAL_HANDLING) { return b; }
+bool sub scoped() { return Option::HAVE_SIGNAL_HANDLING; }
+bool sub bare() { return HAVE_SIGNAL_HANDLING; }
+bool sub notHave() { return !HAVE_SIGNAL_HANDLING; }
+%ifdef HAVE_SIGNAL_HANDLING
+const IfDef = True;
+%else
+const IfDef = False;
+%endif
+hash<string, bool> h = {
+    \"top\": Option::HAVE_SIGNAL_HANDLING,
+    \"const\": Have,
+    \"not_const\": NotHave,
+    \"hash\": HaveHash.have,
+    \"default\": def(),
+    \"scoped\": scoped(),
+    \"bare\": bare(),
+    \"not\": notHave(),
+    \"ifdef\": IfDef,
+};
+map printf(\"%s=%s\\n\", $1.key, $1.value ? \"True\" : \"False\"), h.pairIterator();
+";
+
+        #! the module whose constants and functions other units read
+        const ProviderModuleSource = "%modern
+module RtDepProvider { version = \"1.0\"; desc = \"test\"; author = \"test\"; url = \"test\"; }
+public namespace RtDepProvider {
+    public const Have = Option::HAVE_SIGNAL_HANDLING;
+    public const NotHave = !HAVE_SIGNAL_HANDLING;
+    public const HaveHash = {\"have\": Option::HAVE_SIGNAL_HANDLING};
+%ifdef HAVE_SIGNAL_HANDLING
+    public const IfDef = True;
+%else
+    public const IfDef = False;
+%endif
+    public bool sub scoped() { return Option::HAVE_SIGNAL_HANDLING; }
+    public bool sub bare() { return HAVE_SIGNAL_HANDLING; }
+    public bool sub notHave() { return !HAVE_SIGNAL_HANDLING; }
+    public bool sub def(bool b = Option::HAVE_SIGNAL_HANDLING) { return b; }
+}
+";
+
+        #! a module compiled against the provider's compiled module
+        const ConsumerModuleSource = "%modern
+%requires RtDepProvider
+module RtDepConsumer { version = \"1.0\"; desc = \"test\"; author = \"test\"; url = \"test\"; }
+public namespace RtDepConsumer {
+    public const Have = RtDepProvider::Have;
+    public const Both = RtDepProvider::Have && Option::HAVE_SIGNAL_HANDLING;
+    public bool sub have() { return RtDepProvider::Have; }
+}
+";
+
+        const ModuleReaderSource = "%modern
+%requires RtDepProvider
+%requires RtDepConsumer
+hash<string, bool> h = {
+    \"const\": RtDepProvider::Have,
+    \"not_const\": RtDepProvider::NotHave,
+    \"hash\": RtDepProvider::HaveHash.have,
+    \"scoped\": RtDepProvider::scoped(),
+    \"bare\": RtDepProvider::bare(),
+    \"not\": RtDepProvider::notHave(),
+    \"default\": RtDepProvider::def(),
+    \"ifdef\": RtDepProvider::IfDef,
+    \"consumer_const\": RtDepConsumer::Have,
+    \"consumer_both\": RtDepConsumer::Both,
+    \"consumer_sub\": RtDepConsumer::have(),
+};
+map printf(\"%s=%s\\n\", $1.key, $1.value ? \"True\" : \"False\"), h.pairIterator();
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+    }
+
+    constructor() : QUnit::Test("AOTRuntimeDependentConstantTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("interpreted code reads the value of its process", \testInterpreted());
+        addTestCase("a compiled module reads the value of the process that loads it", \testCompiledModule());
+        addTestCase("a compiled executable reads its own value and keeps the parse define",
+            \testCompiledExecutable());
+
+        set_return_value(main());
+    }
+
+    #! Returns the \c key=True|False lines a child prints as a hash
+    private hash<string, bool> runChild(string cmd, string what) {
+        string output = backquote(cmd + " 2>&1; echo \"rc=$?\"");
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertEq("0", rc[0], sprintf("%s exits normally: %s", what, output));
+        hash<string, bool> h();
+        foreach string line in (output.split("\n")) {
+            *list<*string> kv = (line =~ x/^([a-z_]+)=(True|False)$/);
+            if (kv) {
+                h{kv[0]} = kv[1] == "True";
+            }
+        }
+        assertTrue(h.size() > 0, sprintf("%s printed its values: %s", what, output));
+        return h;
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Asserts that every key but the ones given reads \a expected, and the negations read the opposite
+    private checkValues(hash<string, bool> h, bool expected, string what, *list<string> skip) {
+        foreach string key in (keys h) {
+            if (skip && inlist(key, skip)) {
+                continue;
+            }
+            bool want = key =~ /^not/ ? !expected : expected;
+            assertEq(want, h{key}, sprintf("%s: %s", what, key));
+        }
+    }
+
+    #! Compiles with qcc; returns the output if it failed
+    private *string compile(string args, string what, string env = "") {
+        string output = backquote(sprintf("%s%s %s 2>&1; echo \"rc=$?\"", env ? env + " " : "", qcc_bin, args));
+        *list<*string> rc = (output =~ x/rc=([0-9]+)\s*$/);
+        assertEq("0", rc[0], sprintf("qcc compiles %s: %s", what, output));
+        return rc[0] == "0" ? NOTHING : output;
+    }
+
+    private skipWithoutQcc() {
+        if (qcc_bin =~ /\// ? !is_executable(qcc_bin)
+                : system(sprintf("command -v %s > /dev/null 2>&1", qcc_bin))) {
+            testSkip(sprintf("qcc is not available at %y", qcc_bin));
+        }
+    }
+
+    testInterpreted() {
+        TmpDir tmp("qore-aot-rtdep-interp-");
+        string script = tmp.path + "/forms.q";
+        writeFile(script, "%modern\n" + FormsSource);
+
+        hash<string, bool> normal = runChild(sprintf("%s %s", qore_bin, script), "qore");
+        bool supported = normal.top;
+        # every form, including the parse define, reads the running library's value
+        checkValues(normal, supported, "qore");
+
+        hash<string, bool> nosig = runChild(sprintf("%s -b %s", qore_bin, script), "qore -b");
+        checkValues(nosig, False, "qore -b");
+
+        foreach string mode in ("ir", "jit") {
+            hash<string, bool> tiered = runChild(sprintf("%s --exec-mode=%s %s", qore_bin, mode, script), "qore " + mode);
+            checkValues(tiered, supported, "qore --exec-mode=" + mode);
+            tiered = runChild(sprintf("%s -b --exec-mode=%s %s", qore_bin, mode, script), "qore -b " + mode);
+            checkValues(tiered, False, "qore -b --exec-mode=" + mode);
+        }
+    }
+
+    testCompiledModule() {
+        skipWithoutQcc();
+        TmpDir tmp("qore-aot-rtdep-module-");
+        string src = tmp.path + "/src";
+        string mod = tmp.path + "/mod";
+        mkdir(src);
+        mkdir(mod);
+        writeFile(src + "/RtDepProvider.qm", ProviderModuleSource);
+        writeFile(src + "/RtDepConsumer.qm", ConsumerModuleSource);
+        if (compile(sprintf("-m -o %s/RtDepProvider.qmod %s/RtDepProvider.qm", mod, src), "the provider")) {
+            return;
+        }
+        string env = sprintf("QORE_MODULE_DIR=%s:${QORE_MODULE_DIR:-}", mod);
+        # the consumer is compiled against the provider's compiled module, not its source
+        if (compile(sprintf("-m -o %s/RtDepConsumer.qmod %s/RtDepConsumer.qm", mod, src), "the consumer", env)) {
+            return;
+        }
+        string reader = tmp.path + "/reader.q";
+        writeFile(reader, ModuleReaderSource);
+
+        hash<string, bool> normal = runChild(sprintf("%s %s %s", env, qore_bin, reader),
+            "qore loading compiled modules");
+        bool supported = normal."const";
+        checkValues(normal, supported, "compiled modules in qore");
+
+        hash<string, bool> nosig = runChild(sprintf("%s %s -b %s", env, qore_bin, reader),
+            "qore -b loading compiled modules");
+        # the parse define was decided when the module was compiled, which is the one thing that cannot follow
+        # the loading process
+        checkValues(nosig, False, "compiled modules in qore -b", ("ifdef",));
+        assertEq(supported, nosig.ifdef, "the parse define in a compiled module follows the library's support");
+    }
+
+    testCompiledExecutable() {
+        skipWithoutQcc();
+        TmpDir tmp("qore-aot-rtdep-exe-");
+        string script = tmp.path + "/forms.q";
+        writeFile(script, "%modern\n" + FormsSource);
+        string exe = tmp.path + "/forms";
+        if (compile(sprintf("-o %s %s", exe, script), "the executable")) {
+            return;
+        }
+        hash<string, bool> h = runChild(exe, "the compiled executable");
+        bool supported = h.top;
+        # the executable starts the library with signal handling, and the parse define follows the library's
+        # support rather than the compiler's initialization
+        checkValues(h, supported, "compiled executable");
+
+        if (!supported) {
+            return;
+        }
+        # the compiled program can install a signal handler
+        string sig_script = tmp.path + "/sig.q";
+        writeFile(sig_script, "%modern
+Counter c(1);
+int received;
+set_signal_handler(SIGUSR1, sub (int sig) { received = sig; c.dec(); });
+kill(getpid(), SIGUSR1);
+c.waitForZero();
+printf(\"received=%s\\n\", received == SIGUSR1 ? \"True\" : \"False\");
+");
+        string sig_exe = tmp.path + "/sig";
+        if (compile(sprintf("-o %s %s", sig_exe, sig_script), "the signal handler program")) {
+            return;
+        }
+        hash<string, bool> sh = runChild(sig_exe, "the compiled signal handler program");
+        assertTrue(sh.received, "the compiled program's signal handler ran");
+    }
+}

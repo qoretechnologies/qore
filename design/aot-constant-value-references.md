@@ -324,6 +324,46 @@ a cycle should never be written in the first place, and reaching this means the
 artifact is defective. It exists so that a defect of this family is a reported
 error naming both ends rather than a stack overflow with no diagnostic.
 
+## Builtin constants whose value depends on the running library
+
+Most builtin constants describe the library build, so the compiler's value is
+the value everywhere the code runs.  `Qore::Option::HAVE_SIGNAL_HANDLING` does
+not: it is `False` when the library is initialized with
+`QLO_DISABLE_SIGNAL_HANDLING` (`qore -b`).  The parser replaces a reference to a
+constant with its value (`ConstantEntry::get()`, `ConstantList::find()`), and a
+`bool` has no node the reverse map could name, so qcc froze its own value into
+every object: a compiled module loaded into `qore -b` read `True`, and qcc could
+not run without the signal handling thread without compiling `False` into every
+program.
+
+Such a constant is declared in qpp with
+`qore_runtime(<value>, <parse define value in compiled code>)`, which registers it
+with `qore_ns_add_runtime_constant()`:
+
+- `ConstantEntry::setRuntimeDependent()` gives the entry its fully-qualified path
+  and a shared `RuntimeConstantRefNode` naming it; each copy of the entry (every
+  Program) gets its own node.
+- `ConstantEntry::getParseValue()` returns that node instead of the value, so a
+  parse-time reference, `!X`, a user constant initialized from it, and a
+  parameter default all keep a reference; the user constant becomes a delayed
+  constant with a `__const_init` function.
+- `QoreIRLowering` never folds a runtime-dependent entry to a literal, and
+  `qore_aot_resolve_runtime_constant_path_impl()` returns its path before
+  consulting the reverse map, so every writer emits a by-name reference that the
+  loading process resolves to its own entry.
+- The value itself is unchanged, so evaluation, reflection, and the interpreter's
+  parse defines read it as before.
+
+Parse defines (`%ifdef HAVE_SIGNAL_HANDLING`) are decided when code is parsed,
+which for compiled code is in the compiler, where the library the code will run
+with is unknown.  qcc calls `qore_aot_set_compiler_process()` before
+`qore_init()`, and `ConstantEntry::getParseDefineValue()` then gives a
+runtime-dependent constant's define the value registered for compiled code — for
+`HAVE_SIGNAL_HANDLING`, whether the library supports signal handling — so qcc
+initializes the library without signal handling and still compiles the same code.
+
+Test: `examples/test/ir/AOTRuntimeDependentConstant.qtest`.
+
 ## Why the failure needs more than one compilation unit
 
 The writer never emits a reference into the constant it is currently writing

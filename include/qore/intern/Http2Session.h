@@ -107,8 +107,13 @@ struct Http2StreamInfo {
     //! Maximum body size in bytes (0 = unlimited)
     int64 max_body_size = 0;
 
-    //! True if the body of a client response exceeded the maximum response body size
-    /** The stream has been canceled, its body discarded, and the rest of its DATA is discarded as it arrives.
+    //! True once a body on this stream exceeded its maximum size
+    /** - server: the undelivered request body in @ref body exceeded @ref max_body_size; the body bytes buffered
+          when the limit was exceeded are kept, so every consumer sees more than the limit, and all DATA received
+          afterwards is discarded.  The stream is not reset: the server answers the request (with 413), and resets
+          the stream with @c NO_ERROR once that response is sent (RFC 9113 section 8.1).
+        - client: the body of a response that is returned whole exceeded the maximum response body size; the
+          stream has been canceled, its body discarded, and the rest of its DATA is discarded as it arrives.
     */
     bool body_too_large = false;
 
@@ -521,6 +526,22 @@ public:
         @since %Qore 3.0
     */
     DLLLOCAL bool isStreamRemoteClosed(int32_t stream_id) const;
+
+    //! Returns True if the request body received on the stream exceeded the maximum request body size
+    /** @param stream_id the stream to check
+        @return True if the stream exists and its request body exceeded the limit; see
+        Http2StreamInfo::body_too_large
+    */
+    DLLLOCAL bool isStreamBodyTooLarge(int32_t stream_id) const;
+
+    //! Asks the client to stop sending its request after the server sent the complete response (server)
+    /** Called when the frame that carries the response's END_STREAM flag has been sent; submits
+        RST_STREAM(NO_ERROR) if the client has not yet sent its complete request (RFC 9113 section 8.1).  Extended
+        CONNECT streams are excluded.
+
+        @param stream_id the stream whose response was sent
+    */
+    DLLLOCAL void stopRequestAfterResponse(int32_t stream_id);
 
     //! Drains the stream IDs reset by the peer since the last call (one-shot)
     /** Lets the H2 server poll operation surface peer RST_STREAMs to the

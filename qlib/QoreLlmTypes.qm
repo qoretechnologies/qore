@@ -1087,7 +1087,9 @@ public class AbstractLlmProvider {
         type, function) that should be emitted to the caller for this event.
         The default implementation accumulates OpenAI-compatible progressive
         deltas from \c choices[0].delta.tool_calls into the final response
-        state and returns the original deltas for streaming callers. Gemini
+        state, including a string \c thought_signature (see
+        @ref ChatToolCall::thought_signature) when a delta carries one, and
+        returns the original deltas for streaming callers. Gemini
         overrides this hook to harvest
         \c candidates[0].content.parts[].functionCall entries.
 
@@ -1159,6 +1161,12 @@ public class AbstractLlmProvider {
                 }
             }
             tool_call."function" = function;
+            # a provider reasoning signature (see ChatToolCall::thought_signature) arrives whole on
+            # the delta that carries it; it must reach the final response or the replayed call is
+            # rejected
+            if (delta.thought_signature.typeCode() == NT_STRING && delta.thought_signature.val()) {
+                tool_call.thought_signature = delta.thought_signature;
+            }
             state.tool_calls[index] = tool_call;
             streamed += delta;
         }

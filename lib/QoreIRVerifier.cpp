@@ -902,8 +902,8 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
             collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found, ref_created);
         }
-        // ParseSelfMethodReferenceNode, ParseScopedSelfMethodReferenceNode,
-        // StaticMethodReferenceNode have no local variable references (self-based)
+        // ParseSelfMethodReferenceNode and ParseScopedSelfMethodReferenceNode have no local variable
+        // references (self-based)
         return;
     }
 

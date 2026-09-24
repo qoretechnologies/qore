@@ -179,6 +179,10 @@ namespace TestNs {
     }
 }
 
+hashdecl GenericSerializationInfo<V: any = int> {
+    V value;
+}
+
 hashdecl BatchCastInfo {
     int value;
     *string label;
@@ -243,6 +247,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("static variant tests", \staticVariantTests());
         addTestCase("method enumeration tests", \methodEnumerationTests());
         addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
+        addTestCase("typed hash serialization", \typedHashSerializationTest());
         set_return_value(main());
     }
 
@@ -3667,6 +3672,44 @@ class ReflectionTest inherits QUnit::Test {
             # every method in this class has exactly one variant
             assertEq(c.getMethods().size(), c.getVariants().size());
         }
+    }
+
+    typedHashSerializationTest() {
+        # builtin hashdecl
+        TypedHash th = TypedHash::forName("Qore::SourceLocationInfo");
+        TypedHash th2 = Serializable::deserialize(th.serialize());
+        assertTrue(th2.isEqual(th));
+        assertEq(th.getPathName(), th2.getPathName());
+
+        # hashdecl provided by a module: the module must be recorded as a dependency
+        th = TypedHash::forName("Util::UriQueryInfo");
+        hash<SerializationInfo> info = Serializable::serializeToData(th);
+        assertTrue(inlist("Util", info._modules));
+        th2 = Serializable::deserialize(th.serialize());
+        assertTrue(th2.isEqual(th));
+        assertEq(th.getPathName(), th2.getPathName());
+
+        # user hashdecls
+        th = TypedHash::forName("TestNs::T");
+        th2 = Serializable::deserialize(th.serialize());
+        assertTrue(th2.isEqual(th));
+        assertEq("TestNs::T", th2.getPathName());
+
+        # instantiated generic hashdecl
+        th = new Type("hash<GenericSerializationInfo<string>>").getTypedHash();
+        th2 = Serializable::deserialize(th.serialize());
+        assertTrue(th2.isEqual(th));
+        assertEq(th.getPathName(), th2.getPathName());
+        assertEq("string", th2.getMember("value").getType().getName());
+
+        # as a member of a serialized object
+        hash<auto> h = Serializable::deserialize(Serializable::serialize({"th": th}));
+        assertTrue(h.th.isEqual(th));
+
+        # unknown hashdecl
+        info = Serializable::serializeToData(TypedHash::forName("TestNs::T"));
+        info._index."0"._class_data."Qore::Reflection::TypedHash".path = "::TestNs::NoSuchHashDecl";
+        assertThrows("DESERIALIZATION-ERROR", "UNKNOWN-TYPED-HASH", \Serializable::deserialize(), info);
     }
 
     # verify that when a module extends another module's namespace, the namespace retains

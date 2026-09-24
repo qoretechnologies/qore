@@ -56,6 +56,46 @@ class BodyEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! HTTP/2 body-streaming handler that reads the body through the body queue and reports how the body ended
+class StreamingLimitHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives one hash per request: the byte count read and the value that ended the body
+        Queue results();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        Queue body_queue(-1);
+        cx."header-info".register_body_queue(body_queue);
+        int size = 0;
+        while (True) {
+            auto chunk = body_queue.get(30s);
+            if (!(chunk instanceof binary)) {
+                results.push({"size": size, "end": chunk});
+                if (chunk.typeCode() == NT_HASH) {
+                    return makeResponse(413, chunk.desc);
+                }
+                return makeResponse(200, sprintf("%d", size));
+            }
+            size += chunk.size();
+        }
+    }
+}
+
+#! HTTP/2 body-streaming handler that answers without reading the request body
+class EarlyResponseHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(401, "early", {"Content-Type": "text/plain"});
+    }
+}
+
 #! WebSocket connection that echoes messages back
 class EchoWsConnection inherits WebSocketConnection {
     constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
@@ -112,6 +152,11 @@ class HttpServerBodySizeLimitTest inherits QUnit::Test {
         HttpServer mUnlimitedServer;
         int mUnlimitedPort;
         string mUnlimitedUrl;
+        # HTTPS listener on the unlimited server for HTTP/2 tests
+        string mUnlimitedSslUrl;
+
+        # HTTP/2 body-streaming handler on the limited server
+        StreamingLimitHandler mStreamingLimitHandler();
 
         Logger mLogger;
 
@@ -121,53 +166,54 @@ class HttpServerBodySizeLimitTest inherits QUnit::Test {
         # WebSocket message size limit (512 bytes)
         const WsMessageSizeLimit = 512;
 
+        #! self-signed certificate for localhost and 127.0.0.1, valid until 2126
         const CertPem = "-----BEGIN CERTIFICATE-----
-MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
-BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
-MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
-AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
-wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
-ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
-Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
-UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
-aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
-FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
-mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
-3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
-TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
-tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
-8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
-CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
-cnhHffwhNhKl6MTonQ==
+MIIDJzCCAg+gAwIBAgIUNk74M8XYwhuFBYrVZ9VoV7jMIoowDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MCAXDTI2MDkyNDA2MzIzN1oYDzIxMjYw
+ODMxMDYzMjM3WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQCbSLWZ9lPypGBk99KDJErqzdJ/+wgFtrGvZoZ9so8Y
+hwSBbiTwLUOSsCgx75WQs6MIB1xUa8vj/Wgpsmov7OLnaMj5PPrWc8ArVMVe04gE
+c3a5Qjslx5bQzFfugw3ItnA0/c5dlrAKnzcd+XlOq44BchIX9dxGqn40kwmH9G2O
+E1J9AdD1fmg2ekUh3CoqVK+DBZvdc0rK4uBz6WZQGChNGFtqhxO74iQFPwJmb5aR
+6xuLW+dXCgrGNAh99E2n5YoW4SoNezfyvpTcWZiFLt6KfHUZxpMdLOnsqQljJ0fC
+neEQs1tB3p1p8cDFf55iMF5AaOpohMVBHmgx2u+lX7+9AgMBAAGjbzBtMB0GA1Ud
+DgQWBBRWWBZYIsmL3KRc/MYLfXP1scnfajAfBgNVHSMEGDAWgBRWWBZYIsmL3KRc
+/MYLfXP1scnfajAPBgNVHRMBAf8EBTADAQH/MBoGA1UdEQQTMBGCCWxvY2FsaG9z
+dIcEfwAAATANBgkqhkiG9w0BAQsFAAOCAQEAHUkZzPUjYe+p7BSydt+5f1EvvfgF
+/REGAfZiax6AbCOU42MWUjY465ONeH8kjcrLhv6QxzLwJgKqsCWccoxBGgPr4THL
+At31mux3bYt7UZdpKCifpEE+qQIrdckJi7xBx+pr59NOQoiqasVOKHoGMOgawzKr
+SdsHrqcMjbqz/NaU9/GHzux2kKx5zGkftHSDcBg4MoELanw6o9i+gIglTR6B3s6F
+d7kDfLG4SG94RMA3lvTj6iiqk8tz3NcxSoldpaKQo5CsbHZ/BGAvKW6LOuAJqdJ1
+XVCdAwP0kCyg4562Gup0waOGvzxEhrJXXOz5TlT3ZE1/pUa/F1T/67RxCQ==
 -----END CERTIFICATE-----";
 
         const KeyPem = "-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
-pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
-ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
-9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
-ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
-xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
-yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
-9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
-ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
-Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
-nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
-dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
-+JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
-HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
-mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
-6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
-rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
-fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
-ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
-EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
-aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
-BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
-gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
-MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
-/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
-Do+Sl1gfqlpgpszQaOMjR4M=
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCbSLWZ9lPypGBk
+99KDJErqzdJ/+wgFtrGvZoZ9so8YhwSBbiTwLUOSsCgx75WQs6MIB1xUa8vj/Wgp
+smov7OLnaMj5PPrWc8ArVMVe04gEc3a5Qjslx5bQzFfugw3ItnA0/c5dlrAKnzcd
++XlOq44BchIX9dxGqn40kwmH9G2OE1J9AdD1fmg2ekUh3CoqVK+DBZvdc0rK4uBz
+6WZQGChNGFtqhxO74iQFPwJmb5aR6xuLW+dXCgrGNAh99E2n5YoW4SoNezfyvpTc
+WZiFLt6KfHUZxpMdLOnsqQljJ0fCneEQs1tB3p1p8cDFf55iMF5AaOpohMVBHmgx
+2u+lX7+9AgMBAAECggEABcpAmJIPxUS4d2tU2nZNo32zM08dQyFHH37XgEkFKZP3
+PgrpA6+cYmmBG4OPHyB48WwHgaUCAD6gVgBaEe688zCmtcG+qfpnmEtb5KeciGtJ
+v6n8N0dplIraCIGzJOBwmfk7avqbFnpN/Xx3jSW7xiAGaVr4hgYGGK3BiuPj+zUm
+/MFe3NVrsniFS/hk2pi4Q9n2ek1bTBdgQGOYcDZei5qvhfTzF+jw2hI+jlHYBh20
+COctsgB19+i4Kxe0vV+J/JHtSXun1Z8MUeAQZO1s9efrWC+7pAlvexRJqHh5NN2A
+vjey9i689CUOFVRnHoEmapQHWtojy0UgyjJGiOEYvQKBgQDXbpBE4CnXoQPOcNwm
+qqDzuFpyFbsR7T8k2i8uB9uPcKBU2vQ5wOtLYziyhzK7arOV18yuJpi2y0EjOQ+h
+aixnke4hegPRYS4fk9875KPQ5RuwM1W8aqX6HFZ15XOyjTVfE+LxqV5h+hCBp1YL
++ey8HphXe0Z1vTWrWDxc3nCzDwKBgQC4hpED8WcWMyyqq8tfVwegWrm5sYcYsThs
+Cr7HDlvyJ6mrNk2Qhd+LY14j9AIehLoStys4FnsJ+wQ1OJ1QQMRXaXnpCPqY9uFN
++JNEQPNWNdr/n/a0tY6ihC+UJRhciFbYIUtZBWDt7SwyQwWpbe2QNilZHIIpp1x9
+7L+0tAuwcwKBgQC++oLmrBorz8/CCQcBOC4rIPj9Pgpyn/FkSA+fLNQVWvCniNsM
+/9sXH8S5b2UoBDVj1sTaddjX42PBR+p1W9w1jIagIryTtyTeVYaGX/BhVVmwYDHX
+MGwnR0vWhCyG0uvHd6euOEk1biuH5MJBJ7QYKL9AfkY+Rhf35+bLJV6fPQKBgGGG
+zfJ1jnSPS5ZRAkY7q043ZV4d1Ddaw2VnMHnovvP3vpc9NjWibAox1LnP56bVo7rs
+kK0uRI173Dd82rhl4uAIYWSnWDuskFwzezJh2brA8CSXGT9djiubDcKQ8JVHgg7t
+WfONAjP+XJOcFMv9y8eiuKveg3UcfagYjyIk3uC9AoGARAXelr1bHoWL7I305Dn8
+ndWrv2HdvZhzJdxpBUgqeKeEXa/Fb5wlB3014Jk63HrNClzMHTIpD249/mZEFT7h
+QabowAregdM8CQp7zFoK+dD/Ito6xsUxH+4lVm+BjWj/mt/py7MAJLfRJEz55/Nc
+qiurSfIBhXYMDdqWsl9GD+c=
 -----END PRIVATE KEY-----";
     }
 
@@ -199,6 +245,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \asyncHttp2BodyOverLimitTest());
         addTestCase("async: HTTP/2 body under limit succeeds",
             \asyncHttp2BodyUnderLimitTest());
+        addTestCase("async: HTTP/2 oversized bodies on one connection get 413",
+            \asyncHttp2OversizedBodiesOneConnectionTest());
+        addTestCase("async: HTTP/2 streaming handler gets the body-too-large error",
+            \asyncHttp2StreamingHandlerLimitTest());
+        addTestCase("async: HTTP/2 response before the complete request",
+            \asyncHttp2EarlyResponseTest());
 
         # Server-level configuration tests
         addTestCase("server setMaxRequestBodySize",
@@ -257,6 +309,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "max_message_size": WsMessageSizeLimit,
         });
         mAsyncServer.setHandler("ws-handler", "/ws", NOTHING, mWsHandler);
+        mAsyncServer.setHandler("stream-limit", "/stream-limit", NOTHING, mStreamingLimitHandler, NOTHING, False);
 
         mAsyncServer.waitForAsyncIo();
 
@@ -268,8 +321,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mUnlimitedServer = new HttpServer(unlimited_opts);
         mUnlimitedServer.setHandler("echo", "", NOTHING, new BodyEchoHandler());
         mUnlimitedServer.setDefaultHandler("echo", new BodyEchoHandler());
+        mUnlimitedServer.setHandler("early", "/early", NOTHING, new EarlyResponseHandler(), NOTHING, False);
         mUnlimitedPort = mUnlimitedServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         mUnlimitedUrl = "http://localhost:" + mUnlimitedPort;
+        mUnlimitedSslUrl = "https://localhost:" + mUnlimitedServer.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        mUnlimitedServer.waitForAsyncIo();
     }
 
     globalTearDown() {
@@ -290,12 +350,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         return c;
     }
 
-    private HTTPClient getHttp2Client(*int timeout_ms) {
+    #! returns a client for HTTP/2 tests; @p h2_only keeps it on HTTP/2 instead of following the server's Alt-Svc
+    #! advertisement to HTTP/3 after the first response
+    private HTTPClient getHttp2Client(*int timeout_ms, *string url, *bool h2_only) {
         HTTPClient c({
-            "url": mAsyncSslUrl,
+            "url": url ?? mAsyncSslUrl,
             "ssl_verify_cert": False,
             "timeout": timeout_ms ?? 10000,
-        });
+        } + (h2_only ? {"http_version": "2.0"} : {}));
         c.connect();
         return c;
     }
@@ -486,7 +548,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # HTTP/2 Tests
     # ================================================================
 
-    #! HTTP/2: body over limit should be rejected (RST_STREAM)
+    #! HTTP/2: a body over the limit is answered with 413
     asyncHttp2BodyOverLimitTest() {
         HTTPClient c = getHttp2Client();
         on_exit c.disconnect();
@@ -494,23 +556,85 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         c.setErrorPassthru(True);
 
         binary body = binary(strmul("K", BodySizeLimit + 1));
+        hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "HTTP/2: body over limit should return 413");
+        assertTrue(c.isHttp2Active(), "the request was sent with HTTP/2");
+    }
 
-        # The HTTP/2 body is sent as DATA frames; the server should RST_STREAM
-        # when the accumulated size exceeds the limit. The client may see:
-        # - A socket/protocol error (RST_STREAM received)
-        # - A 413 response (if the server sends one before RST)
-        # - A connection error
-        bool got_error = False;
-        try {
+    #! HTTP/2: bodies far over the limit are answered with 413, and the connection stays usable
+    /** Each body is larger than the flow control window, so it arrives faster than the handler thread reads it; the
+        server must answer every request with 413 instead of resetting the stream, and must ask the client to stop
+        sending the rest of the body after the response, so the next request on the same connection works.
+    */
+    asyncHttp2OversizedBodiesOneConnectionTest() {
+        HTTPClient c = getHttp2Client(30000, NOTHING, True);
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("M", 1024 * 1024));
+        for (int i = 0; i < 3; ++i) {
             hash<auto> resp = c.send(body, "POST", "/echo", {"Content-Type": "application/octet-stream"});
-            if (resp.status_code >= 400) {
-                got_error = True;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # RST_STREAM or protocol error expected
-            got_error = True;
+            assertEq(413, resp.status_code, sprintf("request %d: body over limit returns 413", i));
+            assertTrue(c.isHttp2Active(), sprintf("request %d: sent with HTTP/2", i));
         }
-        assertTrue(got_error, "HTTP/2: body over limit should be rejected");
+
+        binary small = binary(strmul("S", BodySizeLimit - 1));
+        hash<auto> resp = c.send(small, "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "a body under the limit on the same connection succeeds");
+        assertEq(small, resp.body, "the body under the limit is echoed");
+        assertTrue(c.isHttp2Active(), "the connection is still HTTP/2");
+    }
+
+    #! HTTP/2: a body-streaming handler gets an error, not the end of the body, when the body exceeds the limit
+    asyncHttp2StreamingHandlerLimitTest() {
+        HTTPClient c = getHttp2Client(30000, NOTHING, True);
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("T", 1024 * 1024));
+        hash<auto> resp = c.send(body, "POST", "/stream-limit", {"Content-Type": "application/octet-stream"});
+        assertEq(413, resp.status_code, "the streaming handler answers the oversized body with 413");
+        assertTrue(c.isHttp2Active(), "the request was sent with HTTP/2");
+
+        hash<auto> result = mStreamingLimitHandler.results.get(10s);
+        assertEq("HTTP-BODY-TOO-LARGE", result.end.err, "the body ends with the body-too-large error");
+        assertGt(BodySizeLimit, result.size, "the bytes buffered when the limit was exceeded are delivered first");
+        assertLt(body.size(), result.size, "the rest of the body is discarded");
+
+        # a body under the limit ends normally
+        binary small = binary(strmul("U", BodySizeLimit - 1));
+        resp = c.send(small, "POST", "/stream-limit", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "a body under the limit is read to its end");
+        assertEq(string(small.size()), resp.body, "the handler read the whole body");
+        result = mStreamingLimitHandler.results.get(10s);
+        assertNothing(result.end, "a complete body ends with NOTHING");
+        assertEq(small.size(), result.size, "all bytes of the body were delivered");
+    }
+
+    #! HTTP/2: a response sent before the complete request reaches the client, and the connection stays usable
+    /** The server has no body size limit, and the handler answers without reading the body, so the client is still
+        sending when the response is complete; the server asks it to stop with RST_STREAM(NO_ERROR), which the
+        client must not treat as an error (RFC 9113 section 8.1).
+    */
+    asyncHttp2EarlyResponseTest() {
+        HTTPClient c = getHttp2Client(30000, mUnlimitedSslUrl, True);
+        on_exit c.disconnect();
+
+        c.setErrorPassthru(True);
+
+        binary body = binary(strmul("E", 4 * 1024 * 1024));
+        for (int i = 0; i < 3; ++i) {
+            hash<auto> resp = c.send(body, "POST", "/early", {"Content-Type": "application/octet-stream"});
+            assertEq(401, resp.status_code, sprintf("request %d: the early response is received", i));
+            assertEq("early", resp.body, sprintf("request %d: the early response body is received", i));
+            assertTrue(c.isHttp2Active(), sprintf("request %d: sent with HTTP/2", i));
+        }
+
+        hash<auto> resp = c.send(binary("x"), "POST", "/echo", {"Content-Type": "application/octet-stream"});
+        assertEq(200, resp.status_code, "the connection is usable after the early responses");
+        assertEq(binary("x"), resp.body, "the body is echoed");
     }
 
     #! HTTP/2: body under limit should succeed

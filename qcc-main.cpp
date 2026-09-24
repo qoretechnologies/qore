@@ -358,6 +358,21 @@ static bool has_qo_extension(const char* path) {
     return has_extension(path, ".qo");
 }
 
+//! Initializes the Qore library for qcc itself
+/** qcc installs no signal handlers and runs no code that does, so it does not start the signal handling thread:
+    SIGINT and SIGTERM keep their default actions, and the thread cannot kill qcc with SIGSYS at shutdown when it is
+    run under valgrind.
+
+    This does not change the code qcc compiles: Qore::Option::HAVE_SIGNAL_HANDLING is read in the process the
+    compiled code runs in, and marking this process as the compiler makes the \c HAVE_SIGNAL_HANDLING parse define
+    follow whether the library supports signal handling, as it did when qcc started the signal handling thread.
+    The host main() that qcc generates for an executable initializes the library with signal handling.
+*/
+static void qcc_init_qore() {
+    qore_aot_set_compiler_process();
+    qore_init(QL_GPL, "UTF-8", true, QLO_DISABLE_SIGNAL_HANDLING);
+}
+
 static bool qcc_check_cancel(const char* operation) {
     // qcc deliberately performs manifest-current checks before qore_init() so
     // no-op builds can skip without starting the Qore runtime.  The normal
@@ -8872,7 +8887,7 @@ static bool validate_script_object_body_contracts(
         const std::vector<std::string>& object_paths) {
     bool initialize_qore = !q_libqore_initalized();
     if (initialize_qore) {
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
     }
 
     std::vector<QOLinkInputInfo> inputs;
@@ -9210,7 +9225,7 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: --dump-index-json requires exactly one binary/object path\n");
             return 1;
         }
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         int rc = dump_aot_index_json_for_file(argv[optind]);
         qore_cleanup();
         return rc;
@@ -9224,7 +9239,7 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: --dump-info requires at least one binary/object path\n");
             return 1;
         }
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         int rc = 0;
         for (int i = optind; i < argc; ++i) {
             if (dump_aot_info_for_file(argv[i])) {
@@ -9326,7 +9341,7 @@ int main(int argc, char** argv) {
 
         std::vector<QOLinkInputInfo> inputs;
         inputs.reserve(argc - optind);
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         for (int i = optind; i < argc; ++i) {
             std::string error;
             if (!qo_link_check_cancel(static_cast<size_t>(i - optind),
@@ -9566,7 +9581,7 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         int compiled_count = 0;
         bool ok = QoreAOT::compileScriptFilesBatch(
             target_files, temp_dir, PO_DEFAULT, error,
@@ -9687,7 +9702,7 @@ int main(int argc, char** argv) {
             output = basename + ".qoa";
         }
 
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         std::string error;
         bool ok = QoreAOT::archiveModuleFromObjects(
             context_dir, object_paths, output, PO_DEFAULT, error,
@@ -9759,7 +9774,7 @@ int main(int argc, char** argv) {
             output = basename + ".qmod";
         }
 
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         std::string error;
         bool ok = QoreAOT::compileModuleFromObjects(
             context_dir, object_paths, output, PO_DEFAULT, error,
@@ -9873,7 +9888,7 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         std::string error;
         int compiled_count = 0;
         std::vector<std::string> dep_module_files;
@@ -9997,7 +10012,7 @@ int main(int argc, char** argv) {
                 batch_sources.size(), batch_output_dir);
         }
 
-        qore_init(QL_GPL, "UTF-8", true);
+        qcc_init_qore();
         std::string depfile_dir_arg;
         const std::string* depfile_dir_ptr = nullptr;
         if (depfile_dir) {
@@ -10601,7 +10616,7 @@ int main(int argc, char** argv) {
     }
 
     // Initialize Qore library
-    qore_init(QL_GPL, "UTF-8", true);
+    qcc_init_qore();
 
     int rc = 0;
     QoreParseOptions compile_po = PO_DEFAULT;

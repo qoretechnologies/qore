@@ -127,6 +127,81 @@ private:
     int controller_deferred_tid = -1;
 };
 
+//! Closes a connection so that the peer can read everything sent before the close (a "lingering close")
+/** Closing a TCP socket that still has unread data from the peer makes the system reset the connection, and a
+    reset can make the peer discard data it has received but not yet read, such as a final error response.  This
+    operation instead:
+    - sends a TLS close_notify alert on a secure connection,
+    - shuts down the sending side, so the peer receives the end of the stream after all data sent,
+    - reads and discards everything the peer sends until the peer closes its side, an error occurs, or
+      @p max_discard bytes have been discarded,
+    - closes the socket.
+
+    The time spent waiting is bounded by the caller (the async I/O controller timeout or a Socket::poll() loop);
+    when the operation is aborted, the socket is closed.
+
+    @since %Qore 3.0
+*/
+class SocketLingeringClosePollOperation : public SocketPollSocketOperationBase {
+public:
+    DLLLOCAL SocketLingeringClosePollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int64 max_discard);
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (set_non_block) {
+                sock->clearNonBlock();
+            }
+            poll_state.reset();
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return phase == Phase::Closed;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL virtual QoreValue getOutput() const override;
+
+    DLLLOCAL virtual const char* getStateImpl() const override;
+
+    //! the purpose of the operation is to close the socket, so it is closed in every terminal state
+    DLLLOCAL virtual bool needsCloseOnComplete() const override {
+        return true;
+    }
+
+private:
+    enum class Phase {
+        //! sending the TLS close_notify alert
+        TlsShutdown,
+        //! the sending side is shut down; discarding the data received from the peer
+        Drain,
+        //! the socket is closed
+        Closed,
+    };
+
+    Phase phase = Phase::TlsShutdown;
+    //! the maximum number of bytes to discard before closing; 0 = no limit
+    int64 max_discard;
+    //! the number of bytes discarded
+    int64 discarded = 0;
+    //! true if the peer closed its side of the connection
+    bool peer_closed = false;
+    //! true if the operation closed the socket because it reached @ref max_discard
+    bool max_discard_reached = false;
+
+    //! shuts down the sending side and starts discarding data; the socket lock must be held
+    DLLLOCAL void startDrain();
+
+    //! discards the data received; returns SOCK_POLLIN to wait for more or 0 when done; the socket lock must be held
+    DLLLOCAL int drain();
+
+    //! closes the socket; the socket lock must be held
+    DLLLOCAL void closeSocket();
+};
+
 class SocketShutdownPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketShutdownPollOperation(QoreSocketObject* sock);
