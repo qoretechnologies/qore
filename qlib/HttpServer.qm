@@ -210,6 +210,11 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - every request handler receives the effective maximum request body size of the listener
+      (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
+      \c cx."header-info".max_request_body_size (\c 0 = no limit), including handlers on an automatically created
+      HTTP/3 listener; a handler that reads the request body as a stream enforces the total with it, since the
+      server limits only the data it buffers ahead of such a handler
     - a request body with a \c Content-Encoding is decompressed only up to a maximum size, and a larger body receives
       HTTP 413 (Content Too Large); decompression stops as soon as the limit is exceeded, so a small compressed body
       that expands to a huge one (a "decompression bomb") can no longer exhaust the memory of the server.  The limit
@@ -3434,6 +3439,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
         cx."header-info"."accept-encoding" = acceptable;
 
+        # the effective maximum request body size of the listener, read once per request so a change made with
+        # setMaxRequestBodySize() applies to the next request; handlers that read the body as a stream enforce the
+        # total themselves with this value
+        int max_body = listener.getMaxRequestBodySize();
+        cx."header-info".max_request_body_size = max_body;
+
         # erase the encoding string on exit
         on_exit remove cx.encoding;
 
@@ -3547,9 +3558,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     return;
                 }
             }
-
-            # Get effective max body size for this listener
-            int max_body = listener.getMaxRequestBodySize();
 
             # Set body size limits on socket before any body reads
             s.setMaxChunkedBodySize(max_body);

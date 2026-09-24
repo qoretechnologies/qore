@@ -1926,6 +1926,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         unbounded size in memory (a "decompression bomb")
       - fixed an automatically created HTTP/3 (QUIC) listener ignoring the \c max_request_body_size of its TCP
         listener
+      - request handlers receive the effective maximum request body size of the listener in
+        \c cx."header-info".max_request_body_size, so a handler that reads the request body as a stream can enforce
+        the configured limit on the total body size; the server limits only the data it buffers ahead of such a
+        handler
       - fixed HTTP/1.x clients sometimes receiving a connection reset instead of the response when the server
         closed the connection after the response while the client was still sending data that the server did not
         read, such as the rest of a request body answered with an error, a pipelined request, or the remainder of

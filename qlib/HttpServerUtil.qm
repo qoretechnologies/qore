@@ -129,6 +129,10 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - a request handler receives the effective maximum request body size of the listener in
+      \c cx."header-info".max_request_body_size, so a handler that reads the request body as a stream (see
+      @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") can enforce the
+      configured limit on the total body size, which the server does not enforce for it
     - added the \c after_send key to @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
       @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo": a callback called exactly once after the
       response has been completely sent, or has failed to be sent, for HTTP/1.x, HTTP/2, and HTTP/3
@@ -836,9 +840,11 @@ public hashdecl HttpListenerOptionInfo {
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends.
 
         A handler that reads the request body as a stream (see
-        @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces a limit on
-        the total body size itself; for such a handler, this value limits the data that the server buffers for it,
-        and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
+        @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces the limit on
+        the total body size itself using \c cx."header-info".max_request_body_size, which holds the effective limit of
+        the listener for every request; for such a handler, the server applies this value only to the data that it
+        buffers for the handler, and a read of a body whose unread data exceeded it fails with
+        \c HTTP-BODY-TOO-LARGE after the buffered data.
 
         @since HttpServer 1.6
     */
@@ -3169,6 +3175,11 @@ public class AbstractHttpRequestHandler {
         - \c sock (\c Socket): the socket object for calling stream data methods
         - \c http3 (\c bool): \c True for HTTP/3 requests
         - \c http2 (\c bool): \c True for HTTP/2 requests
+        - \c max_request_body_size (\c int): the effective maximum request body size of the listener in bytes
+          (the listener's \c max_request_body_size, or the server's if the listener sets none); \c 0 means no
+          limit.  The server does not limit the total size of a body read as a stream; the handler must stop
+          reading and reject the request (for example with HTTP 413 Content Too Large) when the total exceeds this
+          value.  The key is also set for requests with a buffered body
 
         @par Complete Streaming Handler Example
         @code{.py}
@@ -3188,6 +3199,8 @@ public class AbstractHttpRequestHandler {
                     return makeResponse(200, body ?? "no body");
                 }
 
+                # the server does not limit the total size of a streamed body; enforce the listener's limit
+                int max_body = cx."header-info".max_request_body_size;
                 binary accumulated = binary();
                 if (cx."header-info".http3) {
                     # HTTP/3: read sync from the QUIC stream; the I/O thread
@@ -3202,6 +3215,9 @@ public class AbstractHttpRequestHandler {
                             break;  # END_STREAM — no more data
                         }
                         accumulated += chunk;
+                        if (max_body > 0 && accumulated.size() > max_body) {
+                            return makeResponse(413, "request body too large");
+                        }
                     }
                 } else {
                     # HTTP/2: register a Queue via the header_info closure; the
@@ -3230,6 +3246,9 @@ public class AbstractHttpRequestHandler {
                             break;  # NOTHING sentinel = END_STREAM
                         }
                         accumulated += chunk;
+                        if (max_body > 0 && accumulated.size() > max_body) {
+                            return makeResponse(413, "request body too large");
+                        }
                     }
                 }
 
