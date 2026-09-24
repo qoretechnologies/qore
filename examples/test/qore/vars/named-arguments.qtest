@@ -97,6 +97,39 @@ class NA_Child inherits NA_Base {
     }
 }
 
+class NA_Nullable {
+    string m(int a = 1, int b = 2, int c = 3) {
+        return sprintf("%d:%d:%d", a, b, c);
+    }
+}
+
+class NA_NullableDerived inherits NA_Nullable {
+    string m(int a = 1, int b = 2, int c = 3) {
+        return sprintf("d:%d:%d:%d", a, b, c);
+    }
+}
+
+class NA_NullableGeneric<T> {
+    string m(T a, int b = 2) {
+        return sprintf("%y:%d", a, b);
+    }
+}
+
+class NA_NullableHolder {
+    private {
+        *NA_Nullable nx = new NA_Nullable();
+        NA_Nullable x();
+    }
+
+    list<string> callMembers() {
+        return (x.m(5, c: 9), nx.m(c: 9), nx.m(5, c: 9), nx.m(c: 8, a: 4));
+    }
+}
+
+string sub na_call_nullable(*NA_Nullable n) {
+    return n.m(b: 7);
+}
+
 class NA_Logger inherits LoggerInterfaceBase {
     public {
         list<hash<auto>> messages();
@@ -177,6 +210,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
+        addTestCase("nullable and dynamic receivers", \nullableAndDynamicReceivers(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -197,6 +231,56 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq((20, 10), na_order, "base constructor argument evaluation keeps source order");
         assertEq("3:4", child.method(b: 4, a: 3), "method arguments are mapped by name");
         assertEq("5:6", NA_Child::staticMethod(b: 6, a: 5), "static method arguments are mapped by name");
+    }
+
+    nullableAndDynamicReceivers() {
+        # a receiver declared *X binds named arguments with the signature of X's method
+        NA_NullableHolder holder();
+        assertEq(("5:2:9", "1:2:9", "5:2:9", "4:2:8"), holder.callMembers(), "member receivers");
+        *NA_Nullable local = new NA_Nullable();
+        assertEq("1:2:9", local.m(c: 9), "local receiver");
+        assertEq("5:2:9", local.m(5, c: 9), "local receiver with a positional argument");
+        assertEq("1:7:3", na_call_nullable(new NA_Nullable()), "parameter receiver");
+        # the method is still dispatched at runtime
+        *NA_Nullable derived = new NA_NullableDerived();
+        assertEq("d:1:2:9", derived.m(c: 9), "virtual dispatch");
+        *NA_NullableGeneric<int> generic = new NA_NullableGeneric<int>();
+        assertEq("1:5", generic.m(b: 5, a: 1), "generic receiver");
+
+        # a receiver with no value fails as with positional arguments
+        *NA_Nullable none;
+        string positional_err;
+        try {
+            none.m(1, 2, 9);
+        } catch (hash<ExceptionInfo> ex) {
+            positional_err = ex.err;
+        }
+        assertNeq(NOTHING, positional_err, "a positional call without a receiver fails");
+        assertThrows(positional_err, sub () { none.m(c: 9); });
+
+        assertThrows("NAMED-ARG-UNKNOWN", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("class X { m(int a = 1) {} } *X x = new X(); x.m(z: 1);", "nullable-unknown-name");
+        });
+
+        # without a declared class type, the method is resolved at runtime, so named arguments cannot be bound
+        foreach string decl in ("auto", "object", "any") {
+            assertThrows("NAMED-CALL-NOT-SUPPORTED", "resolved at runtime", sub () {
+                Program p(PO_NEW_STYLE);
+                p.parse(sprintf("class X { m(int a = 1, int c = 3) {} } %s x = new X(); x.m(c: 9);", decl),
+                    "dynamic-receiver-" + decl);
+            });
+        }
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "resolved at runtime", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("class G { auto methodGate(string m) { return m; } } *G g = new G(); g.other(a: 1);",
+                "nullable-method-gate");
+        });
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "resolved at runtime", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("class G { auto methodGate(string m) { return m; } } G g = new G(); g.other(a: 1);",
+                "method-gate");
+        });
     }
 
     referencesAndVarargs() {

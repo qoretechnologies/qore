@@ -96,7 +96,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         int created_mono_us;
 
         #! Reference to AsyncSocketIoController for wake notifications
-        *object controller_ref;
+        *AsyncSocketIoController controller_ref;
 
         #! Number of pending stream reservations (threads assigned but not yet submitted)
         int pending_stream_count = 0;
@@ -337,7 +337,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     }
 
     #! Sets the controller reference for wake notifications
-    setControllerRef(object controller) {
+    setControllerRef(AsyncSocketIoController controller) {
         AutoLock al(lock);
         controller_ref = controller;
     }
@@ -375,7 +375,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     hash<auto> submitRequest(string method, string path, *hash<auto> headers, *data body,
             bool suppress_wake = False) {
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             if (!self.isReady()) {
@@ -441,7 +441,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     hash<auto> submitRequestWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             if (!self.isReady()) {
@@ -497,7 +497,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         triggers a write cycle promptly.
     */
     notifyPendingData() {
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;

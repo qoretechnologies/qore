@@ -108,6 +108,39 @@ int QoreDotEvalOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
     //    qc ? qc->getName() : "n/a", mname, QoreTypeInfo::getName(typeInfo));
 
     if (!qc) {
+        // a call with named arguments through a receiver that is an object of a single class or no value (*X): bind
+        // the arguments by name with the signature of the class's method; the method is not saved for the call, so
+        // it is still dispatched at runtime, and a receiver with no value is handled as before
+        const QoreParseListNode* parse_args = m->getParseArgs();
+        const QoreClass* nqc = parse_args && parse_args->hasNamedArgs()
+            ? QoreTypeInfo::getUniqueReturnClassOrNothing(typeInfo)
+            : nullptr;
+        if (nqc) {
+            qore_class_private::parseInitPartial(*const_cast<QoreClass*>(nqc));
+            qore_class_private* class_ctx = parse_get_class_priv();
+            if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*nqc, class_ctx)) {
+                class_ctx = nullptr;
+            }
+            meth = qore_class_private::get(*const_cast<QoreClass*>(nqc))->parseFindAnyMethod(mname, class_ctx);
+            if (meth && strcmp(mname, "copy")) {
+                parse_context.typeInfo = nullptr;
+                QoreFunction* func = qore_method_private::get(*meth)->getFunction();
+                if (m->parseArgs(parse_context, func, nullptr) && !err) {
+                    err = -1;
+                }
+                if (readonly_receiver
+                    && check_readonly_receiver_method_call(loc, mname,
+                        static_cast<const MethodVariantBase*>(m->getVariant()), func)
+                    && !err) {
+                    err = -1;
+                }
+                // the return type is not known, because a receiver with no value is not dispatched to the method
+                parse_context.typeInfo = returnTypeInfo = nullptr;
+                return err;
+            }
+            meth = nullptr;
+        }
+
         // if the left side has a type and it's not an object, then we try to match pseudo-methods
         if (QoreTypeInfo::hasType(typeInfo)
             && !QoreTypeInfo::parseAccepts(objectTypeInfo, typeInfo)) {

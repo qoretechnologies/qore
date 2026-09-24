@@ -120,7 +120,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         int sid = poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams);
         # Wake the I/O controller so it processes the queued request
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;
@@ -166,7 +166,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming, body_streaming, notifier,
             sse_install_eligible);
         # Wake the I/O controller so it processes the queued request
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;
@@ -206,7 +206,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             throw "HTTP1-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();
@@ -269,7 +269,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         int sid = poll_op.submitRequestSse(method, path, headers, body, queue,
             max_concurrent_streams, notifier);
         # Wake the I/O controller so it processes the queued request
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;
@@ -288,7 +288,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
         self.setClosed();
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;

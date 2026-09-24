@@ -115,7 +115,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
         self.setClosed();
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;
@@ -156,7 +156,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             throw "HTTP2-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();
@@ -231,7 +231,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();
@@ -268,7 +268,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();

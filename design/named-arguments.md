@@ -164,7 +164,13 @@ parse list.
    with the declared default.
 8. Parameter names are case-sensitive (normal Qore identifiers).
 9. A named call to a target with no parse-time-resolved signature is rejected
-   (`NAMED-CALL-NOT-SUPPORTED`).
+   (`NAMED-CALL-NOT-SUPPORTED`), including a method call through a receiver
+   without a declared class type (`auto`, `object`, a `methodGate()` class).
+   A receiver declared `*Class` binds with the signature of `Class`'s method,
+   but the method is not saved on the call node, so it is still dispatched at
+   runtime and a receiver with no value fails exactly as a positional call
+   (`QoreDotEvalOperatorNode::parseInitImpl()`); the call's return type is
+   unknown at parse time for the same reason.
 10. Named binding to a `reference<T>` parameter preserves reference
     semantics — the `\lvalue` expression is bound exactly as if positional.
 
@@ -260,7 +266,7 @@ Concrete error codes for IDE / qls consumption:
 | `NAMED-ARG-UNKNOWN` | name matches no parameter on any candidate | `lib/Function.cpp` ~2219 (lists accessible parameter names) |
 | `NAMED-ARG-POSITIONAL-AFTER-NAMED` | positional arg follows a named arg | `lib/parser.ypp` ~3073; `lib/Function.cpp` ~2226 |
 | `NAMED-ARG-OVERWRITES-POSITIONAL` | named arg targets an already positionally-bound slot | `lib/Function.cpp` ~2222 |
-| `NAMED-CALL-NOT-SUPPORTED` | no parse-time signature / varargs-only / builtin without `QCF_NAMED_ARGS` / runtime-only dispatch | `lib/Function.cpp` ~2204; `lib/FunctionCallNode.cpp` ~271; `lib/CallReferenceNode.cpp` ~162 |
+| `NAMED-CALL-NOT-SUPPORTED` | no parse-time signature / varargs-only / builtin without `QCF_NAMED_ARGS` / runtime-only dispatch | `lib/Function.cpp` ~2204; `lib/FunctionCallNode.cpp` ~271 and `FunctionCallBase::parseArgsVariant()` (no target function); `lib/CallReferenceNode.cpp` ~162 |
 
 When an existing, more informative call error applies, it is preserved
 rather than replaced by a generic named-call failure.

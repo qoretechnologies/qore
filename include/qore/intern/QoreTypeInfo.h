@@ -303,6 +303,20 @@ public:
         return ti->return_vec[0].spec.getClass();
     }
 
+    //! returns the class if the type returns only objects of a single class or no value (\c *X), otherwise nullptr
+    DLLLOCAL static const QoreClass* getUniqueReturnClassOrNothing(const QoreTypeInfo* ti) {
+        if (!ti || ti->return_vec.size() != 2 || !hasType(ti)) {
+            return nullptr;
+        }
+        for (unsigned i = 0; i < 2; ++i) {
+            const QoreClass* qc = ti->return_vec[i].spec.getClass();
+            if (qc && ti->return_vec[!i].spec.getType() == NT_NOTHING) {
+                return qc;
+            }
+        }
+        return nullptr;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static const QoreParameterizedClassTypeInfo* getParameterizedClassType(const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.empty() || !hasType(ti)) {

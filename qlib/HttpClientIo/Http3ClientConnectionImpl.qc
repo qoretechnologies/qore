@@ -190,7 +190,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
         self.setClosed();
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             ctl = controller_ref;
@@ -261,7 +261,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-CONNECTION-CLOSED",
                 "QUIC session closed; connection evicted from pool";
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();
@@ -305,7 +305,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
             Promise promise, bool streaming = False) {
-        *object ctl;
+        *AsyncSocketIoController ctl;
         if (!self.isReady()) {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
@@ -346,7 +346,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();
@@ -384,7 +384,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTPCLIENT-STATE-ERROR",
                 sprintf("connection not ready: state=%y", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();
@@ -429,7 +429,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot migrate: connection not ready (state=%y)", self.getConnectionState());
         }
-        *object ctl;
+        *AsyncSocketIoController ctl;
         {
             AutoLock al(lock);
             touchActivityLocked();

@@ -117,7 +117,7 @@ public class QoreRecordLimitProcessor inherits AbstractDataProvider {
                 return records.head(take);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(records)) {
-                    return records.slice(offset: 0, count: take);
+                    return cast<ColumnarResult>(records).slice(offset: 0, count: take);
                 }
                 return AbstractDataProcessor::sliceColumnBlock(records, 0, take);
             case DataProviderShape::HashOfLists:

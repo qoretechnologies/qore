@@ -241,7 +241,7 @@ public class AbstractDataProviderBulkRecordInterface {
                 return AbstractDataProcessor::sliceColumnBlock(rv, 0, size);
             case DataProviderShape::BufferColumns:
                 if (AbstractDataProcessor::isColumnarResult(rv)) {
-                    return rv.slice(offset: 0, count: size);
+                    return cast<ColumnarResult>(rv).slice(offset: 0, count: size);
                 }
                 return AbstractDataProcessor::sliceColumnBlock(rv, 0, size);
             case DataProviderShape::DataFrameBlock:

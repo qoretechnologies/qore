@@ -768,6 +768,15 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
     } else {
         parse_context.typeInfo = nullptr;
+        // named arguments are bound to parameters with the signature resolved at parse time; without one, they
+        // would be passed positionally
+        if (named_args && !err) {
+            qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
+                new QoreStringNode("named arguments require a parse-time-resolved signature; the target of this "
+                    "call is only resolved at runtime (for example, a method call through a receiver without a "
+                    "declared class type), so use positional arguments or declare the type of the receiver"));
+            err = -1;
+        }
     }
 
     //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p args: %p (%zd)\n", this,
