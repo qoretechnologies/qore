@@ -71,6 +71,9 @@ class HttpServerDecodedBodyLimitTest inherits QUnit::Test {
         # the maximum request body size of the TLS listener
         const TlsRequestLimit = 8192;
 
+        # the maximum request body size of the listeners with their own request body limit
+        const ListenerRequestLimit = 2048;
+
         # the encoders for each supported content encoding
         const Encoders = {
             "gzip": binary sub (binary b) { return gzip(b); },
@@ -149,6 +152,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # server without any limit, where the default applies
         HttpServer default_server;
         string default_url;
+
+        # a listener of the server without any limit that sets a request body limit
+        string default_request_url;
+
+        # a listener of the server with a decoded body limit that sets a request body limit
+        string request_listener_url;
     }
 
     constructor() : Test("HttpServerDecodedBodyLimitTest", "1.0") {
@@ -186,6 +195,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "service": 0,
             "max_decoded_body_size": ListenerLimit,
         }).port;
+        request_listener_url = "http://localhost:" + server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "max_request_body_size": ListenerRequestLimit,
+        }).port;
         tls_port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
             "cert": new SSLCertificate(CertPem),
@@ -209,6 +222,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         });
         default_server.setHandler("size", "/size", NOTHING, new BodySizeHandler());
         default_url = "http://localhost:" + default_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        default_request_url = "http://localhost:" + default_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "max_request_body_size": ListenerRequestLimit,
+        }).port;
         default_server.waitForAsyncIo();
     }
 
@@ -282,6 +299,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # without a decoded body limit, the request body limit applies to the decoded body
         assertAccepted(request_url, "/size", "br", RequestLimit);
         assertRejected(request_url, "/size", "br", RequestLimit + 1);
+
+        # the request body limit of a listener applies to the decoded body when no decoded body limit is set
+        assertAccepted(default_request_url, "/size", "gzip", ListenerRequestLimit);
+        assertRejected(default_request_url, "/size", "gzip", ListenerRequestLimit + 1);
+
+        # a decoded body limit takes precedence over the request body limit of the listener: the limit of the
+        # decoded body is the server's, although the compressed body is within the listener's request body limit
+        assertLt(Limit, ListenerRequestLimit, "the server's decoded body limit is larger");
+        assertAccepted(request_listener_url, "/size", "gzip", Limit);
+        assertRejected(request_listener_url, "/size", "gzip", Limit + 1);
     }
 
     # returns gzip data that decompresses to the given number of spaces, without holding the decompressed data
