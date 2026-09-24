@@ -2451,99 +2451,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "Configuration du format de sortie. Définir `type` sur `json_schema` pour des sorties structurées ou `json_object` pour un JSON libre"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Description"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "Description lisible par l'humain du but du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "Description lisible par l'humain du but du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nom du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "Identifiant du schéma JSON (requis pour le type json_schema)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "Identifiant du schéma JSON. Obligatoire lorsque `type` est `json_schema`. Doit être alphanumérique avec des traits de soulignement ou des traits d'union, maximum 64 caractères"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "Objet de schéma JSON définissant la structure de sortie"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "Objet Schema JSON définissant la structure de sortie. Obligatoire lorsque `type` est `json_schema`.\n\n**Exemple** : `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "Stricte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "Suivre strictement le schéma exact"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "Lorsque `true`, le modèle suit strictement la définition de schéma exacte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "Le type de format de réponse"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "Le type de format de réponse"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "Texte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "Sortie de texte standard (par défaut)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "Sortie de texte standard (par défaut)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "Schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "Sortie structurée conforme à un schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "Sortie structurée conforme à un schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "Objet JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "Sortie JSON valide sans schéma spécifique"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "Sortie JSON valide sans schéma spécifique"
         },
@@ -3375,99 +3375,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "Configuration du format de sortie. Définir `type` sur `json_schema` pour des sorties structurées ou `json_object` pour un JSON libre"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Description"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "Description lisible par l'humain du but du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "Description lisible par l'humain du but du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nom du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "Identifiant du schéma JSON (requis pour le type json_schema)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "Identifiant du schéma JSON. Obligatoire lorsque `type` est `json_schema`. Doit être alphanumérique avec des traits de soulignement ou des traits d'union, maximum 64 caractères"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "Objet de schéma JSON définissant la structure de sortie"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "Objet Schema JSON définissant la structure de sortie. Obligatoire lorsque `type` est `json_schema`.\n\n**Exemple** : `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "Stricte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "Suivre strictement le schéma exact"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "Lorsque `true`, le modèle suit strictement la définition de schéma exacte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "Le type de format de réponse"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "Le type de format de réponse"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "Texte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "Sortie de texte standard (par défaut)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "Sortie de texte standard (par défaut)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "Schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "Sortie structurée conforme à un schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "Sortie structurée conforme à un schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "Objet JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "Sortie JSON valide sans schéma spécifique"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "Sortie JSON valide sans schéma spécifique"
         },
@@ -4299,99 +4299,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "Configuration du format de sortie. Définir `type` sur `json_schema` pour des sorties structurées ou `json_object` pour un JSON libre"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Description"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "Description lisible par l'humain du but du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "Description lisible par l'humain du but du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nom du schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "Identifiant du schéma JSON (requis pour le type json_schema)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "Identifiant du schéma JSON. Obligatoire lorsque `type` est `json_schema`. Doit être alphanumérique avec des traits de soulignement ou des traits d'union, maximum 64 caractères"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schéma"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "Objet de schéma JSON définissant la structure de sortie"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "Objet Schema JSON définissant la structure de sortie. Obligatoire lorsque `type` est `json_schema`.\n\n**Exemple** : `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "Stricte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "Suivre strictement le schéma exact"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "Lorsque `true`, le modèle suit strictement la définition de schéma exacte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "Le type de format de réponse"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "Le type de format de réponse"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "Texte"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "Sortie de texte standard (par défaut)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "Sortie de texte standard (par défaut)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "Schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "Sortie structurée conforme à un schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "Sortie structurée conforme à un schéma JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "Objet JSON"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "Sortie JSON valide sans schéma spécifique"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "Sortie JSON valide sans schéma spécifique"
         },

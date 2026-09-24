@@ -1531,6 +1531,13 @@ public class RestSchemaActionOperation {
             rv.setDefaultValue(ov.default_value);
         }
         if (exists ov.allowed_values) {
+            # the overlay's values replace the schema's enumeration, which the type would otherwise enforce
+            AbstractDataProviderType field_type = rv.getType();
+            if (*hash<DataTypeConstraintInfo> constraints = field_type.getConstraints()) {
+                if (constraints.enum_values) {
+                    rv.updateFieldType(field_type.copyWithConstraints(constraints - "enum_values"));
+                }
+            }
             rv.setAllowedValues(ov.allowed_values, ov.allowed_values_creatable);
         }
         if (exists ov.element_allowed_values) {

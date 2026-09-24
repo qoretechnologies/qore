@@ -1783,95 +1783,95 @@
           "source": "The parameters for the message creation request. Same structure as POST `/v1/messages`",
           "message": "Параметри запиту створення повідомлення. Той самий формат, що й POST `/v1/messages`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.display_name": {
           "source": "Container",
           "message": "Контейнер"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.short_desc": {
           "source": "Container ID for context reuse",
           "message": "ID контейнера для повторного використання контексту"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.desc": {
           "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
           "message": "ID контейнера для повторного використання контексту в кількох запитах. Контейнер зберігає стан розмови на сервері для ефективної багатоетапної взаємодії"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.display_name": {
           "source": "Conversation Key",
           "message": "Ключ розмови"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
           "source": "Key for conversation context persistence",
           "message": "Ключ для збереження контексту розмови"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.desc": {
           "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
           "message": "Непрозорий ключ, що використовується для завантаження та збереження контексту розмови через налаштоване сховище контексту. Якщо вказано, попередні повідомлення додаються автоматично"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "Витрати"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.short_desc": {
           "source": "Controls how much effort the model should spend",
           "message": "Визначає, скільки зусиль має докласти модель"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.desc": {
           "source": "Controls how much effort the model should spend on the response",
           "message": "Визначає, скільки зусиль модель має докласти до відповіді"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "Low",
           "message": "Низький"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
           "source": "Fast, less thorough responses",
           "message": "Швидкі, менш ретельні відповіді"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "Medium",
           "message": "Середній"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
           "source": "Balanced effort",
           "message": "Збалансоване зусилля"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "High",
           "message": "Високий"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
           "source": "More thorough responses",
           "message": "Більш ретельні відповіді"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
           "source": "Max",
           "message": "Максимум"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
           "source": "Maximum effort and thoroughness",
           "message": "Максимальне зусилля та ретельність"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.display_name": {
           "source": "Max Tokens",
           "message": "Максимум токенів"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate",
           "message": "Максимальна кількість токенів для генерації"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.desc": {
           "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
           "message": "Максимальна кількість токенів для генерації перед зупинкою. Вимагається Anthropic API"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.display_name": {
           "source": "Messages",
           "message": "Повідомлення"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.short_desc": {
           "source": "Input messages for the conversation",
           "message": "Вхідні повідомлення для бесіди"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.desc": {
           "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
           "message": "Вхідні повідомлення для бесіди. Кожне повідомлення є хешем із `role` (`user` або `assistant`) та `content` (рядок або список блоків вмісту)"
         },
@@ -2047,15 +2047,15 @@
           "source": "A message from the assistant",
           "message": "Повідомлення від асистента"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.short_desc": {
           "source": "Request metadata",
           "message": "Запитати метадані"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.desc": {
           "source": "An object describing metadata about the request. Contains `user_id` for abuse detection",
           "message": "Об’єкт, що містить метадані про запит. Містить `user_id` для виявлення зловживань"
         },
@@ -2071,27 +2071,27 @@
           "source": "An external identifier for the user who is associated with the request. This should be a uuid, hash value, or other opaque identifier. Anthropic may use this id to help detect abuse",
           "message": "Зовнішній ідентифікатор користувача, пов’язаного з запитом. Це має бути uuid, хеш-значення або інший непрозорий ідентифікатор. Anthropic може використовувати цей ідентифікатор для виявлення зловживань"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.display_name": {
           "source": "Model",
           "message": "Модель"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.short_desc": {
           "source": "The model that will complete your prompt",
           "message": "Модель, яка доповнить вашу підказку"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.desc": {
           "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
           "message": "Модель, яка доповнить вашу підказку (наприклад, `claude-sonnet-4-6-20250514`)"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.display_name": {
           "source": "Output Config",
           "message": "Конфігурація виводу"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.short_desc": {
           "source": "Configuration for structured output and effort",
           "message": "Конфігурація для структурованого виходу та зусиль"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.desc": {
           "source": "Controls structured output (JSON Schema) and effort level. Use `json_schema` for machine-readable output, and `effort` to control response thoroughness",
           "message": "Керує структурованим виходом (схема JSON) та рівнем зусиль. Використовуйте `json_schema` для машинночитаного виходу, і `effort` для керування глибиною відповіді"
         },
@@ -2263,15 +2263,15 @@
           "source": "Constrain output to match a JSON Schema",
           "message": "Обмежити вихід відповідно до схеми JSON"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.display_name": {
           "source": "Output Schema",
           "message": "Схема виводу"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.short_desc": {
           "source": "JSON Schema for structured output",
           "message": "JSON Schema для структурованого виводу"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.desc": {
           "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
           "message": "Об'єкт JSON Schema, який обмежує вивід моделі відповідно до заданої структури. Забезпечує структуровані машиночитні відповіді. Примітка: для типів `object` параметр `additionalProperties` має бути встановлений у `false`.\n\nПриклад:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
         },
@@ -2355,103 +2355,103 @@
           "source": "Boolean",
           "message": "Булеве"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.display_name": {
           "source": "Service Tier",
           "message": "Рівень послуги"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.short_desc": {
           "source": "Service tier for the request",
           "message": "Рівень обслуговування для запиту"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.desc": {
           "source": "Determines which tier of service to use for the request",
           "message": "Визначає, який рівень обслуговування використовувати для запиту"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Автоматично"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Automatically select the best available tier",
           "message": "Автоматично вибирати найкращий доступний рівень"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
           "source": "Standard Only",
           "message": "Лише стандартний"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
           "source": "Use only the standard tier, never prioritized capacity",
           "message": "Використовувати лише стандартний рівень, ніколи не пріоритезовану ємність"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.display_name": {
           "source": "Skill",
           "message": "Навичка"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.short_desc": {
           "source": "An agent skill to use for this request",
           "message": "Навичка агента для використання у цьому запиті"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.desc": {
           "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
           "message": "Навичка агента для використання у цьому запиті. Навички розширюють можливості Claude спеціалізованими знаннями для таких завдань, як створення документів (pptx, xlsx, docx, pdf) або власні робочі процеси. Якщо вибрано навичку, необхідний інструмент виконання коду та бета-заголовки налаштовуються автоматично.\n\nФормат: `{type}/{skill_id}` (наприклад, `anthropic/pptx`, `custom/skill_abc123`). Якщо префікс типу не вказано, передбачається `custom`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.display_name": {
           "source": "Stop Sequences",
           "message": "Послідовності зупинки"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.short_desc": {
           "source": "Custom text sequences that will cause the model to stop generating",
           "message": "Власні текстові послідовності, які змусять модель припинити генерацію"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.desc": {
           "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
           "message": "Власні текстові послідовності, які змусять модель припинити генерацію. Модель зупиниться, коли зустріне будь-яку з наданих послідовностей"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.display_name": {
           "source": "Stream",
           "message": "Потік"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.short_desc": {
           "source": "Whether to stream the response using Server-Sent Events",
           "message": "Чи використовувати потік відповіді через Server-Sent Events"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.desc": {
           "source": "Whether to incrementally stream the response using Server-Sent Events (SSE)",
           "message": "Чи використовувати поступове надсилання відповіді через Server-Sent Events (SSE)"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.display_name": {
           "source": "System Prompt",
           "message": "Системний запит"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.short_desc": {
           "source": "System prompt for the conversation",
           "message": "Системна підказка для бесіди"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.desc": {
           "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
           "message": "Системна підказка, що надає контекст та інструкції. Може бути рядком або списком блоків вмісту для керування кешем"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Температура"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.short_desc": {
           "source": "Amount of randomness injected into the response",
           "message": "Рівень випадковості у відповіді"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.desc": {
           "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
           "message": "Рівень випадковості у відповіді. Діапазон від `0.0` до `1.0`. Використовуйте `temperature` ближче до `0.0` для аналітичних завдань / завдань із множинним вибором і ближче до `1.0` для творчих і генеративних завдань. За замовчуванням: `1.0`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.display_name": {
           "source": "Extended Thinking",
           "message": "Розширене мислення"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.short_desc": {
           "source": "Configuration for extended thinking",
           "message": "Конфігурація для розширеного мислення"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.desc": {
           "source": "Configuration for extended thinking. Budget must be at least `1024` and less than `max_tokens`",
           "message": "Конфігурація для розширеного мислення. Бюджет має бути не меншим за `1024` і меншим за `max_tokens`"
         },
@@ -2503,143 +2503,143 @@
           "source": "Model decides whether to use thinking based on the task",
           "message": "Модель вирішує, чи використовувати міркування, залежно від завдання"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
           "source": "Thinking Budget Tokens",
           "message": "Токени бюджету міркування"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
           "source": "Maximum tokens for thinking",
           "message": "Максимальна кількість токенів для міркування"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
           "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
           "message": "Максимальна кількість токенів для розширеного міркування. Має бути щонайменше `1024` і менше ніж `max_tokens`. Застосовується, лише коли режим міркування — `enabled`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.display_name": {
           "source": "Thinking Mode",
           "message": "Режим міркування"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.short_desc": {
           "source": "Whether extended thinking is enabled",
           "message": "Чи ввімкнено розширене міркування"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.desc": {
           "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
           "message": "Чи ввімкнено або вимкнено розширене міркування. Розширене міркування дозволяє моделі покроково аналізувати складні завдання перед наданням відповіді"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
           "source": "Enabled",
           "message": "Увімкнено"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
           "source": "Enable extended thinking with a fixed budget",
           "message": "Увімкнути розширене міркування з фіксованим бюджетом"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Вимкнено"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
           "source": "Disable extended thinking",
           "message": "Вимкнути розширене міркування"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
           "source": "Adaptive",
           "message": "Адаптивний"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
           "source": "Model decides whether to use thinking based on the task",
           "message": "Модель вирішує, чи використовувати міркування, залежно від завдання"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.display_name": {
           "source": "Tool Choice",
           "message": "Вибір інструменту"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.short_desc": {
           "source": "How the model should use the provided tools",
           "message": "Як модель повинна використовувати надані інструменти"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.desc": {
           "source": "How the model should use the provided tools. Set `type` to control tool usage behavior",
           "message": "Як модель має використовувати надані інструменти. Встановіть `type`, щоб керувати поведінкою використання інструментів"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.display_name": {
           "source": "Disable Parallel Tool Use",
           "message": "Вимкнути паралельне використання інструментів"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.short_desc": {
           "source": "Whether to disable parallel tool use",
           "message": "Чи вимкнути паралельне використання інструментів"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.desc": {
           "source": "Whether to disable parallel tool use. Defaults to `False`",
           "message": "Чи вимкнути паралельне використання інструментів. За замовчуванням — `False`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.display_name": {
           "source": "Tool Name",
           "message": "Назва інструменту"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.short_desc": {
           "source": "Name of the specific tool to use",
           "message": "Назва конкретного інструменту для використання"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.desc": {
           "source": "The name of the specific tool to use. Only applicable when `type` is `tool`",
           "message": "Назва конкретного інструменту для використання. Дійсно лише коли `type` — `tool`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Тип"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.short_desc": {
           "source": "How the model should use tools",
           "message": "Як модель має використовувати інструменти"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.desc": {
           "source": "How the model should use the provided tools",
           "message": "Як модель повинна використовувати надані інструменти"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Автоматично"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Model decides whether to use tools",
           "message": "Модель вирішує, чи використовувати інструменти"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.display_name": {
           "source": "Any",
           "message": "Будь-який"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.short_desc": {
           "source": "Model must use a tool",
           "message": "Модель повинна використовувати інструмент"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
           "source": "Specific Tool",
           "message": "Певний інструмент"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
           "source": "Model must use the named tool",
           "message": "Модель повинна використовувати названий інструмент"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "Немає"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
           "source": "Model must not use tools",
           "message": "Модель не повинна використовувати інструменти"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.display_name": {
           "source": "Tools",
           "message": "Інструменти"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.short_desc": {
           "source": "Definitions of tools that the model may use",
           "message": "Визначення інструментів, якими може користуватись модель"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.desc": {
           "source": "Definitions of tools that the model may use. Each tool has a `name`, `description`, and `input_schema` (JSON Schema object)",
           "message": "Означення інструментів, які може використовувати модель. Кожен інструмент має `name`, `description` та `input_schema` (об’єкт JSON Schema)"
         },
@@ -2759,27 +2759,27 @@
           "source": "The name of the tool. Must match `^[a-zA-Z0-9_-]{1,64}$`",
           "message": "Назва інструменту. Має відповідати `^[a-zA-Z0-9_-]{1,64}$`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.display_name": {
           "source": "Top K",
           "message": "Top K"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.short_desc": {
           "source": "Only sample from the top K options for each subsequent token",
           "message": "Вибирати лише з найкращих K варіантів для кожного наступного токена"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.desc": {
           "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
           "message": "Вибирати лише з найкращих K варіантів для кожного наступного токена. Використовується для видалення малоймовірних відповідей із довгого хвоста"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.display_name": {
           "source": "Top P",
           "message": "Top P"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.short_desc": {
           "source": "Nucleus sampling parameter",
           "message": "Параметр ядерного семплювання"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.desc": {
           "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
           "message": "Використовувати ядерне семплювання. У ядерному семплюванні обчислюється кумулятивний розподіл за всіма варіантами для кожного наступного токена в порядку зменшення ймовірності та відсікається, щойно досягається певна ймовірність, визначена `top_p`"
         },

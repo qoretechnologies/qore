@@ -1783,95 +1783,95 @@
           "source": "The parameters for the message creation request. Same structure as POST `/v1/messages`",
           "message": "Parametry požadavku na vytvoření zprávy. Stejná struktura jako POST `/v1/messages`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.display_name": {
           "source": "Container",
           "message": "Kontejner"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.short_desc": {
           "source": "Container ID for context reuse",
           "message": "ID kontejneru pro opakované použití kontextu"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.desc": {
           "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
           "message": "ID kontejneru pro opakované použití kontextu napříč více požadavky. Kontejner ukládá stav konverzace na serveru pro efektivní vícekrokové interakce"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.display_name": {
           "source": "Conversation Key",
           "message": "Klíč konverzace"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
           "source": "Key for conversation context persistence",
           "message": "Klíč pro perzistenci kontextu konverzace"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.desc": {
           "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
           "message": "Opakní klíč používaný k načítání a ukládání kontextu konverzace prostřednictvím nakonfigurovaného úložiště kontextu. Je-li zadán, předchozí zprávy se automaticky přidají na začátek"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "Náročnost"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.short_desc": {
           "source": "Controls how much effort the model should spend",
           "message": "Určuje, kolik úsilí by měl model vynaložit"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.desc": {
           "source": "Controls how much effort the model should spend on the response",
           "message": "Určuje, kolik úsilí by měl model věnovat odpovědi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "Low",
           "message": "Nízká"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
           "source": "Fast, less thorough responses",
           "message": "Rychlé, méně důkladné odpovědi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "Medium",
           "message": "Střední"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
           "source": "Balanced effort",
           "message": "Vyvážené úsilí"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "High",
           "message": "Vysoká"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
           "source": "More thorough responses",
           "message": "Důkladnější odpovědi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
           "source": "Max",
           "message": "Max"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
           "source": "Maximum effort and thoroughness",
           "message": "Maximální úsilí a důkladnost"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.display_name": {
           "source": "Max Tokens",
           "message": "Maximální počet tokenů"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate",
           "message": "Maximální počet tokenů k vygenerování"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.desc": {
           "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
           "message": "Maximální počet tokenů k vygenerování před zastavením. Vyžadováno rozhraním Anthropic API"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.display_name": {
           "source": "Messages",
           "message": "Zprávy"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.short_desc": {
           "source": "Input messages for the conversation",
           "message": "Vstupní zprávy pro konverzaci"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.desc": {
           "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
           "message": "Vstupní zprávy pro konverzaci. Každá zpráva je hash s `role` (`user` nebo `assistant`) a `content` (řetězec nebo seznam bloků obsahu)"
         },
@@ -2047,15 +2047,15 @@
           "source": "A message from the assistant",
           "message": "Zpráva od asistenta"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Metadatové informace"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.short_desc": {
           "source": "Request metadata",
           "message": "Požádat o metadata"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.desc": {
           "source": "An object describing metadata about the request. Contains `user_id` for abuse detection",
           "message": "Objekt popisující metadata o požadavku. Obsahuje `user_id` pro detekci zneužití"
         },
@@ -2071,27 +2071,27 @@
           "source": "An external identifier for the user who is associated with the request. This should be a uuid, hash value, or other opaque identifier. Anthropic may use this id to help detect abuse",
           "message": "Externí identifikátor uživatele spojeného s požadavkem. Měl by to být uuid, hash hodnota nebo jiný neprůhledný identifikátor. Anthropic může toto ID použít k detekci zneužití"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.display_name": {
           "source": "Model",
           "message": "Model"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.short_desc": {
           "source": "The model that will complete your prompt",
           "message": "Model, který dokončí váš prompt"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.desc": {
           "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
           "message": "Model, který doplní váš prompt (např. `claude-sonnet-4-6-20250514`)"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.display_name": {
           "source": "Output Config",
           "message": "Konfigurace výstupu"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.short_desc": {
           "source": "Configuration for structured output and effort",
           "message": "Konfigurace pro strukturovaný výstup a náročnost"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.desc": {
           "source": "Controls structured output (JSON Schema) and effort level. Use `json_schema` for machine-readable output, and `effort` to control response thoroughness",
           "message": "Ovládá strukturovaný výstup (JSON Schema) a úroveň náročnosti. Použijte `json_schema` pro strojově čitelný výstup a `effort` pro ovládání propracovanosti odpovědi"
         },
@@ -2263,15 +2263,15 @@
           "source": "Constrain output to match a JSON Schema",
           "message": "Omezení výstupu na odpovídající JSON Schema"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.display_name": {
           "source": "Output Schema",
           "message": "Schéma výstupu"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.short_desc": {
           "source": "JSON Schema for structured output",
           "message": "JSON Schema pro strukturovaný výstup"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.desc": {
           "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
           "message": "Objekt JSON Schema, který omezuje výstup modelu tak, aby odpovídal zadané struktuře. Umožňuje strukturované, strojově čitelné odpovědi. Poznámka: pro typy `object` musí být `additionalProperties` nastaveno na `false`.\n\nPříklad:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
         },
@@ -2355,103 +2355,103 @@
           "source": "Boolean",
           "message": "Logická hodnota"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.display_name": {
           "source": "Service Tier",
           "message": "Úroveň služby"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.short_desc": {
           "source": "Service tier for the request",
           "message": "Úroveň služby pro požadavek"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.desc": {
           "source": "Determines which tier of service to use for the request",
           "message": "Určuje, jakou úroveň služby použít pro požadavek"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Automaticky"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Automatically select the best available tier",
           "message": "Automaticky vybrat nejlepší dostupnou úroveň"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
           "source": "Standard Only",
           "message": "Pouze standardní"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
           "source": "Use only the standard tier, never prioritized capacity",
           "message": "Používat pouze standardní úroveň, nikdy prioritní kapacitu"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.display_name": {
           "source": "Skill",
           "message": "Dovednost"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.short_desc": {
           "source": "An agent skill to use for this request",
           "message": "Dovednost agenta pro tento požadavek"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.desc": {
           "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
           "message": "Dovednost agenta, kterou chcete pro tento požadavek použít. Dovednosti rozšiřují schopnosti modelu Claude o specializovanou expertízu pro úkoly, jako je vytváření dokumentů (pptx, xlsx, docx, pdf) nebo vlastní pracovní postupy. Když je dovednost vybrána, požadovaný nástroj pro spouštění kódu a beta hlavičky se automaticky nakonfigurují.\n\nFormát: `{type}/{skill_id}` (např. `anthropic/pptx`, `custom/skill_abc123`). Pokud není zadána žádná předpona typu, předpokládá se `custom`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.display_name": {
           "source": "Stop Sequences",
           "message": "Sekvence pro zastavení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.short_desc": {
           "source": "Custom text sequences that will cause the model to stop generating",
           "message": "Vlastní textové sekvence, které způsobí, že model přestane generovat"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.desc": {
           "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
           "message": "Vlastní textové sekvence, které způsobí, že model přestane generovat. Model se zastaví, jakmile narazí na kteroukoli ze zadaných sekvencí"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.display_name": {
           "source": "Stream",
           "message": "Stream"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.short_desc": {
           "source": "Whether to stream the response using Server-Sent Events",
           "message": "Zda streamovat odpověď pomocí Server-Sent Events"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.desc": {
           "source": "Whether to incrementally stream the response using Server-Sent Events (SSE)",
           "message": "Zda inkrementálně streamovat odpověď pomocí Server-Sent Events (SSE)"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.display_name": {
           "source": "System Prompt",
           "message": "Systémový prompt"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.short_desc": {
           "source": "System prompt for the conversation",
           "message": "Systémová výzva pro konverzaci"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.desc": {
           "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
           "message": "Systémová výzva poskytující kontext a pokyny. Může to být řetězec nebo seznam bloků obsahu pro řízení mezipaměti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Teplota"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.short_desc": {
           "source": "Amount of randomness injected into the response",
           "message": "Míra náhodnosti vnesená do odpovědi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.desc": {
           "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
           "message": "Míra náhodnosti vnesená do odpovědi. V rozsahu od `0.0` do `1.0`. Použijte `temperature` blíže k `0.0` pro analytické úlohy / úlohy s výběrem odpovědí a blíže k `1.0` pro kreativní a generativní úlohy. Výchozí: `1.0`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.display_name": {
           "source": "Extended Thinking",
           "message": "Rozšířené myšlení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.short_desc": {
           "source": "Configuration for extended thinking",
           "message": "Konfigurace pro rozšířené myšlení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.desc": {
           "source": "Configuration for extended thinking. Budget must be at least `1024` and less than `max_tokens`",
           "message": "Konfigurace pro rozšířené myšlení. Rozpočet musí být alespoň `1024` a méně než `max_tokens`"
         },
@@ -2503,143 +2503,143 @@
           "source": "Model decides whether to use thinking based on the task",
           "message": "Model rozhoduje o použití přemýšlení na základě úlohy"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
           "source": "Thinking Budget Tokens",
           "message": "Rozpočet tokenů pro přemýšlení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
           "source": "Maximum tokens for thinking",
           "message": "Maximální počet tokenů pro přemýšlení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
           "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
           "message": "Maximální počet tokenů k použití pro rozšířené přemýšlení. Musí být alespoň `1024` a méně než `max_tokens`. Platí pouze tehdy, když je režim přemýšlení `enabled`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.display_name": {
           "source": "Thinking Mode",
           "message": "Režim přemýšlení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.short_desc": {
           "source": "Whether extended thinking is enabled",
           "message": "Zda je rozšířené přemýšlení povoleno"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.desc": {
           "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
           "message": "Zda je rozšířené přemýšlení povoleno nebo zakázáno. Rozšířené přemýšlení umožňuje modelu před odpovědí krok za krokem promýšlet složité problémy"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
           "source": "Enabled",
           "message": "Povoleno"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
           "source": "Enable extended thinking with a fixed budget",
           "message": "Povolit rozšířené přemýšlení s pevným rozpočtem"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Zakázáno"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
           "source": "Disable extended thinking",
           "message": "Zakázat rozšířené přemýšlení"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
           "source": "Adaptive",
           "message": "Adaptivní"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
           "source": "Model decides whether to use thinking based on the task",
           "message": "Model rozhoduje o použití přemýšlení na základě úlohy"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.display_name": {
           "source": "Tool Choice",
           "message": "Volba nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.short_desc": {
           "source": "How the model should use the provided tools",
           "message": "Jak by měl model používat poskytnuté nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.desc": {
           "source": "How the model should use the provided tools. Set `type` to control tool usage behavior",
           "message": "Jak má model používat poskytnuté nástroje. Nastavte `type` pro ovládání chování použití nástrojů"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.display_name": {
           "source": "Disable Parallel Tool Use",
           "message": "Zakázat paralelní použití nástrojů"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.short_desc": {
           "source": "Whether to disable parallel tool use",
           "message": "Zda zakázat paralelní použití nástrojů"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.desc": {
           "source": "Whether to disable parallel tool use. Defaults to `False`",
           "message": "Zda zakázat paralelní použití nástrojů. Výchozí hodnota je `False`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.display_name": {
           "source": "Tool Name",
           "message": "Název nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.short_desc": {
           "source": "Name of the specific tool to use",
           "message": "Název konkrétního nástroje k použití"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.desc": {
           "source": "The name of the specific tool to use. Only applicable when `type` is `tool`",
           "message": "Název konkrétního nástroje k použití. Platí pouze v případě, že je `type` rovno `tool`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Typ"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.short_desc": {
           "source": "How the model should use tools",
           "message": "Jak má model používat nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.desc": {
           "source": "How the model should use the provided tools",
           "message": "Jak by měl model používat poskytnuté nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Automaticky"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Model decides whether to use tools",
           "message": "Model rozhoduje, zda použít nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.display_name": {
           "source": "Any",
           "message": "Jakýkoli"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.short_desc": {
           "source": "Model must use a tool",
           "message": "Model musí použít nástroj"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
           "source": "Specific Tool",
           "message": "Konkrétní nástroj"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
           "source": "Model must use the named tool",
           "message": "Model musí použít pojmenovaný nástroj"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "Žádné"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
           "source": "Model must not use tools",
           "message": "Model nesmí používat nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.display_name": {
           "source": "Tools",
           "message": "Nástroje"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.short_desc": {
           "source": "Definitions of tools that the model may use",
           "message": "Definice nástrojů, které může model použít"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.desc": {
           "source": "Definitions of tools that the model may use. Each tool has a `name`, `description`, and `input_schema` (JSON Schema object)",
           "message": "Definice nástrojů, které model může použít. Každý nástroj má `name`, `description` a `input_schema` (objekt JSON schématu)"
         },
@@ -2759,27 +2759,27 @@
           "source": "The name of the tool. Must match `^[a-zA-Z0-9_-]{1,64}$`",
           "message": "Název nástroje. Musí odpovídat `^[a-zA-Z0-9_-]{1,64}$`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.display_name": {
           "source": "Top K",
           "message": "Top K"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.short_desc": {
           "source": "Only sample from the top K options for each subsequent token",
           "message": "Vybírat vzorky pouze z horních K možností pro každý následující token"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.desc": {
           "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
           "message": "Vybírat vzorky pouze z horních K možností pro každý následující token. Používá se k odstranění nepravděpodobných odpovědí z dlouhého chvostu"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.display_name": {
           "source": "Top P",
           "message": "Top P"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.short_desc": {
           "source": "Nucleus sampling parameter",
           "message": "Parametr jádrového vzorkování"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.desc": {
           "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
           "message": "Použít jádrové vzorkování. Při jádrovém vzorkování se počítá kumulativní distribuce přes všechny možnosti pro každý následující token v sestupném pořadí pravděpodobnosti a odřízne se, jakmile dosáhne konkrétní pravděpodobnosti určené pomocí `top_p`"
         },

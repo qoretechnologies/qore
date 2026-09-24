@@ -1319,15 +1319,15 @@
           "source": "The variant pricing (basePrice, onSale, salePrice)",
           "message": "Cenové podmienky varianty (basePrice, onSale, salePrice)"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.display_name": {
           "source": "Base Price",
           "message": "Základná cena"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.short_desc": {
           "source": "The base price of the variant",
           "message": "Základná cena pre variant"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.YmFzZVByaWNl.desc": {
           "source": "The base price of the variant (currency + value)",
           "message": "Základná cena pre variant (mena + hodnota)"
         },
@@ -1355,27 +1355,27 @@
           "source": "The monetary amount as a string (e.g., \"9.99\")",
           "message": "Množstvo v peňažnej sume ako reťazec (napr. \"9.99\")"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.display_name": {
           "source": "On Sale",
           "message": "V zľave"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.short_desc": {
           "source": "Whether the variant is on sale",
           "message": "Či je variant na zľave"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.b25TYWxl.desc": {
           "source": "Whether the variant is on sale; if `true`, `salePrice` is required",
           "message": "Či je variant na zľave; ak je `true`, je vyžadované `salePrice`"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.display_name": {
           "source": "Sale Price",
           "message": "Akciová cena"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.short_desc": {
           "source": "The sale price of the variant",
           "message": "Predajná cena variantu"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzdkMjZmMzM0NjNlMzFiNjhkNTAyYzVmYzlkMjQwZWNiZDliZDZkODI2YjBiMzZjZTQ5ZDhiY2E2NzBkNDJhMDk6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VGdWxsUHJpY2luZ0RhdGFUeXBlOkZ1bGxQcmljaW5nIzBjZDFkNjI5YTI2M2I0YjU3OWQ2ZWQ0NjI5Zjk3ZDY0NTlmZWIzZTFlMmM2YThkOWM5ZjYzMTNhZGFmNGU3OTI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmNISnBZMmx1Wnc.field.c2FsZVByaWNl.desc": {
           "source": "The sale price of the variant (currency + value); required if `onSale` is `true`",
           "message": "Predajná cena variantu (mena + hodnota); vyžadované, ak je `onSale` rovné `true`"
         },
@@ -1551,27 +1551,27 @@
           "source": "The stock information (quantity, unlimited)",
           "message": "Informácie o zásobe (množstvo, neobmedzené)"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrIzFiZmNkNzc2M2U5NTFhODUyYzZkZTM0NDI5ZGRmMGIyMjczNDljNzNmMTY2Yjk4YThmOTIxMmNhOTExN2ZiNjI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.display_name": {
           "source": "Quantity",
           "message": "Množstvo"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrIzFiZmNkNzc2M2U5NTFhODUyYzZkZTM0NDI5ZGRmMGIyMjczNDljNzNmMTY2Yjk4YThmOTIxMmNhOTExN2ZiNjI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.short_desc": {
           "source": "The stock quantity",
           "message": "Množstvo zásoby"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrIzFiZmNkNzc2M2U5NTFhODUyYzZkZTM0NDI5ZGRmMGIyMjczNDljNzNmMTY2Yjk4YThmOTIxMmNhOTExN2ZiNjI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.cXVhbnRpdHk.desc": {
           "source": "The available stock quantity for the variant",
           "message": "Dostupné množstvo zásob pre variant"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrIzFiZmNkNzc2M2U5NTFhODUyYzZkZTM0NDI5ZGRmMGIyMjczNDljNzNmMTY2Yjk4YThmOTIxMmNhOTExN2ZiNjI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.display_name": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.display_name": {
           "source": "Unlimited",
           "message": "Neobmedzené"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrIzFiZmNkNzc2M2U5NTFhODUyYzZkZTM0NDI5ZGRmMGIyMjczNDljNzNmMTY2Yjk4YThmOTIxMmNhOTExN2ZiNjI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.short_desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.short_desc": {
           "source": "Whether stock is unlimited",
           "message": "Či je zásoba neobmedzená"
         },
-        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrIzFiZmNkNzc2M2U5NTFhODUyYzZkZTM0NDI5ZGRmMGIyMjczNDljNzNmMTY2Yjk4YThmOTIxMmNhOTExN2ZiNjI6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.desc": {
+        "app.U3F1YXJlc3BhY2U.type.YWN0aW9uOlkzSmxZWFJsTFhCeWIyUjFZM1E6U3F1YXJlc3BhY2VTdG9ja0RhdGFUeXBlOlN0b2NrI2FkNmExY2YwNjk4MmFkNWMxNDkzZmYwYTY1YTAyYjQ2ZjE5ZmIxYjg0ZDliZTU2ZjRlNzU4MTU2MzZlNmUxY2M6b3B0aW9uOmRtRnlhV0Z1ZEhNOmZpZWxkOmMzUnZZMnM.field.dW5saW1pdGVk.desc": {
           "source": "Whether the variant has unlimited stock",
           "message": "Či variant má neobmedzenú zásobu"
         },

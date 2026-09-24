@@ -1267,35 +1267,35 @@
           "source": "Alcohol shipment details (FedEx and UPS only)",
           "message": "알코올 화물 세부 정보 (FedEx 및 UPS 전용)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
           "source": "Contains Alcohol",
           "message": "알코올 포함"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
           "source": "Package contains alcohol",
           "message": "패키지에 알코올 포함"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
           "source": "Specifies that the package contains alcohol (FedEx and UPS only)",
           "message": "이 패키지에 알코올이 포함되어 있음( FedEx 및 UPS 전용)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
           "source": "Recipient Type",
           "message": "수신자 유형"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
           "source": "Alcohol recipient type",
           "message": "알코올 수령자 유형"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
           "source": "License type of the recipient (mandatory for FedEx only)",
           "message": "수신자의 라이선스 유형 (FedEx의 경우 필수)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
           "source": "Licensed recipient",
           "message": "라이선스 보유 수신자"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
           "source": "Consumer recipient",
           "message": "소비자 수신자"
         },
@@ -1595,27 +1595,27 @@
           "source": "Dry ice details (FedEx, Veho, and UPS only)",
           "message": "건조한 얼음 세부 정보 (FedEx, Veho 및 UPS 전용)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
           "source": "Contains Dry Ice",
           "message": "건조한 얼음 포함"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
           "source": "Package contains dry ice",
           "message": "패키지에 건식 이산화탄소 포함"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
           "source": "Specifies that the package contains dry ice (FedEx, Veho, and UPS only)",
           "message": "이 패키지에 건조한 얼음이 포함되어 있음( FedEx, Veho 및 UPS 전용)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
           "source": "Weight",
           "message": "무게"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
           "source": "Dry ice weight in kg",
           "message": "건조한 얼음 무게 (kg)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
           "source": "Weight of dry ice in kilograms. Cannot be greater than the package weight",
           "message": "건조한 이슬의 무게 (킬로그램). 패키지 무게를 초과할 수 없습니다."
         },

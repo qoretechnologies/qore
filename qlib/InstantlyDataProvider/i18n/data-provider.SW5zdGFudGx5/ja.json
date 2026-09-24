@@ -979,39 +979,39 @@
           "source": "A list of email content variants for A/B testing; at least one variant is required",
           "message": "A/Bテスト用のメールコンテンツバリエーションのリスト；少なくとも1つのバリエーションが必要です"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.display_name": {
           "source": "Body",
           "message": "本文"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.short_desc": {
           "source": "Email body content",
           "message": "メール本文の内容"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.Ym9keQ.desc": {
           "source": "The email body content (HTML or plain text); supports template variables like `{{firstName}}`",
           "message": "メール本文コンテンツ（HTMLまたはプレーンテキスト）；`{{firstName}}` などのテンプレート変数をサポート"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.display_name": {
           "source": "Subject",
           "message": "サブジェクト"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.short_desc": {
           "source": "Email subject line",
           "message": "メールの件名"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.c3ViamVjdA.desc": {
           "source": "The email subject line; supports template variables like `{{firstName}}`",
           "message": "メール件名；`{{firstName}}` などのテンプレート変数をサポート"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.display_name": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.display_name": {
           "source": "Variant Disabled",
           "message": "バリエーション無効"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.short_desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.short_desc": {
           "source": "Whether this variant is disabled",
           "message": "このバリエーションが無効化されているか"
         },
-        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jNTVlZTQwYzFjY2I1YmZlYzc3YjA3ZjQ1MTQ0ZWIwMzYyMjljNTBmOTIzZWU2YTFiOWI5OTZjNjRhMjc3ZWFmODpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.desc": {
+        "app.SW5zdGFudGx5.type.YWN0aW9uOlkzSmxZWFJsTFdOaGJYQmhhV2R1Okluc3RhbnRseUNhbXBhaWduVmFyaWFudERhdGFUeXBlOmhhc2g8YXV0bz4jMTBhYmU0Njc5Y2NhODM5ODYwOTEwYTIyOTIxNmVmYzY2MzFlMWRjOTlmZGYyOTczNzJjNDFhOGRkOTM3NTAzZjpvcHRpb246YzJWeGRXVnVZMlZ6OmZpZWxkOmMzUmxjSE06ZmllbGQ6ZG1GeWFXRnVkSE0.field.dl9kaXNhYmxlZA.desc": {
           "source": "If `True`, this variant will not be used for sending; by default all variants are enabled",
           "message": "`True` の場合、このバリエーションは送信に使用されません。デフォルトではすべてのバリエーションが有効です"
         },

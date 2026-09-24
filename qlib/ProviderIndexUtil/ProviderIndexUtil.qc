@@ -92,6 +92,7 @@ hashdecl MetadataDeserializeContext {
     TypedHash type_info_th;
     TypedHash field_info_th;
     TypedHash type_opt_info_th;
+    TypedHash constraint_info_th;
     TypedHash path_vars_th;
     TypedHash dp_info_th;
     TypedHash dp_opt_info_th;
@@ -1296,6 +1297,7 @@ public class ProviderIndexUtil {
             "type_info_th": TypedHash::forName("DataProvider::DataTypeInfo"),
             "field_info_th": TypedHash::forName("DataProvider::DataFieldInfo"),
             "type_opt_info_th": TypedHash::forName("DataProvider::DataProviderTypeOptionInfo"),
+            "constraint_info_th": TypedHash::forName("DataProvider::DataTypeConstraintInfo"),
             "path_vars_th": TypedHash::forName("DataProvider::DataProviderPathVarInfo"),
             "dp_info_th": TypedHash::forName("DataProvider::DataProviderInfo"),
             "dp_opt_info_th": TypedHash::forName("DataProvider::DataProviderOptionInfo"),
@@ -1457,6 +1459,7 @@ public class ProviderIndexUtil {
             "element_allowed_values": (exists info.element_allowed_values
                 ? map cast<hash<AllowedValueInfo>>($1), info.element_allowed_values
                 : NOTHING),
+            "constraints": exists info.constraints ? ctx.constraint_info_th.doCast(info.constraints) : NOTHING,
         });
     }
 

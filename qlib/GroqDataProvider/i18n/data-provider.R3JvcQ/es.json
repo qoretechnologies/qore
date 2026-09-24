@@ -743,63 +743,63 @@
           "source": "Configure text or structured JSON output.",
           "message": "Configure salida de texto o JSON estructurado."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nombre del esquema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
           "source": "Schema Name",
           "message": "Nombre del esquema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
           "source": "Schema name for Responses structured output.",
           "message": "Nombre del esquema para la salida estructurada de Respuestas."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
           "source": "Schema",
           "message": "Schema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
           "source": "JSON Schema describing the required Responses output.",
           "message": "Esquema JSON para la salida requerida de Respuestas."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "estricto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
           "source": "Strict",
           "message": "estricto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
           "source": "Whether to enforce the output schema exactly.",
           "message": "Si forzar el esquema de salida exactamente."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
           "source": "Format",
           "message": "Formato"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
           "source": "Format",
           "message": "Formato"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
           "source": "Choose text, JSON mode, or strict JSON schema output.",
           "message": "Elija texto, modo JSON o salida con esquema JSON estricto."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "Texto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "Objeto JSON"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-IzM3YWQyNzA1Yzc5MTEyYWU4OTJjNWM1ODM3YmZiZmE3M2NmMTE2NTY3YTQyOThhNjdhYjA4Y2FkYTNlNzRlZTA6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb3FSZXNwb25zZUZvcm1hdERhdGFUeXBlOipoYXNoPGF1dG8-I2ZmNGZmZGIxZjc2YjJhMWQwNTkzOTMzZjZhODUzYjBjYjlkNDViZjcxZGExNDgyODQwYWIwMzY2M2QxNWM0YzM6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "Esquema JSON"
         },
@@ -2619,51 +2619,51 @@
           "source": "Function definition; required for `function` tools.",
           "message": "Definición de función; obligatoria para herramientas `function`."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Descripción"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Description",
           "message": "Descripción"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Explain when the model should use this function.",
           "message": "Explique cuándo debe usar esta función el modelo."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.display_name": {
           "source": "Function Name",
           "message": "Nombre de función"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.short_desc": {
           "source": "Function Name",
           "message": "Nombre de función"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.desc": {
           "source": "The function to invoke in your application.",
           "message": "La función que se debe invocar en su aplicación."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.display_name": {
           "source": "Parameters",
           "message": "Parámetros"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.short_desc": {
           "source": "Parameters",
           "message": "Parámetros"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.desc": {
           "source": "JSON Schema describing the function arguments.",
           "message": "Esquema JSON que describe los argumentos de la función."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "estricto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.short_desc": {
           "source": "Strict",
           "message": "estricto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiMwNGI5MzdhZjc2YmVjYzIzYTBiMTE0MDVhNDMxNWI4MzIyN2IyZDIzYzBkNmE4NzllZmZkZWZiMWNhZWU2YjliOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FGdW5jdGlvbkRlZmluaXRpb25EYXRhVHlwZToqaGFzaDxhdXRvPiM4NDgxN2JiNjg5MmI2NDI2M2U5YzNmZmY1Y2IxZmE4YmMwZTY2ZjQ5MTllNzM4ZDMwNDIxYmQwODk0Mjc3YzM2Om9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.desc": {
           "source": "Require arguments to follow the parameter schema exactly.",
           "message": "Requiere que los argumentos sigan exactamente el esquema de parámetros."
         },
@@ -2739,51 +2739,51 @@
           "source": "Schema configuration; required when `type` is `json_schema`.",
           "message": "Configuración de esquema; requerida cuando `type` es `json_schema`."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Descripción"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Description",
           "message": "Descripción"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Explain the intended structured response.",
           "message": "Explique la respuesta estructurada prevista."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.bmFtZQ.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nombre del esquema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.bmFtZQ.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.bmFtZQ.short_desc": {
           "source": "Schema Name",
           "message": "Nombre del esquema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.bmFtZQ.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.bmFtZQ.desc": {
           "source": "A name for the structured output contract.",
           "message": "Un nombre para el contrato de salida estructurada."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c2NoZW1h.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c2NoZW1h.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c2NoZW1h.short_desc": {
           "source": "Schema",
           "message": "Schema"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c2NoZW1h.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c2NoZW1h.desc": {
           "source": "JSON Schema defining the structured response.",
           "message": "Esquema JSON que describe la respuesta estructurada."
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c3RyaWN0.display_name": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "estricto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c3RyaWN0.short_desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c3RyaWN0.short_desc": {
           "source": "Strict",
           "message": "estricto"
         },
-        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jMTY3M2U4ZjhkMjVjZWRhMThkMzNkMGEwNjkzZjRkYjU1OTI1M2FhNTQ2ZDRkYjU3YTJhNzM2MzUxNzlkZjM2MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c3RyaWN0.desc": {
+        "app.R3JvcQ.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1Okdyb3FKc29uU2NoZW1hRGF0YVR5cGU6Kmhhc2g8YXV0bz4jZGE4M2Q4YWVlYjBmMWNmZmMzNjIzNWVmN2EyZTllY2IxNGIzYzk0ZjMyN2ZlZjhhOGNiNjc0NjE1YjYzYTc0MDpvcHRpb246Y21WemNHOXVjMlZmWm05eWJXRjA6ZmllbGQ6YW5OdmJsOXpZMmhsYldF.field.c3RyaWN0.desc": {
           "source": "Require the result to follow the schema exactly.",
           "message": "Requiere que el resultado siga exactamente el esquema."
         },

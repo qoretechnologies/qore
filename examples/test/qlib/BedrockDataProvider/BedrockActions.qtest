@@ -322,7 +322,8 @@ class BedrockActionsTest inherits QUnit::Test {
         }
 
         AbstractDataProviderType tags = BedrockSchema::getOperationEx("tag-resource").getRequestType();
-        hash<auto> tagged = tags.acceptsValue({"resourceARN": "arn:aws:bedrock:us-east-1:123:model/x",
+        # the request type enforces the schema's ARN pattern, which requires a 12-digit account ID
+        hash<auto> tagged = tags.acceptsValue({"resourceARN": "arn:aws:bedrock:us-east-1:123456789012:guardrail/x1",
             "tags": ({"key": "environment", "value": "test"},)});
         assertEq("test", tagged.tags[0].value, "ordinary objects named value stay ordinary objects");
         auto restored = Serializable::deserialize(tags.serialize()).acceptsValue(tagged);
@@ -379,7 +380,8 @@ class BedrockActionsTest inherits QUnit::Test {
         assertFalse(exists null_wire.req.body.messages, "optional null is omitted from the AWS document");
         hash<auto> empty_wire = BedrockSchema::getOperationEx("converse").unflatten(empty);
         assertEq((), empty_wire.req.body.messages, "an empty list is sent and is not conflated with null");
-        assertThrows("SCHEMA-VALIDATION-ERROR", sub () {
+        # the request type enforces the schema's minimum before the request is validated for sending
+        assertThrows("RUNTIME-TYPE-ERROR", sub () {
             actionProvider("converse", fake).doRequest({
                 "modelId": "prompt-arn", "inferenceConfig": {"maxTokens": 0}});
         });

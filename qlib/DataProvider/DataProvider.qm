@@ -1366,6 +1366,16 @@ fetch
     - generated example values respect the field's allowed values and the formats of the string format types, so
       a field no longer publishes an example that it would reject
     - @ref DataProvider::QoreUnionDataType "QoreUnionDataType" accepts an explicit display name and descriptions
+    - added validation constraints (@ref DataProvider::DataTypeConstraintInfo "DataTypeConstraintInfo"): numeric
+      bounds and multiples, string lengths, patterns, and enumerations, list sizes and unique elements, hash sizes,
+      and for unions whether exactly one alternative may match and a discriminator key selecting the alternative;
+      the types of this module enforce them, and they are part of a type's description, so a type restored from its
+      description enforces them too
+    - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" returns
+      @ref DataProvider::QoreBoolDataTypeBase "QoreBoolDataTypeBase" for boolean types, so every soft boolean type
+      validates strings: \c "x" is no longer accepted as @ref True
+    - a mandatory @ref DataProvider::SoftListDataType "SoftListDataType" does not accept @ref nothing, like the Qore
+      \c list type, and does not list it among its accepted types
     - simulating a write to an empty table works: the table's example record falls back to data generated from its
       record type instead of failing with a runtime type error, so a simulated test step can create a record in a
       table that has no rows yet

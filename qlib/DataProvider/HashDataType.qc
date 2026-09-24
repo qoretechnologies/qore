@@ -311,6 +311,7 @@ auto v = t.getDefaultValue();
                 }
             }
         }
+        checkConstraints(value);
         return value;
     }
 
@@ -455,6 +456,7 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
         AbstractDataProviderType::softTypeScopeEnter();
         on_exit AbstractDataProviderType::softTypeScopeExit();
         HashDataType rv(type, name, options, tags, default_value);
+        rv.constraints = constraints;
         # publish the new type before converting fields: a field reaching this type again (a recursive type, or any
         # other path to it in the graph) then uses this object instead of converting this type a second time
         AbstractDataProviderType::publishSoftType(self, rv);

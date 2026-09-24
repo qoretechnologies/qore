@@ -3751,39 +3751,39 @@
           "source": "JSON schema constraints for structured output when type is `json_schema`",
           "message": "Vincoli schema JSON per l'output strutturato quando il tipo è `json_schema`"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nome schema"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.short_desc": {
           "source": "A descriptive name for the JSON schema",
           "message": "Un nome descrittivo per lo schema JSON"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.desc": {
           "source": "A descriptive name for the JSON schema",
           "message": "Un nome descrittivo per lo schema JSON"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schema"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.short_desc": {
           "source": "The JSON schema definition for the structured output",
           "message": "Definizione schema JSON per l'output strutturato"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.desc": {
           "source": "The JSON schema definition for the structured output",
           "message": "Definizione schema JSON per l'output strutturato"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.display_name": {
           "source": "Strict?",
           "message": "Strettamente?"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.short_desc": {
           "source": "Whether to enforce strict schema adherence",
           "message": "Se imporre l'aderenza rigorosa allo schema"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.desc": {
           "source": "Whether to enforce strict schema adherence",
           "message": "Se imporre l'aderenza rigorosa allo schema"
         },
@@ -4303,71 +4303,71 @@
           "source": "Defines a function in your own code the model can choose to call",
           "message": "Definisce una funzione nel tuo codice che il modello può scegliere di chiamare"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Function Description",
           "message": "Descrizione della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "A description of the function used by the model to determine whether or not to call it",
           "message": "Una descrizione della funzione utilizzata dal modello per determinare se chiamarla o meno"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.desc": {
           "source": "A description of the function used by the model to determine whether or not to call it",
           "message": "Una descrizione della funzione utilizzata dal modello per determinare se chiamarla o meno"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.display_name": {
           "source": "Function Name",
           "message": "Nome della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.short_desc": {
           "source": "The name of the function to call",
           "message": "Il nome della funzione da chiamare"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.desc": {
           "source": "The name of the function to call",
           "message": "Il nome della funzione da chiamare"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.display_name": {
           "source": "Function Parameters",
           "message": "Parametri della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.short_desc": {
           "source": "A JSON schema object describing the parameters of the function",
           "message": "Oggetto schema JSON che descrive i parametri della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.desc": {
           "source": "A JSON schema object describing the parameters of the function",
           "message": "Oggetto schema JSON che descrive i parametri della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.display_name": {
           "source": "Strict?",
           "message": "Strettamente?"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.short_desc": {
           "source": "Whether to enforce strict parameter validation",
           "message": "Se imporre la convalida rigorosa dei parametri"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.desc": {
           "source": "Whether to enforce strict parameter validation",
           "message": "Se imporre la convalida rigorosa dei parametri"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Tipo"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.short_desc": {
           "source": "The type of the function tool",
           "message": "Il tipo di strumento funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.desc": {
           "source": "The type of the function tool",
           "message": "Il tipo di strumento funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
           "source": "Function",
           "message": "Funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.desc": {
           "source": "A function tool",
           "message": "Uno strumento funzione"
         },
@@ -5939,39 +5939,39 @@
           "source": "JSON schema constraints for structured output when type is `json_schema`",
           "message": "Vincoli schema JSON per l'output strutturato quando il tipo è `json_schema`"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "Nome schema"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.short_desc": {
           "source": "A descriptive name for the JSON schema",
           "message": "Un nome descrittivo per lo schema JSON"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.bmFtZQ.desc": {
           "source": "A descriptive name for the JSON schema",
           "message": "Un nome descrittivo per lo schema JSON"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "Schema"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.short_desc": {
           "source": "The JSON schema definition for the structured output",
           "message": "Definizione schema JSON per l'output strutturato"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c2NoZW1h.desc": {
           "source": "The JSON schema definition for the structured output",
           "message": "Definizione schema JSON per l'output strutturato"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.display_name": {
           "source": "Strict?",
           "message": "Strettamente?"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.short_desc": {
           "source": "Whether to enforce strict schema adherence",
           "message": "Se imporre l'aderenza rigorosa allo schema"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjMGE3MzIyOTU5ZDAxNWE3YjI5ZmE1ZDk4OWE5YmRmMmM2ZGUyNTc2NjcwZTFhN2RiNDhmNGQwMmRkYjUxYzA5MjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkhhc2hEYXRhVHlwZTpSZXNwb25zZUpzb25TY2hlbWEjNDQyYTEzMWRmMTczOWIwNzQwNjhmMTE4MTkwMjE3MzdmZjQ3MWUyODg3YTY0ZGE3ZWM3YmQwM2ZhMTA1MDcyYjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0YwOmZpZWxkOmFuTnZibDl6WTJobGJXRQ.field.c3RyaWN0.desc": {
           "source": "Whether to enforce strict schema adherence",
           "message": "Se imporre l'aderenza rigorosa allo schema"
         },
@@ -6491,71 +6491,71 @@
           "source": "Defines a function in your own code the model can choose to call",
           "message": "Definisce una funzione nel tuo codice che il modello può scegliere di chiamare"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Function Description",
           "message": "Descrizione della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "A description of the function used by the model to determine whether or not to call it",
           "message": "Una descrizione della funzione utilizzata dal modello per determinare se chiamarla o meno"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.ZGVzY3JpcHRpb24.desc": {
           "source": "A description of the function used by the model to determine whether or not to call it",
           "message": "Una descrizione della funzione utilizzata dal modello per determinare se chiamarla o meno"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.display_name": {
           "source": "Function Name",
           "message": "Nome della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.short_desc": {
           "source": "The name of the function to call",
           "message": "Il nome della funzione da chiamare"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.bmFtZQ.desc": {
           "source": "The name of the function to call",
           "message": "Il nome della funzione da chiamare"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.display_name": {
           "source": "Function Parameters",
           "message": "Parametri della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.short_desc": {
           "source": "A JSON schema object describing the parameters of the function",
           "message": "Oggetto schema JSON che descrive i parametri della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.cGFyYW1ldGVycw.desc": {
           "source": "A JSON schema object describing the parameters of the function",
           "message": "Oggetto schema JSON che descrive i parametri della funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.display_name": {
           "source": "Strict?",
           "message": "Strettamente?"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.short_desc": {
           "source": "Whether to enforce strict parameter validation",
           "message": "Se imporre la convalida rigorosa dei parametri"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.c3RyaWN0.desc": {
           "source": "Whether to enforce strict parameter validation",
           "message": "Se imporre la convalida rigorosa dei parametri"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Tipo"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.short_desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.short_desc": {
           "source": "The type of the function tool",
           "message": "Il tipo di strumento funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.desc": {
           "source": "The type of the function tool",
           "message": "Il tipo di strumento funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.display_name": {
           "source": "Function",
           "message": "Funzione"
         },
-        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjN2E5YmVkMzA3ZWNlMWRlYjAyYTFiN2E1MDU3YjhjZWJmZjU2YzhjMjRkYmM2OGExYjM5ZWFjMzk2Mjg0YzJkMjpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.desc": {
+        "app.T3BlbkFJ.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOk9wZW5BaU1vZGVsRnVuY3Rpb25Ub29sRGF0YVR5cGU6T3BlbkFpTW9kZWxGdW5jdGlvblRvb2wjMzc1NTJlMWUxMGQ0MThjZGJiN2UyZDQ5NjhiYzI4N2Q5YTQ5Y2VjN2ExNWFlMjI0NjM4ZjE0ZGQ1MGE4YjEyYTpvcHRpb246ZEc5dmJITTpmaWVsZDpablZ1WTNScGIyNA.field.dHlwZQ.allowed-value.c3RyaW5nOmZ1bmN0aW9u.desc": {
           "source": "A function tool",
           "message": "Uno strumento funzione"
         },

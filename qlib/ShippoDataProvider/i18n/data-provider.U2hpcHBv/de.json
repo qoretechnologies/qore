@@ -1267,35 +1267,35 @@
           "source": "Alcohol shipment details (FedEx and UPS only)",
           "message": "Details zum Alkoholversand (nur FedEx und UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
           "source": "Contains Alcohol",
           "message": "Enthält Alkohol"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
           "source": "Package contains alcohol",
           "message": "Paket enthält Alkohol"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
           "source": "Specifies that the package contains alcohol (FedEx and UPS only)",
           "message": "Gibt an, dass das Paket Alkohol enthält (nur FedEx und UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
           "source": "Recipient Type",
           "message": "Empfänger-Typ"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
           "source": "Alcohol recipient type",
           "message": "Alkohol-Empfängertyp"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
           "source": "License type of the recipient (mandatory for FedEx only)",
           "message": "Lizenztyp des Empfängers (für FedEx obligatorisch)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
           "source": "Licensed recipient",
           "message": "Lizenzierte Empfänger"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
           "source": "Consumer recipient",
           "message": "Consumer Empfänger"
         },
@@ -1595,27 +1595,27 @@
           "source": "Dry ice details (FedEx, Veho, and UPS only)",
           "message": "Trockeneisdetails (nur FedEx, Veho und UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
           "source": "Contains Dry Ice",
           "message": "Enthält Trockeneis"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
           "source": "Package contains dry ice",
           "message": "Paket enthält trockenen Eis"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
           "source": "Specifies that the package contains dry ice (FedEx, Veho, and UPS only)",
           "message": "Gibt an, dass das Paket Trockeneis enthält (nur FedEx, Veho und UPS)"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
           "source": "Weight",
           "message": "Gewicht"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
           "source": "Dry ice weight in kg",
           "message": "Gewicht von Trockeneis in kg"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
           "source": "Weight of dry ice in kilograms. Cannot be greater than the package weight",
           "message": "Gewicht des Trockeneises in Kilogramm. Darf das Paketgewicht nicht überschreiten"
         },

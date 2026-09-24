@@ -163,6 +163,8 @@ public class ListDataType inherits QoreDataType {
         value = QoreDataType::acceptsValue(value);
         if (element_type.hasType()) {
             value = map element_type.acceptsValue($1), value;
+            # element conversion can make distinct elements equal
+            checkConstraints(value);
         }
         return value;
     }

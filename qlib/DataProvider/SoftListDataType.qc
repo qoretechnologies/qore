@@ -65,6 +65,24 @@ public class SoftListDataType inherits ListDataType {
             or_nothing, options, tags, default_value, attr) {
     }
 
+    #! Returns a hash of types accepted by this type; keys are type names
+    /** The Qore soft list type accepts @ref nothing, which a mandatory data type does not; whether a soft list
+        type is created as mandatory or converted to one with getMandatoryType(), its accepted types are the same
+
+        @param simple if @ref True, return simplified type names
+
+        @return a hash of types accepted by this type; keys are type names
+
+        @since DataProvider 3.8
+    */
+    hash<string, bool> getAcceptTypeHash(*bool simple) {
+        hash<string, bool> rv = ListDataType::getAcceptTypeHash(simple);
+        if (!or_nothing_type) {
+            rv -= ("nothing", "null");
+        }
+        return rv;
+    }
+
     #! returns the subtype (for lists or hashes) if there is only one
     *AbstractDataProviderType getElementType() {
         return element_type;
@@ -102,14 +120,17 @@ public class SoftListDataType inherits ListDataType {
                 value = default_value;
             } else if (or_nothing_type) {
                 return;
+            } else {
+                # like the Qore "list" type, only an "or nothing" soft list accepts no value
+                throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value", name);
             }
         }
         string typename = value.type();
-        if (typename == Type::List) {
-            return map element_type.acceptsValue($1), value;
-        } else {
-            return (element_type.acceptsValue(value),);
-        }
+        auto rv = typename == Type::List
+            ? (map element_type.acceptsValue($1), value)
+            : (element_type.acceptsValue(value),);
+        checkConstraints(rv);
+        return rv;
     }
 
     #! common constructor initialization

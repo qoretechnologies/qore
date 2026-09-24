@@ -99,6 +99,9 @@ public class RestSchemaDataProviderTest inherits QUnit::Test {
                     # Skip - external API is unavailable
                 } else if (ex.err == "SCHEMA-VALIDATION-ERROR") {
                     assertTrue(ex.desc =~ /enumerated values.*x/);
+                } else if (ex.err == "RUNTIME-TYPE-ERROR") {
+                    # the request type enforces the schema's enumeration before the request is sent
+                    assertTrue(ex.desc =~ /does not accept value "x"; accepted values:/);
                 } else {
                     rethrow;
                 }

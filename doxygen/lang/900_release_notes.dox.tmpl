@@ -3750,6 +3750,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         hash types without fields, options of "or nothing" types, and union type descriptions
       - generated example values respect the field's allowed values and the formats of the string format types,
         so a field no longer publishes an example that it would reject
+      - added validation constraints (@ref DataProvider::DataTypeConstraintInfo "DataTypeConstraintInfo"), which
+        the types of the module enforce and describe, so a type restored from its description enforces them too
+      - soft boolean types validate strings (\c "x" is no longer accepted as @ref True), and a mandatory soft list
+        does not accept @ref nothing
 
     - \c qdp and the @ref providerindexintro "ProviderIndex" and
       @ref providerindexutilintro "ProviderIndexUtil" modules
@@ -3974,6 +3978,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
       @ref swaggerintro "Swagger" modules
+      - schema data types describe and enforce the schema's validation constraints, so a value violating them is
+        rejected when the type accepts it rather than only when a request is validated
+      - the scalar and array alternatives of a \c oneOf or \c anyOf union are not soft types: the union checks each
+        alternative against its schema, which accepts only values of the schema's JSON type, and the alternatives
+        now describe that conversion (e.g. \c "string|int" instead of \c "softstring|softint")
       - unconstrained arrays retain size bounds and compare uniqueness using typed structural values
       - opaque PDF responses retain their original bytes on synchronous and asynchronous transports
       - boolean enumerations reject undeclared values and retain false in generated examples

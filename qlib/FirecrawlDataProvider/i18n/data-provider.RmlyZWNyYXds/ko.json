@@ -2443,27 +2443,27 @@
           "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests",
           "message": "세션 상태(쿠키, 로컬 스토리지)를 재사용할 이름이 지정된 브라우저 프로필"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.display_name": {
           "source": "Profile Name",
           "message": "프로필 이름"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.short_desc": {
           "source": "Name of the browser profile",
           "message": "브라우저 프로필 이름"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.desc": {
           "source": "Name of the browser profile to use. The first scrape with a given name creates the profile; subsequent scrapes reuse its session state",
           "message": "사용할 브라우저 프로필 이름입니다. 동일한 이름으로 처음 크롤링하면 프로필이 생성되며, 이후 크롤링에서는 세션 상태(쿠키, 로컬 스토리지)를 재사용합니다."
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.display_name": {
           "source": "Save Changes",
           "message": "변경 사항 저장"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.short_desc": {
           "source": "Persist changes back to the profile",
           "message": "변경 사항을 프로필에 다시 저장합니다."
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlkzSmhkMnc6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.desc": {
           "source": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`",
           "message": "`True`인 경우, 스크래핑 중 변경된 내용(쿠키, 로컬 스토리지 등)이 이름이 지정된 프로파일에 저장됨. 기본값은 `False`"
         },
@@ -3199,27 +3199,27 @@
           "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests",
           "message": "세션 상태(쿠키, 로컬 스토리지)를 재사용할 이름이 지정된 브라우저 프로필"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiMwNjI0NzgxMzAzMzIwYWY4NDJmYzEwOTVkZTk1Nzc0MjkyNGExM2VhYmZkODUwYmUxMTA3Yjk2NGNkYWUwODRiOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.display_name": {
           "source": "Profile Name",
           "message": "프로필 이름"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiMwNjI0NzgxMzAzMzIwYWY4NDJmYzEwOTVkZTk1Nzc0MjkyNGExM2VhYmZkODUwYmUxMTA3Yjk2NGNkYWUwODRiOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.short_desc": {
           "source": "Name of the browser profile",
           "message": "브라우저 프로필 이름"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiMwNjI0NzgxMzAzMzIwYWY4NDJmYzEwOTVkZTk1Nzc0MjkyNGExM2VhYmZkODUwYmUxMTA3Yjk2NGNkYWUwODRiOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.bmFtZQ.desc": {
           "source": "Name of the browser profile to use. The first scrape with a given name creates the profile; subsequent scrapes reuse its session state",
           "message": "사용할 브라우저 프로필 이름입니다. 동일한 이름으로 처음 크롤링하면 프로필이 생성되며, 이후 크롤링에서는 세션 상태(쿠키, 로컬 스토리지)를 재사용합니다."
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiMwNjI0NzgxMzAzMzIwYWY4NDJmYzEwOTVkZTk1Nzc0MjkyNGExM2VhYmZkODUwYmUxMTA3Yjk2NGNkYWUwODRiOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.display_name": {
           "source": "Save Changes",
           "message": "변경 사항 저장"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiMwNjI0NzgxMzAzMzIwYWY4NDJmYzEwOTVkZTk1Nzc0MjkyNGExM2VhYmZkODUwYmUxMTA3Yjk2NGNkYWUwODRiOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.short_desc": {
           "source": "Persist changes back to the profile",
           "message": "변경 사항을 프로필에 다시 저장합니다."
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiMwNjI0NzgxMzAzMzIwYWY4NDJmYzEwOTVkZTk1Nzc0MjkyNGExM2VhYmZkODUwYmUxMTA3Yjk2NGNkYWUwODRiOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOmMyVmhjbU5vOkZpcmVjcmF3bFByb2ZpbGVEYXRhVHlwZToqaGFzaDxhdXRvPiM2NDBkZWNiYWQ4MTYyMDgwYzkxMGYzNzMyOWU4MDkxMDgwZTRjODcyZDMyOWFlZDJkMjczYjZhMTQzZjQ2NjVmOm9wdGlvbjpjMk55WVhCbFQzQjBhVzl1Y3c6ZmllbGQ6Y0hKdlptbHNaUQ.field.c2F2ZUNoYW5nZXM.desc": {
           "source": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`",
           "message": "`True`인 경우, 스크래핑 중 변경된 내용(쿠키, 로컬 스토리지 등)이 이름이 지정된 프로파일에 저장됨. 기본값은 `False`"
         },
@@ -3699,27 +3699,27 @@
           "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests",
           "message": "세션 상태(쿠키, 로컬 스토리지)를 재사용할 이름이 지정된 브라우저 프로필"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.display_name": {
           "source": "Profile Name",
           "message": "프로필 이름"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.short_desc": {
           "source": "Name of the browser profile",
           "message": "브라우저 프로필 이름"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.bmFtZQ.desc": {
           "source": "Name of the browser profile to use. The first scrape with a given name creates the profile; subsequent scrapes reuse its session state",
           "message": "사용할 브라우저 프로필 이름입니다. 동일한 이름으로 처음 크롤링하면 프로필이 생성되며, 이후 크롤링에서는 세션 상태(쿠키, 로컬 스토리지)를 재사용합니다."
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.display_name": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.display_name": {
           "source": "Save Changes",
           "message": "변경 사항 저장"
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.short_desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.short_desc": {
           "source": "Persist changes back to the profile",
           "message": "변경 사항을 프로필에 다시 저장합니다."
         },
-        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzA2MjQ3ODEzMDMzMjBhZjg0MmZjMTA5NWRlOTU3NzQyOTI0YTEzZWFiZmQ4NTBiZTExMDdiOTY0Y2RhZTA4NGI6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.desc": {
+        "app.RmlyZWNyYXds.type.YWN0aW9uOlpYaDBjbUZqZEE6RmlyZWNyYXdsUHJvZmlsZURhdGFUeXBlOipoYXNoPGF1dG8-IzY0MGRlY2JhZDgxNjIwODBjOTEwZjM3MzI5ZTgwOTEwODBlNGM4NzJkMzI5YWVkMmQyNzNiNmExNDNmNDY2NWY6b3B0aW9uOmMyTnlZWEJsVDNCMGFXOXVjdzpmaWVsZDpjSEp2Wm1sc1pR.field.c2F2ZUNoYW5nZXM.desc": {
           "source": "If `True`, changes made during the scrape (cookies, local storage, etc.) are saved back to the named profile. Defaults to `False`",
           "message": "`True`인 경우, 스크래핑 중 변경된 내용(쿠키, 로컬 스토리지 등)이 이름이 지정된 프로파일에 저장됨. 기본값은 `False`"
         },

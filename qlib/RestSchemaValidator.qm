@@ -78,6 +78,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - schema data types describe and enforce the schema's validation constraints (bounds, lengths, patterns,
+      enumerations, and item and property counts), so a value violating them is rejected when it is accepted by the
+      type rather than only when a request is validated
     - accept unconstrained array elements when `items` is absent while retaining bounds and uniqueness
     - compare unique JSON array values with structural typed keys instead of loose equality
     - preserve decimal numeric boundaries so exact fractional endpoints validate consistently
@@ -417,6 +420,48 @@ public namespace RestSchemaValidator {
             */
             *float multipleOf;
         }
+
+        #! Returns the validation constraints of the schema for its data type
+        /** @return the constraints of the schema that its data type enforces and describes, if any
+
+            @since RestSchemaValidator 2.5
+        */
+        *hash<DataTypeConstraintInfo> getConstraintInfo() {
+            hash<auto> rv;
+            if (exists maximum) {
+                rv{exclusiveMax ? "exclusive_maximum" : "maximum"} = maximum;
+            }
+            if (exists minimum) {
+                rv{exclusiveMin ? "exclusive_minimum" : "minimum"} = minimum;
+            }
+            if (multipleOf) {
+                # a float converted directly to a number carries its binary rounding error
+                rv.multiple_of = number(multipleOf.toString());
+            }
+            if (exists minLength) {
+                rv.min_length = minLength;
+            }
+            if (exists maxLength) {
+                rv.max_length = maxLength;
+            }
+            if (pattern.val()) {
+                rv.pattern = pattern;
+            }
+            if (exists minItems) {
+                rv.min_items = minItems;
+            }
+            if (exists maxItems) {
+                rv.max_items = maxItems;
+            }
+            if (uniqueItems) {
+                rv.unique_items = True;
+            }
+            if (enumValues) {
+                # validation compares enum values as strings
+                rv.enum_values = keys enumValues;
+            }
+            return rv ? cast<hash<DataTypeConstraintInfo>>(rv) : NOTHING;
+        }
     }
 
     #! Abstract base class for schema validation with shared check methods
@@ -439,6 +484,23 @@ public namespace RestSchemaValidator {
             /** In JSON Schema draft-07+, exclusiveMinimum is a direct numeric value (not a boolean modifier)
             */
             *softnumber exclusiveMinValue;
+        }
+
+        #! Returns the validation constraints of the schema for its data type
+        /** @return the constraints of the schema that its data type enforces and describes, including numeric
+            exclusive bounds, if any
+
+            @since RestSchemaValidator 2.5
+        */
+        *hash<DataTypeConstraintInfo> getConstraintInfo() {
+            hash<auto> rv = AbstractSchemaBase::getConstraintInfo() ?? {};
+            if (exists exclusiveMaxValue) {
+                rv.exclusive_maximum = exclusiveMaxValue;
+            }
+            if (exists exclusiveMinValue) {
+                rv.exclusive_minimum = exclusiveMinValue;
+            }
+            return rv ? cast<hash<DataTypeConstraintInfo>>(rv) : NOTHING;
         }
 
         #! Returns the label for path/channel in error messages
@@ -1072,6 +1134,23 @@ public namespace RestSchemaValidator {
             bool readOnly = False;
         }
 
+        #! Returns the validation constraints of the schema for its data type
+        /** @return the constraints of the schema that its data type enforces and describes, including the number
+            of properties of objects, if any
+
+            @since RestSchemaValidator 2.5
+        */
+        *hash<DataTypeConstraintInfo> getConstraintInfo() {
+            hash<auto> rv = AbstractSchemaBase::getConstraintInfo() ?? {};
+            if (exists minProperties) {
+                rv.min_properties = minProperties;
+            }
+            if (exists maxProperties) {
+                rv.max_properties = maxProperties;
+            }
+            return rv ? cast<hash<DataTypeConstraintInfo>>(rv) : NOTHING;
+        }
+
         #! Validates the value against the schema definition
         /** @param serialize if serializing the value
             @param request if processing a request (vs response)
@@ -1355,7 +1434,8 @@ public namespace RestSchemaValidator {
         #! Returns the data type for the given schema
         private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *object rest) {
             if (type == "string") {
-                AbstractDataProviderType t = AbstractDataProviderType::get((required ? "" : "*") + "string");
+                AbstractDataProviderType t = AbstractDataProviderType::get((required ? "" : "*") + "string")
+                    .copyWithConstraints(getConstraintInfo());
                 if (required) {
                     dataType = t;
                 } else {
@@ -1366,7 +1446,8 @@ public namespace RestSchemaValidator {
 
             # For "any" type schemas without properties and without composition features, return an auto type
             if (type == "any" && !properties && !hasSchemaCompositionFeatures()) {
-                AbstractDataProviderType t = AbstractDataProviderType::get(required ? "auto" : "*auto");
+                AbstractDataProviderType t = AbstractDataProviderType::get(required ? "auto" : "*auto")
+                    .copyWithConstraints(getConstraintInfo());
                 if (required) {
                     dataType = t;
                 } else {
@@ -1391,6 +1472,10 @@ public namespace RestSchemaValidator {
                 : "*" + name;
 
             HashDataType t = createHashDataType(required ? AutoHashType : AutoHashOrNothingType, typename);
+            # set before the type is referenced by any field, which a recursive schema does
+            if (*hash<DataTypeConstraintInfo> constraints = getConstraintInfo()) {
+                t = cast<HashDataType>(t.copyWithConstraints(constraints));
+            }
 
             if (required) {
                 dataType = t;

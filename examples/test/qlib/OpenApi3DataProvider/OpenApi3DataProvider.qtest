@@ -513,7 +513,8 @@ public class OpenApi3DataProviderTest inherits QUnit::Test {
         AbstractDataProviderType value_req = post_value.getRequestType();
         AbstractDataProviderType value_body_type = value_req.getField("body").getType();
         assertEq("OpenApi3UnionDataType", value_body_type.className(), "anyOf body type");
-        assertEq(("softstring", "softint"), map $1.getName(),
+        # alternatives convert only values of their own JSON type, as their schemas do
+        assertEq(("string", "int"), map $1.getName(),
             cast<QoreUnionDataType>(value_body_type).getUnionTypes());
         assertEq("abc", value_body_type.acceptsValue("abc"));
         assertEq(42, value_body_type.acceptsValue(42));

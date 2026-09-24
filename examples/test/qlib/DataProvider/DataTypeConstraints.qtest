@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires DataProvider
+
+%exec-class DataTypeConstraintsTest
+
+public class DataTypeConstraintsTest inherits QUnit::Test {
+    constructor() : Test("DataProvider type constraints", "1.0") {
+        addTestCase("numeric constraints", \numericTest());
+        addTestCase("string, list, and hash constraints", \collectionTest());
+        addTestCase("constraints are set on copies", \copyTest());
+        addTestCase("constraints survive descriptions and derived types", \restoreTest());
+        addTestCase("union constraints", \unionTest());
+        addTestCase("restored types have the original conversions", \conversionTest());
+        addTestCase("examples are accepted by their fields", \exampleTest());
+        set_return_value(main());
+    }
+
+    #! Returns the type for the given name with the given constraints
+    private static AbstractDataProviderType constrained(string name, hash<DataTypeConstraintInfo> constraints) {
+        return AbstractDataProviderType::get(name).copyWithConstraints(constraints);
+    }
+
+    numericTest() {
+        AbstractDataProviderType t = constrained("int", <DataTypeConstraintInfo>{
+            "minimum": 1,
+            "exclusive_maximum": 10,
+        });
+        assertEq(1, t.acceptsValue(1));
+        assertEq(9, t.acceptsValue(9));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 0);
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 10);
+
+        # decimal multiples are not affected by binary floating-point rounding
+        t = constrained("number", <DataTypeConstraintInfo>{"multiple_of": 0.1n});
+        assertEq(0.3n, t.acceptsValue(0.3n));
+        assertEq(7n, t.acceptsValue(7));
+        # a float is compared as the decimal value it prints as
+        t.acceptsValue(0.3);
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 0.35);
+
+        t = constrained("float", <DataTypeConstraintInfo>{"exclusive_minimum": 0, "maximum": 1.5});
+        assertEq(1.5, t.acceptsValue(1.5));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 0.0);
+    }
+
+    collectionTest() {
+        AbstractDataProviderType t = constrained("string", <DataTypeConstraintInfo>{
+            "min_length": 2,
+            "max_length": 4,
+            "pattern": "^a",
+        });
+        assertEq("ab", t.acceptsValue("ab"));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), "a");
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), "abcde");
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), "bcd");
+
+        # enumerated values are compared as strings
+        t = constrained("softstring", <DataTypeConstraintInfo>{"enum_values": ("ab", "1")});
+        assertEq("ab", t.acceptsValue("ab"));
+        assertEq("1", t.acceptsValue(1));
+        assertThrows("TYPE-VALUE-ERROR", \t.acceptsValue(), "abd");
+
+        t = new ListDataType(AbstractDataProviderType::get("softint")).copyWithConstraints(<DataTypeConstraintInfo>{
+            "min_items": 1,
+            "max_items": 2,
+            "unique_items": True,
+        });
+        assertEq((1, 2), t.acceptsValue((1, 2)));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ((),));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ((1, 2, 3),));
+        # elements are compared after conversion
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), ((1, "1"),));
+
+        t = new SoftListDataType(AbstractDataProviderType::get("string")).copyWithConstraints(
+            <DataTypeConstraintInfo>{"max_items": 1});
+        assertEq(("x",), t.acceptsValue("x"));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), (("x", "y"),));
+
+        HashDataType h("QoreTestHash");
+        h.setDefaultOtherFieldType(AbstractDataProviderTypeMap."auto");
+        t = h.copyWithConstraints(<DataTypeConstraintInfo>{"min_properties": 1, "max_properties": 1});
+        assertEq({"a": 1}, t.acceptsValue({"a": 1}));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), {});
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), {"a": 1, "b": 2});
+    }
+
+    copyTest() {
+        AbstractDataProviderType shared = AbstractDataProviderTypeMap."int";
+        AbstractDataProviderType t = shared.copyWithConstraints(<DataTypeConstraintInfo>{"minimum": 5});
+        assertEq(NOTHING, shared.getConstraints());
+        assertEq(1, shared.acceptsValue(1));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 1);
+        # no constraints: the type itself
+        assertTrue(shared == shared.copyWithConstraints());
+    }
+
+    restoreTest() {
+        AbstractDataProviderType t = constrained("softint", <DataTypeConstraintInfo>{"maximum": 5});
+        hash<DataTypeInfo> info = t.getInfo();
+        assertEq(5n, info.constraints.maximum);
+
+        # restored from its description
+        AbstractDataProviderType restored = AbstractDataProviderType::get(info);
+        assertEq(t.getConstraints(), restored.getConstraints());
+        assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), 6);
+
+        # derived types keep the constraints
+        foreach AbstractDataProviderType derived in ((t.getOrNothingType(), t.getOrNothingType().getMandatoryType(),
+                AbstractDataProviderType::get("int").copyWithConstraints(t.getConstraints()).getSoftType())) {
+            assertEq(t.getConstraints(), derived.getConstraints(), derived.getName());
+            assertThrows("RUNTIME-TYPE-ERROR", \derived.acceptsValue(), 6);
+        }
+
+        # a class-backed named type is copied, not modified
+        AbstractDataProviderType email = AbstractDataProviderType::get(EmailType.copyWithConstraints(
+            <DataTypeConstraintInfo>{"max_length": 20}).getInfo());
+        assertEq(NOTHING, EmailType.getConstraints());
+        assertThrows("RUNTIME-TYPE-ERROR", \email.acceptsValue(), "someone.with.a.long.name@example.com");
+    }
+
+    unionTest() {
+        list<AbstractDataProviderType> alternatives = (
+            AbstractDataProviderType::get("softstring"),
+            AbstractDataProviderType::get("softint"),
+        );
+        QoreUnionDataType any(alternatives);
+        # the first alternative accepting the value converts it
+        assertEq("1", any.acceptsValue(1));
+
+        AbstractDataProviderType one = any.copyWithConstraints(<DataTypeConstraintInfo>{"exclusive_union": True});
+        # values match the alternative of their own kind
+        assertEq("x", one.acceptsValue("x"));
+        assertEq(1, one.acceptsValue(1));
+        # restored from its description
+        AbstractDataProviderType restored = AbstractDataProviderType::get(one.getInfo());
+        assertEq(1, restored.acceptsValue(1));
+        assertEq("x", restored.acceptsValue("x"));
+        # exactly one: two alternatives of the same kind both match
+        AbstractDataProviderType two = (new QoreUnionDataType((AbstractDataProviderType::get("string"),
+            AbstractDataProviderType::get("string")))).copyWithConstraints(
+            <DataTypeConstraintInfo>{"exclusive_union": True});
+        assertThrows("RUNTIME-TYPE-ERROR", \two.acceptsValue(), "x");
+
+        HashDataType cat("Cat");
+        cat.addField(new QoreDataField({"name": "kind", "type": AbstractDataProviderTypeMap."string"}));
+        cat.addField(new QoreDataField({"name": "meows", "type": AbstractDataProviderTypeMap."bool"}));
+        HashDataType dog("Dog");
+        dog.addField(new QoreDataField({"name": "kind", "type": AbstractDataProviderTypeMap."string"}));
+        dog.addField(new QoreDataField({"name": "barks", "type": AbstractDataProviderTypeMap."bool"}));
+        AbstractDataProviderType pet = (new QoreUnionDataType((cat, dog))).copyWithConstraints(
+            <DataTypeConstraintInfo>{"discriminator": "kind", "discriminator_mapping": {"cat": 0, "dog": 1}});
+        pet = AbstractDataProviderType::get(pet.getInfo());
+        assertEq({"kind": "dog", "barks": True}, pet.acceptsValue({"kind": "dog", "barks": True}));
+        # the discriminator selects the alternative, even if another would accept the value
+        assertThrows("MISSING-VALUE-ERROR", \pet.acceptsValue(), {"kind": "dog", "meows": True});
+        assertThrows("RUNTIME-TYPE-ERROR", \pet.acceptsValue(), {"kind": "fish"});
+        assertThrows("RUNTIME-TYPE-ERROR", \pet.acceptsValue(), {"meows": True});
+    }
+
+    conversionTest() {
+        # booleans validate strings
+        AbstractDataProviderType b = AbstractDataProviderType::get("softbool");
+        assertEq(True, b.acceptsValue("1"));
+        assertThrows("RUNTIME-TYPE-ERROR", \b.acceptsValue(), "x");
+        AbstractDataProviderType ob = AbstractDataProviderType::get("*softbool");
+        assertEq(NOTHING, ob.acceptsValue(""));
+
+        # a mandatory soft list accepts no value and does not describe itself as accepting one
+        SoftListDataType mandatory(AbstractDataProviderType::get("string"));
+        assertThrows("RUNTIME-TYPE-ERROR", \mandatory.acceptsValue(), NOTHING);
+        assertFalse(mandatory.getInfo().types_accepted.contains("nothing"));
+        SoftListDataType optional(AbstractDataProviderType::get("string"), True);
+        assertEq(NOTHING, optional.acceptsValue(NOTHING));
+
+        # a union's example is an example of its first alternative, which it accepts unconverted
+        QoreUnionDataType u((new SoftListDataType(AbstractDataProviderType::get("softstring")),
+            AbstractDataProviderType::get("softstring")));
+        auto example = u.getExampleValue();
+        assertEq(example, u.acceptsValue(example));
+
+        # a hash type without fields and without other fields is restored as such
+        HashDataType closed("Closed");
+        closed.setDefaultOtherFieldType();
+        AbstractDataProviderType restored = AbstractDataProviderType::get(closed.getInfo());
+        assertEq(NOTHING, restored.getInfo().default_field_type_info);
+    }
+
+    exampleTest() {
+        QoreDataField choice({"name": "interval", "type": AbstractDataProviderTypeMap."string",
+            "allowed_values": (<AllowedValueInfo>{"value": "day"}, <AllowedValueInfo>{"value": "week"})});
+        assertEq("day", choice.getExampleValue());
+        foreach AbstractDataProviderType t in ((EmailType, UriType, UuidType, HostnameType, Ipv4Type, Ipv6Type,
+                PhoneType)) {
+            auto example = t.getExampleValue();
+            assertEq(example, t.acceptsValue(example), t.getName());
+        }
+    }
+}

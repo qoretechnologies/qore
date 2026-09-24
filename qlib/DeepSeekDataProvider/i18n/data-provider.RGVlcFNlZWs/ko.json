@@ -791,51 +791,51 @@
           "source": "Function.",
           "message": "함수."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "설명"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Description",
           "message": "설명"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Explain when to call this function.",
           "message": "이 함수를 호출할 때를 설명하세요."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.display_name": {
           "source": "Function Name",
           "message": "함수 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.short_desc": {
           "source": "Function Name",
           "message": "함수 이름"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.bmFtZQ.desc": {
           "source": "Function identifier, at most 64 characters: letters, digits, underscores, or dashes.",
           "message": "함수 식별자, 최대 64자: 영문자, 숫자, 밑줄 또는 하이픈."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.display_name": {
           "source": "Parameters",
           "message": "매개변수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.short_desc": {
           "source": "Parameters",
           "message": "매개변수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.cGFyYW1ldGVycw.desc": {
           "source": "JSON Schema describing function arguments.",
           "message": "함수 인수를 설명하는 JSON 스키마입니다."
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.display_name": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.display_name": {
           "source": "Strict Arguments",
           "message": "엄격한 인수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.short_desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.short_desc": {
           "source": "Strict Arguments",
           "message": "엄격한 인수"
         },
-        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNkNzk2OGI5MDAzOWI3MzZlZGYxZjAyYzdmYTUzNzRkYmI3OWYxNjgyMDhmYjgzMmQwNzFiMmZkMThmNmFkZDZkOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.desc": {
+        "app.RGVlcFNlZWs.type.YWN0aW9uOlkyaGhkQzFqYjIxd2JHVjBhVzl1OkRlZXBTZWVrRnVuY3Rpb25EZWZpbml0aW9uRGF0YVR5cGU6aGFzaDxhdXRvPiNjNDNiZDlhZGVlZTIwZmEyYmE5MjkwZGM5ZTk0MmEzMWNmNTc4NjQ5MWMyYTkxNTNmODNjNmUyODRiZDY1NmFmOm9wdGlvbjpkRzl2YkhNOmZpZWxkOlpuVnVZM1JwYjI0.field.c3RyaWN0.desc": {
           "source": "Require arguments to match the schema. Routes this request to the beta API.",
           "message": "인수가 스키마와 일치해야 합니다. 이 요청은 베타 API로 라우팅됩니다."
         },

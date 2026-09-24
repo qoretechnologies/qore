@@ -3919,123 +3919,123 @@
           "source": "Optional text label displayed above the form field. The label is automatically positioned above the field unless custom x/y coordinates are provided",
           "message": "Optionaler Text für die Beschriftung oberhalb des Formularfelds. Die Beschriftung wird automatisch oberhalb des Felds positioniert, es sei denn, benutzerdefinierte x/y-Koordinaten werden angegeben"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "Farbe"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.short_desc": {
           "source": "Text color as hex code",
           "message": "Textfarbe als Hex-Code"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.desc": {
           "source": "Text color in `RRGGBB` or `AARRGGBB` format (default: `000000`)",
           "message": "Textfarbe im `RRGGBB` oder `AARRGGBB`-Format (Standard: `000000`)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.display_name": {
           "source": "Bold",
           "message": "Fett"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.short_desc": {
           "source": "Bold text",
           "message": "Fetter Text"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.desc": {
           "source": "Set to `True` for bold text",
           "message": "Setzen Sie dies auf `True`, um fettgedruckten Text zu verwenden"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.display_name": {
           "source": "Italic",
           "message": "Kursiv"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.short_desc": {
           "source": "Italic text",
           "message": "Kursiver Text"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.desc": {
           "source": "Set to `True` for italic text",
           "message": "Setzen Sie dies auf `True`, um kursiven Text zu verwenden"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.display_name": {
           "source": "Font Name",
           "message": "Schriftartname"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.short_desc": {
           "source": "Font name",
           "message": "Schriftartname"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.desc": {
           "source": "Font name (default: `Arial`)",
           "message": "Schriftartname (Standard: `Arial`)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.display_name": {
           "source": "Strikeout",
           "message": "Durchgestrichen"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.short_desc": {
           "source": "Strikethrough text",
           "message": "Durchgestrichener Text"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.desc": {
           "source": "Set to `True` for strikethrough text",
           "message": "Setzen Sie dies auf `True`, um durchgestrichenen Text zu verwenden"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.display_name": {
           "source": "Underline",
           "message": "Unterstreichen"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.short_desc": {
           "source": "Underlined text",
           "message": "Unterstrichener Text"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.desc": {
           "source": "Set to `True` for underlined text",
           "message": "Setzen Sie dies auf `True`, um unterstrichenen Text zu verwenden"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.display_name": {
           "source": "Font Size",
           "message": "Schriftgröße"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.short_desc": {
           "source": "Font size in points",
           "message": "Schriftgröße in Punkten"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.desc": {
           "source": "Font size in points (default: `12`)",
           "message": "Schriftgröße in Punkten (Standard: `12`)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.display_name": {
           "source": "Title Text",
           "message": "Titeltext"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.short_desc": {
           "source": "Label text to display",
           "message": "Anzuzeigender Etikettentext"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.desc": {
           "source": "Label text to display above the form field",
           "message": "Etikettentext über dem Formularfeld anzeigen"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.display_name": {
           "source": "X Position",
           "message": "X-Position"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.short_desc": {
           "source": "Custom horizontal position",
           "message": "Benutzerdefinierte horizontale Position"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.desc": {
           "source": "Custom horizontal position in points (default: same as the field)",
           "message": "Benutzerdefinierte horizontale Position in Punkten (Standard: gleich wie das Feld)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.display_name": {
           "source": "Y Position",
           "message": "Y-Position"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.short_desc": {
           "source": "Custom vertical position",
           "message": "Benutzerdefinierte vertikale Position"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.desc": {
           "source": "Custom vertical position in points (default: above the field)",
           "message": "Benutzerdefinierte vertikale Position in Punkten (Standard: über dem Feld)"
         },

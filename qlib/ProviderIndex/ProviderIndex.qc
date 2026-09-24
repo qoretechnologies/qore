@@ -431,6 +431,10 @@ public class ProviderIndex inherits ProviderIndexUtil {
             return;
         }
         if (a.typeCode() == NT_LIST && b.typeCode() == NT_LIST && a.size() == b.size()) {
+            # accepted and returned types are sets; their order is that of the hash they are the keys of
+            if (path =~ /\.types_(accepted|returned)$/) {
+                return sort(a) == sort(b) ? NOTHING : path.substr(1);
+            }
             for (int i = 0; i < a.size(); ++i) {
                 if (*string rv = getTypeInfoDifference(a[i], b[i], sprintf("%s[%d]", path, i))) {
                     return rv;

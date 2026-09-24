@@ -113,7 +113,9 @@ public class QoreStringDataTypeBase inherits QoreDataType {
             return QoreDataType::acceptsValue(value);
         }
         if (_flexible_type_handling && exists value && value.typeCode() != NT_STRING) {
-            return SuperSoftStringDataType::getStringValue(value);
+            value = SuperSoftStringDataType::getStringValue(value);
+            checkConstraints(value);
+            return value;
         }
         if (exists value && value !== NULL) {
             if (value.typeCode() != NT_STRING) {
@@ -128,6 +130,7 @@ public class QoreStringDataTypeBase inherits QoreDataType {
             if (options."string.empty_to_nothing" && !value.val() && return_type_hash."nothing") {
                 return;
             }
+            checkConstraints(value);
             return value;
         }
         return QoreDataType::acceptsValue(value);

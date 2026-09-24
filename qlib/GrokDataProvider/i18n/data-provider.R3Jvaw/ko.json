@@ -2451,99 +2451,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "출력 형식 구성. 구조화된 출력을 원할 경우 `type`를 `json_schema`로 설정하고, 자유 형식 JSON을 원할 경우 `json_object`로 설정"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "스키마의 목적에 대한 인간이 읽을 수 있는 설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "스키마의 목적에 대한 인간이 읽을 수 있는 설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "스키마 이름"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "JSON 스키마 식별자 (json_schema 유형의 경우 필수)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "JSON 스키마 식별자. `type`가 `json_schema`인 경우 필수. 알파벳과 숫자, 밑줄/하이픈만 허용되며 최대 64자까지 가능"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "출력 구조를 정의하는 JSON 스키마 객체입니다."
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "출력 구조를 정의하는 JSON 스키마 객체. `type`가 `json_schema`일 때 필수입니다.\n\n**예시**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "엄격한"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "정확한 스키마를 엄격히 따름"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "`true`일 경우, 모델은 정확한 스키마 정의를 엄격히 따릅니다."
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "응답 형식 유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "응답 형식 유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "표준 텍스트 출력(기본값)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "표준 텍스트 출력(기본값)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSON 스키마"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSON 스키마에 부합하는 구조화된 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSON 스키마에 부합하는 구조화된 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSON 객체"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "특정 스키마 없이 유효한 JSON 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "특정 스키마 없이 유효한 JSON 출력"
         },
@@ -3375,99 +3375,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "출력 형식 구성. 구조화된 출력을 원할 경우 `type`를 `json_schema`로 설정하고, 자유 형식 JSON을 원할 경우 `json_object`로 설정"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "스키마의 목적에 대한 인간이 읽을 수 있는 설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "스키마의 목적에 대한 인간이 읽을 수 있는 설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "스키마 이름"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "JSON 스키마 식별자 (json_schema 유형의 경우 필수)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "JSON 스키마 식별자. `type`가 `json_schema`인 경우 필수. 알파벳과 숫자, 밑줄/하이픈만 허용되며 최대 64자까지 가능"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "출력 구조를 정의하는 JSON 스키마 객체입니다."
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "출력 구조를 정의하는 JSON 스키마 객체. `type`가 `json_schema`일 때 필수입니다.\n\n**예시**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "엄격한"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "정확한 스키마를 엄격히 따름"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "`true`일 경우, 모델은 정확한 스키마 정의를 엄격히 따릅니다."
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "응답 형식 유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "응답 형식 유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "표준 텍스트 출력(기본값)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "표준 텍스트 출력(기본값)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSON 스키마"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSON 스키마에 부합하는 구조화된 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSON 스키마에 부합하는 구조화된 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSON 객체"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "특정 스키마 없이 유효한 JSON 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "특정 스키마 없이 유효한 JSON 출력"
         },
@@ -4299,99 +4299,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "출력 형식 구성. 구조화된 출력을 원할 경우 `type`를 `json_schema`로 설정하고, 자유 형식 JSON을 원할 경우 `json_object`로 설정"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "스키마의 목적에 대한 인간이 읽을 수 있는 설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "스키마의 목적에 대한 인간이 읽을 수 있는 설명"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "스키마 이름"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "JSON 스키마 식별자 (json_schema 유형의 경우 필수)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "JSON 스키마 식별자. `type`가 `json_schema`인 경우 필수. 알파벳과 숫자, 밑줄/하이픈만 허용되며 최대 64자까지 가능"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "스키마"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "출력 구조를 정의하는 JSON 스키마 객체입니다."
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "출력 구조를 정의하는 JSON 스키마 객체. `type`가 `json_schema`일 때 필수입니다.\n\n**예시**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "엄격한"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "정확한 스키마를 엄격히 따름"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "`true`일 경우, 모델은 정확한 스키마 정의를 엄격히 따릅니다."
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "응답 형식 유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "응답 형식 유형"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "텍스트"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "표준 텍스트 출력(기본값)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "표준 텍스트 출력(기본값)"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSON 스키마"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSON 스키마에 부합하는 구조화된 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSON 스키마에 부합하는 구조화된 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSON 객체"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "특정 스키마 없이 유효한 JSON 출력"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "특정 스키마 없이 유효한 JSON 출력"
         },

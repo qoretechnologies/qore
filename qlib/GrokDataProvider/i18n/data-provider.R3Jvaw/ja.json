@@ -2451,99 +2451,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "出力フォーマットの構成。構造化出力の場合は `type` を `json_schema` に、自由形式JSONの場合は `json_object` に設定してください"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "スキーマの目的に関する読みやすい説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "スキーマの目的に関する読みやすい説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "スキーマ名"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "JSONスキーマの識別子（json_schemaタイプで必須）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "JSONスキーマの識別子。`type` が `json_schema` の場合に必須。英数字とアンダースコア/ハイフンのみ使用可能。最大64文字"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "スキーマ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "出力構造を定義するJSONスキーマオブジェクト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "出力構造を定義するJSONスキーマオブジェクト。`type` が `json_schema` の場合、必須です。\n\n**例**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "厳格"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "正確なスキーマに厳密に従う"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "`true` の場合、モデルはスキーマ定義を厳密に遵守します"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "タイプ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "応答形式の種類"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "応答形式の種類"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "テキスト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "標準テキスト出力（デフォルト）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "標準テキスト出力（デフォルト）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSONスキーマ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSONスキーマに準拠した構造化出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSONスキーマに準拠した構造化出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSONオブジェクト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "特定のスキーマなしの有効なJSON出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "特定のスキーマなしの有効なJSON出力"
         },
@@ -3375,99 +3375,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "出力フォーマットの構成。構造化出力の場合は `type` を `json_schema` に、自由形式JSONの場合は `json_object` に設定してください"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "スキーマの目的に関する読みやすい説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "スキーマの目的に関する読みやすい説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "スキーマ名"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "JSONスキーマの識別子（json_schemaタイプで必須）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "JSONスキーマの識別子。`type` が `json_schema` の場合に必須。英数字とアンダースコア/ハイフンのみ使用可能。最大64文字"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "スキーマ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "出力構造を定義するJSONスキーマオブジェクト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "出力構造を定義するJSONスキーマオブジェクト。`type` が `json_schema` の場合、必須です。\n\n**例**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "厳格"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "正確なスキーマに厳密に従う"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "`true` の場合、モデルはスキーマ定義を厳密に遵守します"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "タイプ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "応答形式の種類"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "応答形式の種類"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "テキスト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "標準テキスト出力（デフォルト）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "標準テキスト出力（デフォルト）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSONスキーマ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSONスキーマに準拠した構造化出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSONスキーマに準拠した構造化出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSONオブジェクト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "特定のスキーマなしの有効なJSON出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNTdkOTc2ZTRmNmY4MmQwMmU0NWFmZjQyN2FmMTNjNWRjNzQ1ODMwZGI2YzI3Y2E4Yzc4N2RmMmFlYTM4MjYwYTpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOmMzUnlaV0Z0TFhKbGMzQnZibk5sOkdyb2tUZXh0Rm9ybWF0Q29uZmlnRGF0YVR5cGU6R3Jva1RleHRGb3JtYXRDb25maWcjNzIwMjM5N2VjODdhNmUwOTdhZDExZjM0NWZlNzMzODNlNzQwOTMzOThhM2U4ZWFlNjFhYTBmYTI0YzkwMGQ4ZjpvcHRpb246ZEdWNGRBOmZpZWxkOlptOXliV0Yw.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "特定のスキーマなしの有効なJSON出力"
         },
@@ -4299,99 +4299,99 @@
           "source": "Output format configuration. Set `type` to `json_schema` for structured outputs or `json_object` for free-form JSON",
           "message": "出力フォーマットの構成。構造化出力の場合は `type` を `json_schema` に、自由形式JSONの場合は `json_object` に設定してください"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.short_desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "スキーマの目的に関する読みやすい説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.ZGVzY3JpcHRpb24.desc": {
           "source": "Human-readable description of the schema's purpose",
           "message": "スキーマの目的に関する読みやすい説明"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.display_name": {
           "source": "Schema Name",
           "message": "スキーマ名"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.short_desc": {
           "source": "Identifier for the JSON schema (required for json_schema type)",
           "message": "JSONスキーマの識別子（json_schemaタイプで必須）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.bmFtZQ.desc": {
           "source": "Identifier for the JSON schema. Required when `type` is `json_schema`. Must be alphanumeric with underscores/dashes, max 64 characters",
           "message": "JSONスキーマの識別子。`type` が `json_schema` の場合に必須。英数字とアンダースコア/ハイフンのみ使用可能。最大64文字"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.display_name": {
           "source": "Schema",
           "message": "スキーマ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.short_desc": {
           "source": "JSON Schema object defining the output structure",
           "message": "出力構造を定義するJSONスキーマオブジェクト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c2NoZW1h.desc": {
           "source": "The JSON Schema object defining the output structure. Required when `type` is `json_schema`.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`",
           "message": "出力構造を定義するJSONスキーマオブジェクト。`type` が `json_schema` の場合、必須です。\n\n**例**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, \"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], \"additionalProperties\": false}`"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.display_name": {
           "source": "Strict",
           "message": "厳格"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.short_desc": {
           "source": "Strictly follow the exact schema",
           "message": "正確なスキーマに厳密に従う"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.c3RyaWN0.desc": {
           "source": "When `true`, the model strictly follows the exact schema definition",
           "message": "`true` の場合、モデルはスキーマ定義を厳密に遵守します"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "タイプ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.short_desc": {
           "source": "The response format type",
           "message": "応答形式の種類"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.desc": {
           "source": "The response format type",
           "message": "応答形式の種類"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.display_name": {
           "source": "Text",
           "message": "テキスト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
           "source": "Standard text output (default)",
           "message": "標準テキスト出力（デフォルト）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Standard text output (default)",
           "message": "標準テキスト出力（デフォルト）"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.display_name": {
           "source": "JSON Schema",
           "message": "JSONスキーマ"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.short_desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSONスキーマに準拠した構造化出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fc2NoZW1h.desc": {
           "source": "Structured output conforming to a JSON schema",
           "message": "JSONスキーマに準拠した構造化出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.display_name": {
           "source": "JSON Object",
           "message": "JSONオブジェクト"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.short_desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "特定のスキーマなしの有効なJSON出力"
         },
-        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzU3ZDk3NmU0ZjZmODJkMDJlNDVhZmY0MjdhZjEzYzVkYzc0NTgzMGRiNmMyN2NhOGM3ODdkZjJhZWEzODI2MGE6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
+        "app.R3Jvaw.type.YWN0aW9uOlkzSmxZWFJsTFhKbGMzQnZibk5sTFdScGNtVmpkQTpHcm9rVGV4dEZvcm1hdENvbmZpZ0RhdGFUeXBlOkdyb2tUZXh0Rm9ybWF0Q29uZmlnIzcyMDIzOTdlYzg3YTZlMDk3YWQxMWYzNDVmZTczMzgzZTc0MDkzMzk4YTNlOGVhZTYxYWEwZmEyNGM5MDBkOGY6b3B0aW9uOmRHVjRkQTpmaWVsZDpabTl5YldGMA.field.dHlwZQ.allowed-value.c3RyaW5nOmpzb25fb2JqZWN0.desc": {
           "source": "Valid JSON output without a specific schema",
           "message": "特定のスキーマなしの有効なJSON出力"
         },

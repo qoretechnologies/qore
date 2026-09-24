@@ -1,0 +1,140 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires OpenApi3
+%requires json
+%exec-class OpenApi3ConstraintsTest
+
+class OpenApi3ConstraintsTest inherits QUnit::Test {
+    private {
+        # Schema nodes hold weak references to their owning document.
+        list<OpenApi3Schema> documents = ();
+    }
+
+    constructor() : Test("OpenAPI type constraints", "1.0", \ARGV) {
+        addTestCase("schema constraints are described and enforced", \constraintTest());
+        addTestCase("union alternatives convert like their schemas", \unionTest());
+        addTestCase("discriminators are described", \discriminatorTest());
+        set_return_value(main());
+    }
+
+    private hash<string, SchemaObject> schemas(hash<auto> definitions) {
+        OpenApi3Schema doc = OpenApi3Loader::fromString(make_json({
+            "openapi": "3.1.0", "info": {"title": "Constraints", "version": "1"},
+            "paths": {}, "components": {"schemas": definitions},
+        }), True);
+        documents += doc;
+        return doc.components.schemas;
+    }
+
+    #! Checks that a type and the type restored from its description give the same outcome for each value
+    private checkRestored(AbstractDataProviderType type, list<auto> values) {
+        AbstractDataProviderType restored = AbstractDataProviderType::get(type.getInfo());
+        foreach auto value in (values) {
+            string expected;
+            string actual;
+            try {
+                expected = sprintf("%y", type.acceptsValue(value));
+            } catch (hash<ExceptionInfo> ex) {
+                expected = ex.err;
+            }
+            try {
+                actual = sprintf("%y", restored.acceptsValue(value));
+            } catch (hash<ExceptionInfo> ex) {
+                actual = ex.err;
+            }
+            assertEq(expected, actual, sprintf("%s: %y", type.getName(), value));
+        }
+    }
+
+    constraintTest() {
+        hash<string, SchemaObject> s = schemas({
+            "Code": {"type": "string", "minLength": 2, "maxLength": 4, "pattern": "^[A-Z]"},
+            "Plain": {"type": "string"},
+            "Count": {"type": "integer", "exclusiveMinimum": 0, "maximum": 10},
+            "Rate": {"type": "number", "multipleOf": 0.25},
+            "Tags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": True},
+            "Color": {"type": "string", "enum": ("red", "green")},
+        });
+
+        AbstractDataProviderType code = s.Code.getDataType();
+        assertEq(<DataTypeConstraintInfo>{"min_length": 2, "max_length": 4, "pattern": "^[A-Z]"},
+            code.getConstraints());
+        assertEq("ABC", code.acceptsValue("ABC"));
+        assertThrows("RUNTIME-TYPE-ERROR", \code.acceptsValue(), "A");
+        assertThrows("RUNTIME-TYPE-ERROR", \code.acceptsValue(), "abc");
+        # an unconstrained schema of the same type does not share the constraints
+        assertEq(NOTHING, s.Plain.getDataType().getConstraints());
+        assertEq("a", s.Plain.getDataType().acceptsValue("a"));
+
+        AbstractDataProviderType count = s.Count.getDataType();
+        assertEq(10, count.acceptsValue(10));
+        assertThrows("RUNTIME-TYPE-ERROR", \count.acceptsValue(), 0);
+        assertThrows("RUNTIME-TYPE-ERROR", \count.acceptsValue(), 11);
+
+        AbstractDataProviderType rate = s.Rate.getDataType();
+        assertThrows("RUNTIME-TYPE-ERROR", \rate.acceptsValue(), 0.3);
+
+        AbstractDataProviderType tags = s.Tags.getDataType();
+        assertThrows("RUNTIME-TYPE-ERROR", \tags.acceptsValue(), ((),));
+        assertThrows("RUNTIME-TYPE-ERROR", \tags.acceptsValue(), (("a", "a"),));
+
+        AbstractDataProviderType color = s.Color.getDataType();
+        assertThrows("TYPE-VALUE-ERROR", \color.acceptsValue(), "blue");
+
+        foreach AbstractDataProviderType type in ((code, count, rate, tags, color)) {
+            checkRestored(type, ("A", "AB", "abc", "ABCDE", 0, 1, 10, 11, 0.25, 0.3, "red", "blue", (), ("a", "a"),
+                ("a", "b")));
+        }
+    }
+
+    unionTest() {
+        hash<string, SchemaObject> s = schemas({
+            "Id": {"oneOf": ({"type": "string"}, {"type": "integer"})},
+            "Flag": {"anyOf": ({"type": "boolean"}, {"type": "string", "enum": ("auto",)})},
+        });
+        AbstractDataProviderType id = s.Id.getDataType();
+        # the alternatives accept only values of their own JSON type, as their schemas do
+        assertEq("string|int", id.getName());
+        assertTrue(id.getConstraints().exclusive_union);
+        assertEq("x", id.acceptsValue("x"));
+        assertEq(1, id.acceptsValue(1));
+        assertThrows("RUNTIME-TYPE-ERROR", \id.acceptsValue(), 1.5);
+
+        AbstractDataProviderType flag = s.Flag.getDataType();
+        assertEq(True, flag.acceptsValue(True));
+        assertEq("auto", flag.acceptsValue("auto"));
+        assertThrows("RUNTIME-TYPE-ERROR", \flag.acceptsValue(), "x");
+
+        foreach AbstractDataProviderType type in ((id, flag)) {
+            checkRestored(type, ("x", "", "auto", 1, 0, 1.5, True, False, (), {}));
+        }
+    }
+
+    discriminatorTest() {
+        hash<string, SchemaObject> s = schemas({
+            "Pet": {
+                "type": "object",
+                "properties": {"kind": {"type": "string"}},
+                "required": ("kind",),
+                "discriminator": {"propertyName": "kind", "mapping": {
+                    "cat": "#/components/schemas/Cat",
+                    "dog": "#/components/schemas/Dog",
+                }},
+            },
+            "Cat": {"type": "object", "properties": {"kind": {"type": "string"}, "meows": {"type": "boolean"}},
+                "required": ("kind", "meows")},
+            "Dog": {"type": "object", "properties": {"kind": {"type": "string"}, "barks": {"type": "boolean"}},
+                "required": ("kind", "barks")},
+        });
+        AbstractDataProviderType pet = s.Pet.getDataType();
+        assertEq("kind", pet.getConstraints().discriminator);
+        assertEq({"cat": 0, "dog": 1}, pet.getConstraints().discriminator_mapping);
+        checkRestored(pet, ({"kind": "cat", "meows": True}, {"kind": "dog", "barks": True},
+            {"kind": "dog", "meows": True}, {"kind": "fish"}, {"meows": True}, "x"));
+    }
+}

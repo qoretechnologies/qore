@@ -3919,123 +3919,123 @@
           "source": "Optional text label displayed above the form field. The label is automatically positioned above the field unless custom x/y coordinates are provided",
           "message": "필드 위에 표시할 선택적 텍스트 레이블. 레이블은 자동으로 필드 위에 위치하지만, 사용자 지정 x/y 좌표가 제공된 경우 제외"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.display_name": {
           "source": "Color",
           "message": "색상"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.short_desc": {
           "source": "Text color as hex code",
           "message": "16진수 코드로 지정된 텍스트 색상"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Y29sb3I.desc": {
           "source": "Text color in `RRGGBB` or `AARRGGBB` format (default: `000000`)",
           "message": "`RRGGBB` 또는 `AARRGGBB` 형식의 텍스트 색상 (기본값: `000000`)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.display_name": {
           "source": "Bold",
           "message": "강조 표시"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.short_desc": {
           "source": "Bold text",
           "message": "강조 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEJvbGQ.desc": {
           "source": "Set to `True` for bold text",
           "message": "볼드 텍스트를 위해 `True`로 설정"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.display_name": {
           "source": "Italic",
           "message": "기울임"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.short_desc": {
           "source": "Italic text",
           "message": "기울임 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udEl0YWxpYw.desc": {
           "source": "Set to `True` for italic text",
           "message": "이텔릭 텍스트를 위해 `True`로 설정"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.display_name": {
           "source": "Font Name",
           "message": "글꼴 이름"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.short_desc": {
           "source": "Font name",
           "message": "글꼴 이름"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udE5hbWU.desc": {
           "source": "Font name (default: `Arial`)",
           "message": "글꼴 이름 (기본값: `Arial`)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.display_name": {
           "source": "Strikeout",
           "message": "취소선"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.short_desc": {
           "source": "Strikethrough text",
           "message": "취소선 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFN0cmlrZW91dA.desc": {
           "source": "Set to `True` for strikethrough text",
           "message": "취소선 텍스트의 경우 `True`으로 설정"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.display_name": {
           "source": "Underline",
           "message": "밑줄"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.short_desc": {
           "source": "Underlined text",
           "message": "밑줄이 있는 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.Zm9udFVuZGVybGluZQ.desc": {
           "source": "Set to `True` for underlined text",
           "message": "`True`로 설정하여 밑줄 표시 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.display_name": {
           "source": "Font Size",
           "message": "글꼴 크기"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.short_desc": {
           "source": "Font size in points",
           "message": "포인트 단위 글꼴 크기"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.c2l6ZQ.desc": {
           "source": "Font size in points (default: `12`)",
           "message": "포인트 단위 글꼴 크기 (기본값: `12`)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.display_name": {
           "source": "Title Text",
           "message": "제목 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.short_desc": {
           "source": "Label text to display",
           "message": "표시할 라벨 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.dGV4dA.desc": {
           "source": "Label text to display above the form field",
           "message": "폼 필드 위에 표시할 라벨 텍스트"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.display_name": {
           "source": "X Position",
           "message": "X 위치"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.short_desc": {
           "source": "Custom horizontal position",
           "message": "사용자 정의 수평 위치"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eA.desc": {
           "source": "Custom horizontal position in points (default: same as the field)",
           "message": "포인트 단위의 사용자 정의 수평 위치 (기본값: 필드와 동일)"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.display_name": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.display_name": {
           "source": "Y Position",
           "message": "Y 위치"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.short_desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.short_desc": {
           "source": "Custom vertical position",
           "message": "사용자 정의 수직 위치"
         },
-        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjNTYxNjU0Yzk3YzZmYmMyMjlhMjI4MThmMTFhNjhkY2I0ZWNmMjE2OGRhNTBmNTE1NjI4MTk4MTk1MGY2N2ZmMjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.desc": {
+        "app.UGRmQ28.type.YWN0aW9uOlkzSmxZWFJsTFdacGJHeGhZbXhsTFdadmNtMDpQZGZDb0Zvcm1GaWVsZFRpdGxlRGF0YVR5cGU6KlBkZkNvRm9ybUZpZWxkVGl0bGUjZTZjMmFmMjIzZWIzYzMwZDcyMDNjMmFiZTdkNGJiOTdkMzU0MjNmNjM3OWRmOGNiMzNlNjMxNjlhZTA5OTk5MjpvcHRpb246WVc1dWIzUmhkR2x2Ym5NOmZpZWxkOmRHbDBiR1U.field.eQ.desc": {
           "source": "Custom vertical position in points (default: above the field)",
           "message": "포인트 단위의 사용자 정의 수직 위치 (기본값: 필드 위)"
         },

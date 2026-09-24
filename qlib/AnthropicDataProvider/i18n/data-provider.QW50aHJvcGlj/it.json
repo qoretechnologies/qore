@@ -1783,95 +1783,95 @@
           "source": "The parameters for the message creation request. Same structure as POST `/v1/messages`",
           "message": "I parametri per la richiesta di creazione del messaggio. Struttura identica a POST `/v1/messages`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.display_name": {
           "source": "Container",
           "message": "Contenitore"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.short_desc": {
           "source": "Container ID for context reuse",
           "message": "ID contenitore per il riutilizzo del contesto"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udGFpbmVy.desc": {
           "source": "A container ID for reusing context across multiple requests. The container stores conversation state on the server for efficient multi-turn interactions",
           "message": "Un ID contenitore per riutilizzare il contesto in più richieste. Il contenitore memorizza lo stato della conversazione sul server per interazioni multi-turno efficienti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.display_name": {
           "source": "Conversation Key",
           "message": "Chiave di conversazione"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.short_desc": {
           "source": "Key for conversation context persistence",
           "message": "Chiave per la persistenza del contesto di conversazione"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.Y29udmVyc2F0aW9uX2tleQ.desc": {
           "source": "An opaque key used to load and save conversation context via the configured context store. When provided, previous messages are prepended automatically",
           "message": "Una chiave opaca utilizzata per caricare e salvare il contesto della conversazione tramite l'archivio del contesto configurato. Se fornita, i messaggi precedenti vengono anteposti automaticamente"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.display_name": {
           "source": "Effort",
           "message": "Impegno"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.short_desc": {
           "source": "Controls how much effort the model should spend",
           "message": "Controlla l'impegno che il modello deve dedicare"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.desc": {
           "source": "Controls how much effort the model should spend on the response",
           "message": "Controlla l'impegno che il modello deve dedicare alla risposta"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.display_name": {
           "source": "Low",
           "message": "Basso"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmxvdw.short_desc": {
           "source": "Fast, less thorough responses",
           "message": "Risposte rapide e meno approfondite"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
           "source": "Medium",
           "message": "Medio"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
           "source": "Balanced effort",
           "message": "Impegno bilanciato"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
           "source": "High",
           "message": "Alto"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
           "source": "More thorough responses",
           "message": "Risposte più approfondite"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.display_name": {
           "source": "Max",
           "message": "Max"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.ZWZmb3J0.allowed-value.c3RyaW5nOm1heA.short_desc": {
           "source": "Maximum effort and thoroughness",
           "message": "Massimo impegno e accuratezza"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.display_name": {
           "source": "Max Tokens",
           "message": "Token massimi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate",
           "message": "Il numero massimo di token da generare"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWF4X3Rva2Vucw.desc": {
           "source": "The maximum number of tokens to generate before stopping. Required by the Anthropic API",
           "message": "Il numero massimo di token da generare prima di interrompere l'operazione. Richiesto dall'API Anthropic"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.display_name": {
           "source": "Messages",
           "message": "Messaggi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.short_desc": {
           "source": "Input messages for the conversation",
           "message": "Messaggi di input per la conversazione"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWVzc2FnZXM.desc": {
           "source": "Input messages for the conversation. Each message is a hash with `role` (`user` or `assistant`) and `content` (string or list of content blocks)",
           "message": "Messaggi di input per la conversazione. Ogni messaggio è un hash con `role` (`user` o `assistant`) e `content` (stringa o elenco di blocchi di contenuto)"
         },
@@ -2047,15 +2047,15 @@
           "source": "A message from the assistant",
           "message": "Un messaggio dall'assistente"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Metadati"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.short_desc": {
           "source": "Request metadata",
           "message": "Richiedi metadati"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bWV0YWRhdGE.desc": {
           "source": "An object describing metadata about the request. Contains `user_id` for abuse detection",
           "message": "Un oggetto che descrive i metadati della richiesta. Contiene `user_id` per la rilevazione di abusi"
         },
@@ -2071,27 +2071,27 @@
           "source": "An external identifier for the user who is associated with the request. This should be a uuid, hash value, or other opaque identifier. Anthropic may use this id to help detect abuse",
           "message": "Un identificatore esterno per l'utente associato alla richiesta. Dovrebbe essere un uuid, un valore hash o un altro identificatore opaco. Anthropic può utilizzare questo ID per aiutare a rilevare abusi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.display_name": {
           "source": "Model",
           "message": "Modello"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.short_desc": {
           "source": "The model that will complete your prompt",
           "message": "Il modello che completerà il prompt"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.bW9kZWw.desc": {
           "source": "The model that will complete your prompt (e.g. `claude-sonnet-4-6-20250514`)",
           "message": "Il modello che completerà il prompt (ad es. `claude-sonnet-4-6-20250514`)"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.display_name": {
           "source": "Output Config",
           "message": "Configurazione output"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.short_desc": {
           "source": "Configuration for structured output and effort",
           "message": "Configurazione per output strutturato e sforzo"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X2NvbmZpZw.desc": {
           "source": "Controls structured output (JSON Schema) and effort level. Use `json_schema` for machine-readable output, and `effort` to control response thoroughness",
           "message": "Controlla l'output strutturato (JSON Schema) e il livello di sforzo. Usare `json_schema` per output leggibile da macchina, e `effort` per controllare la completezza della risposta"
         },
@@ -2263,15 +2263,15 @@
           "source": "Constrain output to match a JSON Schema",
           "message": "Limita l'output per corrispondere a uno schema JSON"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.display_name": {
           "source": "Output Schema",
           "message": "Schema di output"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.short_desc": {
           "source": "JSON Schema for structured output",
           "message": "JSON Schema per l'output strutturato"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.b3V0cHV0X3NjaGVtYQ.desc": {
           "source": "A JSON Schema object that constrains the model's output to match the specified structure. Enables structured, machine-readable responses. Note: for `object` types, `additionalProperties` must be set to `false`.\n\nExample:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```",
           "message": "Un oggetto JSON Schema che vincola l'output del modello affinché corrisponda alla struttura specificata. Consente risposte strutturate e leggibili da macchina. Nota: per i tipi `object`, `additionalProperties` deve essere impostato su `false`.\n\nEsempio:\n```\ntype: object\nproperties:\n  sentiment:\n    type: string\n    description: The sentiment of the text\n  score:\n    type: number\n    description: Confidence score from 0 to 1\nrequired:\n  - sentiment\n  - score\nadditionalProperties: false\n```"
         },
@@ -2355,103 +2355,103 @@
           "source": "Boolean",
           "message": "Booleano"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.display_name": {
           "source": "Service Tier",
           "message": "Livello servizio"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.short_desc": {
           "source": "Service tier for the request",
           "message": "Livello di servizio per la richiesta"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.desc": {
           "source": "Determines which tier of service to use for the request",
           "message": "Determina quale livello di servizio utilizzare per la richiesta"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Auto"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Automatically select the best available tier",
           "message": "Seleziona automaticamente il miglior livello disponibile"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.display_name": {
           "source": "Standard Only",
           "message": "Solo standard"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2VydmljZV90aWVy.allowed-value.c3RyaW5nOnN0YW5kYXJkX29ubHk.short_desc": {
           "source": "Use only the standard tier, never prioritized capacity",
           "message": "Usa solo il livello standard, mai la capacità con priorità"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.display_name": {
           "source": "Skill",
           "message": "Skill"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.short_desc": {
           "source": "An agent skill to use for this request",
           "message": "Una skill dell'agente da utilizzare per questa richiesta"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c2tpbGw.desc": {
           "source": "An agent skill to use for this request. Skills extend Claude's capabilities with specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or custom workflows. When a skill is selected, the required code execution tool and beta headers are automatically configured.\n\nFormat: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). If no type prefix is given, `custom` is assumed",
           "message": "Una skill dell'agente da utilizzare per questa richiesta. Le skill estendono le funzionalità di Claude con competenze specializzate per attività quali la creazione di documenti (pptx, xlsx, docx, pdf) o flussi di lavoro personalizzati. Quando viene selezionata una skill, lo strumento di esecuzione del codice richiesto e le intestazioni beta vengono configurati automaticamente.\n\nFormato: `{type}/{skill_id}` (es. `anthropic/pptx`, `custom/skill_abc123`). Se non viene fornito alcun prefisso di tipo, viene assunto `custom`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.display_name": {
           "source": "Stop Sequences",
           "message": "Sequenze di arresto"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.short_desc": {
           "source": "Custom text sequences that will cause the model to stop generating",
           "message": "Sequenze di testo personalizzate che interrompono la generazione del modello"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RvcF9zZXF1ZW5jZXM.desc": {
           "source": "Custom text sequences that will cause the model to stop generating. The model will stop when it encounters any of the provided sequences",
           "message": "Sequenze di testo personalizzate che interromperanno la generazione da parte del modello. Il modello si fermerà quando incontra una qualsiasi delle sequenze fornite"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.display_name": {
           "source": "Stream",
           "message": "Stream"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.short_desc": {
           "source": "Whether to stream the response using Server-Sent Events",
           "message": "Se flusso della risposta tramite Server-Sent Events"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3RyZWFt.desc": {
           "source": "Whether to incrementally stream the response using Server-Sent Events (SSE)",
           "message": "Se flusso incrementale della risposta tramite Server-Sent Events (SSE)"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.display_name": {
           "source": "System Prompt",
           "message": "Prompt sistema"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.short_desc": {
           "source": "System prompt for the conversation",
           "message": "Prompt di sistema per la conversazione"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.c3lzdGVt.desc": {
           "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
           "message": "Prompt di sistema che fornisce contesto e istruzioni. Può essere una stringa o un elenco di blocchi di contenuto per il controllo della cache"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.display_name": {
           "source": "Temperature",
           "message": "Temperatura"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.short_desc": {
           "source": "Amount of randomness injected into the response",
           "message": "Quantità di casualità inserita nella risposta"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGVtcGVyYXR1cmU.desc": {
           "source": "Amount of randomness injected into the response. Ranges from `0.0` to `1.0`. Use `temperature` closer to `0.0` for analytical/multiple choice tasks, and closer to `1.0` for creative and generative tasks. Default: `1.0`",
           "message": "Quantità di casualità inserita nella risposta. Varia da `0.0` a `1.0`. Usa `temperature` più vicino a `0.0` per attività analitiche o a scelta multipla e più vicino a `1.0` per attività creative e generative. Predefinito: `1.0`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.display_name": {
           "source": "Extended Thinking",
           "message": "Pensiero Esteso"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.short_desc": {
           "source": "Configuration for extended thinking",
           "message": "Configurazione per pensiero esteso"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmc.desc": {
           "source": "Configuration for extended thinking. Budget must be at least `1024` and less than `max_tokens`",
           "message": "Configurazione per pensiero esteso. Il budget deve essere almeno `1024` e inferiore a `max_tokens`"
         },
@@ -2503,143 +2503,143 @@
           "source": "Model decides whether to use thinking based on the task",
           "message": "Il modello decide se utilizzare il pensiero in base all'attività"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.display_name": {
           "source": "Thinking Budget Tokens",
           "message": "Token del budget di pensiero"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.short_desc": {
           "source": "Maximum tokens for thinking",
           "message": "Token massimi per il pensiero"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfYnVkZ2V0X3Rva2Vucw.desc": {
           "source": "The maximum number of tokens to use for extended thinking. Must be at least `1024` and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
           "message": "Il numero massimo di token da utilizzare per il pensiero esteso. Deve essere almeno `1024` e inferiore a `max_tokens`. Applicabile solo quando la modalità di pensiero è `enabled`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.display_name": {
           "source": "Thinking Mode",
           "message": "Modalità di pensiero"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.short_desc": {
           "source": "Whether extended thinking is enabled",
           "message": "Indica se il pensiero esteso è abilitato"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.desc": {
           "source": "Whether extended thinking is enabled or disabled. Extended thinking allows the model to reason through complex problems step by step before responding",
           "message": "Indica se il pensiero esteso è abilitato o disabilitato. Il pensiero esteso consente al modello di ragionare su problemi complessi passo dopo passo prima di rispondere"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.display_name": {
           "source": "Enabled",
           "message": "Abilitato"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmVuYWJsZWQ.short_desc": {
           "source": "Enable extended thinking with a fixed budget",
           "message": "Abilita il pensiero esteso con un budget fisso"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.display_name": {
           "source": "Disabled",
           "message": "Disabilitato"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmRpc2FibGVk.short_desc": {
           "source": "Disable extended thinking",
           "message": "Disabilita il pensiero esteso"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.display_name": {
           "source": "Adaptive",
           "message": "Adattivo"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dGhpbmtpbmdfbW9kZQ.allowed-value.c3RyaW5nOmFkYXB0aXZl.short_desc": {
           "source": "Model decides whether to use thinking based on the task",
           "message": "Il modello decide se utilizzare il pensiero in base all'attività"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.display_name": {
           "source": "Tool Choice",
           "message": "Scelta strumento"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.short_desc": {
           "source": "How the model should use the provided tools",
           "message": "Come il modello dovrebbe usare gli strumenti forniti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbF9jaG9pY2U.desc": {
           "source": "How the model should use the provided tools. Set `type` to control tool usage behavior",
           "message": "Come il modello dovrebbe utilizzare gli strumenti forniti. Impostare `type` per controllare il comportamento dell'uso degli strumenti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.display_name": {
           "source": "Disable Parallel Tool Use",
           "message": "Disabilita utilizzo strumenti in parallelo"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.short_desc": {
           "source": "Whether to disable parallel tool use",
           "message": "Se disabilitare l'uso parallelo degli strumenti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.ZGlzYWJsZV9wYXJhbGxlbF90b29sX3VzZQ.desc": {
           "source": "Whether to disable parallel tool use. Defaults to `False`",
           "message": "Se disabilitare l'uso parallelo degli strumenti. Predefinito: `False`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.display_name": {
           "source": "Tool Name",
           "message": "Nome dello strumento"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.short_desc": {
           "source": "Name of the specific tool to use",
           "message": "Nome dello strumento specifico da utilizzare"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.bmFtZQ.desc": {
           "source": "The name of the specific tool to use. Only applicable when `type` is `tool`",
           "message": "Il nome dello strumento specifico da utilizzare. Applicabile solo quando `type` è `tool`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Tipo"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.short_desc": {
           "source": "How the model should use tools",
           "message": "Come il modello dovrebbe utilizzare gli strumenti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.desc": {
           "source": "How the model should use the provided tools",
           "message": "Come il modello dovrebbe usare gli strumenti forniti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
           "source": "Auto",
           "message": "Auto"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Model decides whether to use tools",
           "message": "Il modello decide se usare gli strumenti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.display_name": {
           "source": "Any",
           "message": "Qualsiasi"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOmFueQ.short_desc": {
           "source": "Model must use a tool",
           "message": "Il modello deve utilizzare uno strumento"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.display_name": {
           "source": "Specific Tool",
           "message": "Strumento specifico"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOnRvb2w.short_desc": {
           "source": "Model must use the named tool",
           "message": "Il modello deve utilizzare lo strumento denominato"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "None",
           "message": "Nessuno"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-IzBlMDZiZjQyNGU2Nzk4YzI0ODE5NmEzZGVkNWZiNjg2OGZhODY2MDkyMjU3MjUyNjc0ZWU5ZGY1NTYzOTM1MTk6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljVG9vbENob2ljZURhdGFUeXBlOipoYXNoPGF1dG8-I2MxZDIyZTVmYTliYzhiODVhN2UyMjEwMmJiMzNiMWFlYjQ0NzA3MzZiMGUyZDMxYTY4MTkwOTdhZWZlZDcxN2U6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6OmZpZWxkOmRHOXZiRjlqYUc5cFkyVQ.field.dHlwZQ.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
           "source": "Model must not use tools",
           "message": "Il modello non deve usare gli strumenti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.display_name": {
           "source": "Tools",
           "message": "Strumenti"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.short_desc": {
           "source": "Definitions of tools that the model may use",
           "message": "Definizioni degli strumenti che il modello può utilizzare"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9vbHM.desc": {
           "source": "Definitions of tools that the model may use. Each tool has a `name`, `description`, and `input_schema` (JSON Schema object)",
           "message": "Definizioni degli strumenti che il modello può utilizzare. Ogni strumento ha un `name`, `description` e `input_schema` (oggetto JSON Schema)"
         },
@@ -2759,27 +2759,27 @@
           "source": "The name of the tool. Must match `^[a-zA-Z0-9_-]{1,64}$`",
           "message": "Il nome dello strumento. Deve corrispondere a `^[a-zA-Z0-9_-]{1,64}$`"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.display_name": {
           "source": "Top K",
           "message": "Top K"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.short_desc": {
           "source": "Only sample from the top K options for each subsequent token",
           "message": "Campiona solo tra le prime K opzioni per ogni token successivo"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX2s.desc": {
           "source": "Only sample from the top K options for each subsequent token. Used to remove long-tail low probability responses",
           "message": "Campiona solo tra le prime K opzioni per ogni token successivo. Utilizzato per rimuovere risposte a bassa probabilità nella coda lunga"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.display_name": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.display_name": {
           "source": "Top P",
           "message": "Top P"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.short_desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.short_desc": {
           "source": "Nucleus sampling parameter",
           "message": "Parametro di campionamento nucleus"
         },
-        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzE2OWM5MDNlMzk1OWM5NDAzNTIyODRmOTkxZWI1NThlOGNkNGIwMzBjYzgxMmI3N2NjZTdkOGU1NDQ5ZTdkZTA6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.desc": {
+        "app.QW50aHJvcGlj.type.YWN0aW9uOlkzSmxZWFJsTFdKaGRHTm86QW50aHJvcGljTWVzc2FnZVJlcXVlc3REYXRhVHlwZTpoYXNoPGF1dG8-IzJmNTg0YjNjZjExYjNkZTdlY2MyYmJlNTU4MDgzYzk4OWZmODk5MjA0ZWVlYzY3YjEwNzhjMzY5MTUzMTkxZTc6b3B0aW9uOmNtVnhkV1Z6ZEhNOmZpZWxkOmNHRnlZVzF6.field.dG9wX3A.desc": {
           "source": "Use nucleus sampling. In nucleus sampling, we compute the cumulative distribution over all the options for each subsequent token in decreasing probability order and cut it off once it reaches a particular probability specified by `top_p`",
           "message": "Usa il campionamento nucleus. Nel campionamento nucleus, viene calcolata la distribuzione cumulativa su tutte le opzioni per ogni token successivo in ordine decrescente di probabilità e interrotta una volta raggiunta una probabilità specifica indicata da `top_p`"
         },

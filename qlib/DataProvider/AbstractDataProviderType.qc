@@ -298,6 +298,75 @@ public hashdecl DataTypeInfo {
 
     #! Any tags set on the type
     *hash<auto> tags;
+
+    #! Validation constraints of the type, if any
+    /** @since DataProvider 3.8
+    */
+    *hash<DataTypeConstraintInfo> constraints;
+}
+
+#! Validation constraints of a data type
+/** These are the validation keywords of JSON Schema, which describe constraints on values beyond their type.  Each
+    constraint applies only to values of the kind it describes (for example, \c min_length only to strings), so a
+    constraint on a type that accepts values of several kinds applies to the values it describes.  The constraints of
+    a type are enforced by
+    @ref AbstractDataProviderType::checkConstraints() "AbstractDataProviderType::checkConstraints()" for the types
+    provided by this module, and are part of the type's description, so that a type restored from its description
+    with @ref AbstractDataProviderType::get() "AbstractDataProviderType::get()" enforces them too.
+
+    @since DataProvider 3.8
+*/
+public hashdecl DataTypeConstraintInfo {
+    #! The smallest number accepted
+    *softnumber minimum;
+
+    #! The largest number accepted
+    *softnumber maximum;
+
+    #! Numbers must be greater than this value
+    *softnumber exclusive_minimum;
+
+    #! Numbers must be less than this value
+    *softnumber exclusive_maximum;
+
+    #! Numbers must be a multiple of this value
+    *softnumber multiple_of;
+
+    #! The minimum number of characters in a string
+    *int min_length;
+
+    #! The maximum number of characters in a string
+    *int max_length;
+
+    #! A regular expression that strings must match somewhere; it is not implicitly anchored
+    *string pattern;
+
+    #! The minimum number of elements in a list
+    *int min_items;
+
+    #! The maximum number of elements in a list
+    *int max_items;
+
+    #! Whether the elements of a list must all be different
+    *bool unique_items;
+
+    #! The minimum number of keys in a hash
+    *int min_properties;
+
+    #! The maximum number of keys in a hash
+    *int max_properties;
+
+    #! The values accepted, compared as strings
+    *list<string> enum_values;
+
+    #! For union types: whether values must match exactly one alternative instead of at least one
+    *bool exclusive_union;
+
+    #! For union types: the name of the hash key whose value selects the alternative
+    *string discriminator;
+
+    #! For union types with a discriminator: maps values of the discriminator key to alternative indexes
+    *hash<string, int> discriminator_mapping;
 }
 
 /** @defgroup data_type_tags Data Type Tag Constants
@@ -339,6 +408,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
         #! The type path, if any
         *string path;
+
+        #! Validation constraints, if any
+        *hash<DataTypeConstraintInfo> constraints;
     }
 
     #! creates the type
@@ -383,6 +455,135 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
         if (path.val()) {
             self.path = path;
+        }
+    }
+
+    #! Returns the validation constraints of the type, if any
+    /** @return the validation constraints of the type, if any
+
+        @since DataProvider 3.8
+    */
+    *hash<DataTypeConstraintInfo> getConstraints() {
+        return constraints;
+    }
+
+    #! Returns a copy of the type with the given validation constraints
+    /** Types are commonly shared, so constraints are only ever set on a copy
+
+        @param constraints the validation constraints of the copy; if empty, the copy has no constraints
+
+        @return a copy of the type with the given validation constraints, or the type itself if neither it nor the
+        copy has any constraints
+
+        @since DataProvider 3.8
+    */
+    AbstractDataProviderType copyWithConstraints(*hash<DataTypeConstraintInfo> constraints) {
+        if (!constraints && !self.constraints) {
+            return self;
+        }
+        AbstractDataProviderType rv = self.copy();
+        rv.constraints = constraints;
+        return rv;
+    }
+
+    #! Checks the given value against the validation constraints of the type
+    /** @param value the value to check; values of kinds that no constraint describes are not checked
+
+        @throw RUNTIME-TYPE-ERROR the value violates a constraint
+
+        @since DataProvider 3.8
+    */
+    checkConstraints(auto value) {
+        if (!constraints) {
+            return;
+        }
+        if (constraints.enum_values && exists value && value.typeCode() != NT_LIST && value.typeCode() != NT_HASH
+                && !inlist(value.toString(), constraints.enum_values)) {
+            throw "TYPE-VALUE-ERROR", sprintf("type %y does not accept value %y; accepted values: %y", getName(),
+                value, constraints.enum_values);
+        }
+        switch (value.typeCode()) {
+            case NT_INT:
+            case NT_FLOAT:
+            case NT_NUMBER:
+                checkNumericConstraints(value);
+                break;
+            case NT_STRING:
+                if (exists constraints.min_length && value.length() < constraints.min_length) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires at least %d character%s; got %d",
+                        getName(), constraints.min_length, constraints.min_length == 1 ? "" : "s", value.length());
+                }
+                if (exists constraints.max_length && value.length() > constraints.max_length) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y accepts at most %d character%s; got %d",
+                        getName(), constraints.max_length, constraints.max_length == 1 ? "" : "s", value.length());
+                }
+                if (constraints.pattern.val() && !regex(value, constraints.pattern)) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("value %y does not match the pattern %y of type %y", value,
+                        constraints.pattern, getName());
+                }
+                break;
+            case NT_LIST:
+                if (exists constraints.min_items && value.size() < constraints.min_items) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires at least %d element%s; got %d", getName(),
+                        constraints.min_items, constraints.min_items == 1 ? "" : "s", value.size());
+                }
+                if (exists constraints.max_items && value.size() > constraints.max_items) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y accepts at most %d element%s; got %d", getName(),
+                        constraints.max_items, constraints.max_items == 1 ? "" : "s", value.size());
+                }
+                if (constraints.unique_items) {
+                    hash<string, bool> seen;
+                    foreach auto element in (value) {
+                        string key = sprintf("%s:%y", element.type(), element);
+                        if (seen{key}) {
+                            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires unique elements; %y is repeated",
+                                getName(), element);
+                        }
+                        seen{key} = True;
+                    }
+                }
+                break;
+            case NT_HASH:
+                if (exists constraints.min_properties && value.size() < constraints.min_properties) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires at least %d key%s; got %d", getName(),
+                        constraints.min_properties, constraints.min_properties == 1 ? "" : "s", value.size());
+                }
+                if (exists constraints.max_properties && value.size() > constraints.max_properties) {
+                    throw "RUNTIME-TYPE-ERROR", sprintf("type %y accepts at most %d key%s; got %d", getName(),
+                        constraints.max_properties, constraints.max_properties == 1 ? "" : "s", value.size());
+                }
+                break;
+        }
+    }
+
+    #! Checks a numeric value against the numeric constraints of the type
+    private checkNumericConstraints(auto value) {
+        # compare decimal values: a float converted directly to a number carries its binary rounding error
+        number n = value.typeCode() == NT_FLOAT ? number(value.toString()) : number(value);
+        if (exists constraints.minimum && n < constraints.minimum) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value of at least %s; got %s", getName(),
+                constraints.minimum.toString(), n.toString());
+        }
+        if (exists constraints.maximum && n > constraints.maximum) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value of at most %s; got %s", getName(),
+                constraints.maximum.toString(), n.toString());
+        }
+        if (exists constraints.exclusive_minimum && n <= constraints.exclusive_minimum) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value greater than %s; got %s", getName(),
+                constraints.exclusive_minimum.toString(), n.toString());
+        }
+        if (exists constraints.exclusive_maximum && n >= constraints.exclusive_maximum) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a value less than %s; got %s", getName(),
+                constraints.exclusive_maximum.toString(), n.toString());
+        }
+        if (constraints.multiple_of) {
+            # division of decimal values is not exact, so the quotient is compared with its nearest integer
+            number q = n / constraints.multiple_of;
+            number nearest = number((q + (q < 0 ? -0.5n : 0.5n)).toInt());
+            if (abs(q - nearest) > 0.000000001n * (abs(q) > 1n ? abs(q) : 1n)) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("type %y requires a multiple of %s; got %s", getName(),
+                    constraints.multiple_of.toString(), n.toString());
+            }
         }
     }
 
@@ -510,6 +711,7 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             "recursive": recursive,
             "unique_key": uh,
             "tags": tags,
+            "constraints": constraints,
         };
         # element types are traversed as live objects, so a cyclic element-type graph would recurse without
         # bound here; suppress it on the same condition as "fields", with "recursive" marking the truncation
@@ -1025,6 +1227,9 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return new QoreHashDataType(type, options, tags, default_value, attr);
         } else if (type.getBaseTypeCode() == NT_STRING && !type.isOutputCompatible(BinaryType)) {
             return new QoreStringDataTypeBase(type, options, tags, default_value, attr);
+        } else if (type.getBaseTypeCode() == NT_BOOLEAN) {
+            # like strings, booleans are converted from strings with validation, so that e.g. "x" is not true
+            return new QoreBoolDataTypeBase(type, options, tags, default_value, attr);
         }
         return new QoreDataType(type, options, tags, default_value, attr);
     }
@@ -1105,6 +1310,19 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         described type does; a list type with any other name is restored as a @ref ListDataType
     */
     static AbstractDataProviderType get(hash<DataTypeInfo> info) {
+        AbstractDataProviderType rv = AbstractDataProviderType::getFromInfo(info);
+        # restored types may be shared, so constraints are set on a copy
+        return info.constraints ? rv.copyWithConstraints(info.constraints) : rv;
+    }
+
+    #! Returns an appropriate object for the given type description, without its validation constraints
+    /** @param info the description of the type
+
+        @return a type for the description, which may be shared
+
+        @since DataProvider 3.8
+    */
+    private static AbstractDataProviderType getFromInfo(hash<DataTypeInfo> info) {
         if (info.path) {
             return DataProvider::getTypeCache().lookupTypeFromPathEx(info.path);
         }
@@ -1115,13 +1333,14 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         }
         hash<auto> attr = info{"display_name", "short_desc", "desc"};
         if (info.union_types) {
-            AbstractDataProviderType rv = new QoreUnionDataType((map AbstractDataProviderType::get($1),
-                info.union_types), attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
-            return info.mandatory ? rv.getMandatoryType() : rv.getOrNothingType();
+            # each alternative's description restores its own nullability, from which the union's is derived
+            return new QoreUnionDataType((map AbstractDataProviderType::get($1), info.union_types),
+                attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
         }
         # a hash type is restored by its name and description when the name is not a Qore type, even if it has no
         # fields
-        if (info.fields || (info.base_type == "hash" && !AbstractDataProviderType::isQoreTypeName(info.name))) {
+        if (info.fields || (info.base_type == "hash" && (!AbstractDataProviderType::isQoreTypeName(info.name)
+                || info.default_field_type_info))) {
             HashDataType rv(info.mandatory ? AutoHashType : AutoHashOrNothingType, info.name,
                 AbstractDataProviderType::getDataFields(info.fields ?? {}), info.options, info.tags, info.default_value,
                 attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
@@ -1141,6 +1360,16 @@ public class AbstractDataProviderType inherits Qore::Serializable {
                 info.default_value, name_desc);
         }
         *Type t = DataTypeMap{info.name};
+        # the map has aliases (e.g. "any" for "auto"); the type named by the description is restored under that name
+        if (t && t.getName() != info.name) {
+            try {
+                Type named(info.name);
+                if (named.getName() == info.name) {
+                    t = named;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
         if (!t && info.name) {
             # class-backed named types (e.g. "file", "email") are not Qore reflection types; the name
             # ("email" vs "*email") already encodes nullability
@@ -1258,9 +1487,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @since DataProvider 3.5.1
     */
     private static setHashDataTypeInfo(HashDataType rv, hash<DataTypeInfo> info) {
-        if (info.default_field_type_info) {
-            rv.setDefaultOtherFieldType(AbstractDataProviderType::get(info.default_field_type_info));
-        }
+        # a hash type without fields accepts any other fields by default, so an absent default is restored as none
+        rv.setDefaultOtherFieldType(info.default_field_type_info
+            ? AbstractDataProviderType::get(info.default_field_type_info)
+            : NOTHING);
         if (info.required_groups) {
             rv.setRequiredGroups(info.required_groups);
         }

@@ -89,7 +89,14 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.7
     */
     QoreUnionDataType copyWithUnionTypes(list<AbstractDataProviderType> types) {
-        return new QoreUnionDataType(types, name_desc);
+        return copyUnion(types);
+    }
+
+    #! Returns a union over the given alternatives with this union's descriptions and constraints
+    private QoreUnionDataType copyUnion(list<AbstractDataProviderType> types) {
+        QoreUnionDataType rv(types, name_desc);
+        rv.constraints = constraints;
+        return rv;
     }
 
     #! Returns the type name
@@ -293,10 +300,34 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.5.1
     */
     auto acceptsValue(auto value) {
+        if (constraints.discriminator) {
+            if (!exists value && isOrNothingType()) {
+                return;
+            }
+            # the discriminator selects the only alternative that can accept the value
+            if (value.typeCode() != NT_HASH || value{constraints.discriminator}.typeCode() != NT_STRING) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("type %y expects a hash with string discriminator %y",
+                    getName(), constraints.discriminator);
+            }
+            *int index = constraints.discriminator_mapping{value{constraints.discriminator}};
+            if (!exists index) {
+                throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept discriminator %y value %y; expected "
+                    "one of %y", getName(), constraints.discriminator, value{constraints.discriminator},
+                    keys constraints.discriminator_mapping);
+            }
+            value = types[index].acceptsValue(value);
+            checkConstraints(value);
+            return value;
+        }
+        if (constraints.exclusive_union) {
+            return acceptsValueExclusive(value);
+        }
         *hash<ExceptionInfo> last_exception;
         foreach AbstractDataProviderType type in (types) {
             try {
-                return type.acceptsValue(value);
+                auto rv = type.acceptsValue(value);
+                checkConstraints(rv);
+                return rv;
             } catch (hash<ExceptionInfo> ex) {
                 last_exception = ex;
             }
@@ -307,12 +338,93 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
             value_type, getName(), last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
     }
 
+    #! Returns the example value of the first alternative that has one
+    /** An example of any other kind would be converted by the alternative accepting it, so it would not describe a
+        value of the type
+
+        @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
+
+        @return the example value of the first alternative that has one, if any
+    */
+    private auto getExampleValueImpl(*hash<string, bool> emap, *string fname) {
+        foreach AbstractDataProviderType type in (types) {
+            try {
+                auto rv = type.getExampleValue(emap, fname);
+                if (exists rv) {
+                    return rv;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # an alternative such as "null" has no example value
+            }
+        }
+    }
+
+    #! Accepts a value that exactly one alternative accepts
+    /** @param value the value to accept
+
+        @return the value as accepted by the only alternative accepting it
+
+        @throw RUNTIME-TYPE-ERROR no alternative or more than one alternative accepts the value
+
+        @since DataProvider 3.8
+    */
+    private auto acceptsValueExclusive(auto value) {
+        # as in JSON Schema, an alternative matches a value of its own kind; a soft alternative that would accept
+        # the value only by converting it is considered only if no alternative accepts the value's kind
+        list<AbstractDataProviderType> candidates = select types, QoreUnionDataType::acceptsKind($1, value);
+        if (!candidates) {
+            candidates = types;
+        }
+        *hash<ExceptionInfo> last_exception;
+        list<string> matched = ();
+        auto rv;
+        foreach AbstractDataProviderType type in (candidates) {
+            try {
+                auto accepted = type.acceptsValue(value);
+                if (!matched) {
+                    rv = accepted;
+                }
+                push matched, type.getName();
+            } catch (hash<ExceptionInfo> ex) {
+                last_exception = ex;
+            }
+        }
+        if (matched.size() == 1) {
+            checkConstraints(rv);
+            return rv;
+        }
+        string value_type = exists value ? value.type() : "nothing";
+        if (matched) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y matches more than one alternative of union type %y, "
+                "which accepts exactly one: %y", value_type, getName(), matched);
+        }
+        throw "RUNTIME-TYPE-ERROR", sprintf("value of type %y does not match union type %y%s", value_type, getName(),
+            last_exception ? sprintf("; last error: %s", last_exception.desc) : "");
+    }
+
+    #! Returns True if the given type accepts values of the given value's kind without converting them
+    /** @param type the type
+        @param value the value
+
+        @return @ref True if the type accepts values of the value's kind without converting them; as in JSON, an
+        integer is also a number
+    */
+    private static bool acceptsKind(AbstractDataProviderType type, auto value) {
+        *hash<string, bool> direct = type.getDirectTypeHash();
+        if (!direct || direct{NT_ALL}) {
+            return True;
+        }
+        int tc = value.typeCode();
+        return direct{tc} || (tc == NT_INT && (direct{NT_FLOAT} || direct{NT_NUMBER}));
+    }
+
     #! Returns a "soft" type equivalent to the current type
     /** @return a union whose alternatives are the soft equivalents of this union's alternatives
         @since DataProvider 3.5.1
     */
     AbstractDataProviderType getSoftType() {
-        return new QoreUnionDataType(AbstractDataProviderType::getSoftTypesShared(types), name_desc);
+        return copyUnion(AbstractDataProviderType::getSoftTypesShared(types));
     }
 
     #! Returns an "or nothing" type equivalent to the current type
@@ -323,7 +435,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         if (isOrNothingType()) {
             return self;
         }
-        return new QoreUnionDataType((map $1.getOrNothingType(), types), name_desc);
+        return copyUnion(map $1.getOrNothingType(), types);
     }
 
     #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
@@ -334,7 +446,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         if (!isOrNothingType()) {
             return self;
         }
-        return new QoreUnionDataType((map $1.getMandatoryType(), types), name_desc);
+        return copyUnion(map $1.getMandatoryType(), types);
     }
 }
 }

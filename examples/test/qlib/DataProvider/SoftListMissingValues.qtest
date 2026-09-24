@@ -73,7 +73,9 @@ class SoftListMissingValuesTest inherits QUnit::Test {
         foreach AbstractDataProviderType type in (new SoftListDataType(item), optional.getMandatoryType()) {
             foreach AbstractDataProviderType copy in (type, Serializable::deserialize(type.serialize())) {
                 assertTrue(copy.isMandatory());
-                assertThrows("ITEM-MISSING", \copy.acceptsValue(), (NOTHING,));
+                # like the Qore "list" type, only an "or nothing" soft list accepts no value
+                assertThrows("RUNTIME-TYPE-ERROR", \copy.acceptsValue(), (NOTHING,));
+                # a missing element is still validated by the element type
                 assertThrows("ITEM-MISSING", \copy.acceptsValue(), ((NOTHING,),));
                 assertThrows("ITEM-VALUE", \copy.acceptsValue(), (NULL,));
                 assertEq((4,), copy.acceptsValue(4));

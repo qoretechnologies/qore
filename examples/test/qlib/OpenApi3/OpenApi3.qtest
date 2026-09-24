@@ -4159,8 +4159,8 @@ public class OpenApi3Test inherits QUnit::Test {
             # an optional nullable field is an "or nothing" type
             assertEq("*softstring", fields.optionalAnyOfForm.getType().getName());
             assertFalse(fields.optionalAnyOfForm.isMandatory());
-            # a real union is still exposed as a union
-            assertEq("softstring|softint", fields.realUnion.getType().getName());
+            # a real union is still exposed as a union; its alternatives convert only values of their own JSON type
+            assertEq("string|int", fields.realUnion.getType().getName());
         }
 
         # a composition consisting only of "null" members is unconstrained
@@ -4901,7 +4901,7 @@ public class OpenApi3Test inherits QUnit::Test {
             });
             assertEq("any", so.components.schemas.Outer.type);
             # ... but the data type still resolves through the wrapper, because a union can be expressed
-            assertEq("softstring|softint", so.components.schemas.Outer.getDataType().getName());
+            assertEq("string|int", so.components.schemas.Outer.getDataType().getName());
         }
 
         # A wrapped union must also retain its shape when used as an object field. Together's

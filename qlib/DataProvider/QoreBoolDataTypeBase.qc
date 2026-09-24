@@ -27,9 +27,20 @@ public namespace DataProvider {
 #! describes a data type based on softint with validation for parsing strings
 public class QoreBoolDataTypeBase inherits QoreDataType {
     #! creates the object
-    /** @throw TYPE-ERROR invalid type; must be a bool type
+    /** @param type the boolean type
+        @param options type options
+        @param tags type tags
+        @param default_value any default value (since DataProvider 3.8)
+        @param attr any display name and descriptions (since DataProvider 3.8)
+
+        @throw TYPE-ERROR invalid type; must be a bool type
+
+        @note public since DataProvider 3.8, so that
+        @ref AbstractDataProviderType::get() "AbstractDataProviderType::get()" returns a type that validates strings
+        for every boolean type
     */
-    private constructor(Type type, *hash<auto> options, *hash<auto> tags) : QoreDataType(type, options, tags) {
+    constructor(Type type, *hash<auto> options, *hash<auto> tags, auto default_value, *hash<NameDescInfo> attr)
+            : QoreDataType(type, options, tags, default_value, attr) {
         if (type.getBaseTypeCode() != NT_BOOLEAN) {
             throw "TYPE-ERROR", sprintf("cannot create a %s object from type %y", self.className(),
                 type.getName());

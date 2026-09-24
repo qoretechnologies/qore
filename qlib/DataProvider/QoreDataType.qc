@@ -357,6 +357,7 @@ public class QoreDataType inherits AbstractDataProviderType {
                 }
             }
         }
+        checkConstraints(value);
         return value;
     }
 
@@ -397,7 +398,7 @@ public class QoreDataType inherits AbstractDataProviderType {
             # check if a soft type exists
             *Type soft_type = SoftTypeMap{type.getName()};
             if (soft_type) {
-                return new QoreDataType(soft_type, options, tags, default_value);
+                return (new QoreDataType(soft_type, options, tags, default_value)).copyWithConstraints(constraints);
             }
         }
         return self;

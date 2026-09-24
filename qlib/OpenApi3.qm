@@ -1832,20 +1832,21 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! Returns the data type for the given type specification
     AbstractDataProviderType getType(string path, string typestr, *string format, *SchemaObject arrayItems,
-            bool required = True) {
+            bool required = True, *bool strict) {
         string id;
-        if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id)) {
+        if (*AbstractDataProviderType rv = checkType(path, typestr, format, arrayItems, required, \id, strict)) {
             return rv;
         }
-        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required);
+        AbstractDataProviderType rv = getTypeIntern(path, typestr, format, arrayItems, required, strict);
         typemap{id}{required ? "Y" : "N"} = rv;
         return rv;
     }
 
     #! Checks the type cache
     private *AbstractDataProviderType checkType(string path, string typestr, *string format,
-            *SchemaObject arrayItems, bool required = True, reference<string> id) {
-        id = sprintf("%s-%s-%s-%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x");
+            *SchemaObject arrayItems, bool required = True, reference<string> id, *bool strict) {
+        id = sprintf("%s-%s-%s-%s%s", path, typestr, format ?? "x", arrayItems ? arrayItems.uniqueHash() : "x",
+            strict ? "-strict" : "");
         return getCacheType(\typemap{id}, required ? "Y" : "N");
     }
 
@@ -1864,8 +1865,16 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
     }
 
     #! Returns the data type corresponding to the values
+    /** @param path the path of the type
+        @param typestr the JSON Schema type
+        @param format the JSON Schema format, if any
+        @param arrayItems the schema of array elements, if any
+        @param required if the value is required
+        @param strict if @ref True, a plain scalar or array type converts only values of its own JSON type, like the
+        schema validation of the enclosing type; format types still convert strings to the format's type
+    */
     private AbstractDataProviderType getTypeIntern(string path, string typestr, *string format,
-            *SchemaObject arrayItems, bool required = True) {
+            *SchemaObject arrayItems, bool required = True, *bool strict) {
         hash<auto> type_options;
         if (required) {
             type_options += {"qore.no_null": True};
@@ -1894,6 +1903,11 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         }
         switch (typestr) {
             case "boolean":
+                if (strict) {
+                    return required
+                        ? new QoreBoolDataType(type_options)
+                        : new QoreBoolOrNothingDataType(type_options);
+                }
                 return required
                     ? new QoreSoftBoolDataType(type_options)
                     : new QoreSoftBoolOrNothingDataType(type_options);
@@ -1904,6 +1918,11 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 # it for a parameter that accepts either a scalar or a list of them.  Rejecting it would
                 # fail the whole document over a construct that is simply permissive, so it produces a
                 # list of "auto"
+                if (strict) {
+                    return new ListDataType(arrayItems
+                        ? arrayItems.getAlternativeDataType()
+                        : AbstractDataProviderType::get(AutoType), !required);
+                }
                 return new SoftListDataType(arrayItems
                     ? arrayItems.getDataType(True)
                     : AbstractDataProviderType::get(AutoType), !required);
@@ -1912,7 +1931,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
                 return new HashDataType(required ? AutoHashType : AutoHashOrNothingType);
         }
 
-        if (*string newname = OptimalQoreSoftDataTypeMap{typestr}) {
+        if (*string newname = (strict ? OptimalQoreDataTypeMap : OptimalQoreSoftDataTypeMap){typestr}) {
             typestr = newname;
         }
         if (!required && (typestr != "any" && typestr != "auto")) {
@@ -4950,6 +4969,12 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
             : QoreUnionDataType(cast<list<AbstractDataProviderType>>(map $1, alternatives.iterator())) {
         self.discriminator = discriminator;
         self.alternatives = alternatives;
+        # described so that a type restored from the description selects branches the same way
+        int i = 0;
+        constraints = <DataTypeConstraintInfo>{
+            "discriminator": discriminator,
+            "discriminator_mapping": map {$1: i++}, keys alternatives,
+        };
     }
 
     #! Validates a value against the branch selected by its discriminator
@@ -5094,6 +5119,10 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
             *list<AbstractDataProviderType> multipart_wire_types)
             : QoreUnionDataType(types) {
         self.composition_keyword = composition_keyword;
+        if (composition_keyword == "oneOf") {
+            # described so that a type restored from the description also accepts exactly one alternative
+            constraints = <DataTypeConstraintInfo>{"exclusive_union": True};
+        }
         self.schemas = schemas;
         self.multipart_wire_types = multipart_wire_types;
     }
@@ -5418,6 +5447,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 
         #! Resolved discriminator branches, retained when the weak document reference is serialized away
         hash<string, SchemaObject> mappedSchemas = {};
+
+        #! The data type of the schema as a union alternative, if it differs from its data type
+        *AbstractDataProviderType alternativeDataType;
 
         #! Whether the schema declares a JSON Schema constant, including null
         bool has_const = False;
@@ -5961,6 +5993,46 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! Returns the data provider type for a given type/format/items path
+    #! Returns the validation constraints of the schema for its data type
+    /** @return the constraints of the schema that its data type enforces and describes, including numeric exclusive
+        bounds and the number of properties of objects, if any
+    */
+    *hash<DataTypeConstraintInfo> getConstraintInfo() {
+        hash<auto> rv = AbstractSchemaBaseValidator::getConstraintInfo() ?? {};
+        if (exists minProperties) {
+            rv.min_properties = minProperties;
+        }
+        if (exists maxProperties) {
+            rv.max_properties = maxProperties;
+        }
+        return rv ? cast<hash<DataTypeConstraintInfo>>(rv) : NOTHING;
+    }
+
+    #! Returns the data type of the schema as an alternative of a union
+    /** A union checks each alternative against its schema, which accepts only values of the schema's JSON type, so
+        a plain scalar or array alternative is not a soft type: it describes the conversions that the union performs
+
+        @param rest any REST client for request body defaults
+
+        @return the data type of the schema as a mandatory union alternative
+    */
+    AbstractDataProviderType getAlternativeDataType(*object rest) {
+        # the conditions under which getDataType() returns a plain scalar or array type
+        bool plain = (prefix_items ? False : additional_items)
+            && !(discriminatorMapping && !oneOf && !anyOf)
+            && !isAllOfWrapper()
+            && !((oneOf || anyOf) && !isConstraintOnlyComposition())
+            && type != "object" && !properties && !notSchema;
+        if (!plain) {
+            return getDataType(True, rest);
+        }
+        if (!alternativeDataType) {
+            alternativeDataType = openapi3.getType("/", type, format, items, !nullable, True)
+                .copyWithConstraints(getConstraintInfo());
+        }
+        return alternativeDataType;
+    }
+
     AbstractDataProviderType getSchemaType(string path, string typestr, *string format,
             *AbstractSchemaObject arrayItems, bool required) {
         return openapi3.getType(path, typestr, format, arrayItems, required);
@@ -5988,7 +6060,8 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                 }
                 AbstractDataProviderType element_type = types.size() == 1 ? types[0]
                     : types ? new QoreUnionDataType(types) : AbstractDataProviderTypeMap."auto";
-                dataType = new OpenApi3TupleDataType(self, element_type, False);
+                dataType = (new OpenApi3TupleDataType(self, element_type, False))
+                    .copyWithConstraints(getConstraintInfo());
             }
             if (required) { return dataType; }
             if (!orNothingDataType) { orNothingDataType = dataType.getOrNothingType(); }
@@ -6066,15 +6139,17 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             return orNothingDataType;
         }
         if (type != "object" && !properties && !notSchema) {
+            # scalar and array types are shared by schemas of the same type and format, so a schema with
+            # constraints gets its own copy
             if (required) {
                 if (!dataType) {
-                    dataType = getSchemaType("/", type, format, items, True);
+                    dataType = getSchemaType("/", type, format, items, True).copyWithConstraints(getConstraintInfo());
                 }
                 return dataType;
             }
             if (!orNothingDataType) {
                 orNothingDataType = dataType ? dataType.getOrNothingType() : getSchemaType("/", type, format, items,
-                    False);
+                    False).copyWithConstraints(getConstraintInfo());
             }
             return orNothingDataType;
         }
@@ -6356,8 +6431,14 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
         if (schemas.size() == 1) {
             return schemas[0].getDataType(required, rest);
         }
-        AbstractDataProviderType rv = new OpenApi3UnionDataType((map $1.getDataType(True, rest), schemas),
+        # alternatives are checked against their schemas, which accept only values of their own JSON type, so their
+        # types must not convert values of other types either
+        AbstractDataProviderType rv = new OpenApi3UnionDataType((map $1.getAlternativeDataType(rest), schemas),
             oneOf ? "oneOf" : "anyOf", schemas);
+        if (*hash<DataTypeConstraintInfo> constraints = getConstraintInfo()) {
+            rv = rv.copyWithConstraints(cast<hash<DataTypeConstraintInfo>>((rv.getConstraints() ?? {})
+                + constraints));
+        }
         return required ? rv : rv.getOrNothingType();
     }
 

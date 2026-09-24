@@ -1267,35 +1267,35 @@
           "source": "Alcohol shipment details (FedEx and UPS only)",
           "message": "酒精運送詳情（僅限FedEx與UPS）"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.display_name": {
           "source": "Contains Alcohol",
           "message": "含有酒精"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.short_desc": {
           "source": "Package contains alcohol",
           "message": "包裹內含酒精"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.Y29udGFpbnNfYWxjb2hvbA.desc": {
           "source": "Specifies that the package contains alcohol (FedEx and UPS only)",
           "message": "指定包裹內含有酒精（僅適用 FedEx 與 UPS）"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.display_name": {
           "source": "Recipient Type",
           "message": "收件人類型"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.short_desc": {
           "source": "Alcohol recipient type",
           "message": "酒精收件人類型"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.desc": {
           "source": "License type of the recipient (mandatory for FedEx only)",
           "message": "收件人之授權類型（僅FedEx為必要）"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmxpY2Vuc2Vl.desc": {
           "source": "Licensed recipient",
           "message": "授權收件人"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjYWNmNWIyY2NiMTIyMWUxYjRiNjVkMDdmNGNkMmI0MzRmZjUwNWMxODc3MDMxNzNkZjljYmI0NzA5YmYwNWNiNTpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0FsY29ob2xEYXRhVHlwZTpTaGlwcG9BbGNvaG9sRGF0YVR5cGUjNzRlNmVhYmI5ZmEwN2EwMTI3M2JhMzQ0MTAxYTBiMmJkOGQ2N2M2YzIzZGM0MzFlMzBiY2I4Y2NiNTlkMDgwZDpvcHRpb246WlhoMGNtRTpmaWVsZDpZV3hqYjJodmJB.field.cmVjaXBpZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbnN1bWVy.desc": {
           "source": "Consumer recipient",
           "message": "消費者收件人"
         },
@@ -1595,27 +1595,27 @@
           "source": "Dry ice details (FedEx, Veho, and UPS only)",
           "message": "乾冰詳情（僅限 FedEx、Veho 及 UPS）"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.display_name": {
           "source": "Contains Dry Ice",
           "message": "含有乾冰"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.short_desc": {
           "source": "Package contains dry ice",
           "message": "包裹內含乾冰"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.Y29udGFpbnNfZHJ5X2ljZQ.desc": {
           "source": "Specifies that the package contains dry ice (FedEx, Veho, and UPS only)",
           "message": "指定包裹內含有乾冰（適用於 FedEx、Veho 與 UPS）"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.display_name": {
           "source": "Weight",
           "message": "重量"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.short_desc": {
           "source": "Dry ice weight in kg",
           "message": "乾冰重量（公斤）"
         },
-        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlI2QwZjRiZjZhZjY4NzZmZmVhNjM2MGMyNWFiZTVlZDkwMjhjN2JlYzA0YTc3ODBjODc0MDBjN2IxY2M1ZDFhMzk6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
+        "app.U2hpcHBv.type.YWN0aW9uOlkzSmxZWFJsTFhOb2FYQnRaVzUwOlNoaXBwb0RyeUljZURhdGFUeXBlOlNoaXBwb0RyeUljZURhdGFUeXBlIzIzMDg5NWNkMjI2MGRhYThmOTM1MzBhMDViZjlhMDAyOGM2YmNkN2QwNTUzNzUzZjQ4YmFjMGJjMmQ4OTFlZmI6b3B0aW9uOlpYaDBjbUU6ZmllbGQ6WkhKNVgybGpaUQ.field.d2VpZ2h0.desc": {
           "source": "Weight of dry ice in kilograms. Cannot be greater than the package weight",
           "message": "乾冰重量（公斤）。不可超過包裹總重量"
         },
