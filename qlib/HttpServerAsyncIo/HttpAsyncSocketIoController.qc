@@ -836,6 +836,9 @@ public class HttpAsyncSocketIoController {
         @param ssl_verify_flags SSL peer certificate verification flags
         @param ssl_accept_all_certs whether to accept untrusted peer certificates
         @param get_remote_certs whether to capture peer certificates
+        @param max_request_body_size maximum request body size in bytes (0 = unlimited); a body that exceeds it
+        while it is buffered before the request is dispatched is answered with 413, and the client is asked to
+        stop sending it
 
         @note QUIC uses UDP and handles TLS 1.3 as part of the QUIC handshake.
         The socket must already be bound to a UDP port before calling this method.
@@ -843,7 +846,7 @@ public class HttpAsyncSocketIoController {
     addQuicListener(Socket listener, HttpAsyncTarget target, auto cert, auto key,
             HttpServer::HttpListenerInterface http_listener,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
-            bool get_remote_certs = False) {
+            bool get_remote_certs = False, int max_request_body_size = 0) {
         @assert(listener, "listener socket cannot be null");
         @assert(target, "target cannot be null");
         @assert(cert && key, "QUIC requires certificate and key for TLS 1.3");
@@ -887,6 +890,7 @@ public class HttpAsyncSocketIoController {
                 "get_remote_certs": get_remote_certs,
                 "http_listener": http_listener,
                 "socket_info": socket_info,
+                "max_request_body_size": max_request_body_size,
             };
             quic_listener_hash_by_http_listener{http_listener.uniqueHash()} = lhash;
         }
@@ -1594,10 +1598,20 @@ public class HttpAsyncSocketIoController {
         # handler waiting on body data would block HttpServer.stop() for the
         # full body-read timeout in the future graceful-drain or per-stream-
         # cancel scenarios that keep the session alive across an H3 op cancel.
+        # the listener's limit, as for HTTP/1.x and HTTP/2 connections; a controller option applies to listeners
+        # registered without one
+        int max_request_body_size;
+        {
+            AutoReadLock al(m);
+            max_request_body_size = listeners{owner}.max_request_body_size ?? 0;
+        }
+        if (!max_request_body_size) {
+            max_request_body_size = pool_opts.max_request_body_size ?? 0;
+        }
         Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
             pool_opts.quic_headers_only ?? True,
-            pool_opts.max_request_body_size ?? 0);
+            max_request_body_size);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 

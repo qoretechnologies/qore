@@ -728,6 +728,11 @@ public hashdecl HttpListenerOptionInfo {
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends.
 
+        A handler that reads the request body as a stream (see
+        @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces a limit on
+        the total body size itself; for such a handler, this value limits the data that the server buffers for it,
+        and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
+
         @since HttpServer 1.6
     */
     int max_request_body_size = 0;

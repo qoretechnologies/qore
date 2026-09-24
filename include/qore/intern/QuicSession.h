@@ -89,6 +89,12 @@ struct QuicStreamInfo {
     bool headers_complete = false;
     bool body_complete = false;
     std::string error_message;  //!< non-empty if stream terminated with error
+    //! true if the request body exceeded the maximum request body size before the request was dispatched (server)
+    /** The bytes buffered when the limit was exceeded are kept, so every consumer sees more than the limit; the rest
+        of the body is not read (STOP_SENDING with H3_NO_ERROR, RFC 9114 section 4.1.2), and a reader of the stream's
+        data gets \c HTTP-BODY-TOO-LARGE after the buffered bytes instead of the end of the body.
+    */
+    bool body_too_large = false;
     //! true if stream received data in 0-RTT (for server-side logging/auditing)
     bool received_0rtt_data = false;
 
@@ -563,6 +569,14 @@ public:
     */
     DLLLOCAL void cleanupStream(int64_t stream_id);
 
+    //! Stops reading a request stream: the client is asked to stop sending with STOP_SENDING(H3_NO_ERROR) (server)
+    /** Used when the server answers a request without reading all of it (RFC 9114 section 4.1.2); the lock must be
+        held.
+
+        @param stream_id the HTTP/3 stream ID
+    */
+    DLLLOCAL void stopReadingStreamLocked(int64_t stream_id);
+
     //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
     /** Sends STOP_SENDING to the peer and removes the stream from the session map.
         Use this when a body streaming error is detected mid-stream.
@@ -586,6 +600,11 @@ public:
         @return body data as BinaryNode*, or NOTHING if no data available
     */
     DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete);
+
+    //! Returns True if the request body of the stream exceeded the maximum request body size (server)
+    /** @see QuicStreamInfo::body_too_large
+    */
+    DLLLOCAL bool isStreamBodyTooLarge(int64_t stream_id) const;
 
     //! Check if the QUIC handshake is complete
     DLLLOCAL bool isHandshakeComplete() const;

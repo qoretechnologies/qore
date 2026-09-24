@@ -8719,6 +8719,9 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
     is closed during the wait (e.g., server shutdown)
     @throw QUIC-STREAM-TIMEOUT if the timeout expires before data arrives or the stream
     completes
+    @throw HTTP-BODY-TOO-LARGE the request body exceeded the server's maximum request body size while it was buffered
+    before the request was dispatched; raised after all buffered data has been returned, instead of the end of the
+    body
 
     @see @ref cleanupQuicStream()
     @see @ref isQuicStreamComplete()

@@ -621,6 +621,24 @@ crediting only the connection window.  `examples/test/qlib/HttpServer/HttpServer
 frames on the wire; `HttpClient`-based tests cannot see the difference, because the client reads the response while
 it is still sending.
 
+## HTTP/3 Server: Responses Before the Complete Request
+
+The HTTP/3 counterparts of the HTTP/2 rules above, in `lib/QuicSession.cpp`:
+
+- `cleanupStream()` (the handler is done with the request) calls `stopReadingStreamLocked()` for a request stream
+  whose body the client has not finished: STOP_SENDING with `H3_NO_ERROR` (RFC 9114 section 4.1.2).  Without it, a
+  client that does not finish its request leaves the stream half-open on both sides, and the stream counts against
+  the connection's `QUIC_INITIAL_MAX_STREAMS_BIDI` (100) until the connection closes: the 101st request fails with
+  `HTTP3-CAPACITY-ERROR`.  `HttpServerH3Streaming.qtest` ("early responses to unfinished requests") runs 150 of them
+  on one connection.
+- `max_request_body_size` reaches the HTTP/3 operation per listener (`addQuicListener()`), as it reaches HTTP/1.x and
+  HTTP/2 connections.  Dispatched streams need no I/O-layer check: flow control is extended only as the handler
+  consumes data, which bounds the buffer.  A body buffered before dispatch (all of it with `quic_headers_only`
+  disabled, the part received before dispatch otherwise) that exceeds the limit is marked `body_too_large`: the
+  buffered bytes are kept (so HttpServer answers 413 instead of dispatching an empty body, which the previous code
+  did after clearing them), the rest is not read (STOP_SENDING `H3_NO_ERROR`), and `readQuicStreamDataBlock()`
+  raises `HTTP-BODY-TOO-LARGE` after the buffered bytes.
+
 ## HTTP/1.x Lingering Close
 
 Closing a TCP socket with unread received data makes the kernel send RST instead of FIN (RFC 1122 section

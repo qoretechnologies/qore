@@ -682,6 +682,13 @@ private:
         }
         if (complete) {
             done = true;
+            // a body that exceeded the maximum size ends with an error after its buffered bytes, so it can never be
+            // taken for a complete body
+            if (session->isStreamBodyTooLarge(stream_id)) {
+                xsink->raiseException("HTTP-BODY-TOO-LARGE", "HTTP/3 request body on stream %lld exceeds the "
+                    "maximum request body size", (long long)stream_id);
+                return -1;
+            }
             return 0;
         }
         return 1;

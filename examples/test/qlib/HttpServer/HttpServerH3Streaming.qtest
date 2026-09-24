@@ -69,6 +69,17 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! answers without reading the request body
+class EarlyResponseH3Handler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(401, "early", {"Content-Type": "text/plain"});
+    }
+}
+
 #! Handler that returns a large InputStream response (server-streaming)
 class StreamResponseHandler inherits AbstractHttpRequestHandler {
     private {
@@ -1033,6 +1044,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 backward-compat body buffering", \testH3BackwardCompatBuffering());
         addTestCase("HTTP/3 timeout handling", \testH3Timeout());
         addTestCase("HTTP/3 oversized body (413)", \testH3OversizedBody());
+        addTestCase("HTTP/3 oversized body buffered before dispatch (413)", \testH3BufferedOversizedBody());
+        addTestCase("HTTP/3 early responses to unfinished requests", \testH3EarlyResponseStreamLimit());
         addTestCase("HTTP/3 concurrent streaming", \testH3ConcurrentStreaming());
         addTestCase("HTTP/3 shutdown during streaming", \testH3ShutdownDuringStreaming());
         addTestCase("HTTP/3 partial body read + early response", \testH3PartialBodyRead());
@@ -1473,6 +1486,73 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp = mgr.request(url, "POST", "/echo",
             {"Content-Type": "application/octet-stream"}, oversized);
         assertEq(413, resp.status_code, "oversized body: response status 413");
+    }
+
+    #! A body buffered before dispatch that exceeds the limit is answered with 413, not dispatched truncated
+    /** With quic_headers_only disabled, the whole body is buffered before the handler is called; the listener's limit
+        stops buffering when it is exceeded, and the request must still be answered with 413 instead of reaching the
+        handler with a truncated (empty) body.
+    */
+    testH3BufferedOversizedBody() {
+        hash<auto> setup = createServer({
+            "headers_only": False,
+            "max_request_body_size": 4096,
+        });
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/echo", {"Content-Type": "application/octet-stream"},
+            binary(strmul("X", 1024 * 1024)));
+        assertEq(413, resp.status_code, "a buffered body over the limit is answered with 413");
+
+        binary small = binary(strmul("Y", 1000));
+        resp = mgr.request(url, "POST", "/echo", {"Content-Type": "application/octet-stream"}, small);
+        assertEq(200, resp.status_code, "a body under the limit is dispatched");
+        assertEq(small, resp.body, "the body under the limit is complete");
+    }
+
+    #! Early responses to requests that the client never finishes must not use up the connection's streams
+    /** The handler answers without reading the body, and the client never finishes the request (no FIN); the server
+        asks the client to stop sending with STOP_SENDING(H3_NO_ERROR) when the handler is done (RFC 9114 section
+        4.1.2), so the stream closes.  Otherwise each stream stays half-open and counts against the connection's
+        limit of 100 concurrent streams, and the 101st request fails with HTTP3-CAPACITY-ERROR.
+    */
+    testH3EarlyResponseStreamLimit() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+        server.setHandler("early", "/early", NOTHING, new EarlyResponseH3Handler(), NOTHING, False);
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        int answered = 0;
+        for (int i = 0; i < 150; ++i) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            stream.startStreaming("POST", "/early", {"Content-Type": "application/octet-stream"}, True);
+            stream.sendData(binary(strmul("X", 1000)));
+            while (True) {
+                auto data = stream.readData(10s);
+                if (!exists data) {
+                    throw "TEST-ERROR", sprintf("request %d: no response in time", i);
+                }
+                if (data.typeCode() == NT_HASH && data.error) {
+                    throw "TEST-ERROR", sprintf("request %d: %y", i, data.error);
+                }
+                if (data.typeCode() == NT_HASH && data.end_stream) {
+                    break;
+                }
+            }
+            if (stream.getResponse().status_code == 401) {
+                ++answered;
+            }
+        }
+        assertEq(150, answered, "every early response was received on the connection");
     }
 
     #! Test 3.3: Concurrent streaming — multiple simultaneous POSTs

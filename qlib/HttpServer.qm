@@ -222,6 +222,12 @@ log("started listener on %s", lh.desc);
       an error, receives the response instead of a connection reset; the new
       @ref HttpServer::HttpServer::closeConnectionAfterResponse() "closeConnectionAfterResponse()" method closes a
       connection in this way after a response sent by a handler thread
+    - the maximum request body size now applies to HTTP/3 listeners as well; a body that exceeded it while it was
+      buffered before dispatch was cleared and the request was dispatched with an empty body; it is now answered
+      with 413, and a streaming read of it fails with \c HTTP-BODY-TOO-LARGE
+    - an HTTP/3 request that the handler finished without reading to its end is followed by
+      \c STOP_SENDING(H3_NO_ERROR) (RFC 9114 section 4.1.2); before, a client that did not finish such a request
+      left the stream half-open, and after 100 of them no other request could be opened on the connection
 
     @subsection http1_6 HttpServer 1.6
     - fixed a regression where @ref HttpServer::HttpServer::listenerStarted() "listenerStarted()" was no longer
@@ -610,7 +616,13 @@ public hashdecl HttpServerOptionInfo {
         that grow beyond this value, receive HTTP 413 (Content Too Large).  An HTTP/1.x connection
         is closed after the response; on HTTP/2 and HTTP/3 only the request's stream ends, and the
         rest of the body is discarded.  An HTTP/2 client that is still sending the body when the
-        response has been sent is asked to stop with \c RST_STREAM(NO_ERROR) (RFC 9113 section 8.1).
+        response has been sent is asked to stop with \c RST_STREAM(NO_ERROR) (RFC 9113 section 8.1), and an
+        HTTP/3 client with \c STOP_SENDING(H3_NO_ERROR) (RFC 9114 section 4.1.2).
+
+        A handler that reads the request body as a stream (see
+        @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") enforces a limit on
+        the total body size itself; for such a handler, this value limits the data that the server buffers for it,
+        and a read of a body that exceeded it fails with \c HTTP-BODY-TOO-LARGE after the buffered data.
 
         @since HttpServer 1.6
     */
@@ -1468,7 +1480,8 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
             throw "HTTP3-ERROR", "async I/O controller not initialized";
         }
         asyncIo.addQuicListener(udp_sock, asyncTarget, opts.cert, opts.key, http_listener,
-            opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs);
+            opts.ssl_verify_flags, opts.ssl_accept_all_certs, opts.get_remote_certs,
+            http_listener.getMaxRequestBodySize());
 
         listeners{lid} = http_listener;
         nmap{lname} = lid;
@@ -3504,7 +3517,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             }
                             return;
                         }
-                        rethrow;
+                        if (ex.err != "HTTP-BODY-TOO-LARGE") {
+                            rethrow;
+                        }
+                        # the I/O layer stopped reading a body that exceeds the limit; the bytes it buffered
+                        # until then were delivered first
+                        hit_max_body = True;
                     }
                     # NOTE: cleanupQuicStream is called by the controller's on_exit handler
                 } else {
