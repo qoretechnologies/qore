@@ -41,8 +41,8 @@ while (*binary chunk = readNextChunk()) {
 */
 public class StreamDecompressor {
     private {
-        #! Output buffer for incremental decompression
-        StringOutputStream string_ostream();
+        #! Holds the decompressed output until it is taken
+        StreamDecompressorOutputStream output;
 
         #! Decompression transform wrapping the output buffer
         *TransformOutputStream dstream;
@@ -53,25 +53,35 @@ public class StreamDecompressor {
 
     #! Creates a decompressor for the given HTTP Content-Encoding
     /** @param content_encoding the value of the \c Content-Encoding response header
-        (e.g., \c "gzip", \c "deflate", \c "br", \c "zstd"); pass \c NOTHING or
-        \c "identity" for no decompression
+        (e.g., \c "gzip", \c "deflate", \c "br", \c "zstd"); \c "x-gzip", \c "x-deflate", and \c "x-bzip2" are
+        accepted as well; pass \c NOTHING or \c "identity" for no decompression
+        @param max_size the maximum size in bytes of the data decompressed by one call; \c 0 (the default) or a
+        negative value means no limit; decompression stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon
+        as the data would exceed it, so that a small chunk of compressed data that expands to a huge one cannot
+        exhaust memory; the decompressor cannot be used after this exception
 
         @throw ENCODING-ERROR if the content encoding is not supported
+
+        @since %HttpClientStreamingIo 1.0 added the \a max_size parameter
     */
-    constructor(*string content_encoding) {
-        if (!content_encoding || content_encoding == "identity") {
+    constructor(*string content_encoding, int max_size = 0) {
+        output = new StreamDecompressorOutputStream(max_size);
+        if (!content_encoding || content_encoding.lwr() == "identity") {
             return;
         }
 
         Transform decompressor;
-        switch (content_encoding) {
+        switch (content_encoding.lwr()) {
             case "deflate":
+            case "x-deflate":
                 decompressor = get_decompressor(COMPRESSION_ALG_ZLIB);
                 break;
             case "gzip":
+            case "x-gzip":
                 decompressor = get_decompressor(COMPRESSION_ALG_GZIP);
                 break;
             case "bzip2":
+            case "x-bzip2":
                 decompressor = get_decompressor(COMPRESSION_ALG_BZIP2);
                 break;
             case "br":
@@ -88,7 +98,7 @@ public class StreamDecompressor {
                     sprintf("unsupported Content-Encoding: %y", content_encoding);
         }
 
-        dstream = new TransformOutputStream(string_ostream, decompressor);
+        dstream = new TransformOutputStream(output, decompressor);
         active = True;
     }
 
@@ -106,16 +116,77 @@ public class StreamDecompressor {
         @return the decompressed string (may be empty if the decompressor
         is buffering across chunk boundaries)
 
+        @throw DECOMPRESSION-LIMIT-EXCEEDED the data decompressed by this call exceeds the maximum size
+
         @note This method is designed for text-based streaming protocols (SSE,
-        JSON streams).  For binary protocols, use a separate decompression
-        approach.
+        JSON streams); use decompressToBinary() for binary content.
     */
     string decompressToString(binary data) {
         if (!active) {
             return data.toString();
         }
         dstream.write(data);
-        return string_ostream.getData();
+        return output.take().toString();
+    }
+
+    #! Decompresses binary data and returns the result as a binary value
+    /** @param data compressed binary data
+        @return the decompressed data (may be empty if the decompressor is buffering across chunk boundaries)
+
+        @throw DECOMPRESSION-LIMIT-EXCEEDED the data decompressed by this call exceeds the maximum size
+
+        @since %HttpClientStreamingIo 1.0
+    */
+    binary decompressToBinary(binary data) {
+        if (!active) {
+            return data;
+        }
+        dstream.write(data);
+        return output.take();
+    }
+}
+
+#! Holds decompressed data up to a maximum size until it is taken
+/** A transform writes its output in small pieces, so the limit is enforced before more than the maximum size is
+    held.
+*/
+class StreamDecompressorOutputStream inherits Qore::OutputStream {
+    private {
+        #! Buffered decompressed data
+        BinaryOutputStream buf();
+
+        #! The maximum size of the data held at once; <= 0 means no limit
+        int max_size;
+
+        #! The size of the data held
+        int size = 0;
+    }
+
+    #! Creates the stream
+    constructor(int max_size) {
+        self.max_size = max_size;
+    }
+
+    #! Closes the stream
+    close() {
+    }
+
+    #! Buffers decompressed data
+    /** @throw DECOMPRESSION-LIMIT-EXCEEDED the buffered data would exceed the maximum size
+    */
+    write(binary data) {
+        if (max_size > 0 && data.size() > max_size - size) {
+            throw "DECOMPRESSION-LIMIT-EXCEEDED", sprintf("the data decompressed from the stream at once exceeds "
+                "the maximum size of %d bytes", max_size);
+        }
+        buf.write(data);
+        size += data.size();
+    }
+
+    #! Returns and clears the buffered data
+    binary take() {
+        size = 0;
+        return buf.getData();
     }
 }
 
