@@ -419,6 +419,18 @@
           "source": "Sets the maximum HTTP redirects to support in a single request",
           "message": "단일 요청에서 지원할 최대 HTTP 리디렉션 수를 설정합니다"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "최대 응답 본문 크기"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "메모리로 수신하는 응답 본문의 최대 크기"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "메모리로 수신하는 응답 본문의 최대 크기(바이트)로, 수신한 그대로의 크기와 콘텐츠 인코딩(예: `gzip`)을 디코딩한 후의 크기에 모두 적용됩니다. `0`(기본값)은 제한이 없음을 의미합니다.\n\n이보다 큰 응답은 요청을 실패시키므로, 거대한 응답이나 거대한 크기로 풀리는 작은 압축 응답이 메모리를 고갈시킬 수 없습니다."
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "비밀번호"

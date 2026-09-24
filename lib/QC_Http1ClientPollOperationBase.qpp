@@ -3025,6 +3025,19 @@ nothing Http1ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
 }
 
+//! Sets the maximum size of a response body that is returned whole
+/** A response body that exceeds the limit as received fails the request with
+    \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon as the limit is exceeded, and the connection is closed; a body
+    delivered incrementally to a streaming consumer is not limited.
+
+    @param max_size the maximum size in bytes; <= 0 means no limit
+
+    @since %Qore 3.0
+*/
+nothing Http1ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
+    priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
+}
+
 //! Sets the connect-phase timeout for this connection.
 /** Bounds the time spent establishing the connection - TCP connect, TLS handshake and
     proxy \c CONNECT tunnel - independently of the caller's request budget.  When the

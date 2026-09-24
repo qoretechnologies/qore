@@ -757,6 +757,13 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     action->execute(output->hashRefSelf(), xsink);
                 }
                 action->complete(xsink);
+            } else if (!action->isStreaming() && output->getKeyValue("err").getType() == NT_STRING) {
+                // a stream that failed (reset by the peer, or canceled because its response body exceeded the
+                // maximum response body size) fails the request instead of resolving it with the error hash as
+                // if it were a response
+                QoreStringValueHelper err(output->getKeyValue("err"));
+                QoreStringValueHelper desc(output->getKeyValue("desc"));
+                action->executeError(err->c_str(), desc->c_str(), xsink);
             } else {
                 // Non-streaming (PromiseAction) or intermediate streaming data:
                 // send complete output to action
@@ -1733,6 +1740,19 @@ nothing Http2ClientPollOperationBase::abort() {
 */
 nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
+}
+
+//! Sets the maximum size of a response body that is returned whole
+/** A response body that exceeds the limit as received fails the request with
+    \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon as the limit is exceeded, and the stream is canceled; a body
+    delivered incrementally to a streaming consumer is not limited.
+
+    @param max_size the maximum size in bytes; <= 0 means no limit
+
+    @since %Qore 3.0
+*/
+nothing Http2ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
+    priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
 }
 
 //! Sets the connect-phase timeout for this connection.

@@ -116,6 +116,9 @@ public class HttpClientStreamHandle {
 
         #! True if this stream's connection was reused from the pool (not freshly created)
         bool connection_reused = False;
+
+        #! The maximum size of a response body that is returned whole, after decoding; <= 0 means no limit
+        int max_response_body_size = 0;
     }
 
     #! Creates a new stream handle
@@ -130,6 +133,16 @@ public class HttpClientStreamHandle {
         self.request_timeout = request_timeout;
         self.logger = logger;
         self.connect_timeout = connect_timeout;
+    }
+
+    #! Sets the maximum size of a response body that is returned whole, after its content encoding is decoded
+    /** @param max_size the maximum size in bytes; <= 0 means no limit
+
+        @see @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size
+        "max_response_body_size"
+    */
+    setMaxResponseBodySize(int max_size) {
+        max_response_body_size = max_size;
     }
 
     #! Releases any unreleased stream reservation
@@ -359,6 +372,8 @@ public class HttpClientStreamHandle {
 
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails
         @throw HTTPCLIENT-TIMEOUT if the request times out
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the response body exceeds the maximum response body size, as
+        received or as decoded
     */
     hash<auto> request(string method, string path, *hash<auto> headers, *data body,
             *timeout timeout_ms) {
@@ -430,7 +445,7 @@ public class HttpClientStreamHandle {
                 state = HttpClientStreamState::Complete;
                 response = rv;
             }
-            return normalizeResponseBody(rv ?? {});
+            return normalizeResponseBody(rv ?? {}, max_response_body_size);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
@@ -443,6 +458,10 @@ public class HttpClientStreamHandle {
             # Let connection errors propagate unwrapped so the connection
             # manager can detect, evict dead connections, and retry
             if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                rethrow;
+            }
+            # a response body over the limit is reported with the same error as by the futures and HTTPClient
+            if (ex.err == "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE") {
                 rethrow;
             }
             throw "HTTPCLIENT-REQUEST-ERROR", sprintf("%s: %s", ex.err, ex.desc);
@@ -534,7 +553,7 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return result;
+        return decodeResultFuture(result);
     }
 
     #! Submits an async request and signals an EventNotifier on completion
@@ -607,7 +626,7 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return result;
+        return decodeResultFuture(result);
     }
 
     #! Submits an asynchronous request without blocking on connection establishment
@@ -656,7 +675,7 @@ public class HttpClientStreamHandle {
             releaseReservationIfHeld();
             rethrow;
         }
-        return result;
+        return decodeResultFuture(result);
     }
 
     #! Submits an asynchronous request with a QUIC datagram atomically
@@ -740,7 +759,7 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return result;
+        return decodeResultFuture(result);
     }
 
     #! Protocol-specific async request + datagram submission (subclasses override)
@@ -826,17 +845,55 @@ public class HttpClientStreamHandle {
         return notifier;
     }
 
-    #! Internal: converts binary body to string for text-based content types
-    /** Ensures consistent body types across all HTTP protocol versions (H1, H2, H3).
-        The H1 and H2 layers already perform this conversion internally, so this is
-        effectively a no-op for those protocols (body is already a string). For H3
-        (QUIC), the C++ layer returns bodies as binary, so this normalizes the output.
+    #! Internal: returns the result of an async submission with a future that decodes the response
+    private hash<auto> decodeResultFuture(hash<auto> result) {
+        if (result.future) {
+            result.future = new DecodingResponseFuture(result.future, max_response_body_size);
+        }
+        return result;
+    }
 
-        The charset parameter from the Content-Type header is used for encoding
-        conversion when present; JSON and YAML content types always use UTF-8
-        per RFC 8259 / YAML spec regardless of any charset parameter.
+    #! Decodes the content encoding of a response body and converts it to a string for text types
+    /** A body with a \c Content-Encoding is decoded first, like
+        @ref Qore::HTTPClient "HTTPClient" does: the first coding of the header is decoded (\c gzip,
+        \c deflate, \c bzip2, \c br, or \c zstd, and the \c x- aliases); \c identity, a charset given as a
+        coding, and an unknown coding leave the body as it is.  The decoded body is limited to \a max_size; the
+        \c Content-Encoding header is left in the response.
+
+        Then the body is converted to a string for text types, to ensure consistent body types across all HTTP
+        protocol versions (H1, H2, H3): the H1 and H2 layers already convert a body that is not compressed, and
+        the H3 (QUIC) layer returns bodies as binary.  The charset parameter from the Content-Type header is used
+        for encoding conversion when present; JSON and YAML content types always use UTF-8 per RFC 8259 / YAML
+        spec regardless of any charset parameter.
+
+        @param resp the response
+        @param max_size the maximum size of the decoded body; <= 0 means no limit
+
+        @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the decoded body exceeds \a max_size
     */
-    private static hash<auto> normalizeResponseBody(hash<auto> resp) {
+    static hash<auto> normalizeResponseBody(hash<auto> resp, int max_size = 0) {
+        if (resp.body) {
+            *string coding = getContentCoding(resp.headers."content-encoding");
+            if (coding) {
+                binary body = resp.body.typeCode() == NT_BINARY ? resp.body : binary(resp.body);
+                int limit = max_size > 0 ? max_size : 0;
+                try {
+                    switch (coding) {
+                        case "gzip": resp.body = gunzip_to_binary(body, limit); break;
+                        case "deflate": resp.body = uncompress_to_binary(body, limit); break;
+                        case "bzip2": resp.body = bunzip2_to_binary(body, limit); break;
+                        case "br": resp.body = unbrotli_to_binary(body, limit); break;
+                        case "zstd": resp.body = unzstd_to_binary(body, limit); break;
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "DECOMPRESSION-LIMIT-EXCEEDED") {
+                        throw "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", sprintf("the decoded response body exceeds "
+                            "the maximum response body size of %d bytes", max_size);
+                    }
+                    rethrow;
+                }
+            }
+        }
         *string ct = resp.headers."content-type";
         # expose the bare MIME type so downstream consumers don't each re-strip parameters
         resp.content_type = mime_get_base_type(ct);
@@ -857,6 +914,40 @@ public class HttpClientStreamHandle {
             }
         }
         return resp;
+    }
+
+    #! Internal: returns the first coding of a Content-Encoding value if the body is to be decoded
+    /** @return \c gzip, \c deflate, \c bzip2, \c br, or \c zstd (an \c x- alias is returned without its
+        prefix), or @ref nothing if the body is not to be decoded: no coding, \c identity, a charset given as a
+        coding, or an unknown coding
+    */
+    private static *string getContentCoding(auto content_encoding) {
+        # a header sent more than once arrives as a list; the first value gives the first coding
+        if (content_encoding.typeCode() == NT_LIST) {
+            content_encoding = content_encoding[0];
+        }
+        if (content_encoding.typeCode() != NT_STRING) {
+            return;
+        }
+        *string coding = (content_encoding =~ x/^[ \t]*([^ \t,;]+)/)[0];
+        if (!coding) {
+            return;
+        }
+        switch (coding.lwr()) {
+            case "gzip":
+            case "x-gzip":
+                return "gzip";
+            case "deflate":
+            case "x-deflate":
+                return "deflate";
+            case "bzip2":
+            case "x-bzip2":
+                return "bzip2";
+            case "br":
+                return "br";
+            case "zstd":
+                return "zstd";
+        }
     }
 
     #! Starts a streaming request on this stream handle
@@ -1205,6 +1296,50 @@ public class HttpCancellableFuture inherits Future<auto> {
             return True;
         }
         return False;
+    }
+}
+
+
+#! A future that decodes the content encoding of a response when it is resolved
+/** The response is decoded on the caller's thread, once; see HttpClientStreamHandle::normalizeResponseBody().
+*/
+class DecodingResponseFuture inherits Future<auto> {
+    private {
+        Future real_future;
+        int max_size;
+        Mutex m();
+        bool decoded;
+        auto rv;
+    }
+
+    constructor(Future real_future, int max_size) {
+        self.real_future = real_future;
+        self.max_size = max_size;
+    }
+
+    #! Blocks until the response is available, then decodes and returns it
+    /** @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the decoded body exceeds the maximum response body size
+    */
+    auto get(timeout timeout_ms = 0) {
+        auto resp = real_future.get(timeout_ms);
+        AutoLock al(m);
+        if (!decoded) {
+            rv = resp.typeCode() == NT_HASH ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size) : resp;
+            decoded = True;
+        }
+        return rv;
+    }
+
+    bool isDone() {
+        return real_future.isDone();
+    }
+
+    bool isError() {
+        return real_future.isError();
+    }
+
+    bool cancel() {
+        return real_future.cancel();
     }
 }
 

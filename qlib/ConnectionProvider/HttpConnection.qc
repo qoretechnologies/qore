@@ -40,6 +40,8 @@ public namespace ConnectionProvider {
       \c "auto"); HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN; HTTP/3 (\c "3.0")
       requires TLS and uses QUIC as the transport protocol
     - \c "max_redirects": maximum redirects to support
+    - \c "max_response_body_size": the maximum size in bytes of a response body received into memory, as received
+      and after its content encoding is decoded (0, the default, means no limit)
     - \c "negotiate_auth": enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it
     - \c "negotiate_credential_cache": credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication
     - \c "negotiate_delegation_mode": delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication
@@ -283,6 +285,16 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                     "short_desc": "Sets the maximum HTTP redirects to support",
                     "type": "int",
                     "desc": "Sets the maximum HTTP redirects to support in a single request",
+                },
+                "max_response_body_size": <ConnectionOptionInfo>{
+                    "display_name": "Max Response Body Size",
+                    "short_desc": "The maximum size of a response body received into memory",
+                    "type": "int",
+                    "desc": "The maximum size in bytes of a response body that is received into memory, as "
+                        "received and after its content encoding (such as `gzip`) is decoded; `0` (the default) "
+                        "means no limit.\n\n"
+                        "A larger response fails the request, so a huge response, or a small compressed response "
+                        "that expands to a huge size, cannot exhaust memory.",
                 },
                 "password": <ConnectionOptionInfo>{
                     "display_name": "Password",
@@ -578,6 +590,9 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
             };
         if (exists opts.max_redirects) {
             async_opts.max_redirects = opts.max_redirects;
+        }
+        if (exists opts.max_response_body_size) {
+            async_opts.max_response_body_size = opts.max_response_body_size;
         }
         if (opts.proxy.val()) {
             async_opts.proxy_url = opts.proxy;

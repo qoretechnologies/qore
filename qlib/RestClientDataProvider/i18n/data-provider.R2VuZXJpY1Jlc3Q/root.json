@@ -419,6 +419,18 @@
           "source": "Sets the maximum HTTP redirects to support in a single request",
           "message": "Sets the maximum HTTP redirects to support in a single request"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "Max Response Body Size"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "The maximum size of a response body received into memory"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory."
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"

@@ -1724,6 +1724,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         contains, startsWith, endsWith, null, and notNull operators
 
     - @ref connectionproviderintro "ConnectionProvider" module
+      - added the \c max_response_body_size option to @ref ConnectionProvider::HttpConnection "HttpConnection"
+        and the connections based on it, limiting the size of a response body received into memory, as received
+        and after its content encoding is decoded, for both the synchronous and the asynchronous clients
       - added the @ref ConnectionProvider::RestartableIoHelper "ConnectionProvider::RestartableIoHelper" class
       - new \c http_version option in @ref ConnectionProvider::HttpConnection "ConnectionProvider::HttpConnection" for HTTP version control ("auto", "1.0", "1.1", "2.0", "3.0")
       - @ref RestClient::RestConnection "RestClient::RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "ConnectionProvider::HttpConnection"
