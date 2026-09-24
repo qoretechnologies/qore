@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class ProviderIndexActionMetadataTest
+
+public class ProviderIndexActionMetadataTest inherits QUnit::Test {
+    private {
+        # every app is only ever restored by the test case that names it, since restoration is process-wide
+        const MetadataApp = "QoreTestMetadataApp";
+        const TypedApp = "QoreTestTypedApp";
+        const RemovedApp = "QoreTestRemovedApp";
+        const AllApp = "QoreTestAllApp";
+
+        const ConnectionAlternative = {
+            "connection_alternative": {
+                "option": "webhook",
+                "required_group": "test-destination",
+            },
+        };
+    }
+
+    constructor() : Test("ProviderIndex action metadata test", "1.0") {
+        addTestCase("metadata is available without restoring types", \metadataWithoutTypes());
+        addTestCase("unrestorable actions are omitted from typed metadata", \unrestorableActionsAreOmitted());
+        addTestCase("a removed app has no actions", \removedAppHasNoActions());
+        addTestCase("restoring all apps keeps restored apps", \restoringAllAppsKeepsRestoredApps());
+        addTestCase("reading the index omits unrestorable actions", \readIndexOmitsUnrestorableActions());
+
+%ifndef NoYaml
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        writeIndex();
+%endif
+
+        set_return_value(main());
+    }
+
+    private checkModules() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    #! Writes an index where every app has one restorable and one unrestorable action
+    private writeIndex() {
+        # types are restored in the ProviderIndexUtil module's program, so only module classes can be restored
+        HashDataType type("QoreTestIndexedType");
+        type.addQoreFields({"value": {"name": "value", "type": AbstractDataProviderTypeMap."string"}});
+        binary restorable = type.serialize();
+        # same-length rename, so the serialized form stays valid but names a class that does not exist
+        binary unrestorable = parse_hex_string(replace(restorable.toHex(), "HashDataType".toHex(),
+            "HashDataTypX".toHex()));
+
+        hash<string, hash<auto>> appinfomap;
+        hash<string, hash<string, hash<auto>>> actioninfomap;
+        foreach string app in ((MetadataApp, TypedApp, RemovedApp, AllApp)) {
+            appinfomap{app} = {"name": app};
+            actioninfomap{app} = {
+                "restorable": {
+                    "app": app,
+                    "action": "restorable",
+                    "short_desc": "restorable action",
+                    "output_type": restorable,
+                    "options": {
+                        "legacy": {
+                            "display_name": "Legacy",
+                            "short_desc": "legacy primitive type name",
+                            "type": "string",
+                        },
+                    },
+                },
+                "unrestorable": {
+                    "app": app,
+                    "action": "unrestorable",
+                    "short_desc": "unrestorable action",
+                    "output_type": unrestorable,
+                    "options": {
+                        "webhook": {
+                            "display_name": "Webhook",
+                            "short_desc": "webhook destination",
+                            "type": restorable,
+                        },
+                    },
+                    "metadata": ConnectionAlternative,
+                },
+            };
+        }
+
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": appinfomap,
+            "actioninfomap": actioninfomap,
+            "top_actioninfomap": {},
+        }, 0s, {});
+    }
+
+    #! Checks that the given action metadata has no types and is otherwise complete
+    private checkMetadata(*hash<auto> action, string app, string name) {
+        assertEq(app, action.app);
+        assertEq(name, action.action);
+        assertEq("hash<auto>", action.fullType());
+        assertFalse(action.hasKey("output_type"));
+        assertTrue(action.options.size() > 0);
+        map assertFalse($1.hasKey("type"), $1.display_name), action.options.iterator();
+    }
+
+    #! Returns the given actions keyed by action name
+    private *hash<string, hash<auto>> byName(*list<hash<auto>> actions) {
+        return map {$1.action: $1}, actions;
+    }
+
+    metadataWithoutTypes() {
+        checkModules();
+
+        # an unrestorable type would be omitted if the metadata accessors tried to restore it
+        *hash<string, hash<auto>> before = byName(ProviderIndexUtil::tryGetActionMetadataForApp(MetadataApp));
+        assertEq(("restorable", "unrestorable"), keys before);
+        checkMetadata(before.restorable, MetadataApp, "restorable");
+        checkMetadata(before.unrestorable, MetadataApp, "unrestorable");
+        assertEq(ConnectionAlternative, before.unrestorable.metadata);
+        assertEq("webhook destination", before.unrestorable.options.webhook.short_desc);
+        assertEq(before.unrestorable, ProviderIndexUtil::tryGetActionMetadata(MetadataApp, "unrestorable"));
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadata(MetadataApp, "unknown"));
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestUnknownApp"));
+
+        # restoring the types changes neither the metadata nor which actions it includes
+        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(MetadataApp).size());
+        assertEq(before, byName(ProviderIndexUtil::tryGetActionMetadataForApp(MetadataApp)));
+    }
+
+    unrestorableActionsAreOmitted() {
+        checkModules();
+
+        *list<hash<auto>> actions = ProviderIndexUtil::tryGetApproximateActionsForApp(TypedApp);
+        assertEq(1, actions.size());
+        hash<DataProviderActionInfo> action = cast<hash<DataProviderActionInfo>>(actions[0]);
+        assertEq("restorable", action.action);
+        assertEq("QoreTestIndexedType", action.output_type.getName());
+        assertEq("string", action.options.legacy.type.getName());
+
+        assertEq(NOTHING, ProviderIndexUtil::tryGetApproximateAppAction(TypedApp, "unrestorable"));
+        assertEq(("restorable",),
+            (map $1.action, ProviderIndexUtil::searchCachedAppActionSubstr(TypedApp, "restorable")));
+    }
+
+    removedAppHasNoActions() {
+        checkModules();
+
+        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(RemovedApp).size());
+        assertTrue(ProviderIndexUtil::removeCachedApp(RemovedApp));
+        assertEq(0, ProviderIndexUtil::tryGetApproximateActionsForApp(RemovedApp).size());
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp));
+    }
+
+    restoringAllAppsKeepsRestoredApps() {
+        checkModules();
+
+        # the app retains the unrestorable action's serialized entry, which must not replace its restored actions
+        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(TypedApp).size());
+
+        hash<string, bool> all = map {$1.app + "/" + $1.action: True}, ProviderIndexUtil::getAllCachedActions();
+        assertTrue(all{TypedApp + "/restorable"});
+        assertTrue(all{AllApp + "/restorable"});
+        assertEq(0, (select keys all, $1 =~ /unrestorable/).size());
+        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(TypedApp).size());
+        assertEq(("restorable", "unrestorable"),
+            keys byName(ProviderIndexUtil::tryGetActionMetadataForApp(AllApp)));
+        # loading the complete index must not bring back a removed app
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp));
+    }
+
+    readIndexOmitsUnrestorableActions() {
+        checkModules();
+
+        hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
+        foreach string app in ((MetadataApp, TypedApp, RemovedApp, AllApp)) {
+            assertEq(("restorable",), keys index.actioninfomap{app}, app);
+            assertEq("QoreTestIndexedType", index.actioninfomap{app}.restorable.output_type.getName(), app);
+        }
+        assertEq(0, (select keys index.top_actioninfomap, $1 =~ /unrestorable/).size());
+    }
+}

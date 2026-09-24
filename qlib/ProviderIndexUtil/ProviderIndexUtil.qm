@@ -63,6 +63,16 @@ module ProviderIndexUtil {
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
     - restore complete input and output type graphs from ProviderIndex 1.2, retaining support for legacy indexes
+    - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
+      and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()",
+      which return indexed action metadata without restoring action types, so callers that do not need the types
+      neither load provider modules nor pay for deserializing type graphs
+    - an action whose types cannot be restored is logged and omitted from the typed action accessors instead of
+      being returned with serialized types in place of the declared type objects
+    - fixed a complete load of a deferred index bringing back serialized metadata for apps that had already been
+      loaded, which restored their actions again and returned the actions of removed apps
+    - fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
+      leaving the removed app's actions available
 
     @subsection providerindexutil_v1_1 ProviderIndexUtil v1.1
     - loaded dependency filtering recognizes exact module names and loaded artifact paths, including compiled

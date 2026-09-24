@@ -3757,6 +3757,17 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         index from a system where no index has been created yet, and therefore avoid silently degrading to a
         partial app catalog
         (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
+        and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()",
+        which return indexed action metadata without restoring action types; reading plain fields such as an
+        action's \c metadata or \c options no longer requires loading provider modules or deserializing type
+        graphs, which could take minutes for a large index
+      - an action whose types cannot be restored is logged and omitted from the typed action accessors; previously
+        the whole app's actions were returned with serialized \c binary values in place of type objects, causing
+        runtime type errors in callers
+      - fixed a complete load of a deferred index bringing back serialized metadata for apps that had already been
+        loaded, and fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
+        leaving the removed app's actions available
 
     - @ref mysqlsqlutilintro "MysqlSqlUtil" module
       - fixed case-sensitive regular-expression matching on MySQL 8.0.22+ and current MySQL releases; generated
