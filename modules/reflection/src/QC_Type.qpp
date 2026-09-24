@@ -36,11 +36,6 @@
 
 #include <memory>
 
-static QoreProgram* get_reflection_lookup_program(RuntimeConfig& runtime_cfg) {
-    QoreProgram* pgm = runtime_cfg.getProgram();
-    return pgm ? pgm : getProgram();
-}
-
 void QoreType::setContainer(QoreObject* obj) {
     container = obj;
     if (source_pgm) {

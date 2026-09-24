@@ -51,6 +51,62 @@ QoreReflectionTypedHash::QoreReflectionTypedHash(ExceptionSink* xsink, const cha
     }
 }
 
+static QoreHashNode* TypedHash_serializer(const QoreObject& self, const QoreReflectionTypedHash& thd,
+        QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
+    (void)rc;
+    // the typed hash (hashdecl) ptr is owned by the source Program
+    QoreExternalProgramContextHelper tch(xsink, thd.pgm);
+    if (*xsink) {
+        return nullptr;
+    }
+    // a hashdecl provided by a module must be resolvable after the module is loaded on the deserializing side
+    if (const char* mod = thd.th->getModuleName()) {
+        context.addModule(mod);
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    // the anchored path does not depend on the deserializing namespace context; for an instantiated generic
+    // hashdecl it includes the type arguments (ex: "::NS::Info<int>")
+    rv->setKeyValue("path", new QoreStringNode(thd.th->getNamespacePath(true)), xsink);
+    return rv.release();
+}
+
+static void TypedHash_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
+        RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    QoreValue val = sdata ? sdata->getKeyValue("path") : QoreValue();
+    if (val.getType() != NT_STRING) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "TypedHash serialization key 'path' has type '%s'; "
+            "expecting 'string'", val.getFullTypeName());
+        return;
+    }
+    QoreStringValueHelper path(val);
+    QoreProgram* lookup_pgm = get_reflection_lookup_program(runtime_cfg);
+    ReferenceHolder<QoreReflectionTypedHash> th(xsink);
+    if (strchr(path->c_str(), '<')) {
+        // an instantiated generic hashdecl is resolved through its type, which instantiates it with the given
+        // type arguments
+        QoreStringMaker type_str("hash<%s>", path->c_str());
+        const QoreTypeInfo* type = qore_reflection_get_type_from_string(lookup_pgm, type_str.c_str(), *xsink);
+        const TypedHashDecl* hd = *xsink ? nullptr : typeInfoGetTypedHash(type);
+        if (!hd) {
+            xsink->clear();
+            xsink->raiseException("UNKNOWN-TYPED-HASH", "cannot resolve typed hash (hashdecl) '%s'",
+                path->c_str());
+        } else {
+            th = new QoreReflectionTypedHash(lookup_pgm, hd);
+        }
+    } else {
+        th = new QoreReflectionTypedHash(xsink, path->c_str(), lookup_pgm);
+    }
+    if (*xsink) {
+        QoreStringValueHelper err(xsink->getExceptionErr());
+        QoreStringValueHelper edesc(xsink->getExceptionDesc());
+        QoreStringMaker desc("%s: %s", err->c_str(), edesc->c_str());
+        xsink->renamePrependLastException("DESERIALIZATION-ERROR", "%s", desc.c_str());
+        return;
+    }
+    self.setPrivate(CID_TYPEDHASH, th.release());
+}
+
 static QoreValue find_all_typedhashes(const QoreString& pattern, int re_opts, QoreProgram* pgm, ExceptionSink* xsink) {
     hashdecl_vec_t hashdecl_vec = pgm->findAllHashDeclsRegex(pattern, re_opts, xsink);
     if (*xsink) {
@@ -66,10 +122,23 @@ static QoreValue find_all_typedhashes(const QoreString& pattern, int re_opts, Qo
 }
 
 //! The base class for %Qore typed hashes (@ref hashdecl "hashdecls")
-/**
-    @since %Qore 0.9.0
+/** Objects of this class can be serialized; the serialized form records the anchored namespace path of the
+    @ref hashdecl "typed hash", and deserialization resolves the path again in the deserializing
+    @ref Qore::Program "Program".  If the typed hash is provided by a module, the module is recorded as a
+    serialization dependency.
+
+    @since
+    - %Qore 0.9.0
+    - %Qore 3.0 made serializable
  */
-qclass TypedHash [ns=Qore::Reflection; arg=QoreReflectionTypedHash* thd; dom=REFLECTION];
+qclass TypedHash [
+    ns=Qore::Reflection;
+    arg=QoreReflectionTypedHash* thd;
+    dom=REFLECTION;
+    vparent=Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(TypedHash_serializer);
+    deserializer=TypedHash_deserializer
+];
 
 //! Creates the object from the @ref hashdecl "typed hash (hashdecl)" name or namespace-justified path as a string
 /** @par Example:

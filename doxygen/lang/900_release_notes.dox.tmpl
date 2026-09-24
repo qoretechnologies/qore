@@ -1951,6 +1951,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         that tooling that has to determine which methods can be called on a class no longer has to
         reimplement the runtime's accessibility rules on top of
         @ref Qore::Reflection::Class::getClassHierarchy() "Class::getClassHierarchy()"
+      - @ref Qore::Reflection::TypedHash "TypedHash" objects can be serialized; the serialized form records
+        the typed hash's anchored namespace path (with type arguments for an instantiated generic
+        @ref hashdecl "hashdecl") and the module providing it, so that
+        @ref DataProvider::HashDeclDataType "HashDeclDataType" objects, and data provider action output types
+        based on them, can be serialized
 
     - @ref restclientintro "RestClient" module
       - OAuth consent URLs encode optional authorization arguments and state, preserving scope lists and
