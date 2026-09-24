@@ -79,8 +79,24 @@ bool Http2PollOperationPriv::goalReached() const {
         || h2_state == H2ServerState::SENT;
 }
 
+void Http2PollOperationPriv::collectResponseSendResults() {
+    std::vector<std::pair<int32_t, bool>> results = sock->takeHttp2ResponseSendResultsForAsyncPoll();
+    response_send_results.insert(response_send_results.end(), results.begin(), results.end());
+}
+
 QoreHashNode* Http2PollOperationPriv::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(op_lock);
+    // take the results of watched responses written in this cycle on every exit, while op_lock is held; responses
+    // are also written by the socket's enqueue operations, whose results are taken in the next cycle, which the
+    // caller's wake triggers
+    struct ResponseSendResultCollector {
+        Http2PollOperationPriv& op;
+        ResponseSendResultCollector(Http2PollOperationPriv& op) : op(op) {
+        }
+        ~ResponseSendResultCollector() {
+            op.collectResponseSendResults();
+        }
+    } response_send_result_collector(*this);
 
     while (true) {
         switch (h2_state) {
@@ -1018,6 +1034,34 @@ bool Http2PollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
 */
 bool Http2PollOperationBase::isStreamPeerClosed(int stream_id) [flags=RET_VALUE_ONLY] {
     return priv->isStreamPeerClosed((int32_t)stream_id);
+}
+
+//! Registers the watch of the response on a stream so that the result of its transmission is reported
+/** Must be called before the response is submitted.  One result is then reported for the stream with
+    @ref onStreamSendResult(): @ref True "True" once the frame carrying the response's \c END_STREAM flag has been
+    written to the socket, or @ref False "False" if the stream is closed first (for example reset by the peer) or is
+    already closed.  No result is reported if the connection closes first.
+
+    @param stream_id the HTTP/2 stream ID
+
+    @throw HTTP2-ERROR no HTTP/2 session is active on the socket
+
+    @since %Qore 3.0
+*/
+nothing Http2PollOperationBase::registerResponseSendWatch(int stream_id) {
+    priv->watchResponseSend((int32_t)stream_id, xsink);
+}
+
+//! Called on a worker thread with the transmission result of a response watched with @ref registerResponseSendWatch()
+/** The default implementation does nothing; a subclass that watches responses reimplements it.
+
+    @param stream_key the stream ID as a string
+    @param sent @ref True "True" if the response has been written to the socket, @ref False "False" if the stream
+    was closed first
+
+    @since %Qore 3.0
+*/
+nothing Http2PollOperationBase::onStreamSendResult(string stream_key, bool sent) {
 }
 
 //! Returns True if an error occurred

@@ -1931,6 +1931,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         read, such as the rest of a request body answered with an error, a pipelined request, or the remainder of
         an HTTP/2 connection preface; the server now closes such connections with a lingering close, bounded by the
         new \c lingering_close_timeout option
+      - new \c after_send callback in @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
+        @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo", called exactly once with the request
+        context after the response has been completely sent (HTTP/1.x and HTTP/2: written to the socket; HTTP/3:
+        acknowledged by the peer), or with \c sent = @ref False "False" if it could not be sent, so that a handler
+        can order work after its response, such as a WS-Addressing reply sent to a non-anonymous reply address
+        after the \c 202 response
 
     - @ref httpserverutilintro "HttpServerUtil" module
       - cookie-setting support and a refactored, more extensible authentication design
@@ -1947,6 +1953,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         @ref HttpServer::AbstractHttpRequestHandler::decodeRequestBody()
         "AbstractHttpRequestHandler::decodeRequestBody()",
         limiting the size of a decompressed request body
+      - new \c after_send key in @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
+        @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo" for a callback called after the response
+        has been sent
 
     - @ref huerestclientintro "HueRestClient" module
       - fixed platform-generated connection URLs by declaring \c DefaultConnectionUrl

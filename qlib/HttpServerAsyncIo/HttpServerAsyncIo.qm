@@ -232,6 +232,17 @@ public namespace HttpServerAsyncIo {
             @see send_callback
         */
         *timeout send_timeout;
+
+        #! Called exactly once with the transmission result of an HTTP/1.x response
+        /** When set, the controller sends the response with an operation whose completion it observes instead of
+            one that also reads the next request, and calls this callback on a handler pool thread with
+            @ref True "True" once the complete response has been written to the socket, or with @ref False "False"
+            if writing it failed or the connection was closed first.
+
+            HTTP/2 and HTTP/3 responses are watched with the \c watch_response_send closure in \c header_info
+            instead; see @ref HttpConnectionInfo.
+        */
+        *code<nothing(bool)> after_send;
     }
 
     #! Connection info passed to callbacks
@@ -255,6 +266,10 @@ public namespace HttpServerAsyncIo {
           Queue with a maximum size is rejected with \c HTTP2-QUEUE-ERROR; a reader can cancel the body read with
           @ref Qore::Thread::Queue::setError() "Queue::setError()", after which the data received for the stream is
           discarded
+        - \c watch_response_send: a closure that takes a \c code<nothing(bool)> callback and must be
+          called before the response is submitted on the stream; the callback is then called exactly once, on a
+          handler pool thread, with @ref True "True" once the response has been sent (the frame with its \c END_STREAM flag has been written to the socket) or @ref False "False" if
+          it was not
 
         For HTTP/3 connections, \c header_info contains:
         - \c http3: \c True for HTTP/3 requests
@@ -262,6 +277,10 @@ public namespace HttpServerAsyncIo {
         - \c stream_id: The HTTP/3 stream ID (needed for sending response)
         - \c body_streaming: \c True when the stream has not received END_STREAM on HEADERS
         - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame
+        - \c watch_response_send: a closure that takes a \c code<nothing(bool)> callback and must be
+          called before the response is submitted on the stream; the callback is then called exactly once, on a
+          handler pool thread, with @ref True "True" once the response has been sent (the stream has been closed after the peer acknowledged the complete response) or @ref False "False" if
+          it was not
 
         When \c body_streaming is \c True, the following additional key is available after
         the request is dispatched through \c HttpServer:

@@ -743,7 +743,17 @@ void Http3ServerPollOperationPriv::deliverSessionLifecycleEvents() {
     }
     std::vector<std::pair<int64_t, int64_t>> resets;
     std::vector<int64_t> closed;
-    read_op->takeSessionLifecycleEvents(resets, closed);
+    std::vector<QuicResponseSendResult> send_results;
+    read_op->takeSessionLifecycleEvents(resets, closed, send_results);
+
+    // Report the transmission results of watched responses; they are taken before the close of their session, so
+    // they are reported before closeSessionStreams() fails the session's remaining watches below
+    for (auto& r : send_results) {
+        std::string skey = std::to_string(r.session_id) + ":" + std::to_string(r.stream_id);
+        if (response_send_watches.erase(skey)) {
+            response_send_results.emplace_back(skey, r.sent);
+        }
+    }
 
     // Report each peer-reset stream to its Qore-side owner before anything else.
     // A listener-only stream (an SSE response stream, which registers no inbound
@@ -834,6 +844,16 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
     // op_lock held (called from deliverSessionLifecycleEvents() on the I/O thread).
     // The trailing ':' makes this an exact session match — "1:" cannot match "11:5".
     const std::string prefix = std::to_string(session_id) + ":";
+
+    // A watched response whose result the session did not report before it closed was not sent
+    for (auto it = response_send_watches.begin(); it != response_send_watches.end();) {
+        if (it->compare(0, prefix.size(), prefix) != 0) {
+            ++it;
+            continue;
+        }
+        response_send_results.emplace_back(*it, false);
+        it = response_send_watches.erase(it);
+    }
     for (auto it = stream_queues.begin(); it != stream_queues.end();) {
         if (it->first.compare(0, prefix.size(), prefix) != 0) {
             ++it;
@@ -878,6 +898,63 @@ void Http3ServerPollOperationPriv::closeSessionStreams(int64_t session_id) {
         data_ready_streams.push_back(*it);
         it = close_notify_streams.erase(it);
     }
+}
+
+// Stores the callback for the transmission result of the response on a stream in the "response_send_callbacks"
+// member hash; returns false if an exception was raised
+static bool setResponseSendCallback(QoreObject* self, Http3ServerPollOperationPriv* priv, const std::string& skey,
+        const ResolvedCallReferenceNode* callback, ExceptionSink* xsink) {
+    AutoLocker ml(priv->stream_member_lock);
+    ValueHolder existing(self->getReferencedMemberNoMethod("response_send_callbacks", xsink), xsink);
+    if (*xsink) {
+        return false;
+    }
+    // copy() ensures unique ownership (refcount == 1) before mutation
+    ReferenceHolder<QoreHashNode> callbacks(existing->getType() == NT_HASH
+        ? existing->get<QoreHashNode>()->copy()
+        : new QoreHashNode(codeTypeInfo), xsink);
+    callbacks->setKeyValue(skey.c_str(), callback->refRefSelf(), xsink);
+    if (*xsink) {
+        return false;
+    }
+    self->setMemberValue("response_send_callbacks", QC_HTTP3SERVERPOLLOPERATION, callbacks.release(), xsink);
+    return !*xsink;
+}
+
+// Removes and returns the callback for the transmission result of the response on a stream, if any
+static QoreValue takeResponseSendCallback(QoreObject* self, Http3ServerPollOperationPriv* priv,
+        const std::string& skey, ExceptionSink* xsink) {
+    AutoLocker ml(priv->stream_member_lock);
+    ValueHolder existing(self->getReferencedMemberNoMethod("response_send_callbacks", xsink), xsink);
+    if (*xsink || existing->getType() != NT_HASH) {
+        return QoreValue();
+    }
+    const QoreHashNode* current = existing->get<const QoreHashNode>();
+    if (!current->existsKey(skey.c_str())) {
+        return QoreValue();
+    }
+    ValueHolder rv(current->getKeyValue(skey.c_str()).refSelf(), xsink);
+    // copy() ensures unique ownership (refcount == 1) before mutation
+    ReferenceHolder<QoreHashNode> callbacks(current->copy(), xsink);
+    callbacks->removeKey(skey.c_str(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    self->setMemberValue("response_send_callbacks", QC_HTTP3SERVERPOLLOPERATION, callbacks.release(), xsink);
+    return *xsink ? QoreValue() : rv.release();
+}
+
+// Removes and returns all callbacks for the transmission results of responses
+static QoreHashNode* takeAllResponseSendCallbacks(QoreObject* self, Http3ServerPollOperationPriv* priv,
+        ExceptionSink* xsink) {
+    AutoLocker ml(priv->stream_member_lock);
+    ValueHolder existing(self->getReferencedMemberNoMethod("response_send_callbacks", xsink), xsink);
+    if (*xsink || existing->getType() != NT_HASH || existing->get<const QoreHashNode>()->empty()) {
+        return nullptr;
+    }
+    self->setMemberValue("response_send_callbacks", QC_HTTP3SERVERPOLLOPERATION, new QoreHashNode(codeTypeInfo),
+        xsink);
+    return *xsink ? nullptr : existing.release().get<QoreHashNode>();
 }
 
 /** @endcond */
@@ -1349,6 +1426,60 @@ nothing Http3ServerPollOperation::deregisterStreamListener(int session_id, int s
         listeners.release(), xsink);
 }
 
+//! Watches the response on a stream so that the result of its transmission is reported to a callback
+/** Must be called before the response is submitted.  The callback is then called once, on a worker thread, with
+    @ref True "True" once the stream is closed without an error, meaning that the complete response has been sent and
+    acknowledged by the peer, or @ref False "False" if the stream is reset or its QUIC session closes first, if it is
+    already closed, or if the operation closes first (see @ref notifyStreamListenersClosed()).
+
+    @param session_id the QUIC session ID
+    @param stream_id the QUIC stream ID
+    @param callback called with the transmission result; it must not block, as it runs on a controller worker
+
+    @return @ref True "True" if the response is watched, @ref False "False" if the operation is closed, in which
+    case the callback is not called
+
+    @throw QUIC-ERROR the QUIC session is gone; the callback is not called
+
+    @since %Qore 3.0
+*/
+bool Http3ServerPollOperation::watchResponseSend(int session_id, int stream_id, code callback) {
+    std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
+    if (!setResponseSendCallback(self, priv, skey, callback, xsink)) {
+        return false;
+    }
+    // the key is recorded before the watch is registered with the session so that no result can be missed
+    if (!priv->addResponseSendWatch(skey)) {
+        ValueHolder cb(takeResponseSendCallback(self, priv, skey, xsink), xsink);
+        return false;
+    }
+    if (priv->watchQuicResponseSend((int64_t)session_id, (int64_t)stream_id, xsink) || *xsink) {
+        priv->removeResponseSendWatch(skey);
+        ExceptionSink xsink2;
+        ValueHolder cb(takeResponseSendCallback(self, priv, skey, &xsink2), &xsink2);
+        return QoreValue();
+    }
+    return true;
+}
+
+//! Called on a worker thread with the transmission result of a response watched with @ref watchResponseSend()
+/** Calls and removes the callback registered for the stream, if any.
+
+    @param stream_key composite key "session_id:stream_id"
+    @param sent @ref True "True" if the response was sent, @ref False "False" if not
+
+    @since %Qore 3.0
+*/
+nothing Http3ServerPollOperation::onStreamSendResult(string stream_key, bool sent) {
+    ValueHolder cb(takeResponseSendCallback(self, priv, stream_key->c_str(), xsink), xsink);
+    if (*xsink || (cb->getType() != NT_RUNTIME_CLOSURE && cb->getType() != NT_FUNCREF)) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> cb_args(new QoreListNode(autoTypeInfo), xsink);
+    cb_args->push(sent, xsink);
+    ValueHolder rv(cb->get<ResolvedCallReferenceNode>()->execValue(*cb_args, xsink), xsink);
+}
+
 //! Returns True if the given stream can no longer carry data to the peer
 /** True when the peer reset the stream, when its QUIC session closed, or when
     the whole listener poll operation is closed.
@@ -1518,6 +1649,29 @@ nothing Http3ServerPollOperation::deregisterPersistentSessionQueue(int session_i
     @since %Qore 3.0
 */
 nothing Http3ServerPollOperation::notifyStreamListenersClosed() {
+    // the responses still watched were not sent, or their transmission can no longer be reported
+    {
+        ExceptionSink cb_xsink;
+        ReferenceHolder<QoreHashNode> callbacks(takeAllResponseSendCallbacks(self, priv, &cb_xsink), &cb_xsink);
+        if (callbacks) {
+            ConstHashIterator hi(*callbacks);
+            while (hi.next()) {
+                QoreValue val = hi.get();
+                if (val.getType() != NT_RUNTIME_CLOSURE && val.getType() != NT_FUNCREF) {
+                    continue;
+                }
+                ExceptionSink call_xsink;
+                ReferenceHolder<QoreListNode> cb_args(new QoreListNode(autoTypeInfo), &call_xsink);
+                cb_args->push(false, &call_xsink);
+                ValueHolder rv(val.get<ResolvedCallReferenceNode>()->execValue(*cb_args, &call_xsink),
+                    &call_xsink);
+                // the callbacks handle their own errors; the remaining callbacks must still be called
+                call_xsink.clear();
+            }
+        }
+        cb_xsink.clear();
+    }
+
     std::vector<QoreObject*> listeners_to_notify;
     {
         AutoLocker ml(priv->stream_member_lock);

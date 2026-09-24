@@ -129,6 +129,9 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - added the \c after_send key to @ref HttpServer::HttpResponseInfo "HttpResponseInfo" and
+      @ref HttpServer::HttpHandlerResponseInfo "HttpHandlerResponseInfo": a callback called exactly once after the
+      response has been completely sent, or has failed to be sent, for HTTP/1.x, HTTP/2, and HTTP/3
     - added a limit on the size of a decompressed request body: a request body with a \c Content-Encoding is
       decompressed only up to @ref HttpServer::DefaultMaxDecodedBodySize "DefaultMaxDecodedBodySize" (128 MiB) or
       the configured \c max_decoded_body_size (or the \c max_request_body_size when set), and a larger body
@@ -542,6 +545,45 @@ public hashdecl HttpResponseInfo {
         @see send_callback
     */
     *timeout send_timeout;
+
+    #! a callback called exactly once after the response has been completely sent, or has failed to be sent
+    /** Lets a handler run code that must happen after the client has been sent the response, for example a
+        WS-Addressing server that answers a request with an empty \c 202 response and then sends the reply as a
+        separate HTTP request to the reply address.
+
+        The callback is called with the following arguments:
+        - \c cx: the request context (see @ref HttpServer::AbstractHttpRequestHandler::handleRequest())
+        - \c sent: @ref True "True" if the response has been completely sent, @ref False "False" if sending it
+          failed or the connection or stream was closed or reset first
+
+        The response counts as sent:
+        - HTTP/1.x: once the last byte of the response (the terminating chunk of a chunked message body) has been
+          written to the socket
+        - HTTP/2: once the frame carrying the response's \c END_STREAM flag has been written to the socket
+        - HTTP/3: once the peer has acknowledged the complete response, including the end of the stream
+
+        A client that reads the response has therefore received all of it before anything that the callback sends
+        on another connection, as far as the server can guarantee: the response bytes have been written (and for
+        HTTP/3 acknowledged), not necessarily read by the client application.
+
+        The callback runs on a server thread (the request's thread or a handler pool thread, never an I/O
+        thread), after the handler's @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData()
+        "saveThreadLocalData()" has been called and before its
+        @ref HttpServer::AbstractHttpRequestHandler::restoreThreadLocalData() "restoreThreadLocalData()" is called,
+        as with @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()".  Exceptions are
+        logged in the HTTP server's error log and do not affect the connection.  With HTTP/1.x keep-alive
+        connections, the next request on the connection is processed independently of the callback.
+
+        A response that does not end the exchange, i.e. a Server-Sent Events stream, a \c 101 protocol upgrade
+        or an extended \c CONNECT response, is never completely sent: the callback is called with
+        @ref False "False" when the response is returned.  With \c reply_sent, the handler has sent the
+        response itself; the callback is called with @ref True "True" for an HTTP/1.x response as soon as the
+        handler returns, and with @ref False "False" for an HTTP/2 or HTTP/3 response, whose transmission the
+        server cannot observe in that case.
+
+        @since HttpServerUtil 1.6
+    */
+    *code<nothing(hash<auto>, bool)> after_send;
 }
 
 #! the return value of HTTP handler methods with potentially unserialized message bodies
@@ -632,6 +674,45 @@ public hashdecl HttpHandlerResponseInfo {
         @see send_callback
     */
     *timeout send_timeout;
+
+    #! a callback called exactly once after the response has been completely sent, or has failed to be sent
+    /** Lets a handler run code that must happen after the client has been sent the response, for example a
+        WS-Addressing server that answers a request with an empty \c 202 response and then sends the reply as a
+        separate HTTP request to the reply address.
+
+        The callback is called with the following arguments:
+        - \c cx: the request context (see @ref HttpServer::AbstractHttpRequestHandler::handleRequest())
+        - \c sent: @ref True "True" if the response has been completely sent, @ref False "False" if sending it
+          failed or the connection or stream was closed or reset first
+
+        The response counts as sent:
+        - HTTP/1.x: once the last byte of the response (the terminating chunk of a chunked message body) has been
+          written to the socket
+        - HTTP/2: once the frame carrying the response's \c END_STREAM flag has been written to the socket
+        - HTTP/3: once the peer has acknowledged the complete response, including the end of the stream
+
+        A client that reads the response has therefore received all of it before anything that the callback sends
+        on another connection, as far as the server can guarantee: the response bytes have been written (and for
+        HTTP/3 acknowledged), not necessarily read by the client application.
+
+        The callback runs on a server thread (the request's thread or a handler pool thread, never an I/O
+        thread), after the handler's @ref HttpServer::AbstractHttpRequestHandler::saveThreadLocalData()
+        "saveThreadLocalData()" has been called and before its
+        @ref HttpServer::AbstractHttpRequestHandler::restoreThreadLocalData() "restoreThreadLocalData()" is called,
+        as with @ref HttpServer::AbstractHttpRequestHandler::handleRequest() "handleRequest()".  Exceptions are
+        logged in the HTTP server's error log and do not affect the connection.  With HTTP/1.x keep-alive
+        connections, the next request on the connection is processed independently of the callback.
+
+        A response that does not end the exchange, i.e. a Server-Sent Events stream, a \c 101 protocol upgrade
+        or an extended \c CONNECT response, is never completely sent: the callback is called with
+        @ref False "False" when the response is returned.  With \c reply_sent, the handler has sent the
+        response itself; the callback is called with @ref True "True" for an HTTP/1.x response as soon as the
+        handler returns, and with @ref False "False" for an HTTP/2 or HTTP/3 response, whose transmission the
+        server cannot observe in that case.
+
+        @since HttpServerUtil 1.6
+    */
+    *code<nothing(hash<auto>, bool)> after_send;
 }
 
 # hashdecl for SSL info

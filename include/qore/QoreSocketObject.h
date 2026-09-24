@@ -683,6 +683,26 @@ public:
     */
     DLLLOCAL std::vector<int32_t> takeHttp2PeerResetReportsForAsyncPoll();
 
+    //! Watches the response on an HTTP/2 server stream so that the result of its transmission is reported
+    /** Must be called before the response is submitted; see Http2Session::watchResponseSend().  The result is
+        taken with takeHttp2ResponseSendResultsForAsyncPoll().
+
+        @return 0 on success, -1 if an exception was raised
+    */
+    DLLLOCAL int watchHttp2ResponseSend(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Drains the transmission results of HTTP/2 responses watched with watchHttp2ResponseSend() (I/O thread only)
+    /** @return (stream ID, sent) pairs; empty if there is no HTTP/2 session
+    */
+    DLLLOCAL std::vector<std::pair<int32_t, bool>> takeHttp2ResponseSendResultsForAsyncPoll();
+
+    //! Watches the response on an HTTP/3 server stream so that the result of its transmission is reported
+    /** Must be called before the response is submitted; see QuicSession::watchResponseSend().
+
+        @return 0 on success, -1 if an exception was raised (for example when the QUIC session is gone)
+    */
+    DLLLOCAL int watchQuicResponseSend(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
     //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
     /** @param stream_id the HTTP/2 stream ID
         @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)

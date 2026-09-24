@@ -1911,6 +1911,14 @@ private:
     }
 };
 
+//! The transmission result of an HTTP/3 response watched with QuicSession::watchResponseSend()
+struct QuicResponseSendResult {
+    int64_t session_id;
+    int64_t stream_id;
+    //! true if the response was sent and acknowledged, false if the stream was reset
+    bool sent;
+};
+
 //! Poll operation for QUIC server: accept connection + read HTTP/3 request
 /** Waits for QUIC packets, dispatches to the correct session by DCID,
     creates new sessions for Initial packets, and reads HTTP/3 requests.
@@ -2035,14 +2043,18 @@ public:
 
         @param resets appended with (session_id, stream_id) for each peer reset
         @param closed appended with session_id for each newly-closed session
+        @param send_results appended with the transmission result of each watched response (see
+        QuicSession::watchResponseSend()); a result is always taken before the close of its session
     */
     DLLLOCAL void takeSessionLifecycleEvents(std::vector<std::pair<int64_t, int64_t>>& resets,
-            std::vector<int64_t>& closed) {
+            std::vector<int64_t>& closed, std::vector<QuicResponseSendResult>& send_results) {
         AutoLocker al(sock->priv->m);
         resets.insert(resets.end(), lifecycle_peer_resets_.begin(), lifecycle_peer_resets_.end());
         lifecycle_peer_resets_.clear();
         closed.insert(closed.end(), lifecycle_closed_sessions_.begin(), lifecycle_closed_sessions_.end());
         lifecycle_closed_sessions_.clear();
+        send_results.insert(send_results.end(), lifecycle_send_results_.begin(), lifecycle_send_results_.end());
+        lifecycle_send_results_.clear();
     }
 
 private:
@@ -2112,6 +2124,10 @@ private:
     //! takeSessionLifecycleEvents().  Protected by sock->priv->m.
     std::vector<std::pair<int64_t, int64_t>> lifecycle_peer_resets_;  //!< (session_id, stream_id)
     std::vector<int64_t> lifecycle_closed_sessions_;                  //!< session_ids
+    std::vector<QuicResponseSendResult> lifecycle_send_results_;      //!< watched response results
+
+    //! Takes the transmission results of watched responses from a session; sock->priv->m held
+    DLLLOCAL void collectResponseSendResults(int64_t session_id, QuicSession& session);
 
     //! Poll cycle counter for periodic cleanup scheduling
     //! With up to 10K sessions, iterating all sessions every poll cycle is O(n);

@@ -795,6 +795,15 @@ void QoreCallDispatcher::dispatchStreamDataAsync(QoreObject* spop_obj, const std
     enqueue(std::move(item));
 }
 
+void QoreCallDispatcher::dispatchStreamSendResultAsync(QoreObject* spop_obj, const std::string& stream_key,
+        bool sent, const std::string& owner) {
+    AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_STREAM_SEND_RESULT_NOTIFY, nullptr,
+        std::string(), stream_key};
+    item.owner = owner;
+    item.sent = sent;
+    enqueue(std::move(item));
+}
+
 void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj, const std::string& owner) {
     AsyncWorkItem item{spop_obj, nullptr, nullptr, nullptr, DT_POLL_COMPLETE_NOTIFY, nullptr,
         std::string()};
@@ -1267,6 +1276,8 @@ static const char* getDispatchTypeName(QoreCallDispatcher::DispatchType type) {
             return "continuePoll";
         case QoreCallDispatcher::DT_STREAM_DATA_NOTIFY:
             return "onStreamData";
+        case QoreCallDispatcher::DT_STREAM_SEND_RESULT_NOTIFY:
+            return "onStreamSendResult";
         case QoreCallDispatcher::DT_POLL_COMPLETE_NOTIFY:
             return "onPollComplete";
         case QoreCallDispatcher::DT_RELEASE:
@@ -1518,6 +1529,15 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                     args->push(new QoreStringNode(async_item.stream_key), xsink);
                     ValueHolder rv(async_item.spop_obj->evalMethod("onStreamData", *args,
+                        &work_xsink), &work_xsink);
+                    break;
+                }
+                case DT_STREAM_SEND_RESULT_NOTIFY: {
+                    method_name = "onStreamSendResult";
+                    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+                    args->push(new QoreStringNode(async_item.stream_key), xsink);
+                    args->push(async_item.sent, xsink);
+                    ValueHolder rv(async_item.spop_obj->evalMethod("onStreamSendResult", *args,
                         &work_xsink), &work_xsink);
                     break;
                 }
@@ -4676,6 +4696,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 op.spop_obj, std::to_string(sid), op.owner);
                         }
                     }
+                    // the transmission results of watched responses
+                    std::vector<std::pair<int32_t, bool>> sent = h2_op->getAndClearResponseSendResults();
+                    if (!sent.empty()) {
+                        ensureCallDispatcher();
+                        for (auto& r : sent) {
+                            op.spop_obj->ref();
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamSendResultAsync(
+                                op.spop_obj, std::to_string(r.first), r.second, op.owner);
+                        }
+                    }
                 }
 
                 // Same for HTTP/2 client poll ops (WebSocket/SSE over H2 CONNECT)
@@ -4711,6 +4741,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // Same for HTTP/3 server poll ops (WebSocket/SSE over H3 server CONNECT)
                 auto* h3_server_op = dynamic_cast<Http3ServerPollOperationPriv*>(op.spop_base);
                 if (h3_server_op) {
+                    // the transmission results of watched responses
+                    std::vector<std::pair<std::string, bool>> sent = h3_server_op->getAndClearResponseSendResults();
+                    if (!sent.empty()) {
+                        ensureCallDispatcher();
+                        for (auto& r : sent) {
+                            op.spop_obj->ref();
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamSendResultAsync(
+                                op.spop_obj, r.first, r.second, op.owner);
+                        }
+                    }
                     std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
                     ASYNC_IO_TRACE("AsyncIo h3_server dispatch check ready=%zu\n", ready.size());
                     if (!ready.empty()) {

@@ -1,0 +1,773 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Verifies HttpResponseInfo::after_send: the callback is called exactly once, after the response has been
+# completely sent (or with sent = False if it could not be sent), under the handler's thread-local data, for
+# HTTP/1.x (keep-alive, close, HTTP/1.0, persistent sessions, inline handlers), HTTP/2 and HTTP/3, and for every
+# form of message body.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpServerAfterSendTest
+
+#! the transmission result reported to an after_send callback
+hashdecl AfterSendResult {
+    #! the request ID
+    string id;
+    #! the sent argument
+    bool sent;
+    #! the handler's thread-local data while the callback ran
+    *string tld;
+    #! the request context's handler name
+    *string handler_name;
+    #! the result of the request's probe, if any
+    auto probe;
+}
+
+#! collects the results of after_send callbacks
+class AfterSendRecorder {
+    public {
+        #! receives an AfterSendResult for each callback call
+        Queue results();
+    }
+
+    #! returns an after_send callback for the given request ID
+    /** @param id the request ID
+        @param probe called in the callback; its return value is recorded
+        @param fail if True, the callback throws an exception after recording its result
+    */
+    code<nothing(hash<auto>, bool)> getCallback(string id, *code probe, bool fail = False) {
+        return sub (hash<auto> cx, bool sent) {
+            results.push(<AfterSendResult>{
+                "id": id,
+                "sent": sent,
+                "tld": get_thread_data("after_send_tld"),
+                "handler_name": cx.handler_name,
+                "probe": probe ? probe() : NOTHING,
+            });
+            if (fail) {
+                throw "AFTER-SEND-TEST-ERROR", "the callback fails";
+            }
+        };
+    }
+}
+
+#! a Qore-implemented InputStream, which only a Qore thread can read (not I/O-thread-safe)
+class QoreBlockStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+    }
+
+    constructor(binary data) {
+        self.data = data;
+    }
+
+    *binary read(int limit) {
+        if (pos >= data.size()) {
+            return;
+        }
+        binary rv = data.substr(pos, limit > 3 ? 3 : limit);
+        pos += rv.size();
+        return rv;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+}
+
+#! returns responses of every form, each with an after_send callback
+class AfterSendHandler inherits AbstractHttpRequestHandler {
+    public {
+        const Body = "0123456789";
+        const Chunks = ("01", "234", "56789");
+        #! the size of the large response
+        const LargeSize = 1024 * 1024;
+        #! the size of the response to a client that has gone away; larger than any socket buffers
+        const HugeSize = 16 * 1024 * 1024;
+    }
+
+    private {
+        AfterSendRecorder recorder;
+        #! the "wait" request pushes to this Queue when it is being handled
+        Queue entered();
+        #! the "wait" request returns its response when this Queue has an entry
+        Queue release();
+        #! the probe for the "order" request
+        *code order_probe;
+    }
+
+    constructor(AfterSendRecorder recorder) {
+        self.recorder = recorder;
+    }
+
+    #! sets the probe for the "order" request
+    setOrderProbe(*code probe) {
+        order_probe = probe;
+    }
+
+    #! waits until a "wait" request is being handled
+    waitEntered() {
+        entered.get(30s);
+    }
+
+    #! lets a "wait" request return its response
+    releaseWait() {
+        release.push(True);
+    }
+
+    *hash<auto> saveThreadLocalData() {
+        save_thread_data({"after_send_tld": "handler"});
+        return {};
+    }
+
+    restoreThreadLocalData(*hash<auto> data) {
+        remove_thread_data("after_send_tld");
+    }
+
+    hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
+            *data body) {
+        string name = (hdr.path =~ x/([^\/]+)$/)[0];
+        string id = hdr."x-id" ?? name;
+        code<nothing(hash<auto>, bool)> after_send = recorder.getCallback(id, name == "order" ? order_probe : NOTHING,
+            name == "raise");
+        binary b = binary(Body);
+        switch (name) {
+            case "small":
+            case "order":
+            case "raise":
+                return <HttpResponseInfo>{"code": 200, "body": Body, "after_send": after_send};
+            case "close":
+                return <HttpResponseInfo>{"code": 200, "body": Body, "close": True, "after_send": after_send};
+            case "empty":
+                return <HttpResponseInfo>{"code": 202, "after_send": after_send};
+            case "chunked":
+                return <HttpResponseInfo>{"code": 200, "chunked_body": new BinaryInputStream(b),
+                    "after_send": after_send};
+            case "stream":
+                return <HttpResponseInfo>{"code": 200, "body": new BinaryInputStream(b), "after_send": after_send};
+            case "stream-length":
+                return <HttpResponseInfo>{"code": 200, "body": new BinaryInputStream(b),
+                    "hdr": {"Content-Length": b.size()}, "after_send": after_send};
+            case "qore-stream":
+                return <HttpResponseInfo>{"code": 200, "body": new QoreBlockStream(b), "after_send": after_send};
+            case "callback": {
+                list<string> l = Chunks;
+                return <HttpResponseInfo>{"code": 200, "send_callback": auto sub () { return shift l; },
+                    "after_send": after_send};
+            }
+            case "error":
+                return <HttpResponseInfo>{"code": 404, "body": "not here", "after_send": after_send};
+            case "large":
+                return <HttpResponseInfo>{"code": 200, "body": strmul("x", LargeSize), "after_send": after_send};
+            case "wait":
+                entered.push(True);
+                release.get(30s);
+                return <HttpResponseInfo>{"code": 200, "body": strmul("x", HugeSize), "after_send": after_send};
+            case "invalid":
+                return <HttpResponseInfo>{"code": 999, "body": "invalid", "after_send": after_send};
+            case "sse":
+                # this handler cannot serve an SSE stream; the response is replaced by an error response
+                return <HttpResponseInfo>{"code": 200, "hdr": {"Content-Type": MimeTypeSse},
+                    "after_send": after_send};
+            case "reply-sent":
+                s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": MimeTypeText, "Connection": "close"},
+                    "self-reply");
+                return <HttpResponseInfo>{"code": 200, "reply_sent": True, "close": True, "after_send": after_send};
+        }
+        return <HttpResponseInfo>{"code": 404, "body": "unknown case"};
+    }
+}
+
+#! makes the session persistent with a request ending in "start"; a request ending in "end" ends the session
+class PersistentAfterSendHandler inherits AbstractHttpRequestHandler {
+    private {
+        AfterSendRecorder recorder;
+    }
+
+    constructor(AfterSendRecorder recorder) {
+        self.recorder = recorder;
+    }
+
+    *hash<auto> saveThreadLocalData() {
+        save_thread_data({"after_send_tld": "persistent"});
+        return {};
+    }
+
+    restoreThreadLocalData(*hash<auto> data) {
+        remove_thread_data("after_send_tld");
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string id = hdr."x-id";
+        if (hdr.path =~ /start$/) {
+            setPersistent(True);
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": isPersistent() ? "persistent" : "not persistent",
+            "after_send": recorder.getCallback(id),
+        };
+    }
+
+    bool isPersistentSessionEndRequest(hash<auto> hdr) {
+        return hdr.path =~ /end$/;
+    }
+}
+
+#! answers requests inline, on the async I/O callback dispatcher
+class InlineAfterSendHandler inherits AbstractHttpRequestHandler {
+    private {
+        AfterSendRecorder recorder;
+    }
+
+    constructor(AfterSendRecorder recorder) {
+        self.recorder = recorder;
+    }
+
+    *hash<auto> saveThreadLocalData() {
+        save_thread_data({"after_send_tld": "inline"});
+        return {};
+    }
+
+    restoreThreadLocalData(*hash<auto> data) {
+        remove_thread_data("after_send_tld");
+    }
+
+    bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleInlineRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 200, "body": "inline", "after_send": recorder.getCallback(hdr."x-id")};
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{"code": 500, "body": "not handled inline"};
+    }
+}
+
+#! collects the errors logged for failing after_send callbacks
+class AfterSendErrorCapture inherits LoggerAppenderWithLayout {
+    public {
+        #! receives each after_send callback error message
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /error in after_send callback/) {
+            messages.push(params);
+        }
+    }
+}
+
+class HttpServerAfterSendTest inherits QUnit::Test {
+    public {
+        #! the response cases with a complete response: name -> expected body
+        const Cases = {
+            "small": AfterSendHandler::Body,
+            "empty": NOTHING,
+            "chunked": AfterSendHandler::Body,
+            "stream": AfterSendHandler::Body,
+            "stream-length": AfterSendHandler::Body,
+            "qore-stream": AfterSendHandler::Body,
+            "callback": AfterSendHandler::Body,
+            "error": "not here",
+            "large": NOTHING,
+        };
+
+        # Self-signed test certificate
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        AfterSendRecorder recorder();
+        AfterSendHandler handler(recorder);
+        AfterSendErrorCapture capture();
+        HttpServer server;
+        int port;
+        int ssl_port;
+        int h3_port;
+        int id_seq = 0;
+        #! results received while waiting for the result of another request: id -> result
+        hash<string, hash<AfterSendResult>> received;
+    }
+
+    constructor() : Test("HttpServerAfterSendTest", "1.0") {
+        addTestCase("HTTP/1.1 keep-alive", \h1KeepAliveTest());
+        addTestCase("HTTP/1.1 connection close", \h1CloseTest());
+        addTestCase("HTTP/1.0", \h10Test());
+        addTestCase("HTTP/1.1 client has the response when the callback runs", \h1OrderTest());
+        addTestCase("HTTP/1.1 client gone", \h1ClientGoneTest());
+        addTestCase("callback exception", \callbackExceptionTest());
+        addTestCase("responses that are not sent as given", \notSentTest());
+        addTestCase("an invalid handler response is answered with one error response", \invalidResponseOnceTest());
+        addTestCase("HTTP/1.1 persistent session", \h1PersistentTest());
+        addTestCase("inline handler", \inlineTest());
+        addTestCase("HTTP/2", \h2Test());
+        addTestCase("HTTP/2 persistent session", \h2PersistentTest());
+        addTestCase("HTTP/2 client gone", \h2ClientGoneTest());
+        addTestCase("HTTP/3", \h3Test());
+        addTestCase("HTTP/3 client gone", \h3ClientGoneTest());
+        addTestCase("HTTP/2 connection closed before the response", \h2ConnectionClosedTest());
+        addTestCase("HTTP/3 connection closed before the response", \h3ConnectionClosedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("after-send-test", LoggerLevel::getLevelInfo());
+        logger.addAppender(capture);
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+        });
+        server.setHandler("after-send", "/as/", NOTHING, handler);
+        server.setHandler("persistent", "/persist", NOTHING, new PersistentAfterSendHandler(recorder), NOTHING,
+            False);
+        server.setHandler("inline", "/inline", NOTHING, new InlineAfterSendHandler(recorder));
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        ssl_port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        h3_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    tearDown() {
+        # a callback is called exactly once: no result is left over after a test consumed the results it expected
+        assertEq(0, recorder.results.size(), "no unexpected after_send callback calls");
+        assertEq({}, received, "no unexpected after_send callback calls");
+        received = {};
+    }
+
+    #! returns a new unique request ID
+    private string getId(string name) {
+        return sprintf("%s-%d", name, ++id_seq);
+    }
+
+    #! returns the after_send result for the given request
+    /** Results for other requests are kept; a second result for a request is an error
+    */
+    private hash<AfterSendResult> getResult(string id) {
+        while (!received{id}) {
+            hash<AfterSendResult> rv = recorder.results.get(30s);
+            if (received{rv.id}) {
+                fail(sprintf("second after_send result for request %y: %y", rv.id, rv));
+            }
+            received{rv.id} = rv;
+        }
+        return remove received{id};
+    }
+
+    #! asserts that the response to the given request was reported as sent
+    private assertSent(string id, string tld = "handler") {
+        hash<AfterSendResult> rv = getResult(id);
+        assertTrue(rv.sent, id + ": sent");
+        assertEq(tld, rv.tld, id + ": the callback runs under the handler's thread-local data");
+    }
+
+    #! asserts that the response to the given request was reported as not sent
+    private assertNotSent(string id) {
+        hash<AfterSendResult> rv = getResult(id);
+        assertFalse(rv.sent, id + ": not sent");
+        assertEq("handler", rv.tld, id + ": the callback runs under the handler's thread-local data");
+    }
+
+    #! checks a response of the given case
+    private checkResponse(string name, hash<auto> resp) {
+        if (name == "error") {
+            assertEq(404, resp.status_code, name);
+        } else if (name == "empty") {
+            assertEq(202, resp.status_code, name);
+        } else {
+            assertEq(200, resp.status_code, name);
+        }
+        if (name == "large") {
+            assertEq(AfterSendHandler::LargeSize, resp.body.size(), name);
+        } else if (exists Cases{name}) {
+            assertEq(Cases{name}, resp.body.typeCode() == NT_BINARY ? resp.body.toString() : resp.body, name);
+        }
+    }
+
+    #! returns a client for the plain listener
+    private HTTPClient getH1Client(*string version) {
+        HTTPClient hc({
+            "url": "http://127.0.0.1:" + port,
+            "http_version": version ?? "1.1",
+            "timeout": 30s,
+        });
+        hc.setHttp2Mode("disabled");
+        return hc;
+    }
+
+    #! returns a client for the TLS listener that requires HTTP/2
+    private HTTPClient getH2Client(timeout timeout = 30s) {
+        HTTPClient hc({
+            "url": "https://127.0.0.1:" + ssl_port,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+            "timeout": timeout,
+        });
+        hc.setHttp2Mode("required");
+        return hc;
+    }
+
+    #! sends a request with an ID; returns the response, also for an error status code
+    private hash<auto> send(HTTPClient hc, string path, string id, *hash<auto> hdr) {
+        try {
+            return hc.send(NOTHING, "GET", path, hdr + {"x-id": id});
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" && ex.arg.status_code) {
+                return ex.arg;
+            }
+            rethrow;
+        }
+    }
+
+    h1KeepAliveTest() {
+        HTTPClient hc = getH1Client();
+        foreach string name in (keys Cases) {
+            string id = getId(name);
+            hash<auto> resp = send(hc, "/as/" + name, id);
+            checkResponse(name, resp);
+            assertSent(id);
+        }
+    }
+
+    h1CloseTest() {
+        foreach string name in (keys Cases + ("close",)) {
+            HTTPClient hc = getH1Client();
+            string id = getId(name);
+            hash<auto> resp = send(hc, "/as/" + name, id, {"Connection": "close"});
+            if (name == "close") {
+                assertEq(200, resp.status_code, name);
+                assertEq(AfterSendHandler::Body, resp.body, name);
+            } else {
+                checkResponse(name, resp);
+            }
+            assertSent(id);
+        }
+    }
+
+    h10Test() {
+        # a streamed message body of unknown length is delimited by closing the connection
+        foreach string name in (keys Cases) {
+            HTTPClient hc = getH1Client("1.0");
+            string id = getId(name);
+            hash<auto> resp = send(hc, "/as/" + name, id);
+            checkResponse(name, resp);
+            assertSent(id);
+        }
+    }
+
+    h1OrderTest() {
+        Socket client();
+        client.connect("127.0.0.1:" + port, 30s);
+        on_exit client.close();
+        # the callback reads the complete response from the client socket without waiting: it has been written
+        handler.setOrderProbe(auto sub () {
+            hash<auto> hdr = client.readHTTPHeader(0);
+            return {
+                "status_code": hdr.status_code,
+                "body": client.recv(hdr."content-length".toInt(), 0),
+            };
+        });
+        on_exit handler.setOrderProbe();
+        string id = getId("order");
+        client.send(sprintf("GET /as/order HTTP/1.1\r\nHost: 127.0.0.1\r\nx-id: %s\r\n\r\n", id));
+        hash<AfterSendResult> rv = getResult(id);
+        assertTrue(rv.sent);
+        assertEq({"status_code": 200, "body": AfterSendHandler::Body}, rv.probe,
+            "the client has the complete response when the callback runs");
+    }
+
+    h1ClientGoneTest() {
+        string id = getId("wait");
+        {
+            Socket client();
+            client.connect("127.0.0.1:" + port, 30s);
+            client.send(sprintf("GET /as/wait HTTP/1.1\r\nHost: 127.0.0.1\r\nx-id: %s\r\n\r\n", id));
+            handler.waitEntered();
+            client.close();
+        }
+        handler.releaseWait();
+        assertNotSent(id);
+    }
+
+    callbackExceptionTest() {
+        HTTPClient hc = getH1Client();
+        string id = getId("raise");
+        hash<auto> resp = send(hc, "/as/raise", id);
+        assertEq(200, resp.status_code);
+        assertSent(id);
+        string msg = capture.messages.get(30s);
+        assertRegex("AFTER-SEND-TEST-ERROR", msg, "the callback's exception is logged");
+        # the connection is not affected
+        id = getId("small");
+        resp = send(hc, "/as/small", id);
+        assertEq(AfterSendHandler::Body, resp.body);
+        assertSent(id);
+    }
+
+    notSentTest() {
+        # the response is replaced by an error response
+        foreach string name in ("invalid", "sse") {
+            HTTPClient hc = getH1Client();
+            string id = getId(name);
+            hash<auto> resp = send(hc, "/as/" + name, id);
+            assertEq(500, resp.status_code, name);
+            assertNotSent(id);
+        }
+        # the handler sent the response itself on the HTTP/1.1 connection
+        {
+            HTTPClient hc = getH1Client();
+            string id = getId("reply-sent");
+            hash<auto> resp = send(hc, "/as/reply-sent", id);
+            assertEq("self-reply", resp.body);
+            assertSent(id);
+        }
+    }
+
+    invalidResponseOnceTest() {
+        Socket client();
+        client.connect("127.0.0.1:" + port, 30s);
+        on_exit client.close();
+        string id = getId("invalid");
+        client.send(sprintf("GET /as/invalid HTTP/1.1\r\nHost: 127.0.0.1\r\nx-id: %s\r\n\r\n", id));
+        hash<auto> hdr = client.readHTTPHeader(30s);
+        assertEq(500, hdr.status_code);
+        assertEq("close", hdr.connection);
+        client.recvBinary(hdr."content-length".toInt(), 30s);
+        # the server closes the connection after the error response, which is the only response
+        binary rest = binary();
+        while (True) {
+            binary b;
+            try {
+                b = client.recvBinary(-1, 30s);
+            } catch (hash<ExceptionInfo> ex) {
+                # the connection was closed
+                break;
+            }
+            if (!b) {
+                break;
+            }
+            rest += b;
+        }
+        assertEq(binary(), rest, "no data follows the error response");
+        assertNotSent(id);
+    }
+
+    h1PersistentTest() {
+        HTTPClient hc = getH1Client();
+        # the first response is sent before the session loop, the following ones by the session's thread
+        foreach string path in ("/persist/start", "/persist/next", "/persist/next") {
+            string id = getId("persist");
+            hash<auto> resp = send(hc, path, id);
+            assertEq("persistent", resp.body, path);
+            assertSent(id, "persistent");
+        }
+        string id = getId("persist");
+        hash<auto> resp = send(hc, "/persist/end", id);
+        assertEq(200, resp.status_code);
+    }
+
+    inlineTest() {
+        HTTPClient hc = getH1Client();
+        foreach int i in (xrange(2)) {
+            string id = getId("inline");
+            hash<auto> resp = send(hc, "/inline", id);
+            assertEq("inline", resp.body);
+            assertSent(id, "inline");
+        }
+    }
+
+    h2Test() {
+        HTTPClient hc = getH2Client();
+        foreach string name in (keys Cases) {
+            string id = getId(name);
+            hash<auto> resp = send(hc, "/as/" + name, id);
+            assertEq("2", resp.http_version, name + ": served on HTTP/2");
+            checkResponse(name, resp);
+            assertSent(id);
+        }
+    }
+
+    h2PersistentTest() {
+        # a persistent session on a multiplexed connection only lasts for the request
+        HTTPClient hc = getH2Client();
+        string id = getId("persist");
+        hash<auto> resp = send(hc, "/persist/start", id);
+        assertEq("2", resp.http_version);
+        assertEq(200, resp.status_code);
+        assertSent(id, "persistent");
+    }
+
+    h2ClientGoneTest() {
+        string id = getId("wait");
+        {
+            HTTPClient hc = getH2Client(2s);
+            # the client gives up waiting for the response and closes the connection
+            try {
+                send(hc, "/as/wait", id);
+                fail("the request does not time out");
+            } catch (hash<ExceptionInfo> ex) {
+                # the request timed out
+            }
+            handler.waitEntered();
+            hc.disconnect();
+        }
+        handler.releaseWait();
+        assertNotSent(id);
+    }
+
+    #! returns a client for the HTTP/3 listener
+    private HttpClientIo::HttpClientConnectionManager getH3Client(timeout timeout = 30s) {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h3",
+            "accept_all_certs": True,
+            "request_timeout": timeout,
+            "connect_timeout": 15s,
+        });
+    }
+
+    h3Test() {
+        HttpClientIo::HttpClientConnectionManager mgr = getH3Client();
+        on_exit delete mgr;
+        string url = "https://127.0.0.1:" + h3_port;
+        foreach string name in (keys Cases) {
+            string id = getId(name);
+            hash<auto> resp = mgr.request(url, "GET", "/as/" + name, {"x-id": id});
+            checkResponse(name, resp);
+            assertSent(id);
+        }
+    }
+
+    #! the client closes its connection while the handler runs, without resetting the request's stream
+    /** The response's transmission is watched only after the connection has been closed.
+    */
+    private connectionClosedTest(string protocol, int port) {
+        string id = getId("wait");
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": protocol,
+            "accept_all_certs": True,
+            "request_timeout": 60s,
+            "connect_timeout": 15s,
+        });
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            try {
+                mgr.request("https://127.0.0.1:" + port, "GET", "/as/wait", {"x-id": id});
+            } catch (hash<ExceptionInfo> ex) {
+                # the connection manager is deleted while the request is in progress
+            }
+        }();
+        handler.waitEntered();
+        delete mgr;
+        done.waitForZero(30s);
+        handler.releaseWait();
+        assertNotSent(id);
+    }
+
+    h2ConnectionClosedTest() {
+        connectionClosedTest("h2", ssl_port);
+    }
+
+    h3ConnectionClosedTest() {
+        connectionClosedTest("h3", h3_port);
+    }
+
+    h3ClientGoneTest() {
+        string id = getId("wait");
+        {
+            HttpClientIo::HttpClientConnectionManager mgr = getH3Client(2s);
+            on_exit delete mgr;
+            # the client gives up waiting for the response and closes the connection
+            try {
+                mgr.request("https://127.0.0.1:" + h3_port, "GET", "/as/wait", {"x-id": id});
+                fail("the request does not time out");
+            } catch (hash<ExceptionInfo> ex) {
+                # the request timed out
+            }
+            handler.waitEntered();
+        }
+        handler.releaseWait();
+        assertNotSent(id);
+    }
+}

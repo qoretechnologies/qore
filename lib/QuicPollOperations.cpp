@@ -1979,6 +1979,9 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
             // Report the close before erasing so the persistent-session teardown
             // path is not lost when this is the only place the session is reaped
             // (e.g. a session that closed without any reset/abandon event).
+            // Any response transmission results are taken first so that they are
+            // delivered before the close fails the session's remaining watches.
+            collectResponseSendResults(it->first, *it->second);
             if (it->second->reportCloseIfNew()) {
                 lifecycle_closed_sessions_.push_back(it->first);
             }
@@ -1997,6 +2000,12 @@ void SocketQuicServerPollOperation::cleanupClosedSessions() {
     }
 }
 
+void SocketQuicServerPollOperation::collectResponseSendResults(int64_t session_id, QuicSession& session) {
+    for (auto& r : session.takeResponseSendResults()) {
+        lifecycle_send_results_.push_back({session_id, r.first, r.second});
+    }
+}
+
 void SocketQuicServerPollOperation::collectSessionLifecycleEvents() {
     // Called on the I/O thread with sock->priv->m held.  Folds two cheap
     // per-session checks: drain peer-reset reports and detect newly-closed
@@ -2008,6 +2017,7 @@ void SocketQuicServerPollOperation::collectSessionLifecycleEvents() {
         for (int64_t stream_id : resets) {
             lifecycle_peer_resets_.emplace_back(entry.first, stream_id);
         }
+        collectResponseSendResults(entry.first, *entry.second);
         if (entry.second->reportCloseIfNew()) {
             ASYNC_IO_TRACE("SocketQuicServerPollOperation::collectSessionLifecycleEvents "
                 "session closed=%lld\n", (long long)entry.first);

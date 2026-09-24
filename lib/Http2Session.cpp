@@ -1071,6 +1071,16 @@ int Http2Session::submitPriority(int32_t stream_id, int32_t dependency, int32_t 
 
 int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
+    // report watched responses whose END_STREAM frame has been written on every exit, after the lock is acquired
+    // and before it is released
+    struct ResponseSendWatchUpdater {
+        Http2Session& h2;
+        ResponseSendWatchUpdater(Http2Session& h2) : h2(h2) {
+        }
+        ~ResponseSendWatchUpdater() {
+            h2.updateResponseSendWatches();
+        }
+    } response_send_watch_updater(*this);
     size_t pending = send_buffer.size() - send_offset;
     printd(5, "sendPendingData() want_write=%d isServer=%d timeout_ms=%d pending=%zu\n",
         nghttp2_session_want_write(session), is_server, timeout_ms, pending);
@@ -1102,9 +1112,21 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
         total_collected += len;
     }
 
+    // nghttp2 reports a frame as sent while returning its data, so each END_STREAM frame of a watched response
+    // serialized in this pass is in the buffer now
+    for (int32_t stream_id : response_end_streams_serialized) {
+        auto i = response_send_watches.find(stream_id);
+        if (i != response_send_watches.end()) {
+            i->second.end_pos = send_buffer_base + send_buffer.size();
+            i->second.end_pos_set = true;
+        }
+    }
+    response_end_streams_serialized.clear();
+
     // Compact send buffer when consumed prefix exceeds threshold
     if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
         send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
+        send_buffer_base += send_offset;
         send_offset = 0;
     }
 
@@ -1220,6 +1242,7 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     // Release memory when fully drained to prevent long-lived idle connections
     // from holding onto large send buffer allocations
     if (send_offset == send_buffer.size()) {
+        send_buffer_base += send_buffer.size();
         send_buffer.clear();
         send_offset = 0;
     }
@@ -1770,9 +1793,50 @@ int Http2Session::onFrameSendCallback(nghttp2_session* session,
     }
     if (h2 && h2->is_server && (frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_DATA)
             && (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        // the frame's data is added to the send buffer by sendPendingData(), which then records its end position
+        auto i = h2->response_send_watches.find(frame->hd.stream_id);
+        if (i != h2->response_send_watches.end() && !i->second.end_stream_serialized) {
+            i->second.end_stream_serialized = true;
+            h2->response_end_streams_serialized.push_back(frame->hd.stream_id);
+        }
         h2->stopRequestAfterResponse(frame->hd.stream_id);
     }
     return 0;
+}
+
+void Http2Session::watchResponseSend(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    assert(is_server);
+    // a stream that nghttp2 no longer knows was closed (reset by the peer) before the response could be sent
+    if (!session || !nghttp2_session_find_stream(session, stream_id)) {
+        response_send_results.emplace_back(stream_id, false);
+        return;
+    }
+    response_send_watches[stream_id] = ResponseSendWatch();
+}
+
+void Http2Session::updateResponseSendWatches() {
+    if (response_send_watches.empty()) {
+        return;
+    }
+    uint64_t written = send_buffer_base + send_offset;
+    for (auto i = response_send_watches.begin(); i != response_send_watches.end();) {
+        if (i->second.end_pos_set && written >= i->second.end_pos) {
+            response_send_results.emplace_back(i->first, true);
+            i = response_send_watches.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+void Http2Session::failResponseSendWatch(int32_t stream_id) {
+    auto i = response_send_watches.find(stream_id);
+    if (i == response_send_watches.end()) {
+        return;
+    }
+    response_send_watches.erase(i);
+    response_send_results.emplace_back(stream_id, false);
 }
 
 void Http2Session::stopRequestAfterResponse(int32_t stream_id) {
@@ -2115,6 +2179,14 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
         fprintf(stderr, "HTTP2 DEBUG: stream close stream=%d error_code=%u\n",
             stream_id, error_code);
         fflush(stderr);
+    }
+    // a watched response is sent only if the stream was closed normally after its END_STREAM frame was serialized;
+    // the frame's end position in the send buffer is then reported by updateResponseSendWatches()
+    {
+        auto i = h2->response_send_watches.find(stream_id);
+        if (i != h2->response_send_watches.end() && (error_code || !i->second.end_stream_serialized)) {
+            h2->failResponseSendWatch(stream_id);
+        }
     }
     Http2StreamInfo* stream = h2->getStream(stream_id);
     if (stream) {

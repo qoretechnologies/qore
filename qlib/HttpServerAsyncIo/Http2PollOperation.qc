@@ -77,6 +77,83 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
 
         #! Lock protecting stream listener registration and dispatch
         Mutex stream_listener_mutex();
+
+        #! Callbacks waiting for the transmission results of watched responses: stream_id string → callback
+        /** Protected by @ref stream_listener_mutex; see @ref watchResponseSend()
+        */
+        hash<string, code> response_send_callbacks;
+
+        #! True once the connection is closed; no further responses can be watched
+        bool response_send_closed = False;
+    }
+
+    #! Watches the response on a stream so that the result of its transmission is reported to a callback
+    /** Must be called before the response is submitted.  The callback is then called once, on a controller worker
+        thread, with @ref True "True" once the frame carrying the response's \c END_STREAM flag has been written to
+        the socket, or @ref False "False" if the stream is closed first (for example reset by the peer), if it is
+        already closed, or if the connection closes first (see @ref failResponseSendWatches()).
+
+        @param stream_id the HTTP/2 stream ID
+        @param callback called with the transmission result; it must not block
+
+        @return @ref True "True" if the response is watched, @ref False "False" if the connection is closed, in
+        which case the callback is not called
+
+        @throw HTTP2-ERROR no HTTP/2 session is active on the socket; the callback is not called
+    */
+    bool watchResponseSend(int stream_id, code<nothing(bool)> callback) {
+        {
+            AutoLock al(stream_listener_mutex);
+            if (response_send_closed) {
+                return False;
+            }
+            response_send_callbacks{stream_id} = callback;
+        }
+        try {
+            registerResponseSendWatch(stream_id);
+        } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(stream_listener_mutex);
+            remove response_send_callbacks{stream_id};
+            rethrow;
+        }
+        return True;
+    }
+
+    #! Called on a worker thread with the transmission result of a response watched with @ref watchResponseSend()
+    /** @param stream_key the stream ID as a string
+        @param sent @ref True "True" if the response has been written to the socket, @ref False "False" if not
+    */
+    nothing onStreamSendResult(string stream_key, bool sent) {
+        *code callback;
+        {
+            AutoLock al(stream_listener_mutex);
+            callback = remove response_send_callbacks{stream_key};
+        }
+        if (callback) {
+            callback(sent);
+        }
+    }
+
+    #! Reports every response still watched as not sent; called when the connection is closed
+    /** Responses cannot be watched afterwards.  Idempotent.
+    */
+    failResponseSendWatches() {
+        *hash<string, code> callbacks;
+        {
+            AutoLock al(stream_listener_mutex);
+            response_send_closed = True;
+            callbacks = remove response_send_callbacks;
+        }
+        if (!callbacks) {
+            return;
+        }
+        foreach code callback in (callbacks.iterator()) {
+            try {
+                callback(False);
+            } catch (hash<ExceptionInfo> ex) {
+                # the callbacks handle their own errors; the remaining callbacks must still be called
+            }
+        }
     }
 
     #! Registers a listener to be notified when stream data arrives
@@ -171,6 +248,7 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
         a listener may deregister itself from inside the callback.
     */
     notifyStreamListenersClosed() {
+        failResponseSendWatches();
         list<object> listeners;
         {
             AutoLock al(stream_listener_mutex);

@@ -1631,6 +1631,7 @@ public:
         StreamingResponseWithStream,
         Cleanup,
         Reset,
+        WatchResponseSend,
     };
 
     DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
@@ -1821,6 +1822,11 @@ public:
                 output = 0;
                 break;
 
+            case Action::WatchResponseSend:
+                h2->watchResponseSend(stream_id);
+                output = 0;
+                break;
+
             case Action::Reset:
                 output = h2->submitRstStream(stream_id, h2_error_code, xsink);
                 if (output != 0) {
@@ -1898,6 +1904,7 @@ public:
         DeregisterConnectFrameState,
         RegisterDatagramQueue,
         UnregisterDatagramQueue,
+        WatchResponseSend,
     };
 
     DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, const char* method,
@@ -1940,7 +1947,7 @@ public:
         assert(action == Action::Cancel || action == Action::ShutdownNotice || action == Action::Shutdown
             || action == Action::Cleanup || action == Action::Reset
             || action == Action::DeregisterConnectQueue || action == Action::DeregisterConnectFrameState
-            || action == Action::UnregisterDatagramQueue);
+            || action == Action::UnregisterDatagramQueue || action == Action::WatchResponseSend);
         sock->ref();
     }
 
@@ -2063,6 +2070,11 @@ public:
 
             case Action::Cleanup:
                 session->cleanupStream(stream_id);
+                output = 0;
+                break;
+
+            case Action::WatchResponseSend:
+                session->watchResponseSend(stream_id);
                 output = 0;
                 break;
 
@@ -2204,6 +2216,7 @@ private:
             case Action::Trailers:
                 return output == 0;
             case Action::Cleanup:
+            case Action::WatchResponseSend:
             case Action::RegisterConnectQueue:
             case Action::DeregisterConnectQueue:
             case Action::RegisterConnectFrameState:
@@ -5729,6 +5742,32 @@ int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNo
         "sendHttp2Trailers", xsink));
 }
 
+int QoreSocketObject::watchHttp2ResponseSend(int32_t stream_id, ExceptionSink* xsink) {
+    // serialized with the stream's frames on the async I/O execution path, so a stream already closed is reported
+    // at once; there is no socket I/O and nothing to flush, so no controller wake is needed
+    if (qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker()) {
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+        if (!h2) {
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+            return -1;
+        }
+        h2->watchResponseSend(stream_id);
+        return 0;
+    }
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::WatchResponseSend, stream_id, false),
+        "watchHttp2ResponseSend", xsink));
+}
+
+std::vector<std::pair<int32_t, bool>> QoreSocketObject::takeHttp2ResponseSendResultsForAsyncPoll() {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    if (!h2) {
+        return {};
+    }
+    return h2->takeResponseSendResults();
+}
+
 void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
     // Http2Session::cleanupStream() only drops per-stream local state under the session mutex;
     // no socket I/O and nothing to flush, so no controller wake is needed from a worker either
@@ -6733,6 +6772,13 @@ void QoreSocketObject::cleanupQuicStream(int64_t session_id, int64_t stream_id,
         new QoreSocketObjectQuicEnqueuePollOperation(this,
             QoreSocketObjectQuicEnqueuePollOperation::Action::Cleanup, session_id, stream_id),
         "cleanupQuicStream", xsink);
+}
+
+int QoreSocketObject::watchQuicResponseSend(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::WatchResponseSend, session_id, stream_id),
+        "watchQuicResponseSend", xsink));
 }
 
 int QoreSocketObject::resetQuicStream(int64_t session_id, int64_t stream_id,

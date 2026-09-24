@@ -652,6 +652,34 @@ public:
         return rv;
     }
 
+    //! Watches the response on a server request stream so that the result of its transmission is reported
+    /** Must be called before the response is submitted.  One result is reported per watched stream by
+        takeResponseSendResults() when ngtcp2 closes the stream: @c true if it was closed without an application
+        error, meaning that the response including its FIN has been sent and acknowledged by the peer, or
+        @c false if the stream was reset.  A stream that is already closed or reset, or a stream of a closed
+        session, is reported at once, as not sent: ngtcp2 does not close the streams of a closed connection, and
+        the close of the session, which the H3 server poll operation reports only once (reportCloseIfNew()), may
+        already have been reported.  Protected by mtx_.
+
+        @param stream_id the stream whose response is watched
+    */
+    DLLLOCAL void watchResponseSend(int64_t stream_id) {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        if (isClosed() || closed_streams_.count(stream_id) || peer_reset_streams_.count(stream_id)) {
+            response_send_results_.emplace_back(stream_id, false);
+            return;
+        }
+        response_send_watches_.insert(stream_id);
+    }
+
+    //! Drains the transmission results of watched responses (one-shot); see watchResponseSend()
+    DLLLOCAL std::vector<std::pair<int64_t, bool>> takeResponseSendResults() {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        std::vector<std::pair<int64_t, bool>> rv;
+        rv.swap(response_send_results_);
+        return rv;
+    }
+
     //! Returns true exactly once, after the session has closed
     /** Lets the H3 server poll operation report a per-session close to the
         controller exactly once, so a persistent dedicated handler thread on a
@@ -1536,6 +1564,12 @@ private:
         (persistent-session teardown on multiplexed connections).  Protected by mtx_.
     */
     std::vector<int64_t> pending_peer_reset_reports_;
+
+    //! Streams whose response transmission result is reported; see watchResponseSend().  Protected by mtx_.
+    std::unordered_set<int64_t> response_send_watches_;
+
+    //! Response transmission results awaiting takeResponseSendResults().  Protected by mtx_.
+    std::vector<std::pair<int64_t, bool>> response_send_results_;
 
     //! True once a session close has been reported via @ref reportCloseIfNew().  Protected by mtx_.
     bool close_reported_ = false;

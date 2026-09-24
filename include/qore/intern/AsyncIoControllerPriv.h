@@ -158,6 +158,7 @@ public:
         DT_CALLBACK,        //!< Call a code reference with args (timer callbacks)
         DT_CONTINUE_POLL,   //!< Call continuePoll() on spop_obj and send result back to I/O thread
         DT_STREAM_DATA_NOTIFY, //!< Call onStreamData(stream_id) on spop_obj (stream queue drain notification)
+        DT_STREAM_SEND_RESULT_NOTIFY, //!< Call onStreamSendResult(stream_key, sent) on spop_obj
         DT_POLL_COMPLETE_NOTIFY, //!< Call onPollComplete() on spop_obj (WebSocket frame arrival notification)
         DT_RELEASE,         //!< Release the references in release only, off the async I/O thread
         DT_NATIVE_TASK,     //!< Run the native task in native_task, off the async I/O execution path
@@ -177,6 +178,7 @@ public:
         std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
         AsyncIoNativeTask* native_task = nullptr; //!< For DT_NATIVE_TASK: owned task (or nullptr)
+        bool sent = false;                   //!< For DT_STREAM_SEND_RESULT_NOTIFY: the transmission result
     };
 
     //! Creates the dispatcher
@@ -231,6 +233,18 @@ public:
         @param owner optional owner identifier for per-owner flush tracking
     */
     DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key,
+        const std::string& owner = std::string());
+
+    //! Dispatch onStreamSendResult(stream_key, sent) asynchronously (fire-and-forget)
+    /** Called by the I/O thread with the transmission result of a response whose stream is watched by an HTTP/2
+        or HTTP/3 server poll operation.
+
+        @param spop_obj the poll operation object (referenced — ownership transferred)
+        @param stream_key stream identifier (H2: "stream_id", H3: "session_id:stream_id")
+        @param sent true if the response was sent, false if not
+        @param owner optional owner identifier for per-owner flush tracking
+    */
+    DLLLOCAL void dispatchStreamSendResultAsync(QoreObject* spop_obj, const std::string& stream_key, bool sent,
         const std::string& owner = std::string());
 
     //! Dispatch onPollComplete() asynchronously (fire-and-forget)

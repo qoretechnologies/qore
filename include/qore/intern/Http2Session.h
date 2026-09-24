@@ -557,6 +557,26 @@ public:
         return rv;
     }
 
+    //! Watches the response on a server stream so that the result of its transmission is reported (server)
+    /** Must be called before the response is submitted.  One result is reported per watched stream by
+        takeResponseSendResults(): @c true once the frame carrying the response's END_STREAM flag has been written
+        to the socket, or @c false if the stream is closed first (peer reset) or is already closed when this is
+        called.
+
+        @param stream_id the stream whose response is watched
+    */
+    DLLLOCAL void watchResponseSend(int32_t stream_id);
+
+    //! Drains the transmission results of watched responses (one-shot)
+    /** @return (stream ID, sent) pairs; see watchResponseSend()
+    */
+    DLLLOCAL std::vector<std::pair<int32_t, bool>> takeResponseSendResults() {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        std::vector<std::pair<int32_t, bool>> rv;
+        rv.swap(response_send_results);
+        return rv;
+    }
+
     //! Remove stream from map (cleanup after handler finishes)
     /** @param stream_id the stream to remove
         @since %Qore 3.0
@@ -857,6 +877,33 @@ private:
     // Send buffer
     std::vector<char> send_buffer;
     size_t send_offset = 0;
+    //! The absolute position in the outgoing byte stream of send_buffer[0]; advanced when consumed data is removed
+    uint64_t send_buffer_base = 0;
+
+    //! The transmission state of a response watched with watchResponseSend()
+    struct ResponseSendWatch {
+        //! True once the frame carrying END_STREAM has been serialized by nghttp2
+        bool end_stream_serialized = false;
+        //! True once end_pos has been set
+        bool end_pos_set = false;
+        //! The absolute position in the outgoing byte stream after the END_STREAM frame
+        uint64_t end_pos = 0;
+    };
+
+    //! Watched responses by stream ID; accessed under m
+    std::unordered_map<int32_t, ResponseSendWatch> response_send_watches;
+
+    //! Watched streams whose END_STREAM frame was serialized in the current sendPendingData() collection pass
+    std::vector<int32_t> response_end_streams_serialized;
+
+    //! Transmission results awaiting takeResponseSendResults(); accessed under m
+    std::vector<std::pair<int32_t, bool>> response_send_results;
+
+    //! Reports the watched responses whose END_STREAM frame has been written to the socket; called under m
+    DLLLOCAL void updateResponseSendWatches();
+
+    //! Reports a watched response as not sent, if it is watched; called under m
+    DLLLOCAL void failResponseSendWatch(int32_t stream_id);
 
     // Settings
     Http2Settings local_settings;

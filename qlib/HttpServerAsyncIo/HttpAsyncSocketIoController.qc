@@ -562,6 +562,55 @@ public class HttpAsyncSocketIoController {
         controller.waitStop();
     }
 
+    #! Watches the transmission of the response on an HTTP/2 or HTTP/3 stream
+    /** Called on the request's handler thread before the response is submitted.  The callback is called exactly
+        once, on a handler pool thread, with @ref True "True" once the response has been sent (HTTP/2: the frame
+        with its \c END_STREAM flag has been written to the socket; HTTP/3: the stream has been closed after the
+        peer acknowledged the complete response) or @ref False "False" if it was not.
+
+        @param target the async target of the connection
+        @param callback the callback for the result
+        @param watch registers the watch with the stream's poll operation; returns @ref False "False" if the
+        connection is closed
+    */
+    private watchMultiplexedResponseSend(HttpAsyncTarget target, code<nothing(bool)> callback,
+            code<bool(code<nothing(bool)>)> watch) {
+        bool watched;
+        try {
+            # the poll operation calls this on a controller worker, where no user code may run
+            watched = watch(sub (bool sent) {
+                dispatchResponseSendResult(target, callback, sent);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "cannot watch the transmission of a multiplexed response: %s: %s", ex.err,
+                ex.desc);
+        }
+        if (!watched) {
+            dispatchResponseSendResult(target, callback, False);
+        }
+    }
+
+    #! Calls a callback with the transmission result of a response on a handler pool thread
+    /** User code must not run on the I/O thread or on a controller worker.
+
+        @param target the async target of the connection
+        @param callback the callback for the result
+        @param sent the transmission result
+    */
+    dispatchResponseSendResult(HttpAsyncTarget target, code<nothing(bool)> callback, bool sent) {
+        try {
+            submitToHandlerPool(target, sub () {
+                callback(sent);
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            # the handler pool no longer accepts tasks (the controller is stopping); the callback must still be
+            # called exactly once
+            log(LoggerLevel::DEBUG, "cannot submit a response transmission result to the handler pool: %s: %s",
+                ex.err, ex.desc);
+            background callback(sent);
+        }
+    }
+
     #! Submits a user-code body to the handler thread pool, wrapped in the target's
     #! per-dispatch context save/restore hooks
     /** All controller dispatches that may run user code (regular request handling,
@@ -1894,6 +1943,14 @@ public class HttpAsyncSocketIoController {
                 "stream_uses_frame_state": stream_uses_frame_state,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wakeSocket(listener); },
+                # Reports the transmission result of the response on this stream;
+                # see watchMultiplexedResponseSend()
+                "watch_response_send": sub (code<nothing(bool)> callback) {
+                    watchMultiplexedResponseSend(target, callback,
+                        bool sub (code<nothing(bool)> cb) {
+                            return h3op.watchResponseSend(session_id, stream_id, cb);
+                        });
+                },
                 "register_stream_listener": sub (object listener) {
                     h3op.registerStreamListener(session_id, stream_id, listener);
                 },
@@ -2791,6 +2848,9 @@ public class HttpAsyncSocketIoController {
                     # ignore close errors
                 }
             }
+            if (cancel_cinfo.after_send && orig_state == HttpConnectionState::SendStreamResponse) {
+                dispatchResponseSendResult(cancel_cinfo.target, cancel_cinfo.after_send, False);
+            }
             return;
         }
 
@@ -2828,6 +2888,9 @@ public class HttpAsyncSocketIoController {
             }
             log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
                 uh, orig_state, result.ex.err, result.ex.desc);
+            if (orig_state == HttpConnectionState::SendStreamResponse && cinfo.after_send) {
+                dispatchResponseSendResult(cinfo.target, cinfo.after_send, False);
+            }
             handleConnectionError(uh, cinfo, orig_state, result.ex);
             return;
         }
@@ -3034,12 +3097,24 @@ public class HttpAsyncSocketIoController {
                         # Wake the socket to flush any data queued during
                         # header send (SSE events, WS frames)
                         wakeSocketIfPresent(cinfo.sock, uh, "HTTP/2 submit failure resume");
+                    } else if (cinfo.after_send) {
+                        # the response has been written; report it, then keep the connection if the response
+                        # allows it
+                        dispatchResponseSendResult(cinfo.target, cinfo.after_send, True);
+                        if (cinfo.return_to_idle_after_send && cinfo.sock.isOpen()) {
+                            addIdleConnection(cinfo.sock, cinfo.listener, cinfo.cx, cinfo.target, cinfo.ttl);
+                        } else {
+                            lingeringClose(uh, cinfo.sock, cinfo.listener, cinfo.cx, cinfo.target, cinfo.ssl);
+                        }
                     } else {
                         # No pending streaming — the response is complete; close the connection
                         lingeringClose(uh, cinfo.sock, cinfo.listener, cinfo.cx, cinfo.target, cinfo.ssl);
                     }
                 } else {
                     # Error or unexpected state — close connection
+                    if (cinfo.after_send) {
+                        dispatchResponseSendResult(cinfo.target, cinfo.after_send, False);
+                    }
                     handleConnectionClosed(uh, cinfo);
                 }
                 break;
@@ -3183,6 +3258,11 @@ public class HttpAsyncSocketIoController {
         {
             AutoWriteLock al(m);
             remove connections{uh};
+        }
+
+        # the responses still watched on a failed HTTP/2 connection were not sent
+        if (cinfo.stream_op instanceof Http2PollOperation) {
+            cast<Http2PollOperation>(cinfo.stream_op).failResponseSendWatches();
         }
 
         dispatchOnError(cinfo.target, cinfo.sock, ex, cinfo.listener, cinfo.cx, uh, "connection error");
@@ -3538,10 +3618,12 @@ public class HttpAsyncSocketIoController {
                     "HTTP/1.x stream send error for %y: %s: %s", uh, ex.err, ex.desc);
                 try { is.unassignThread(); } catch () {}
                 try { sock.close(); } catch () {}
+                notifyResponseSent(target, \result, False);
                 return;
             }
             try { is.unassignThread(); } catch () {}
             remove result.input_stream;
+            notifyResponseSent(target, \result, True);
 
             # Response fully sent.  Either keep-alive or close.
             if (result.close || close_delimited || !result.return_to_idle || !sock.isOpen()) {
@@ -3556,9 +3638,12 @@ public class HttpAsyncSocketIoController {
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
         # Only use fused I/O-thread path for I/O-thread-safe InputStreams (C++ native);
         # Qore InputStreams (CallbackInputStream etc.) converted to body/send_callback above
+        # A response with after_send is never sent with a fused operation: its completion is only observed once
+        # the next request header has been read, so it is sent with the operations below, whose completion is
+        # observed in handleConnectionResult()
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
                 && !result.close && result.return_to_idle && result.hdr."Content-Length"
-                && result.input_stream.isIoThreadSafe()) {
+                && result.input_stream.isIoThreadSafe() && !result.after_send) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 timeout ttl = result.ttl ?? DefaultIdleTimeout;
@@ -3590,9 +3675,9 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Opt #3b: InputStream + close → non-fused stream send (I/O-thread-safe only)
+        # Opt #3b: InputStream + close or after_send → non-fused stream send (I/O-thread-safe only)
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
-                && result.close && result.input_stream.isIoThreadSafe()) {
+                && (result.close || result.after_send) && result.input_stream.isIoThreadSafe()) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 AbstractPollOperation send_op;
@@ -3614,6 +3699,9 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendStreamResponse,
                     "stream_op": send_op,
                     "ssl": linfo.ssl,
+                    "after_send": remove result.after_send,
+                    "return_to_idle_after_send": !result.close && result.return_to_idle,
+                    "ttl": result.ttl ?? DefaultIdleTimeout,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -3625,6 +3713,7 @@ public class HttpAsyncSocketIoController {
                 log(LoggerLevel::ERROR, "Error starting stream send for %y: %s: %s",
                     uh, ex.err, ex.desc);
                 try { sock.close(); } catch () {}
+                notifyResponseSent(target, \result, False);
             }
             return;
         }
@@ -3636,7 +3725,7 @@ public class HttpAsyncSocketIoController {
         # Requirements: has response, not streaming, not using InputStream or send_callback,
         # returning to idle
         if (result.code && !result.streaming && !result.input_stream && !result.send_callback
-                && !result.close && result.return_to_idle) {
+                && !result.close && result.return_to_idle && !result.after_send) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 timeout ttl = result.ttl ?? DefaultIdleTimeout;
@@ -3670,7 +3759,7 @@ public class HttpAsyncSocketIoController {
         # (I/O-thread-safe only; non-I/O-safe InputStreams already converted above)
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
                 && !result.close && result.return_to_idle && result.chunked
-                && result.input_stream.isIoThreadSafe()) {
+                && result.input_stream.isIoThreadSafe() && !result.after_send) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 timeout ttl = result.ttl ?? DefaultIdleTimeout;
@@ -3717,6 +3806,7 @@ public class HttpAsyncSocketIoController {
                     # this socket until it is handed back or closed.
                     HttpServer::http_send_streamed_response(sock, result.code, status_msg, result.hdr ?? {},
                         result.send_callback, result.send_timeout ?? -1);
+                    notifyResponseSent(target, \result, True);
                     if (result.close || isCloseDelimited(result.hdr) || !result.return_to_idle || !sock.isOpen()) {
                         lingeringClose(uh, sock, linfo.listener, cx, target, linfo.ssl ?? False);
                         return;
@@ -3737,6 +3827,9 @@ public class HttpAsyncSocketIoController {
                         "state": HttpConnectionState::SendStreamResponse,
                         "stream_op": send_op,
                         "ssl": linfo.ssl,
+                        "after_send": remove result.after_send,
+                        "return_to_idle_after_send": !result.close && result.return_to_idle,
+                        "ttl": result.ttl ?? DefaultIdleTimeout,
                     };
                     hash<HttpActiveConnectionInfo> cinfo;
                     {
@@ -3750,6 +3843,7 @@ public class HttpAsyncSocketIoController {
                 log(LoggerLevel::ERROR, "Error sending HTTP/1.x response for %y: %s: %s",
                     uh, ex.err, ex.desc);
                 try { sock.close(); } catch () {}
+                notifyResponseSent(target, \result, False);
                 return;
             }
         }
@@ -3819,6 +3913,20 @@ public class HttpAsyncSocketIoController {
             *HttpKeepAlivePollOperation reuse_op = linfo.keep_alive_op;
             addIdleConnection(sock, linfo.listener, cx, target,
                 result.ttl ?? DefaultIdleTimeout, reuse_op);
+        }
+    }
+
+    #! Reports the transmission result of an HTTP/1.x response to its after_send callback, if any
+    /** The callback is removed from the result, so it is called at most once.
+
+        @param target the async target of the connection
+        @param result the request result
+        @param sent @ref True "True" if the response was sent, @ref False "False" if not
+    */
+    private notifyResponseSent(HttpAsyncTarget target, reference<hash<HttpRequestResultInfo>> result, bool sent) {
+        *code<nothing(bool)> after_send = remove result.after_send;
+        if (after_send) {
+            dispatchResponseSendResult(target, after_send, sent);
         }
     }
 
@@ -4129,6 +4237,14 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "headers_end_stream": request.headers_end_stream ?? False,
                 "io_wake": sub () { controller.wakeSocket(dispatch_sock); },
+                # Reports the transmission result of the response on this stream;
+                # see watchMultiplexedResponseSend()
+                "watch_response_send": sub (code<nothing(bool)> callback) {
+                    watchMultiplexedResponseSend(dispatch_target, callback,
+                        bool sub (code<nothing(bool)> cb) {
+                            return dispatch_h2op.watchResponseSend(dispatch_stream_id, cb);
+                        });
+                },
                 # Wires an SSE response stream to the HTTP/2 stream-teardown
                 # notification.  HTTP/2 multiplexes streams onto one connection,
                 # so neither a socket close nor a failed write can report that
@@ -4949,6 +5065,11 @@ hashdecl HttpActiveConnectionInfo {
     #! Header parsing info (saved during ReadBody state for dispatch after body is read)
     *hash<auto> pending_header_info;
 
+    #! Called once with the transmission result of the HTTP/1.x response sent in the SendStreamResponse state
+    *code<nothing(bool)> after_send;
+
+    #! True if the connection is returned to the idle pool once the response with after_send has been sent
+    bool return_to_idle_after_send = False;
 }
 
 #! Internal delayed-response timer info

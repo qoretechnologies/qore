@@ -3618,6 +3618,15 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
         // lost during connection migration.
         session->closed_streams_.insert(stream_id);
 
+        // Report a watched response: ngtcp2 closes a stream without an application error only once the data
+        // sent on it, including the FIN, has been acknowledged by the peer
+        {
+            std::lock_guard<std::recursive_mutex> lock(session->mtx_);
+            if (session->response_send_watches_.erase(stream_id)) {
+                session->response_send_results_.emplace_back(stream_id, !peer_reset);
+            }
+        }
+
         // Clean up body data
         session->body_data_.erase(stream_id);
         session->streaming_body_data_.erase(stream_id);

@@ -92,6 +92,37 @@ module HttpServer {
     - <a href="http://www.qore.org/manual/modules/xml/current/SoapHandler/html/index.html">SoapHandler</a>: provides
       infrastructure for implementing SOAP server-side services using the HttpServer module
 
+    @section httpserver_after_send Running Code After the Response Has Been Sent
+
+    A handler returns its response; the server sends it afterwards.  To run code once the response has been sent,
+    for example to send a reply to a separate address only after the client has received the response to its
+    request, set the \c after_send key of the @ref HttpServer::HttpResponseInfo "HttpResponseInfo" hash.  The
+    callback is called exactly once with the request context and @ref True "True" if the response has been completely
+    sent, or @ref False "False" if it could not be sent:
+
+    @code{.py}
+# accepts a request with 202 Accepted and sends the reply to the address in the request's "Reply-To" header once
+# the client has been sent the 202 response
+class DecoupledReplyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string reply_to = hdr."reply-to";
+        string reply = sprintf("processed %d bytes", body.size());
+        return <HttpResponseInfo>{
+            "code": 202,
+            "after_send": sub (hash<auto> cx, bool sent) {
+                if (sent) {
+                    HTTPClient client({"url": reply_to});
+                    client.post(NOTHING, reply, {"Content-Type": MimeTypeText});
+                }
+            },
+        };
+    }
+}
+    @endcode
+
+    See @ref HttpServer::HttpResponseInfo::after_send "HttpResponseInfo::after_send" for when a response counts as
+    sent with each HTTP version and on which thread the callback runs.
+
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
     When a TLS listener is added with \c enable_h3 (or when
@@ -3907,6 +3938,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
 
             if (rv.reply_sent) {
+                # the handler sent the response itself: only an HTTP/1.x response has then been written on this
+                # thread; the transmission of an HTTP/2 or HTTP/3 response cannot be observed
+                if (rv.after_send) {
+                    ResponseAfterSendNotifier after_send(remove rv.after_send, cx, handler, listener);
+                    after_send.notify(!is_multiplexed && rv."code" >= 200);
+                }
                 if (is_multiplexed && async_response_out) {
                     if (rv.streaming) {
                         # Streaming handler already sent response directly via protocol-specific
@@ -4012,6 +4049,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             err_hdr = http_canonicalize_reply_header_names(mergeResponseHeaders(err_hdr,
                 cx."error-response-headers"));
         }
+        # an HTTP/1.x connection closed after the response is announced in it (RFC 9112 section 9.6)
+        if (close) {
+            err_hdr.Connection = "close";
+        }
         return <HttpAsyncResponseInfo>{
             "code": status_code,
             "hdr": err_hdr,
@@ -4057,6 +4098,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         rv.close = boolean(cx.close);
 
+        # reports the transmission result of the response to the handler's after_send callback; the result is
+        # reported by the code that sends the response, or here if it is not sent
+        *ResponseAfterSendNotifier after_send;
+        if (rv.after_send) {
+            after_send = new ResponseAfterSendNotifier(remove rv.after_send, cx, handler, listener);
+        }
+        on_error if (after_send) {
+            after_send.notify(False);
+        }
+
         # if there is a pending chunked body that has not yet been read on exit, then read it and discard before sending any response
         on_exit if (s.pendingHttpChunkedBody())
             s.readHTTPChunkedBodyBinary(HttpServer::ReadTimeout);
@@ -4066,7 +4117,20 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             cx.close = True;
             remove cx.persistent;
 
-            sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
+            if (async_response_out) {
+                # the async I/O controller sends the error response; sending it here as well sent a second error
+                # response, as sendHttpError() cannot mark the caller's context as having sent a response
+                bool is_multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
+                async_response_out = buildAsyncErrorResponse(500, str, cx, listener, s, !is_multiplexed);
+            } else {
+                sendHttpError(listener, cx, s, 500, str, NOTHING, NOTHING, cx."response-encoding", head);
+                cx."response-sent" = True;
+            }
+            logError("%s", str);
+            # the handler's response was replaced with an error response
+            if (after_send) {
+                after_send.notify(False);
+            }
             return;
         }
 
@@ -4153,7 +4217,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         if (rv."code" >= 300 && rv."code" < 400) {
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
-            doResponse(listener, s, cx, rv, chunked_allowed, \async_response_out);
+            doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
         } else if (rv."code" >= 400) {
             if (!head && !rv.body && !rv.hasKeyValue("chunked_body")) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
@@ -4163,12 +4227,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 # through h2op (HTTP/2) or sendHTTPResponse (HTTP/1.x), rather than
                 # sending directly on the socket which would bypass the poll operation
                 # state machine and corrupt the connection lifecycle
-                doResponse(listener, s, cx, rv, chunked_allowed, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
             } else {
                 sendHttpError(listener, cx, s, rv."code", rv.body,
                     rv.hasKey("chunked_body") ? rv.chunked_body : NOTHING,
                     rv.hdr, cx."response-encoding", head);
                 cx."response-sent" = True;
+                if (after_send) {
+                    after_send.notify(True);
+                }
             }
             remove cx.persistent;
         } else {
@@ -4213,8 +4280,18 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # For HTTP/2 and HTTP/3 extended CONNECT streaming, don't send response here -
             # it's handled in the dedicated socket section
             if (!rv.streaming || !ext_connect) {
-                doResponse(listener, s, cx, rv, chunked_allowed, \async_response_out);
+                doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
             }
+        }
+
+        # a response that does not end the exchange (a Server-Sent Events stream, a protocol upgrade, or an extended
+        # CONNECT response) is never completely sent
+        if (after_send && ((rv.streaming && ext_connect) || rv.hdr."Content-Type" == MimeTypeSse
+                || rv."code" == 101)) {
+            if (async_response_out) {
+                remove async_response_out.after_send;
+            }
+            after_send.notify(False);
         }
 
         if (rv.log)
@@ -4621,7 +4698,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     # chunked_allowed: False for a response to an HTTP/1.0 request, where a streamed message body is delimited by
     # closing the connection instead of chunked transfer encoding
     private:internal doResponse(HttpListener listener, Socket s, hash<auto> cx, hash rv, bool chunked_allowed,
-            *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
+            *ResponseAfterSendNotifier after_send, *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
             # Capture callback for the response-sending code
@@ -4633,6 +4710,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 "close": cx.close ?? False,
                 "cx": cx,
                 "listener": listener,
+                "after_send": after_send,
             };
             listener.logResponse(cx, rv);
             return;
@@ -4697,6 +4775,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             "close": cx.close ?? False,
             "cx": cx,
             "listener": listener,
+            "after_send": after_send,
         };
         listener.logResponse(cx, rv);
     }
@@ -5118,6 +5197,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (hdr.method == "HEAD" || resp.code < 200 || resp.code == 204 || resp.code == 304) {
                 body = NOTHING;
             }
+            # the controller sends the response and reports its transmission result
+            *code<nothing(bool)> after_send;
+            if (resp.after_send) {
+                ResponseAfterSendNotifier notifier(resp.after_send, cx, handler, self);
+                after_send = sub (bool sent) {
+                    notifier.notify(sent);
+                };
+            }
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "code": resp.code,
                 "status_message": HttpCodes{resp.code},
@@ -5126,6 +5213,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "close": close,
                 "return_to_idle": !close,
                 "ttl": serv.getTtl(),
+                "after_send": after_send,
             };
         } catch (hash<ExceptionInfo> ex) {
             string err = sprintf("inline handler %s: %s: %s", handler.className(), ex.err, ex.desc);
@@ -6110,6 +6198,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> cx, Socket s) {
         bool is_multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
 
+        # a response without a message exchange to send reports that it was not sent
+        on_exit if (async_response.after_send) {
+            async_response.after_send.notify(False);
+        }
+
         # Handler set up a streaming connection (SSE or WebSocket)
         if (async_response.streaming) {
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
@@ -6138,6 +6231,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # For multiplexed protocols (HTTP/2, HTTP/3), don't close the connection
             # based on cx.close — the stream is closed independently
             bool do_close = !is_multiplexed && (async_response.close || !s.isOpen());
+            # the controller sends the response and reports its transmission result
+            *code<nothing(bool)> after_send;
+            if (*ResponseAfterSendNotifier notifier = remove async_response.after_send) {
+                if (is_multiplexed) {
+                    watchMultiplexedResponseSend(cx."header-info", notifier);
+                } else {
+                    after_send = sub (bool sent) {
+                        notifier.notify(sent);
+                    };
+                }
+            }
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "code": async_response.code,
                 "status_message": HttpServer::HttpCodes{async_response.code},
@@ -6150,6 +6254,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 "close": do_close,
                 "return_to_idle": !do_close,
                 "ttl": serv.getTtl(),
+                "after_send": after_send,
             };
         }
 
@@ -6199,6 +6304,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     #! Sends a response synchronously (used when switching from async to sync mode for persistent handlers)
     private sendResponseSync(Socket s, hash<HttpAsyncResponseInfo> response) {
         @assert(response.code, "response.code must be set");
+        # an HTTP/2 or HTTP/3 response is written by the I/O thread after it has been submitted here, so its
+        # transmission is watched; an HTTP/1.x response has been written when the send call returns
+        *ResponseAfterSendNotifier after_send = remove response.after_send;
+        if (after_send && (response.cx."header-info".http2 || response.cx."header-info".http3)) {
+            watchMultiplexedResponseSend(response.cx."header-info", after_send);
+            remove after_send;
+        }
         @debug {
             auto body_size = response.body ? response.body.size() : 0;
             log("DEBUG: sendResponseSync: code=%d body_size=%d chunked=%y http2=%y http3=%y",
@@ -6276,9 +6388,35 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
         } catch (hash<ExceptionInfo> ex) {
             log("ERROR: Failed to send response synchronously: %s: %s", ex.err, ex.desc);
+            if (after_send) {
+                after_send.notify(False);
+            }
             rethrow;
         }
+        if (after_send) {
+            after_send.notify(True);
+        }
         logResponse(response.cx, response);
+    }
+
+    #! Watches the transmission of a multiplexed response so that its after_send callback is called
+    /** Must be called before the response is submitted on the stream.
+
+        @param header_info the request header info, whose \c watch_response_send closure the async I/O controller
+        provides for HTTP/2 and HTTP/3 streams
+        @param after_send the response's after_send notifier
+    */
+    private watchMultiplexedResponseSend(hash<auto> header_info, ResponseAfterSendNotifier after_send) {
+        *code<nothing(code<nothing(bool)>)> watch = header_info.watch_response_send;
+        if (!watch) {
+            logError("cannot report the transmission result of the response on stream %d to its after_send callback: "
+                "the connection does not support it", header_info.stream_id);
+            after_send.notify(False);
+            return;
+        }
+        watch(sub (bool sent) {
+            after_send.notify(sent);
+        });
     }
 
     #! Sends a multiplexed response from a handler pool thread using the protocol-appropriate submit API
@@ -6292,6 +6430,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     private sendMultiplexedResponse(Socket s, hash<auto> header_info,
             hash<HttpAsyncResponseInfo> response) {
+        if (response.after_send) {
+            watchMultiplexedResponseSend(header_info, response.after_send);
+        }
         int stream_id = header_info.stream_id;
         code<nothing()> io_wake = header_info.io_wake;
         hash<auto> hdr = response.hdr ?? {};
@@ -6378,6 +6519,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     */
     private sendMultiplexedStreamingResponseInline(Socket s, hash<auto> header_info,
             hash<HttpAsyncResponseInfo> response) {
+        if (response.after_send) {
+            watchMultiplexedResponseSend(header_info, response.after_send);
+        }
         int stream_id = header_info.stream_id;
         code<nothing()> io_wake = header_info.io_wake;
         hash<auto> hdr = response.hdr ?? {};
@@ -7623,6 +7767,93 @@ hashdecl HttpAsyncResponseInfo {
         @since HttpServer 1.7
     */
     *AbstractPollOperation stream_operation;
+
+    #! Reports the transmission result of the response to the handler's after_send callback
+    /** @since HttpServer 1.7
+    */
+    *ResponseAfterSendNotifier after_send;
+}
+
+#! Calls the after_send callback of a response exactly once
+/** @see HttpServer::HttpResponseInfo::after_send
+
+    @since HttpServer 1.7
+*/
+class ResponseAfterSendNotifier {
+    private:internal {
+        #! the callback
+        code<nothing(hash<auto>, bool)> callback;
+        #! the request context
+        hash<auto> cx;
+        #! the handler whose thread-local data the callback runs under
+        *HttpServer::AbstractHttpRequestHandler handler;
+        #! the listener for logging errors
+        HttpListener listener;
+        #! protects called
+        Mutex m();
+        #! True once the result has been reported
+        bool called = False;
+    }
+
+    #! Creates the object
+    constructor(code<nothing(hash<auto>, bool)> callback, hash<auto> cx,
+            *HttpServer::AbstractHttpRequestHandler handler, HttpListener listener) {
+        self.callback = callback;
+        self.cx = cx;
+        self.handler = handler;
+        self.listener = listener;
+    }
+
+    #! Reports that the response was not sent if no result was reported
+    /** Every path that sends a response reports its result; this ensures that the callback is called even if the
+        response is discarded without being sent.  The callback runs in a new thread, as the destructor may run on
+        any thread.
+    */
+    destructor() {
+        if (called) {
+            return;
+        }
+        called = True;
+        try {
+            background ResponseAfterSendNotifier::call(callback, cx, handler, listener, False);
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logError("cid %d: %s: cannot call the after_send callback: %s: %s", cx.id, cx.handler_name,
+                ex.err, ex.desc);
+        }
+    }
+
+    #! Reports the transmission result of the response; only the first call has any effect
+    /** Must not be called on an I/O thread, as the callback runs on the calling thread.
+
+        @param sent @ref True "True" if the response has been completely sent, @ref False "False" if not
+    */
+    notify(bool sent) {
+        {
+            AutoLock al(m);
+            if (called) {
+                return;
+            }
+            called = True;
+        }
+        ResponseAfterSendNotifier::call(callback, cx, handler, listener, sent);
+    }
+
+    #! Calls the callback under the handler's thread-local data; exceptions are logged
+    private:internal static call(code<nothing(hash<auto>, bool)> callback, hash<auto> cx,
+            *HttpServer::AbstractHttpRequestHandler handler, HttpListener listener, bool sent) {
+        try {
+            if (handler) {
+                *hash<auto> tld_save = handler.saveThreadLocalData();
+                on_exit handler.restoreThreadLocalData(tld_save);
+                callback(cx, sent);
+            } else {
+                callback(cx, sent);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            listener.logError("cid %d: %s: error in after_send callback: %s", cx.id, cx.handler_name,
+                get_exception_string(ex));
+        }
+    }
 }
 } # namespace Priv
 

@@ -271,6 +271,27 @@ public:
         return result;
     }
 
+    //! Returns and clears the transmission results of watched responses
+    /** Called by the controller after continuePoll() returns.  For each result, the controller dispatches
+        onStreamSendResult() to the worker pool.
+    */
+    DLLLOCAL std::vector<std::pair<int32_t, bool>> getAndClearResponseSendResults() {
+        std::vector<std::pair<int32_t, bool>> result;
+        result.swap(response_send_results);
+        return result;
+    }
+
+    //! Watches the response on a stream so that the result of its transmission is reported
+    /** Must be called on a handler thread before the response is submitted; the result is dispatched as
+        onStreamSendResult().
+
+        @param stream_id the HTTP/2 stream ID
+        @param xsink exception sink
+    */
+    DLLLOCAL void watchResponseSend(int32_t stream_id, ExceptionSink* xsink) {
+        sock->watchHttp2ResponseSend(stream_id, xsink);
+    }
+
     //! Drains all registered stream queues after a read poll cycle
     /** Reads all available data from each registered stream's per-stream buffer
         and pushes it to the corresponding Queue.  When a stream is closed, a
@@ -337,6 +358,12 @@ private:
 
     //! Stream IDs that had data drained — I/O-thread-only
     std::vector<int32_t> data_ready_streams;
+
+    //! Transmission results of watched responses taken from the session — I/O-thread-only
+    std::vector<std::pair<int32_t, bool>> response_send_results;
+
+    //! Takes the transmission results of watched responses from the session (continuePoll(), under op_lock)
+    DLLLOCAL void collectResponseSendResults();
 
     //! Stream IDs the peer reset (RST_STREAM) on a still-open connection
     /** Written by @ref deliverPersistentSessionClose() on the I/O thread and

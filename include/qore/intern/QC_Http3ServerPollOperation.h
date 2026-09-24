@@ -207,6 +207,46 @@ public:
         return result;
     }
 
+    //! Records that the response on a stream is watched; see QuicSession::watchResponseSend()
+    /** @param stream_key composite key "session_id:stream_id"
+
+        @return false if the operation is closed, in which case no result will be reported
+    */
+    DLLLOCAL bool addResponseSendWatch(const std::string& stream_key) {
+        AutoLocker al(op_lock);
+        if (h3_state.load(std::memory_order_acquire) == H3State::CLOSED) {
+            return false;
+        }
+        response_send_watches.insert(stream_key);
+        return true;
+    }
+
+    //! Registers the watch of a response with its QUIC session; see QuicSession::watchResponseSend()
+    /** Must not be called with @c op_lock held: the registration runs on the async I/O execution path.
+
+        @return 0 on success, -1 if an exception was raised
+    */
+    DLLLOCAL int watchQuicResponseSend(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
+        return sock_obj->watchQuicResponseSend(session_id, stream_id, xsink);
+    }
+
+    //! Drops a watch added with addResponseSendWatch() whose registration with the QUIC session failed
+    DLLLOCAL void removeResponseSendWatch(const std::string& stream_key) {
+        AutoLocker al(op_lock);
+        response_send_watches.erase(stream_key);
+    }
+
+    //! Returns and clears the transmission results of watched responses
+    /** Called by the I/O controller after continuePoll(); for each result, it dispatches onStreamSendResult() to
+        the worker pool.
+    */
+    DLLLOCAL std::vector<std::pair<std::string, bool>> getAndClearResponseSendResults() {
+        AutoLocker al(op_lock);
+        std::vector<std::pair<std::string, bool>> result;
+        result.swap(response_send_results);
+        return result;
+    }
+
     //! Records that a stream key has a Qore-side listener wanting close notification
     /** Mirrors, in the priv, the QPP layer's @c stream_listeners member hash so
         the I/O thread can queue an @c onStreamData() wakeup for a listener-only
@@ -434,6 +474,13 @@ private:
 
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;
+
+    //! Stream keys whose response transmission result is reported; see addResponseSendWatch().  Protected by
+    //! @c op_lock.
+    std::unordered_set<std::string> response_send_watches;
+
+    //! Transmission results of watched responses awaiting dispatch by the controller.  Protected by @c op_lock.
+    std::vector<std::pair<std::string, bool>> response_send_results;
 
     //! Stream keys whose Qore-side listener wants a close notification
     /** Populated by @ref registerStreamCloseNotify() from
