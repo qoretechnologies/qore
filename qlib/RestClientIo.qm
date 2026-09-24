@@ -1579,6 +1579,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @ref HttpClientStreamingIo::SseStreamReader::isDone() to tell a
             timeout from the end of the stream
 
+            @note the reader decodes the stream according to the \c Content-Encoding of the response, and limits an
+            event, and the data decompressed from one received chunk, to
+            @ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize"
+
             @see restSseStream()
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
@@ -1656,9 +1660,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                         method, path, hdr, prepared.serialized_body,
                         response_start.first_data, response,
                         response_start.response_timeout, deadline);
-                    # the reader replays the data consumed while validating the response
-                    return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING,
-                        initial_data);
+                    # the reader replays the data consumed while validating the response, and decodes the stream
+                    # according to its content encoding
+                    return new HttpClientStreamingIo::SseStreamReader(stream,
+                        response.headers."content-encoding", initial_data);
                 } catch (hash<ExceptionInfo> ex) {
                     stream.cancel();
                     rethrow;
