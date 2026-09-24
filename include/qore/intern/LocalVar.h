@@ -566,6 +566,15 @@ public:
         delete this;
     }
 
+#ifdef DEBUG
+    //! debug-only hook run by deref() after a rescan and before the scan releases the references it held
+    /** Tests use it to release a reference that another thread would release at that moment; see
+        ut_closure_var_deref_rescan_reentry() in lib/ql_debug.cpp.
+    */
+    typedef void (*dbg_after_rescan_t)(ClosureVarValue* cvv, ExceptionSink* xsink);
+    DLLLOCAL static std::atomic<dbg_after_rescan_t> dbg_after_rescan;
+#endif
+
     DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) {
         deref(xsink);
     }

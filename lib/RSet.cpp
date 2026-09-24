@@ -224,6 +224,10 @@ static unsigned deref_inprogress_own(const RObject* o) {
     return rv;
 }
 
+bool qore_robject_deref_inprogress_on_this_thread(const RObject* o) {
+    return deref_inprogress_own(o) > 0;
+}
+
 //! records that this thread has finished the dereference owning frame \a f
 static void deref_inprogress_pop(robject_deref_frame& f) {
     assert(t_deref_inprogress == &f);

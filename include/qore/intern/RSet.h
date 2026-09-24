@@ -81,6 +81,10 @@ DLLLOCAL void q_inc_deref_rsection_count();
 DLLLOCAL int64 q_get_deref_locked_count();
 #endif
 
+class RObject;
+//! Returns true if this thread has a dereference of the object in progress; for assertions
+DLLLOCAL bool qore_robject_deref_inprogress_on_this_thread(const RObject* o);
+
 class RObject {
     friend class robject_dereference_helper;
 
@@ -206,8 +210,13 @@ public:
         printd(QORE_DEBUG_OBJ_REFS, "RObject::tDeref() this: %p tref %d->%d\n", this, tRefs.reference_count(),
             tRefs.reference_count() - 1);
 #endif
-        if (tRefs.ROdereference())
+        if (tRefs.ROdereference()) {
+            // the memory of an object that this thread is still dereferencing further up its stack must not be
+            // freed: that dereference uses the object's locks when it resumes (see customDeref() and
+            // ClosureVarValue::deref(), which hold a weak reference for their duration)
+            assert(!qore_robject_deref_inprogress_on_this_thread(this));
             deleteObject();
+        }
     }
 
     // real: decrement rref too

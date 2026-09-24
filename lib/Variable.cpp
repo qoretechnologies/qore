@@ -3445,6 +3445,10 @@ void ClosureVarValue::ref() const {
     references.fetch_add(1, std::memory_order_relaxed);
 }
 
+#ifdef DEBUG
+std::atomic<ClosureVarValue::dbg_after_rescan_t> ClosureVarValue::dbg_after_rescan{nullptr};
+#endif
+
 void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
     // NOTE: do not access val here without holding rml; val may be modified concurrently
     // by another thread that holds a reference to this ClosureVarValue
@@ -3459,6 +3463,18 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
     if (fast > 0) {
         return;
     }
+
+    // Keep the variable ALLOCATED for the duration of the call, as qore_object_private::customDeref() does for an
+    // object.  This dereference has already released its own reference, and a scan started here holds references on
+    // the graph it walks and releases them when it ends (RSetHelper::releaseHeld(), called from ~RSetHelper inside
+    // the loop below).  When another thread has meanwhile released the variable's other references - a closure
+    // that captured it and ran on a handler thread, for example - releasing them dereferences this very variable on
+    // this thread: its last reference goes away, it is deleted, its last weak reference goes away, and its memory is
+    // freed while this frame still uses its lock.  RObject::derefDone() does not wait for a dereference that this
+    // thread owns (it would wait for itself), so nothing else stops that.  A weak reference does not keep the
+    // variable alive, only allocated, so this changes nothing about when its value is released.
+    tRef();
+    ON_BLOCK_EXIT_OBJ(*static_cast<RObject*>(this), &RObject::tDeref);
 
     RSetDerefHelper cycle_cleanup(xsink);
     int ref_copy;
@@ -3511,6 +3527,14 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                 // need to recalculate references: a scan deferred while the frame held the variable is made here,
                 // after which the loop decides collection with the set it found
                 RSetHelper rsh(*this, xsink);
+#ifdef DEBUG
+                {
+                    ClosureVarValue::dbg_after_rescan_t hook = dbg_after_rescan.load();
+                    if (hook) {
+                        hook(this, xsink);
+                    }
+                }
+#endif
             }
             if (do_del) {
                 qodh.willDelete();
