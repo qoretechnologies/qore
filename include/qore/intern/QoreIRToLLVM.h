@@ -984,8 +984,17 @@ private:
 
     // NaN-boxing helpers: encode typed LLVM values into i64 QoreValue representation
     llvm::Value* boxInt(llvm::Value* int_val);
-    llvm::Value* boxFloat(llvm::Value* float_val);
+    //! Box a native double; the result owns a QoreBigFloatNode when boxFloatMayAllocate() is true
+    //! and the double collides with a value tag (see QoreValue::rawDoubleCollidesWithTag()); without
+    //! allow_branch, no block is created (for code inserted before an existing terminator)
+    llvm::Value* boxFloat(llvm::Value* float_val, bool allow_branch = true);
+    //! Returns false only for a double constant that boxFloat() encodes inline
+    bool boxFloatMayAllocate(llvm::Value* float_val) const;
+    //! Box a native double as a borrowed temp: a node allocated by boxFloat() is released at function exit
+    llvm::Value* boxFloatTemp(llvm::Value* float_val, bool allow_branch = true);
     llvm::Value* boxBool(llvm::Value* bool_val);
+    //! Box a native bool, double or int (an owned value, like boxInt()); nullptr for any other type
+    llvm::Value* boxNative(llvm::Value* val);
     llvm::Value* boxNothing();
 
     // Unboxing helpers: extract typed values from i64 QoreValue
@@ -1263,6 +1272,10 @@ private:
     // via invoke_alloca_map so the returned value isn't decremented.
     void trackResultForCleanup(llvm::Value* result, uint32_t result_id,
             llvm::Function* llvm_func);
+
+    // Track a boxed temp that may own a heap node (boxInt()/boxFloat() result) for release at
+    // function exit; each store releases the previous value held by the same cleanup slot.
+    void trackBoxedTempCleanup(llvm::Value* boxed);
 
     // Box any typed LLVM value to NaN-boxed i64, handling already-boxed values
     llvm::Value* boxValue(llvm::Value* val, uint32_t id,

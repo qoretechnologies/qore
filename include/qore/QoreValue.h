@@ -241,7 +241,10 @@ namespace detail {
  *   All other types use high bits as tags.
  *
  * BIT LAYOUT:
- *   Doubles:       Encoded value < 0xFFF9... (after adding 2^48 offset)
+ *   Doubles:       Encoded value < 0xFFF9... (after adding 2^48 offset), outside the short-string
+ *                  and opaque tag families; the doubles that would encode into a tag (negative NaNs
+ *                  and finite negative doubles with raw bits 0xFFBF...-0xFFDE...) are stored as
+ *                  QoreBigFloatNode pointers (see QoreValue::rawDoubleCollidesWithTag())
  *   Short strings: Bits 63-52 = 0xFFC, bits 51-48 = length (0-6), bits 47-0 = data
  *   Integers:      Bits 63-48 = 0xFFF9, bits 47-0 = 48-bit signed value
  *   Pointers:      Bits 63-48 = 0xFFFA, bits 47-0 = 48-bit address
@@ -252,6 +255,9 @@ namespace detail {
  *   < 0xFFC0:      Encoded doubles (raw bits + 2^48)
  *   0xFFC0-0xFFC6: Short strings (length in bits 51-48)
  *   0xFFC7-0xFFCF: Reserved by the short-string decoder family
+ *   0xFFD0-0xFFD2: Opaque references (kind in bits 51-48)
+ *   0xFFD3-0xFFDF: Reserved by the opaque reference decoder family
+ *   0xFFE0-0xFFF8: Encoded doubles (raw bits + 2^48)
  *   0xFFF9:        48-bit signed integers
  *   0xFFFA:        Pointers to AbstractQoreNode
  *   0xFFFB:        Special values (nothing=0, null=1, false=2, true=3)
@@ -349,6 +355,9 @@ private:
         "opaque tag family must not overlap the short-string tag family");
     static_assert(TAG16_OPAQUE_LAST < TAG16_INT48,
         "opaque tag family must remain below the non-double value tag boundary");
+    static_assert(TAG16_OPAQUE_FIRST == TAG16_SHORTSTR_LAST + 1,
+        "the short-string and opaque tag families must be contiguous so that the doubles colliding "
+        "with them form a single raw range (see rawDoubleCollidesWithTag())");
     static_assert(TAG16_INT48 < TAG16_PLUGIN_IMMEDIATE_FIRST,
         "inline integer tag must not collide with plugin immediate tags");
     static_assert(TAG16_POINTER < TAG16_PLUGIN_IMMEDIATE_FIRST,
@@ -438,6 +447,35 @@ private:
     }
 
 public:
+    // ========================================================================
+    // Double encoding limits
+    // ========================================================================
+
+    //! First raw double bit pattern whose inline encoding would land in the short-string tag family
+    /** The short-string (0xFFC) and opaque (0xFFD) tag families lie inside the encoded double range,
+        so the finite negative doubles from this bit pattern up to
+        @ref RAW_DOUBLE_TAG_COLLISION_END (exclusive) cannot be stored inline.
+
+        @since %Qore 3.0
+    */
+    static constexpr uint64_t RAW_DOUBLE_TAG_COLLISION_FIRST = TAG_SHORTSTR_BASE - DOUBLE_ENCODE_OFFSET;
+    //! First raw double bit pattern past the doubles whose inline encoding would land in the opaque tag family
+    /** @since %Qore 3.0 */
+    static constexpr uint64_t RAW_DOUBLE_TAG_COLLISION_END = TAG_OPAQUE_BASE + (1ULL << 52) - DOUBLE_ENCODE_OFFSET;
+    //! First raw double bit pattern whose inline encoding would reach the non-double tags (negative NaNs)
+    /** @since %Qore 3.0 */
+    static constexpr uint64_t RAW_DOUBLE_HIGH_TAG_FIRST = TAG_INT48 - DOUBLE_ENCODE_OFFSET;
+
+    //! Returns true if the double with the given raw bits collides with a value tag when encoded inline
+    /** Such a double is stored in a QoreBigFloatNode instead; see set(double).
+
+        @since %Qore 3.0
+    */
+    static constexpr bool rawDoubleCollidesWithTag(uint64_t raw) {
+        return raw >= RAW_DOUBLE_HIGH_TAG_FIRST
+            || (raw >= RAW_DOUBLE_TAG_COLLISION_FIRST && raw < RAW_DOUBLE_TAG_COLLISION_END);
+    }
+
     // ========================================================================
     // Constructors
     // ========================================================================
@@ -938,10 +976,11 @@ public:
     }
 
     //! Sets a double value (any current value is overwritten without dereferencing)
-    /** For most doubles, stores them inline using offset encoding. However, doubles
-        with bit patterns >= 0xFFF8000000000000 (including negative NaN values)
-        would collide with internal NaN-boxing tags after encoding, so they are
-        stored as QoreFloatNode instead.
+    /** For most doubles, stores them inline using offset encoding. However, doubles whose encoding
+        would collide with an internal NaN-boxing tag (see rawDoubleCollidesWithTag()) are stored
+        as a QoreBigFloatNode instead: negative NaNs (bit patterns >= 0xFFF8000000000000) and the
+        finite negative doubles with bit patterns from 0xFFBF000000000000 up to 0xFFDF000000000000
+        (magnitudes from about 2.18e307 to about 8.71e307).
     */
     DLLEXPORT void set(double f);
 

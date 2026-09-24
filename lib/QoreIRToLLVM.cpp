@@ -1771,16 +1771,87 @@ llvm::Value* QoreIRToLLVM::boxInt(llvm::Value* int_val) {
     return builder->CreateCall(helper, {int_val});
 }
 
-// NaN-boxing: encode a native double into the QoreValue i64 representation.
-// bits = bitcast_to_i64(double) + DOUBLE_ENCODE_OFFSET
-llvm::Value* QoreIRToLLVM::boxFloat(llvm::Value* float_val) {
+// NaN-boxing: encode a native double into the QoreValue i64 representation exactly as
+// QoreValue::set(double) does: bits = bitcast_to_i64(double) + DOUBLE_ENCODE_OFFSET, except that a
+// double whose encoding would collide with a value tag (QoreValue::rawDoubleCollidesWithTag():
+// negative NaNs and the finite negative doubles that would encode into the short-string or opaque
+// tag families) is boxed by qore_rt_box_float() in a new QoreBigFloatNode.  Like boxInt(), the
+// result is therefore an owned value unless boxFloatMayAllocate() returns false.
+// With allow_branch false (code inserted before an existing terminator, as in PHI
+// fixup), a runtime value is always boxed by the helper so that no block is created.
+llvm::Value* QoreIRToLLVM::boxFloat(llvm::Value* float_val, bool allow_branch) {
+    if (auto* cf = llvm::dyn_cast<llvm::ConstantFP>(float_val)) {
+        uint64_t raw = cf->getValueAPF().bitcastToAPInt().getZExtValue();
+        if (!QoreValue::rawDoubleCollidesWithTag(raw)) {
+            return llvm::ConstantInt::get(i64_type, raw + DOUBLE_ENCODE_OFFSET);
+        }
+    }
+    auto helper = current_module->getOrInsertFunction("qore_rt_box_float",
+            llvm::FunctionType::get(i64_type, {double_type}, false));
+    if (llvm::isa<llvm::ConstantFP>(float_val)) {
+        return builder->CreateCall(helper, {float_val});
+    }
+    if (!allow_branch) {
+        return builder->CreateCall(helper, {float_val});
+    }
     llvm::Value* raw_bits = builder->CreateBitCast(float_val, i64_type);
-    llvm::Value* is_colliding_nan = builder->CreateICmpUGE(raw_bits,
-        llvm::ConstantInt::get(i64_type, 0xFFF8000000000000ULL));
-    llvm::Value* positive_nan_bits = builder->CreateAnd(raw_bits,
-        llvm::ConstantInt::get(i64_type, 0x7FFFFFFFFFFFFFFFULL));
-    llvm::Value* safe_bits = builder->CreateSelect(is_colliding_nan, positive_nan_bits, raw_bits);
-    return builder->CreateAdd(safe_bits, llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+    // mirrors QoreValue::rawDoubleCollidesWithTag()
+    llvm::Value* high_tag = builder->CreateICmpUGE(raw_bits,
+        llvm::ConstantInt::get(i64_type, QoreValue::RAW_DOUBLE_HIGH_TAG_FIRST));
+    llvm::Value* tag_family_offset = builder->CreateSub(raw_bits,
+        llvm::ConstantInt::get(i64_type, QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST));
+    llvm::Value* tag_family = builder->CreateICmpULT(tag_family_offset,
+        llvm::ConstantInt::get(i64_type,
+            QoreValue::RAW_DOUBLE_TAG_COLLISION_END - QoreValue::RAW_DOUBLE_TAG_COLLISION_FIRST));
+    llvm::Value* collides = builder->CreateOr(high_tag, tag_family);
+
+    auto* cur_func = builder->GetInsertBlock()->getParent();
+    auto* inline_bb = llvm::BasicBlock::Create(ctx, "box_float_inline", cur_func);
+    auto* node_bb = llvm::BasicBlock::Create(ctx, "box_float_node", cur_func);
+    auto* merge_bb = llvm::BasicBlock::Create(ctx, "box_float_merge", cur_func);
+    builder->CreateCondBr(collides, node_bb, inline_bb,
+        llvm::MDBuilder(ctx).createBranchWeights(1, 1 << 20));
+
+    builder->SetInsertPoint(inline_bb);
+    llvm::Value* inline_result = builder->CreateAdd(raw_bits,
+        llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(node_bb);
+    llvm::Value* node_result = builder->CreateCall(helper, {float_val});
+    builder->CreateBr(merge_bb);
+
+    builder->SetInsertPoint(merge_bb);
+    auto* phi = builder->CreatePHI(i64_type, 2);
+    phi->addIncoming(inline_result, inline_bb);
+    phi->addIncoming(node_result, node_bb);
+    return phi;
+}
+
+bool QoreIRToLLVM::boxFloatMayAllocate(llvm::Value* float_val) const {
+    auto* cf = llvm::dyn_cast<llvm::ConstantFP>(float_val);
+    return !cf || QoreValue::rawDoubleCollidesWithTag(cf->getValueAPF().bitcastToAPInt().getZExtValue());
+}
+
+llvm::Value* QoreIRToLLVM::boxNative(llvm::Value* val) {
+    if (val->getType() == i1_type) {
+        return boxBool(val);
+    }
+    if (val->getType() == double_type) {
+        return boxFloat(val);
+    }
+    if (val->getType() == i64_type) {
+        return boxInt(val);
+    }
+    return nullptr;
+}
+
+llvm::Value* QoreIRToLLVM::boxFloatTemp(llvm::Value* float_val, bool allow_branch) {
+    llvm::Value* boxed = boxFloat(float_val, allow_branch);
+    if (boxFloatMayAllocate(float_val)) {
+        trackBoxedTempCleanup(boxed);
+    }
+    return boxed;
 }
 
 // NaN-boxing: encode a native bool (i1) into QoreValue
@@ -1840,12 +1911,15 @@ llvm::Value* QoreIRToLLVM::emitIsBoxedInt48(llvm::Value* qv) {
 
 llvm::Value* QoreIRToLLVM::emitIsBoxedFloat(llvm::Value* qv) {
     // Mirrors QoreValue::isFloat(): encoded doubles are non-zero, below the
-    // INT48 boundary, and must exclude short strings (top 12 bits 0xFFC).
+    // INT48 boundary, and must exclude the short-string (top 12 bits 0xFFC) and
+    // opaque reference (0xFFD) tag families, which are contiguous.
     llvm::Value* not_nothing = builder->CreateICmpNE(qv, llvm::ConstantInt::get(i64_type, VAL_NOTHING));
     llvm::Value* below_boundary = builder->CreateICmpULT(qv, llvm::ConstantInt::get(i64_type, TAG_INT48));
     llvm::Value* tag12 = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 52));
-    llvm::Value* not_short_string = builder->CreateICmpNE(tag12, llvm::ConstantInt::get(i64_type, 0xFFC));
-    return builder->CreateAnd(builder->CreateAnd(not_nothing, below_boundary), not_short_string);
+    llvm::Value* tag_family_offset = builder->CreateSub(tag12, llvm::ConstantInt::get(i64_type, 0xFFC));
+    llvm::Value* not_tag_family = builder->CreateICmpUGE(tag_family_offset,
+        llvm::ConstantInt::get(i64_type, 2));
+    return builder->CreateAnd(builder->CreateAnd(not_nothing, below_boundary), not_tag_family);
 }
 
 // Phase 4: Inline qore_rt_ref - reference count a value if it's a node
@@ -1906,10 +1980,10 @@ llvm::Value* QoreIRToLLVM::ensureIntType(llvm::Value* val, uint32_t value_id) {
         }
         llvm::Value* native_float = val->getType() == double_type
             ? val : builder->CreateFPCast(val, double_type);
-        auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
-            llvm::FunctionType::get(i64_type, {i64_type}, false));
+        auto to_int = current_module->getOrInsertFunction("qore_rt_float_to_int",
+            llvm::FunctionType::get(i64_type, {double_type}, false));
         llvm::Value* result =
-            builder->CreateCall(to_int, {boxFloat(native_float)});
+            builder->CreateCall(to_int, {native_float});
         cacheStableConversion(value_id, result, stable_int_conversions);
         return result;
     }
@@ -1952,10 +2026,10 @@ llvm::Value* QoreIRToLLVM::ensureIntTypeInline(llvm::Value* val, uint32_t value_
         }
         llvm::Value* native_float = val->getType() == double_type
             ? val : builder->CreateFPCast(val, double_type);
-        auto to_int = current_module->getOrInsertFunction("qore_rt_to_int",
-            llvm::FunctionType::get(i64_type, {i64_type}, false));
+        auto to_int = current_module->getOrInsertFunction("qore_rt_float_to_int",
+            llvm::FunctionType::get(i64_type, {double_type}, false));
         llvm::Value* result =
-            builder->CreateCall(to_int, {boxFloat(native_float)});
+            builder->CreateCall(to_int, {native_float});
         cacheStableConversion(value_id, result, stable_int_conversions);
         return result;
     }
@@ -2961,6 +3035,7 @@ void QoreIRToLLVM::syncLocalsToRuntimeForHandlers(llvm::Module& module) {
             boxed_temp = true;
         } else if (native_float_locals.count(key)) {
             val = boxFloat(builder->CreateLoad(double_type, alloca));
+            boxed_temp = true;
         } else if (native_bool_locals.count(key)) {
             val = boxBool(builder->CreateLoad(i1_type, alloca));
         } else {
@@ -3031,6 +3106,7 @@ llvm::Value* QoreIRToLLVM::beginNativeHandlerSlotCache(llvm::Module& module) {
             boxed_temp = true;
         } else if (native_float_locals.count(key)) {
             val = boxFloat(builder->CreateLoad(double_type, it->second));
+            boxed_temp = true;
         } else if (native_bool_locals.count(key)) {
             val = boxBool(builder->CreateLoad(i1_type, it->second));
         } else {
@@ -4984,6 +5060,23 @@ void QoreIRToLLVM::invalidateLocalsForCallee(
     }
 }
 
+void QoreIRToLLVM::trackBoxedTempCleanup(llvm::Value* boxed) {
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* entry = &func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "box_cleanup");
+    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+    // Decref previous value before overwriting (handles loop bodies where
+    // the same alloca is stored to each iteration; first iteration old_val
+    // = NOTHING which is a no-op for decref)
+    auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
+    builder->CreateStore(boxed, cleanup);
+    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    registerInvokeCleanupAlloca(cleanup);
+}
+
 llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id,
         bool allow_dynamic_inline) {
     if (nanboxed_values.count(id)) {
@@ -5027,24 +5120,13 @@ llvm::Value* QoreIRToLLVM::boxValue(llvm::Value* val, uint32_t id,
             }
         }
         // Runtime value or out-of-range constant: track for cleanup
-        llvm::Function* func = builder->GetInsertBlock()->getParent();
-        llvm::BasicBlock* entry = &func->getEntryBlock();
-        llvm::IRBuilder<> alloca_builder(entry, entry->begin());
-        auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "box_cleanup");
-        alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-        // Decref previous value before overwriting (handles loop bodies where
-        // the same alloca is stored to each iteration; first iteration old_val
-        // = NOTHING which is a no-op for decref)
-        auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-        llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
-        builder->CreateStore(result, cleanup);
-        builder->CreateCall(decref_fn, {old_val, xsink_arg});
-        registerInvokeCleanupAlloca(cleanup);
+        trackBoxedTempCleanup(result);
         return result;
     }
     if (val->getType() == double_type) {
-        return boxFloat(val);
+        // boxFloat() allocates a QoreBigFloatNode for a double that collides with a value tag;
+        // track the temp ref for release like a boxed int
+        return boxFloatTemp(val, allow_dynamic_inline);
     }
     if (val->getType() == i1_type) {
         return boxBool(val);
@@ -13629,7 +13711,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 } else if (val->getType() == i64_type) {
                     boxed = boxIntInline(val);
                 } else if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
+                    // the assign helper takes its own reference
+                    boxed = boxFloatTemp(val);
                 } else if (val->getType() == i1_type) {
                     boxed = boxBool(val);
                 } else {
@@ -13976,6 +14059,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             } else if (val->getType() == double_type) {
                 boxed = boxFloat(val);
+                // boxFloat may allocate a QoreBigFloatNode for a double that collides
+                // with a value tag; track it like a boxed int
+                need_box_cleanup = boxFloatMayAllocate(val);
             } else if (val->getType() == i1_type) {
                 boxed = boxBool(val);
             } else {
@@ -13983,20 +14069,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             }
             if (need_box_cleanup) {
                 // Runtime value or out-of-range constant: track for cleanup
-                llvm::Function* func = builder->GetInsertBlock()->getParent();
-                llvm::BasicBlock* entry = &func->getEntryBlock();
-                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
-                auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr,
-                        "box_cleanup");
-                alloca_builder.CreateStore(
-                        llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-                auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type},
-                                false));
-                llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup);
-                builder->CreateStore(boxed, cleanup);
-                builder->CreateCall(decref_fn, {old_val, xsink_arg});
-                registerInvokeCleanupAlloca(cleanup);
+                trackBoxedTempCleanup(boxed);
             }
             // Type handling before storing to the local alloca.
             bool is_aot_body_local = aot_mode && aot_body_locals.count(key);
@@ -14708,14 +14781,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::Incref: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            if (val->getType() == double_type || val->getType() == i1_type) {
+                // a native double or bool holds no reference
+                return true;
             }
+            llvm::Value* boxed = val;
             auto helper = module.getOrInsertFunction("qore_rt_incref",
                     llvm::FunctionType::get(void_type, {i64_type}, false));
             builder->CreateCall(helper, {boxed});
@@ -14754,17 +14824,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else {
                 auto* val = getVal(value_id, error);
                 if (!val) { return false; }
-                llvm::Value* boxed = val;
-                if (val->getType() != i64_type) {
-                    if (val->getType() == double_type) {
-                        boxed = boxFloat(val);
-                    } else if (val->getType() == i1_type) {
-                        boxed = boxBool(val);
-                    }
+                // a native double or bool holds no reference
+                if (val->getType() != double_type && val->getType() != i1_type) {
+                    auto helper = module.getOrInsertFunction("qore_rt_decref",
+                            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    builder->CreateCall(helper, {val, xsink_arg});
                 }
-                auto helper = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                builder->CreateCall(helper, {boxed, xsink_arg});
             }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
@@ -14772,14 +14837,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::DecrefNoThrow: {
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
-            llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            if (val->getType() == double_type || val->getType() == i1_type) {
+                // a native double or bool holds no reference
+                return true;
             }
+            llvm::Value* boxed = val;
             auto helper = module.getOrInsertFunction("qore_rt_decref_nothrow",
                     llvm::FunctionType::get(void_type, {i64_type}, false));
             builder->CreateCall(helper, {boxed});
@@ -14793,12 +14855,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!val) { return false; }
             // Box if needed
             llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            // A native double or bool is never NOTHING and its type is known statically; boxing a
+            // double here could also allocate a QoreBigFloatNode that nothing would release.
+            llvm::Value* static_pass = nullptr;
+            if (val->getType() == double_type) {
+                static_pass = llvm::ConstantInt::get(i1_type, 1);
+            } else if (val->getType() == i1_type) {
+                static_pass = llvm::ConstantInt::get(i1_type, 1);
             }
             // Profile-informed: use inline check when profile shows value is rarely NOTHING
             llvm::Value* guard_pass;
@@ -14809,7 +14872,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     profile_hot = true;
                 }
             }
-            if (profile_hot) {
+            if (static_pass) {
+                guard_pass = static_pass;
+            } else if (profile_hot) {
                 // Inline check: NOTHING is represented as 0
                 guard_pass = builder->CreateICmpNE(boxed,
                     llvm::ConstantInt::get(i64_type, VAL_NOTHING), "guard_not_nothing_inline");
@@ -14843,12 +14908,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            // A native double or bool is never NOTHING and its type is known statically; boxing a
+            // double here could also allocate a QoreBigFloatNode that nothing would release.
+            llvm::Value* static_pass = nullptr;
+            if (val->getType() == double_type) {
+                static_pass = llvm::ConstantInt::get(i1_type, 0);
+            } else if (val->getType() == i1_type) {
+                static_pass = llvm::ConstantInt::get(i1_type, 0);
             }
             // Profile-informed: use inline NaN-boxing check instead of runtime call.
             llvm::Value* guard_pass;
@@ -14859,7 +14925,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     profile_hot = true;
                 }
             }
-            if (profile_hot || boxed->getType() == i64_type) {
+            if (static_pass) {
+                guard_pass = static_pass;
+            } else if (profile_hot || boxed->getType() == i64_type) {
                 guard_pass = emitIsBoxedInt48(boxed);
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_guard_int",
@@ -14889,12 +14957,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* boxed = val;
-            if (val->getType() != i64_type) {
-                if (val->getType() == double_type) {
-                    boxed = boxFloat(val);
-                } else if (val->getType() == i1_type) {
-                    boxed = boxBool(val);
-                }
+            // A native double or bool is never NOTHING and its type is known statically; boxing a
+            // double here could also allocate a QoreBigFloatNode that nothing would release.
+            llvm::Value* static_pass = nullptr;
+            if (val->getType() == double_type) {
+                static_pass = llvm::ConstantInt::get(i1_type, 1);
+            } else if (val->getType() == i1_type) {
+                static_pass = llvm::ConstantInt::get(i1_type, 0);
             }
             // Profile-informed: use inline NaN-boxing check for float
             llvm::Value* guard_pass;
@@ -14905,7 +14974,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     profile_hot = true;
                 }
             }
-            if (profile_hot) {
+            if (static_pass) {
+                guard_pass = static_pass;
+            } else if (profile_hot) {
                 guard_pass = emitIsBoxedFloat(boxed);
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_guard_float",
@@ -15294,6 +15365,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const QoreIRValueFacts* return_value_facts = current_ir_func
                 ? current_ir_func->getValueFacts(ret->value) : nullptr;
             bool coerce_return = false;
+            // set when return_value is boxed here from a native scalar: that value already owns its
+            // reference (a boxed big int or colliding double is a new node), so it takes no other
+            bool fresh_boxed_return = false;
             if (ret->has_value) {
                 auto* val = getVal(ret->value.id, error);
                 if (!val) { return false; }
@@ -15308,6 +15382,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         val, ret->value.id);
                     return_value = boxed_return
                         ? boxIntInline(timeout_value) : timeout_value;
+                    fresh_boxed_return = boxed_return;
                 } else if (optional_timeout_return) {
                     llvm::Value* boxed = boxValue(val, ret->value.id);
                     auto coerce_timeout = module.getOrInsertFunction(
@@ -15340,10 +15415,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return_value = val;
                 } else if (val->getType() == i64_type) {
                     return_value = boxIntInline(val);
+                    fresh_boxed_return = true;
                 } else if (val->getType() == double_type) {
                     return_value = boxFloat(val);
+                    fresh_boxed_return = true;
                 } else if (val->getType() == i1_type) {
                     return_value = boxBool(val);
+                    fresh_boxed_return = true;
                 } else {
                     error = "unsupported return value type for LLVM lowering";
                     return false;
@@ -15387,8 +15465,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // Fall through — incref + cleanup + ret now emitted into cont
                 }
                 // A boxed result needs its own reference across cleanup. Native
-                // scalar returns carry no ownership.
-                if (boxed_return) {
+                // scalar returns carry no ownership, and a value boxed above from a
+                // native scalar already owns its reference.
+                if (boxed_return && !fresh_boxed_return) {
                     auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
                             llvm::FunctionType::get(void_type, {i64_type}, false));
                     builder->CreateCall(incref_fn, {return_value});
@@ -18483,12 +18562,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             " expression select is invalid";
                         return false;
                     }
+                    // Each branch is emitted as a native value in the current block; a boxed
+                    // branch is boxed only once selected (below), since boxing an integer or a
+                    // float can allocate a node that the unselected branch would leak.
                     auto emit_descriptor = [&](const QoreIRCallDirectInstruction::
-                            AOTAggregateProjectionDescriptor& descriptor)
-                            -> llvm::Value* {
+                            AOTAggregateProjectionDescriptor& descriptor,
+                            bool& boxed) -> llvm::Value* {
                         using Kind = QoreIRCallDirectInstruction::
                             AOTAggregateProjectionKind;
-                        bool boxed = descriptor.kind == Kind::BoxedInt
+                        boxed = descriptor.kind == Kind::BoxedInt
                             || descriptor.kind == Kind::BoxedFloat
                             || descriptor.kind == Kind::BoxedBool
                             || descriptor.kind
@@ -18643,35 +18725,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 llvm::ConstantFP::get(double_type,
                                     descriptor.float_constant));
                         }
-                        if (!boxed) {
-                            return value;
+                        if (boxed && value->getType() != i1_type
+                                && value->getType() != double_type
+                                && value->getType() != i64_type) {
+                            error = "internal error: fused AOT aggregate"
+                                " expression cannot be boxed";
+                            return nullptr;
                         }
-                        if (value->getType() == i1_type) {
-                            return boxBool(value);
-                        }
-                        if (value->getType() == double_type) {
-                            return boxFloat(value);
-                        }
-                        if (value->getType() == i64_type) {
-                            return boxInt(value);
-                        }
-                        error = "internal error: fused AOT aggregate"
-                            " expression cannot be boxed";
-                        return nullptr;
+                        return value;
                     };
+                    bool true_boxed;
                     llvm::Value* true_value =
-                        emit_descriptor(descriptors[0]);
-                    llvm::Value* false_value =
-                        emit_descriptor(descriptors[1]);
+                        emit_descriptor(descriptors[0], true_boxed);
+                    bool false_boxed;
+                    llvm::Value* false_value = true_value
+                        ? emit_descriptor(descriptors[1], false_boxed)
+                        : nullptr;
                     llvm::Type* expected_type = projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     NativeFloatExpressionSelect
                         ? double_type : i64_type;
+                    auto result_type = [&](llvm::Value* value, bool boxed) {
+                        return boxed ? i64_type : value->getType();
+                    };
                     if (!true_value || !false_value
-                            || true_value->getType()
-                                != false_value->getType()
-                            || true_value->getType() != expected_type) {
+                            || result_type(true_value, true_boxed)
+                                != result_type(false_value, false_boxed)
+                            || result_type(true_value, true_boxed)
+                                != expected_type) {
                         if (error.empty()) {
                             error = "internal error: fused AOT aggregate"
                                 " expression branches have incompatible"
@@ -18679,10 +18761,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         }
                         return false;
                     }
-                    call_result = builder->CreateSelect(
-                        get_projection_bool_arg(
-                            static_cast<size_t>(condition_operand)),
-                        true_value, false_value);
+                    llvm::Value* condition = get_projection_bool_arg(
+                        static_cast<size_t>(condition_operand));
+                    if (!true_boxed && !false_boxed) {
+                        call_result = builder->CreateSelect(condition,
+                            true_value, false_value);
+                    } else {
+                        auto* true_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_select_true", llvm_func);
+                        auto* false_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_select_false", llvm_func);
+                        auto* merge_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_select_merge", llvm_func);
+                        builder->CreateCondBr(condition, true_bb, false_bb);
+                        builder->SetInsertPoint(true_bb);
+                        llvm::Value* true_result = true_boxed
+                            ? boxNative(true_value) : true_value;
+                        // boxing may create blocks
+                        llvm::BasicBlock* true_end = builder->GetInsertBlock();
+                        builder->CreateBr(merge_bb);
+                        builder->SetInsertPoint(false_bb);
+                        llvm::Value* false_result = false_boxed
+                            ? boxNative(false_value) : false_value;
+                        llvm::BasicBlock* false_end = builder->GetInsertBlock();
+                        builder->CreateBr(merge_bb);
+                        builder->SetInsertPoint(merge_bb);
+                        auto* selected = builder->CreatePHI(i64_type, 2);
+                        selected->addIncoming(true_result, true_end);
+                        selected->addIncoming(false_result, false_end);
+                        call_result = selected;
+                    }
                     call_return_kind = projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
@@ -18879,6 +18987,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 direct_inst->
                                     aot_aggregate_projection_float));
                     }
+                    // With guarded descriptors, the result is the descriptor the index selects (boxed
+                    // below), so this projection is only validated here: boxing it could allocate a
+                    // node (or take a reference) that would be discarded.
+                    bool defer_boxing = direct_inst->aot_aggregate_projection_guarded_index
+                        && !direct_inst->aot_aggregate_projection_guarded_descriptors.empty();
                     if (projection
                             == QoreIRCallDirectInstruction::AOTAggregateProjectionKind::NativeInt
                             || projection == QoreIRCallDirectInstruction::
@@ -18907,7 +19020,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || projection == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedIntSelect) {
-                        call_result = boxInt(call_result);
+                        call_result = defer_boxing
+                            ? call_result : boxInt(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
@@ -18915,7 +19029,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || projection == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedFloatSelect) {
-                        call_result = boxFloat(call_result);
+                        call_result = defer_boxing
+                            ? call_result : boxFloat(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
@@ -18926,7 +19041,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || projection == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedBoolIntCompare) {
-                        call_result = boxBool(call_result);
+                        call_result = defer_boxing
+                            ? call_result : boxBool(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
@@ -18942,7 +19058,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 " projection argument is not boxed";
                             return false;
                         }
-                        call_result = emitHelperRef(module, boxed);
+                        call_result = defer_boxing
+                            ? boxed : emitHelperRef(module, boxed);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
@@ -18970,13 +19087,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             || projection == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedIntMulConstant) {
-                        call_result = boxInt(call_result);
+                        call_result = defer_boxing
+                            ? call_result : boxInt(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else if (projection
                             == QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind::
                                     BoxedFloatAddConstant) {
-                        call_result = boxFloat(call_result);
+                        call_result = defer_boxing
+                            ? call_result : boxFloat(call_result);
                         call_return_kind = BatchCalleeReturnKind::Boxed;
                     } else {
                         error = "internal error: unsupported fused AOT"
@@ -19071,9 +19190,28 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const auto& descriptors = direct_inst->
                         aot_aggregate_projection_guarded_descriptors;
                     if (descriptors.empty()) {
-                        call_result = builder->CreateSelect(in_range,
-                            call_result,
-                            llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                        // call_result is already boxed and may own a node; release it when
+                        // the index is outside the list
+                        llvm::BasicBlock* in_range_bb = builder->GetInsertBlock();
+                        auto* release_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_projection_out_of_range", llvm_func);
+                        auto* merge_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_projection_merge", llvm_func);
+                        builder->CreateCondBr(in_range, merge_bb, release_bb);
+                        builder->SetInsertPoint(release_bb);
+                        auto decref_nothrow = module.getOrInsertFunction(
+                            "qore_rt_decref_nothrow",
+                            llvm::FunctionType::get(void_type, {i64_type},
+                                false));
+                        builder->CreateCall(decref_nothrow, {call_result});
+                        builder->CreateBr(merge_bb);
+                        builder->SetInsertPoint(merge_bb);
+                        auto* selected = builder->CreatePHI(i64_type, 2);
+                        selected->addIncoming(call_result, in_range_bb);
+                        selected->addIncoming(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                            release_bb);
+                        call_result = selected;
                     } else {
                         if (descriptors.size()
                                 != static_cast<size_t>(
@@ -19083,25 +19221,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 " descriptor count does not match list size";
                             return false;
                         }
+                        // Each descriptor is emitted as a native value in the current block;
+                        // only the selected one is boxed (below), since boxing an integer or
+                        // a float can allocate a node that an unselected candidate would leak.
                         auto emit_descriptor = [&](const QoreIRCallDirectInstruction::
-                                AOTAggregateProjectionDescriptor& descriptor)
-                                -> llvm::Value* {
+                                AOTAggregateProjectionDescriptor& descriptor,
+                                bool& needs_box) -> llvm::Value* {
+                            needs_box = true;
                             using Kind = QoreIRCallDirectInstruction::
                                 AOTAggregateProjectionKind;
                             switch (descriptor.kind) {
                                 case Kind::BoxedIntConstant:
-                                    return boxInt(llvm::ConstantInt::get(
+                                    return llvm::ConstantInt::get(
                                         i64_type,
-                                        descriptor.int_constant));
+                                        descriptor.int_constant);
                                 case Kind::BoxedFloatConstant:
-                                    return boxFloat(llvm::ConstantFP::get(
+                                    return llvm::ConstantFP::get(
                                         double_type,
-                                        descriptor.float_constant));
+                                        descriptor.float_constant);
                                 case Kind::BoxedBoolConstant:
-                                    return boxBool(llvm::ConstantInt::get(
+                                    return llvm::ConstantInt::get(
                                         i1_type,
-                                        descriptor.int_constant != 0));
+                                        descriptor.int_constant != 0);
                                 case Kind::BoxedNothingConstant:
+                                    needs_box = false;
                                     return llvm::ConstantInt::get(
                                         i64_type, VAL_NOTHING);
                                 default:
@@ -19138,7 +19281,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                             " wrong type";
                                         return nullptr;
                                     }
-                                    return boxInt(value);
+                                    return value;
                                 case Kind::BoxedFloatAddConstant:
                                     if (value->getType() != double_type) {
                                         error = "internal error: guarded AOT"
@@ -19157,7 +19300,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                             " wrong type";
                                         return nullptr;
                                     }
-                                    return boxFloat(value);
+                                    return value;
                                 case Kind::BoxedBool:
                                     if (value->getType() != i1_type) {
                                         error = "internal error: guarded AOT"
@@ -19165,26 +19308,83 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                             " wrong type";
                                         return nullptr;
                                     }
-                                    return boxBool(value);
+                                    return value;
                                 default:
                                     error = "internal error: unsupported"
                                         " guarded AOT aggregate descriptor";
                                     return nullptr;
                             }
                         };
-                        call_result = llvm::ConstantInt::get(
-                            i64_type, VAL_NOTHING);
-                        for (size_t i = 0; i < descriptors.size(); ++i) {
+                        std::vector<llvm::Value*> candidates;
+                        std::vector<bool> candidates_need_box;
+                        candidates.reserve(descriptors.size());
+                        candidates_need_box.reserve(descriptors.size());
+                        for (const auto& descriptor : descriptors) {
+                            if (candidates.size() && !(candidates.size() % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT guarded aggregate descriptor lowering")) {
+                                error = "cancelled during AOT guarded aggregate"
+                                    " descriptor lowering";
+                                return false;
+                            }
+                            bool needs_box;
                             llvm::Value* candidate =
-                                emit_descriptor(descriptors[i]);
+                                emit_descriptor(descriptor, needs_box);
                             if (!candidate) {
                                 return false;
                             }
-                            call_result = builder->CreateSelect(
-                                builder->CreateICmpEQ(normalized,
-                                    llvm::ConstantInt::get(i64_type, i)),
-                                candidate, call_result);
+                            candidates.push_back(candidate);
+                            candidates_need_box.push_back(needs_box);
                         }
+                        // an index outside the list selects NOTHING
+                        auto* merge_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_projection_merge", llvm_func);
+                        auto* none_bb = llvm::BasicBlock::Create(ctx,
+                            "aggregate_projection_none", llvm_func);
+                        llvm::SwitchInst* sw = builder->CreateSwitch(
+                            normalized, none_bb,
+                            static_cast<unsigned>(candidates.size()));
+                        std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>>
+                            incoming;
+                        incoming.reserve(candidates.size() + 1);
+                        for (size_t i = 0; i < candidates.size(); ++i) {
+                            if (i && !(i % 100)
+                                    && qore_check_cancel(nullptr,
+                                        "AOT guarded aggregate descriptor boxing")) {
+                                error = "cancelled during AOT guarded aggregate"
+                                    " descriptor boxing";
+                                return false;
+                            }
+                            auto* case_bb = llvm::BasicBlock::Create(ctx,
+                                "aggregate_projection_case", llvm_func);
+                            sw->addCase(llvm::ConstantInt::get(
+                                llvm::cast<llvm::IntegerType>(i64_type), i),
+                                case_bb);
+                            builder->SetInsertPoint(case_bb);
+                            llvm::Value* boxed = candidates_need_box[i]
+                                ? boxNative(candidates[i]) : candidates[i];
+                            if (!boxed) {
+                                error = "internal error: guarded AOT"
+                                    " aggregate descriptor cannot be boxed";
+                                return false;
+                            }
+                            // boxing may create blocks
+                            incoming.emplace_back(boxed,
+                                builder->GetInsertBlock());
+                            builder->CreateBr(merge_bb);
+                        }
+                        builder->SetInsertPoint(none_bb);
+                        builder->CreateBr(merge_bb);
+                        incoming.emplace_back(
+                            llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                            none_bb);
+                        builder->SetInsertPoint(merge_bb);
+                        auto* selected = builder->CreatePHI(i64_type,
+                            static_cast<unsigned>(incoming.size()));
+                        for (const auto& [value, block] : incoming) {
+                            selected->addIncoming(value, block);
+                        }
+                        call_result = selected;
                     }
                 }
                 if (has_arg_cleanups) {
@@ -22679,8 +22879,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // NaN path: call runtime helper to raise exception
             builder->SetInsertPoint(nan_bb);
-            llvm::Value* lhs_boxed = boxFloat(l);
-            llvm::Value* rhs_boxed = boxFloat(r);
+            llvm::Value* lhs_boxed = boxFloatTemp(l);
+            llvm::Value* rhs_boxed = boxFloatTemp(r);
             llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
                     static_cast<int>(QoreIROpcode::CmpFloat));
             auto helper = module.getOrInsertFunction("qore_rt_comparison_op",
@@ -26637,7 +26837,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (hash_val->getType() == i1_type) {
                     hash_val = boxBool(hash_val);
                 } else if (hash_val->getType() == double_type) {
-                    hash_val = boxFloat(hash_val);
+                    hash_val = boxFloatTemp(hash_val);
                 } else {
                     hash_val = boxIntInline(hash_val);
                 }
@@ -26646,7 +26846,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (key_val->getType() == i1_type) {
                     key_val = boxBool(key_val);
                 } else if (key_val->getType() == double_type) {
-                    key_val = boxFloat(key_val);
+                    key_val = boxFloatTemp(key_val);
                 } else {
                     key_val = boxIntInline(key_val);
                 }
@@ -26655,7 +26855,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (value_val->getType() == i1_type) {
                     value_val = boxBool(value_val);
                 } else if (value_val->getType() == double_type) {
-                    value_val = boxFloat(value_val);
+                    value_val = boxFloatTemp(value_val);
                 } else {
                     value_val = boxIntInline(value_val);
                 }
@@ -26681,7 +26881,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (iterable_val->getType() == i64_type) {
                 iterable_boxed = boxIntInline(iterable_val);
             } else if (iterable_val->getType() == double_type) {
-                iterable_boxed = boxFloat(iterable_val);
+                iterable_boxed = boxFloatTemp(iterable_val);
             } else {
                 error = "unsupported iterable type for IteratorCreateReverse";
                 return false;
@@ -29850,7 +30050,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (iterable_val->getType() == i64_type) {
                 iterable_boxed = boxIntInline(iterable_val);
             } else if (iterable_val->getType() == double_type) {
-                iterable_boxed = boxFloat(iterable_val);
+                iterable_boxed = boxFloatTemp(iterable_val);
             } else {
                 error = "unsupported iterable type for IteratorCreate";
                 return false;
@@ -30199,7 +30399,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (value_val->getType() == i64_type) {
                 value_boxed = boxIntInline(value_val);
             } else if (value_val->getType() == double_type) {
-                value_boxed = boxFloat(value_val);
+                value_boxed = boxFloatTemp(value_val);
             } else if (value_val->getType() == llvm::Type::getInt1Ty(ctx)) {
                 value_boxed = boxBool(value_val);
             } else {

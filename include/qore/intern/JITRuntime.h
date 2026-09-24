@@ -144,6 +144,9 @@ uint64_t qore_rt_coerce_optional_timeout(uint64_t val);
 //! Convert a QoreValue to double
 double qore_rt_to_float(uint64_t val);
 
+//! Convert a native double to an integer exactly as QoreValue::getAsBigInt() converts a float value
+int64_t qore_rt_float_to_int(double val);
+
 //! Convert a QoreValue to bool
 int64_t qore_rt_to_bool(uint64_t val);
 
@@ -288,6 +291,11 @@ int64_t qore_rt_guard_float(uint64_t val);
 //! Box a native int64_t into a NaN-boxed QoreValue.
 //! Handles values outside the 48-bit inline range by allocating a QoreBigIntNode.
 uint64_t qore_rt_box_big_int(int64_t val);
+
+//! Box a native double into a NaN-boxed QoreValue exactly as QoreValue::set(double) does.
+//! A double whose inline encoding would collide with a value tag (see
+//! QoreValue::rawDoubleCollidesWithTag()) is returned as a new QoreBigFloatNode reference.
+uint64_t qore_rt_box_float(double val);
 
 // --- Local variable helpers ---
 // These keep the Qore thread-local variable stack in sync for runtime helpers,

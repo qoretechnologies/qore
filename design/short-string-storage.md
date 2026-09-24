@@ -26,6 +26,19 @@ Inline strings use the NaN-box tag `0xFFC`:
 - the encoding is always UTF-8; `QoreValue::makeStringValue()` only stores inline when the effective
   encoding is `QCS_UTF8`, otherwise it allocates a `QoreStringNode`
 
+### Overlap with encoded doubles
+
+The `0xFFC` family, and the opaque reference family `0xFFD` above it, lie inside the range of encoded
+doubles (raw bits + 2^48, everything below `0xFFF9`), so they are not free tag space: the finite
+negative doubles with raw bits from `0xFFBF000000000000` up to `0xFFDF000000000000` (magnitudes from
+about 2.18e307 to about 8.71e307) would encode into them. `QoreValue::set(double)` therefore stores
+every double for which `QoreValue::rawDoubleCollidesWithTag()` is true (these and the negative NaNs
+at `0xFFF8` and above) as a `QoreBigFloatNode`, and `QoreValue::isFloat()` excludes both families.
+Every other producer of a boxed double must make the same decision: JIT and AOT code boxes a native
+double with `QoreIRToLLVM::boxFloat()`, which calls `qore_rt_box_float()` for a colliding double, so
+boxing a double in compiled code can allocate a node that the code must release like a boxed large
+int.
+
 Two properties follow from the packing and matter to callers:
 
 - the bytes are **not** contiguous in ascending memory order on a little-endian host, so no

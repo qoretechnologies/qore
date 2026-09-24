@@ -39,6 +39,9 @@
     would collide with internal NaN-boxing tags after encoding. This includes:
     - Negative NaN values (bit pattern >= 0xFFF8000000000000)
     - Negative signaling NaN values
+    - Finite negative values with bit patterns from 0xFFBF000000000000 up to 0xFFDF000000000000
+      (magnitudes from about 2.18e307 to about 8.71e307), whose encoding would collide with the
+      short-string and opaque reference tags
 
     In normal Qore code, most floating-point values are stored directly in
     QoreValue's 8-byte inline representation without heap allocation.

@@ -18,6 +18,7 @@ class NanBoxingTest inherits QUnit::Test {
         addTestCase("Float edge cases", \testFloatEdgeCases());
         addTestCase("Float special values", \testFloatSpecialValues());
         addTestCase("NaN encoding edge cases", \testNanEncodingEdgeCases());
+        addTestCase("Doubles colliding with value tags", \testDoubleTagCollisions());
         addTestCase("Type discrimination", \testTypeDiscrimination());
         addTestCase("Type conversions", \testTypeConversions());
         addTestCase("Null and Nothing", \testNullNothing());
@@ -145,6 +146,49 @@ class NanBoxingTest inherits QUnit::Test {
         # Comparisons with infinity
         assertTrue(1.0e308 < inf, "large < inf");
         assertTrue(-1.0e308 > neginf, "large neg > -inf");
+    }
+
+    #! Test the finite negative doubles whose encoding would collide with the short-string and opaque tags
+    /** A double is stored inline as its raw bits + 2^48; the doubles with raw bits from
+        0xFFBF000000000000 up to 0xFFDF000000000000 would land in the short-string (0xFFC) and
+        opaque reference (0xFFD) tag families, so they are stored as heap float nodes and must behave
+        like any other float.  Every tier and AOT are covered by ir/NanBoxDoubleTagCollision.qtest.
+    */
+    testDoubleTagCollisions() {
+        # -2^1022: raw bits 0xFFD0000000000000 would be read back as an opaque hash reference
+        float v = -4.4942328371557898e307;
+        assertEq("float", v.type(), "-2^1022");
+        assertEq(4.4942328371557898e307, -v, "-2^1022 negated");
+        assertEq(0.0, v + 4.4942328371557898e307, "-2^1022 sum");
+        # -2^1021: raw bits 0xFFC0000000000000 would be read back as an empty short string
+        auto a = -2.2471164185778949e307;
+        assertEq("float", a.type(), "-2^1021");
+        assertEq(2.2471164185778949e307, -a, "-2^1021 negated");
+        # the ends of the colliding range and the values just outside it
+        list<hash<auto>> cases = (
+            {"label": "0xFFBE (just below)", "mantissa": 1.875, "exp": 1020.0},
+            {"label": "0xFFBF (first)", "mantissa": 1.9375, "exp": 1020.0},
+            {"label": "0xFFDE (last)", "mantissa": 1.875, "exp": 1022.0},
+            {"label": "0xFFDF (just above)", "mantissa": 1.9375, "exp": 1022.0},
+        );
+        foreach hash<auto> c in (cases) {
+            float p = c.mantissa * exp2(c.exp);
+            auto n = -p;
+            assertEq("float", n.type(), c.label);
+            assertEq(p, -n, c.label + " negated");
+            assertEq("-" + sprintf("%.17g", p), sprintf("%.17g", n), c.label + " formatted");
+        }
+        # results of builtins, conversions and containers
+        assertEq("float", (-exp2(1022.0)).type(), "-exp2(1022.0)");
+        assertEq(v, float("-4.4942328371557898e307"), "float(string)");
+        list<auto> l = (v, a);
+        assertEq(("float", "float"), (map $1.type(), l), "list storage");
+        hash<auto> h = {"v": v, "a": a};
+        assertEq(v, h.v, "hash storage");
+        assertEq(a, h.a, "hash storage");
+        assertTrue(v < -a && a < 0.0, "comparisons");
+        assertTrue(v.toBool(), "truthy");
+        assertEq("-4.4942328371557898e+307", sprintf("%.17g", v), "formatting");
     }
 
     #! Test NaN encoding edge cases - critical for NaN-boxing correctness

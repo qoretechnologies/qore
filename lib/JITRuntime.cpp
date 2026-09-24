@@ -135,6 +135,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_coerce_optional_timeout",
         reinterpret_cast<void*>(&qore_rt_coerce_optional_timeout) },
     { "qore_rt_to_float", reinterpret_cast<void*>(&qore_rt_to_float) },
+    { "qore_rt_float_to_int", reinterpret_cast<void*>(&qore_rt_float_to_int) },
+    { "qore_rt_box_float", reinterpret_cast<void*>(&qore_rt_box_float) },
     { "qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool) },
     { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
     { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
@@ -886,6 +888,11 @@ extern "C" DLLEXPORT int64_t qore_rt_to_int(uint64_t val) {
     return v.getAsBigInt();
 }
 
+extern "C" DLLEXPORT int64_t qore_rt_float_to_int(double val) {
+    // same conversion as QoreValue::getAsBigInt() for a float value
+    return static_cast<int64>(val);
+}
+
 extern "C" DLLEXPORT int64_t qore_rt_to_timeout(uint64_t val) {
     QoreValue v = fromBits(val);
     return v.getType() == NT_DATE
@@ -1479,6 +1486,13 @@ extern "C" DLLEXPORT int64_t qore_rt_guard_float(uint64_t val) {
 // --- Boxing helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_box_big_int(int64_t val) {
+    QoreValue v(val);
+    uint64_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    return bits;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_box_float(double val) {
     QoreValue v(val);
     uint64_t bits;
     std::memcpy(&bits, &v, sizeof(bits));

@@ -743,13 +743,11 @@ void QoreValue::set(double f) {
     uint64_t double_bits;
     memcpy(&double_bits, &f, sizeof(f));
 
-    // Check if this double would collide with internal tags after encoding.
-    // Doubles with bits >= 0xFFF8000000000000 (including negative NaN values)
-    // would become >= TAG_INT48 after adding DOUBLE_ENCODE_OFFSET.
-    // These must be stored as QoreBigFloatNode to preserve correct behavior.
-    constexpr uint64_t PROBLEMATIC_THRESHOLD = 0xFFF8000000000000ULL;
-    if (double_bits >= PROBLEMATIC_THRESHOLD) {
-        // Allocate QoreBigFloatNode for problematic doubles (negative NaN, etc.)
+    // Doubles whose encoding (raw bits + DOUBLE_ENCODE_OFFSET) would land in a value tag must be
+    // stored as a QoreBigFloatNode: bits >= 0xFFF8000000000000 (negative NaNs) would reach TAG_INT48
+    // and above, and the finite negative doubles from 0xFFBF000000000000 up to 0xFFDF000000000000
+    // would be read back as short strings or opaque references.
+    if (rawDoubleCollidesWithTag(double_bits)) {
         QoreBigFloatNode* n = new QoreBigFloatNode(f);
         bits = TAG_POINTER | (reinterpret_cast<uint64_t>(n) & PAYLOAD_MASK);
     } else {

@@ -17005,9 +17005,10 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
     auto* i64_ty = llvm::Type::getInt64Ty(ctx);
     auto* i32_ty = llvm::Type::getInt32Ty(ctx);
     auto* ptr_ty = llvm::PointerType::get(ctx, 0);
-    constexpr uint64_t double_encode_offset = 0x0001000000000000ULL;
     constexpr uint64_t val_false = 0xFFFB000000000002ULL;
     constexpr uint64_t val_true = 0xFFFB000000000003ULL;
+    auto box_float = module.getOrInsertFunction("qore_rt_box_float",
+        llvm::FunctionType::get(i64_ty, {llvm::Type::getDoubleTy(ctx)}, false));
     llvm::Value* guarded_ref = guarded ? dispatch->getArg(0) : nullptr;
     llvm::Value* guarded_identity = guarded ? dispatch->getArg(1) : nullptr;
     llvm::Value* aot_ctx = dispatch->getArg(
@@ -17106,15 +17107,8 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
                     llvm::FunctionType::get(i64_ty, {i64_ty}, false));
                 fast_result = builder.CreateCall(box_int, {fast_result});
             } else if (fast_return_kind == BatchCalleeReturnKind::NativeFloat) {
-                llvm::Value* raw_bits = builder.CreateBitCast(fast_result, i64_ty);
-                llvm::Value* colliding_nan = builder.CreateICmpUGE(raw_bits,
-                    llvm::ConstantInt::get(i64_ty, 0xFFF8000000000000ULL));
-                llvm::Value* positive_nan = builder.CreateAnd(raw_bits,
-                    llvm::ConstantInt::get(i64_ty, 0x7FFFFFFFFFFFFFFFULL));
-                llvm::Value* safe_bits = builder.CreateSelect(
-                    colliding_nan, positive_nan, raw_bits);
-                fast_result = builder.CreateAdd(safe_bits,
-                    llvm::ConstantInt::get(i64_ty, double_encode_offset));
+                // a double that collides with a value tag is boxed in a new node
+                fast_result = builder.CreateCall(box_float, {fast_result});
             } else if (fast_return_kind == BatchCalleeReturnKind::NativeBool) {
                 fast_result = builder.CreateSelect(fast_result,
                     llvm::ConstantInt::get(i64_ty, val_true),
@@ -17146,15 +17140,9 @@ static bool defineAOTClosureNativeDispatch(llvm::LLVMContext& ctx,
                 boxed = builder.CreateCall(box_int, {arg});
                 owned_boxed_args.push_back(boxed);
             } else if (param_kinds[i] == BatchCalleeParamKind::NativeFloat) {
-                llvm::Value* raw_bits = builder.CreateBitCast(arg, i64_ty);
-                llvm::Value* colliding_nan = builder.CreateICmpUGE(raw_bits,
-                    llvm::ConstantInt::get(i64_ty, 0xFFF8000000000000ULL));
-                llvm::Value* positive_nan = builder.CreateAnd(raw_bits,
-                    llvm::ConstantInt::get(i64_ty, 0x7FFFFFFFFFFFFFFFULL));
-                llvm::Value* safe_bits = builder.CreateSelect(
-                    colliding_nan, positive_nan, raw_bits);
-                boxed = builder.CreateAdd(safe_bits,
-                    llvm::ConstantInt::get(i64_ty, double_encode_offset));
+                // a double that collides with a value tag is boxed in a new node
+                boxed = builder.CreateCall(box_float, {arg});
+                owned_boxed_args.push_back(boxed);
             } else if (param_kinds[i] == BatchCalleeParamKind::NativeBool) {
                 boxed = builder.CreateSelect(arg,
                     llvm::ConstantInt::get(i64_ty, val_true),

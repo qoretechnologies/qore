@@ -1,0 +1,364 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fixture for NanBoxDoubleTagCollision.qtest: the finite negative doubles whose NaN-boxed encoding
+# (raw bits + 2^48) would land in the short-string (0xFFC) or opaque reference (0xFFD) tag families
+# must be stored as heap float nodes, so every tier must read them back as the same float.
+#
+# Without arguments it checks every raw top-16-bit prefix from 0xFFB0 to 0xFFEF (with the first
+# and last low mantissa payloads) through locals, arguments, returns, containers, conversions,
+# handlers, closures and fused AOT aggregate projections, and prints a summary.  With "rss" it
+# repeats the patterns that box such a double (or an int outside the 48-bit immediate range) and
+# prints the resident set growth of a promoted call in kB: every leaked node is a separate heap
+# allocation, so a leak grows by megabytes while correct code reuses freed nodes.
+
+%disable-warning unreferenced-variable
+
+#! -2^1022: raw bits 0xFFD0000000000000, encoded inline as an opaque hash reference
+const Big = -4.4942328371557898e307;
+#! -2^1021: raw bits 0xFFC0000000000000, encoded inline as a short string
+const Big2 = -2.2471164185778949e307;
+#! outside the 48-bit immediate int range
+const BigInt = 1 << 50;
+
+# the positive double with the given top 16 raw bits (sign bit ignored) and low 48 mantissa bits
+float sub positiveDouble(int top16, int low48) {
+    int exponent = (top16 >> 4) & 0x7ff;
+    int mantissa = ((top16 & 0xf) << 48) | low48;
+    # exact: a 53-bit integer times a power of two
+    return float((1 << 52) + mantissa) * pow(2.0, exponent - 1075);
+}
+
+string sub fmt(auto v) {
+    return sprintf("%.17g", v);
+}
+
+list<string> errors;
+
+# checks that v is the float -p (p is positive and never collides with a tag)
+sub check(string label, auto v, float p) {
+    if (v.type() != "float") {
+        errors += sprintf("%s: type %s (%y)", label, v.type(), v);
+        return;
+    }
+    float f = v;
+    if (-f != p || f + p != 0.0 || fmt(f) != "-" + fmt(p)) {
+        errors += sprintf("%s: %s != -%s", label, fmt(f), fmt(p));
+    }
+}
+
+sub checkValue(string label, auto actual, auto expected) {
+    if (actual.type() != expected.type() || fmt(actual) != fmt(expected)) {
+        errors += sprintf("%s: %s %y != %s %y", label, actual.type(), actual, expected.type(), expected);
+    }
+}
+
+float sub identity(float f) {
+    return f;
+}
+
+auto sub identityAuto(auto v) {
+    return v;
+}
+
+float sub negate(float f) {
+    return -f;
+}
+
+# native float locals published to an on_exit handler
+float sub handlerLocal(float p) {
+    float v = -p;
+    float seen;
+    on_exit {
+        seen = v;
+        check("on_exit local", seen, p);
+    }
+    v = v * 1.0;
+    return v;
+}
+
+# a closure assigning a captured float
+float sub closureAssign(float p) {
+    float v;
+    code c = sub () { v = -p; };
+    c();
+    return v;
+}
+
+# foreach over a scalar float
+list<float> sub foreachScalar(float v) {
+    list<float> rv;
+    foreach float f in (v) {
+        rv += f;
+    }
+    return rv;
+}
+
+# foreach with a reference over a typed list
+list<float> sub foreachRef(list<float> l) {
+    foreach float f in (\l) {
+        f = -f;
+    }
+    return l;
+}
+
+int sub toInt(float v) {
+    return int(v);
+}
+
+# fused AOT aggregate projections: only the selected element may be boxed
+list<float> sub repeatFloat(float value) {
+    return (value, value);
+}
+
+list<int> sub repeatValue(int value) {
+    return (value, value, value);
+}
+
+list<auto> sub makeMixedValues(int value, float ratio, bool enabled) {
+    return (value, ratio, enabled);
+}
+
+list<float> sub makeConditionalFloats(bool reverse, float left, float right) {
+    if (reverse) {
+        return (right, left);
+    }
+    return (left, right);
+}
+
+list<auto> sub makeConditionalAutoFloats(bool reverse, float left, float right, float invariant) {
+    if (reverse) {
+        return (right, invariant + 0.0);
+    }
+    return (left, invariant + 0.0);
+}
+
+list<auto> sub makeConditionalAutoValues(bool reverse, int left, int right, int invariant) {
+    if (reverse) {
+        return (right, invariant + 7);
+    }
+    return (left, invariant + 7);
+}
+
+*float sub guardedFloatListIndex(float value, int index) {
+    return repeatFloat(value)[index];
+}
+
+*int sub guardedListIndex(int value, int index) {
+    return repeatValue(value)[index];
+}
+
+auto sub dynamicMixedListIndex(float ratio, int index) {
+    return makeMixedValues(BigInt, ratio, True)[index];
+}
+
+float sub conditionalFloatElementProjection(bool reverse, float left, float right) {
+    return makeConditionalFloats(reverse, left, right)[0];
+}
+
+auto sub conditionalAutoFloatProjection(bool reverse, float left, float right, float invariant) {
+    return makeConditionalAutoFloats(reverse, left, right, invariant)[0];
+}
+
+auto sub conditionalAutoFloatInvariantProjection(bool reverse, float left, float right, float invariant) {
+    return makeConditionalAutoFloats(reverse, left, right, invariant)[1];
+}
+
+auto sub conditionalAutoIntProjection(bool reverse, int left, int right, int invariant) {
+    return makeConditionalAutoValues(reverse, left, right, invariant)[0];
+}
+
+# typed closures with native float parameters and returns
+code sub makeNegate() {
+    return float sub (float x) { return -x; };
+}
+
+const RssIterations = 200000;
+
+int sub rssKb() {
+    *list<*string> m = (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/VmRSS:\s+([0-9]+)/);
+    return m[0].toInt();
+}
+
+float sub rssLocals() {
+    float sum = 0.0;
+    for (int i = 0; i < RssIterations; ++i) {
+        float v = Big * 1.0;
+        auto a = identityAuto(v);
+        hash<auto> h = {"a": a};
+        sum += h.a == v ? 1.0 : 0.0;
+    }
+    return sum;
+}
+
+float sub rssHandler() {
+    float sum = 0.0;
+    for (int i = 0; i < RssIterations; ++i) {
+        sum += handlerLocal(-Big) == Big ? 1.0 : 0.0;
+    }
+    return sum;
+}
+
+int sub rssProjections() {
+    int n = 0;
+    for (int i = 0; i < RssIterations; ++i) {
+        bool reverse = (i % 2) == 0;
+        n += exists guardedFloatListIndex(Big, i % 3) ? 1 : 0;
+        n += exists guardedListIndex(BigInt, i % 4) ? 1 : 0;
+        n += exists dynamicMixedListIndex(Big, i % 4) ? 1 : 0;
+        n += conditionalFloatElementProjection(reverse, Big, Big2) < 0.0 ? 1 : 0;
+        n += conditionalAutoFloatProjection(reverse, Big, Big2, Big) < 0.0 ? 1 : 0;
+        n += conditionalAutoFloatInvariantProjection(reverse, Big, Big2, Big) < 0.0 ? 1 : 0;
+        n += conditionalAutoIntProjection(reverse, BigInt, BigInt + 1, BigInt) > 0 ? 1 : 0;
+    }
+    return n;
+}
+
+float sub rssClosures() {
+    code neg = makeNegate();
+    float sum = 0.0;
+    for (int i = 0; i < RssIterations; ++i) {
+        sum += neg(-Big) == -Big ? 1.0 : 0.0;
+    }
+    return sum;
+}
+
+if (ARGV[0] == "rss") {
+    hash<string, code> cases = {
+        "locals": \rssLocals(),
+        "handler": \rssHandler(),
+        "projections": \rssProjections(),
+        "closures": \rssClosures(),
+    };
+    foreach hash<auto> c in (cases.pairIterator()) {
+        code f = c.value;
+        # the first call promotes and compiles the function; measure a later call
+        f();
+        int before = rssKb();
+        f();
+        printf("%s: %d\n", c.key, rssKb() - before);
+    }
+    return;
+}
+
+int count;
+list<float> values;
+list<float> positives;
+for (int top16 = 0x7fb0; top16 <= 0x7fef; ++top16) {
+    foreach int low48 in ((0, (1 << 48) - 1)) {
+        float p = positiveDouble(top16, low48);
+        string label = sprintf("0x%x/%x", top16 | 0x8000, low48);
+        # arithmetic result stored in a typed local
+        float v = -p;
+        check(label + " local", v, p);
+        # untyped local
+        auto a = p * -1.0;
+        check(label + " auto", a, p);
+        # function return and typed and untyped arguments
+        check(label + " negate()", negate(p), p);
+        check(label + " identity()", identity(v), p);
+        check(label + " identityAuto()", identityAuto(a), p);
+        # container storage
+        list<auto> l = (v, a);
+        check(label + " list[0]", l[0], p);
+        check(label + " list[1]", l[1], p);
+        hash<auto> h = {"v": v};
+        h.a = a;
+        check(label + " hash.v", h.v, p);
+        check(label + " hash.a", h.a, p);
+        # string round trip
+        check(label + " float(string)", float(fmt(v)), p);
+        # conversions and comparisons
+        if (!v) {
+            errors += label + ": not truthy";
+        }
+        if (!(v < 0.0) || v > -p || v != -p) {
+            errors += label + ": comparison";
+        }
+        values += v;
+        positives += p;
+        ++count;
+    }
+}
+
+# typed list mapping and reduction
+list<float> negated = map -$1, positives;
+for (int i = 0; i < negated.size(); ++i) {
+    check(sprintf("map[%d]", i), negated[i], positives[i]);
+    check(sprintf("values[%d]", i), values[i], positives[i]);
+}
+float sum = foldl $1 + $2, values;
+float psum = foldl $1 + $2, positives;
+if (sum != -psum) {
+    errors += sprintf("foldl: %s != -%s", fmt(sum), fmt(psum));
+}
+
+# literals, constants and builtin results
+check("literal -2^1022", -4.4942328371557898e307, 4.4942328371557898e307);
+check("literal -2^1021", -2.2471164185778949e307, 2.2471164185778949e307);
+check("constant Big", Big, -Big);
+float e = 1022.0;
+check("-exp2(1022.0)", -exp2(e), exp2(e));
+check("-pow(2.0, 1021)", -pow(2.0, 1021), pow(2.0, 1021));
+
+{
+    float p = -Big;
+    check("handlerLocal()", handlerLocal(p), p);
+    check("closureAssign()", closureAssign(p), p);
+    list<float> fl = foreachScalar(-p);
+    check("foreach scalar", fl[0], p);
+    fl = foreachRef((p, positives[0]));
+    check("foreach ref[0]", fl[0], p);
+    check("foreach ref[1]", fl[1], positives[0]);
+    hash<string, float> hf = {"a": -p, "b": -positives[1]};
+    check("hash<string, float>.a", hf.a, p);
+    check("hash<string, float>.b", hf.b, positives[1]);
+    code neg = makeNegate();
+    check("closure return", neg(p), p);
+    code ident = float sub (float x) { return x; };
+    check("closure argument", ident(-p), p);
+    float offset = 0.0;
+    code shifted = float sub (float x) { return x + offset; };
+    check("capturing closure", shifted(-p), p);
+    # the conversion of an out-of-range float is platform-defined; the tiers must agree
+    printf("toInt: %d %d\n", toInt(-p), toInt(-2.5));
+}
+
+# fused aggregate projections
+foreach int index in ((0, 1, -1, -2)) {
+    check(sprintf("guardedFloatListIndex(%d)", index), guardedFloatListIndex(Big, index), -Big);
+}
+foreach int index in ((2, -3)) {
+    checkValue(sprintf("guardedFloatListIndex(%d)", index), guardedFloatListIndex(Big, index), NOTHING);
+}
+foreach int index in ((0, 1, 2, -1, -3)) {
+    checkValue(sprintf("guardedListIndex(%d)", index), guardedListIndex(BigInt + index, index), BigInt + index);
+}
+checkValue("guardedListIndex(3)", guardedListIndex(BigInt, 3), NOTHING);
+checkValue("dynamicMixedListIndex(0)", dynamicMixedListIndex(Big, 0), BigInt);
+check("dynamicMixedListIndex(1)", dynamicMixedListIndex(Big, 1), -Big);
+checkValue("dynamicMixedListIndex(2)", dynamicMixedListIndex(Big, 2), True);
+checkValue("dynamicMixedListIndex(3)", dynamicMixedListIndex(Big, 3), NOTHING);
+foreach bool reverse in ((True, False)) {
+    float selected = reverse ? Big2 : Big;
+    check(sprintf("conditionalFloatElementProjection(%y)", reverse),
+        conditionalFloatElementProjection(reverse, Big, Big2), -selected);
+    check(sprintf("conditionalAutoFloatProjection(%y)", reverse),
+        conditionalAutoFloatProjection(reverse, Big, Big2, Big), -selected);
+    check(sprintf("conditionalAutoFloatInvariantProjection(%y)", reverse),
+        conditionalAutoFloatInvariantProjection(reverse, Big, Big2, Big), -Big);
+    checkValue(sprintf("conditionalAutoIntProjection(%y)", reverse),
+        conditionalAutoIntProjection(reverse, BigInt, BigInt + 1, BigInt), reverse ? BigInt + 1 : BigInt);
+}
+
+# a negative NaN keeps its sign in every tier
+float neg_nan = -@nan@;
+printf("negative NaN: %s %s %f\n", neg_nan.type(), neg_nan.nanp() ? "nan" : "number", neg_nan);
+
+printf("checked: %d\n", count);
+foreach string err in (errors) {
+    printf("ERROR: %s\n", err);
+}
+printf("errors: %d\n", errors.size());

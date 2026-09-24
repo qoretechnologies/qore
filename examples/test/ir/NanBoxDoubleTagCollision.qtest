@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class NanBoxDoubleTagCollisionTest
+
+#! Regression coverage for finite negative doubles that collide with NaN-boxing value tags
+/** A double is stored inline as its raw bits + 2^48, but the short-string (0xFFC) and opaque
+    reference (0xFFD) tag families lie inside that range, so the finite negative doubles with raw
+    bits from 0xFFBF000000000000 up to 0xFFDF000000000000 (magnitudes from about 2.18e307 to about
+    8.71e307) were read back as short strings, NOTHING or opaque references, and could crash.
+
+    Such doubles are now stored as heap float nodes in every tier, which also makes boxing a double
+    an allocation in compiled code: the fixture checks the values in every tier and AOT, and
+    measures resident set growth over many boxing operations, since each leaked node is a separate
+    allocation.  The same growth checks cover ints outside the 48-bit immediate range in fused AOT
+    aggregate projections, which boxed values that were then discarded.
+*/
+class NanBoxDoubleTagCollisionTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+        #! the AST output that every other tier must reproduce
+        *string ast_output;
+
+        #! forces promotion on the first call so ir/tiered also run the native code
+        const Promote = "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+
+        #! exec mode -> extra environment
+        const Tiers = (
+            ("ir", ""),
+            ("ir", Promote),
+            ("jit", ""),
+            ("jit", Promote),
+            ("tiered", ""),
+            ("tiered", Promote),
+        );
+
+        #! the summary that ends a run in which every check passed
+        const Summary = "checked: 128\nerrors: 0\n";
+
+        #! the growth measurements printed in "rss" mode
+        const GrowthCases = ("locals", "handler", "projections", "closures");
+
+        #! resident set growth that no leak-free run approaches; a leak of the 200000 iterations grows by megabytes
+        const MaxGrowthKb = 2048;
+    }
+
+    constructor() : QUnit::Test("NanBoxDoubleTagCollisionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture = get_script_dir() + "/NanBoxDoubleTagCollisionScenario.qr";
+
+        addTestCase("colliding doubles: ast", \testAst());
+        foreach list<string> tier in (Tiers) {
+            string mode = tier[0];
+            string env = tier[1];
+            string label = mode + (env ? " (promoted)" : "");
+            addTestCase("colliding doubles: " + label, sub () {
+                checkValues(mode, env);
+            });
+        }
+        foreach list<string> tier in ((("ast", ""),) + Tiers) {
+            string mode = tier[0];
+            string env = tier[1];
+            string label = mode + (env ? " (promoted)" : "");
+            addTestCase("boxing colliding doubles does not leak: " + label, sub () {
+                checkGrowth(mode, env);
+            });
+        }
+        addTestCase("colliding doubles: AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    testAst() {
+        string output = astOutput();
+        assertEq(-1, output.find("ERROR:"), "no failed checks: " + output);
+        assertEq(Summary, output.substr(-Summary.size()), "summary: " + output);
+        assertRegex("^toInt: -?[0-9]+ -2\n", output, "float to int conversions");
+        assertRegex("\nnegative NaN: float nan ", output, "negative NaN is a float NaN");
+    }
+
+    private string run(string mode, string env, *string arg) {
+        # synchronous compilation makes promotion deterministic instead of racing the compiler
+        return backquote(sprintf("%sQORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s%s 2>&1", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture), arg ? " " + arg : ""));
+    }
+
+    private checkValues(string mode, string env) {
+        # the float to int conversion of an out-of-range value is platform-defined, so every tier is
+        # compared with the AST output, which testAst() checks
+        assertEq(astOutput(), run(mode, env), sprintf("exec-mode=%s %s output matches AST", mode, env));
+    }
+
+    private string astOutput() {
+        if (!exists ast_output) {
+            ast_output = run("ast", "");
+        }
+        return ast_output;
+    }
+
+    private checkGrowth(string mode, string env) {
+        if (!is_readable("/proc/self/status")) {
+            testSkip("resident set size is only measured through /proc");
+        }
+        checkGrowthOutput(sprintf("exec-mode=%s %s", mode, env), run(mode, env, "rss"));
+    }
+
+    private checkGrowthOutput(string label, string output) {
+        list<string> lines = output.split("\n");
+        assertEq(GrowthCases.size(), lines.size(), label + ": one growth measurement per pattern: " + output);
+        foreach string line in (lines) {
+            *list<*string> m = (line =~ x/^([a-z-]+): (-?[0-9]+)$/);
+            assertTrue(exists m, label + ": growth line format: " + line);
+            if (m) {
+                assertTrue(m[1].toInt() < MaxGrowthKb, sprintf("%s: %s grew by %s kB", label, m[0], m[1]));
+            }
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-nan-box-double-tag-collision-");
+        string exe = tmp.path + "/collision";
+        # the stats show that the fused aggregate projections the fixture relies on were applied
+        string compile_out = backquote(sprintf("QORE_IR_OPT_STATS=1 LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            shellQuote(libqore_dir), shellQuote(qcc_bin), shellQuote(exe), shellQuote(fixture)));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        foreach string function in (("guardedFloatListIndex", "guardedListIndex", "dynamicMixedListIndex",
+                "conditionalFloatElementProjection", "conditionalAutoFloatProjection",
+                "conditionalAutoFloatInvariantProjection", "conditionalAutoIntProjection")) {
+            assertRegex(sprintf("IR-OPT-AOT-EFFECTS: %s_[^:]*:.* aggregate-projections=1 ", function), compile_out,
+                function + " uses a fused aggregate projection");
+        }
+        assertEq(astOutput(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(exe))), "AOT output matches AST");
+        if (is_readable("/proc/self/status")) {
+            checkGrowthOutput("AOT", backquote(sprintf("LD_LIBRARY_PATH=%s %s rss 2>&1", shellQuote(libqore_dir),
+                shellQuote(exe))));
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
