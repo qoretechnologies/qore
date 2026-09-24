@@ -612,6 +612,16 @@ public namespace HttpClientIo {
         */
         int max_redirects = 5;
 
+        #! The maximum size in bytes of a response body that is returned whole; 0 (the default) means no limit
+        /** The limit applies to the body as received and after its content encoding is decoded, over HTTP/1.x,
+            HTTP/2, and HTTP/3; a larger body fails the request with \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon
+            as the limit is exceeded, so a huge body or a small compressed body that expands to a huge size (a
+            "decompression bomb") cannot exhaust memory.  A body delivered incrementally to a streaming consumer is
+            not limited; see @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader" for the limits of an
+            event stream.
+        */
+        int max_response_body_size = 0;
+
         #! Pass redirect responses to the caller instead of following them
         /** When True, 3xx responses are returned as-is without following
             the Location header.  Overrides \c max_redirects.

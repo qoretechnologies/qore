@@ -419,6 +419,18 @@
           "source": "Sets the maximum HTTP redirects to support in a single request",
           "message": "Legt die maximale Anzahl von HTTP-Weiterleitungen fest, die in einer einzelnen Anfrage unterstützt werden"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "Maximale Größe des Antworttexts"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "Die maximale Größe eines Antworttexts, der in den Speicher empfangen wird"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "Die maximale Größe in Bytes eines Antworttexts, der in den Speicher empfangen wird, wie empfangen und nach dem Dekodieren seiner Inhaltskodierung (z. B. `gzip`); `0` (der Standardwert) bedeutet keine Begrenzung.\n\nEine größere Antwort lässt die Anfrage fehlschlagen, sodass eine sehr große Antwort oder eine kleine komprimierte Antwort, die sich auf eine sehr große Größe ausdehnt, den Speicher nicht erschöpfen kann."
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Passwort"

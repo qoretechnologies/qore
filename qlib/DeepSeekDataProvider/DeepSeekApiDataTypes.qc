@@ -746,6 +746,51 @@ public class DeepSeekModelDataType inherits HashDataType {
                 "desc": "Owner.",
                 "type": AbstractDataProviderTypeMap."string",
             },
+            "name": {
+                "display_name": "Model Name",
+                "short_desc": "The display name of the model",
+                "desc": "The display name of the model, for example `DeepSeek-V4-Pro`.",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "context_window": {
+                "display_name": "Context Window",
+                "short_desc": "The maximum number of tokens in the context",
+                "desc": "The maximum number of tokens the model accepts in its context, including the input and "
+                    "the output.",
+                "type": AbstractDataProviderTypeMap."*softint",
+            },
+            "max_output_tokens": {
+                "display_name": "Maximum Output Tokens",
+                "short_desc": "The maximum number of tokens in a response",
+                "desc": "The maximum number of tokens the model can generate in a response.",
+                "type": AbstractDataProviderTypeMap."*softint",
+            },
+            "input_modalities": {
+                "display_name": "Input Modalities",
+                "short_desc": "The kinds of input the model accepts",
+                "desc": "The kinds of input the model accepts, for example `text` and `image`.",
+                "type": AbstractDataProviderTypeMap."*list",
+            },
+            "output_modalities": {
+                "display_name": "Output Modalities",
+                "short_desc": "The kinds of output the model generates",
+                "desc": "The kinds of output the model generates, for example `text`.",
+                "type": AbstractDataProviderTypeMap."*list",
+            },
+            "effort": {
+                "display_name": "Reasoning Effort",
+                "short_desc": "The reasoning effort levels the model supports",
+                "desc": "The reasoning effort levels the model supports: `supported_levels` lists the levels and "
+                    "`default_level` gives the level used when a request does not set one.",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "api_capabilities": {
+                "display_name": "API Capabilities",
+                "short_desc": "Model behavior specific to each supported API",
+                "desc": "Model behavior specific to each supported API, keyed by the API name (for example "
+                    "`anthropic_messages`).",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
         };
     }
 

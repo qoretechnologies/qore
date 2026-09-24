@@ -1,0 +1,323 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for the memory limits of the HttpClientStreamingIo classes:
+    - StreamDecompressor: content codings and the maximum size of the data decompressed at once
+    - SseStreamReader: compressed event streams, event framing across chunks, and the maximum event size
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires AsyncSocketIo
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+
+%exec-class StreamLimitsTest
+
+#! An HTTP/1.1 server that answers each request with the raw response a callback builds for its path
+/** Each connection gets one response and is closed.  The server is stopped with a request for \c /stop, so that
+    no accept timeout is needed.
+*/
+class RawResponseServer {
+    public {
+        int port;
+    }
+
+    private {
+        Socket listener();
+        Counter running(1);
+        code<binary(string)> respond;
+    }
+
+    constructor(code<binary(string)> respond) {
+        self.respond = respond;
+        listener.bindINET("127.0.0.1", 0);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    destructor() {
+        stop();
+    }
+
+    stop() {
+        if (!running.getCount()) {
+            return;
+        }
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        s.send("GET /stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        running.waitForZero();
+    }
+
+    private run() {
+        on_exit running.dec();
+        while (True) {
+            Socket s = listener.accept();
+            hash<auto> hdr = s.readHTTPHeader(30s);
+            if (hdr.path == "/stop") {
+                break;
+            }
+            try {
+                s.send(respond(hdr.path));
+            } catch (hash<ExceptionInfo> ex) {
+                # the client may close the connection before reading the whole response
+            }
+            s.close();
+        }
+    }
+}
+
+class StreamLimitsTest inherits QUnit::Test {
+    private {
+        # the encoders for each supported content coding
+        const Encoders = {
+            "gzip": binary sub (binary b) { return gzip(b); },
+            "x-gzip": binary sub (binary b) { return gzip(b); },
+            "deflate": binary sub (binary b) { return compress(b); },
+            "x-deflate": binary sub (binary b) { return compress(b); },
+            "bzip2": binary sub (binary b) { return bzip2(b); },
+            "x-bzip2": binary sub (binary b) { return bzip2(b); },
+            "br": binary sub (binary b) { return brotli(b); },
+            "zstd": binary sub (binary b) { return zstd(b); },
+        };
+
+        # an event stream with LF, CRLF, and CR line endings
+        const Stream = "data: one\n\nevent: two\r\ndata: second\r\n\r\ndata: three\r\rdata: four\n\n";
+
+        # the data of the events of the stream
+        const StreamData = ("one", "second", "three", "four");
+
+        # the tolerated growth of the peak memory of the process in the decompression bomb tests
+        const MaxPeakGrowth = 64 * 1024 * 1024;
+    }
+
+    private {
+        RawResponseServer server;
+        string url;
+
+        # a gzip-compressed stream with an event that never ends
+        binary sse_bomb;
+    }
+
+    constructor() : Test("StreamLimitsTest", "1.0") {
+        addTestCase("StreamDecompressor content codings", \decompressorCodingTest());
+        addTestCase("StreamDecompressor maximum size", \decompressorLimitTest());
+        addTestCase("SseStreamReader compressed streams", \readerStreamTest());
+        addTestCase("SseStreamReader maximum event size", \readerLimitTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        sse_bomb = makeBomb("data: ", 64);
+        server = new RawResponseServer(\respond());
+        url = "http://127.0.0.1:" + server.port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    # returns gzip data that starts with the given text followed by the given number of MiB of "z", without holding
+    # the uncompressed data
+    private static binary makeBomb(string prefix, int mib) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+        tos.write(binary(prefix));
+        binary chunk = binary(strmul("z", 1024 * 1024));
+        for (int i = 0; i < mib; ++i) {
+            tos.write(chunk);
+        }
+        tos.close();
+        return bos.getData();
+    }
+
+    # returns the peak resident memory of the process in bytes, if available
+    private static *int getPeakMemory() {
+        try {
+            string status = ReadOnlyFile::readTextFile("/proc/self/status");
+            *string kb = (status =~ x/^VmHWM:\s+([0-9]+) kB/m)[0];
+            return kb ? kb.toInt() * 1024 : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            # not available on this platform
+        }
+    }
+
+    # returns a chunked event stream response, sent in small chunks so that events and compressed data span chunks
+    private static binary chunkedResponse(binary body, *string enc) {
+        string hdr = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n"
+            "Connection: close\r\n";
+        if (enc) {
+            hdr += sprintf("Content-Encoding: %s\r\n", enc);
+        }
+        binary rv = binary(hdr + "\r\n");
+        for (int offset = 0; offset < body.size(); offset += 7) {
+            binary chunk = body.substr(offset, 7);
+            rv += binary(sprintf("%x\r\n", chunk.size())) + chunk + binary("\r\n");
+        }
+        return rv + binary("0\r\n\r\n");
+    }
+
+    # builds the raw response for a path: /<kind>/<arg>
+    private binary respond(string path) {
+        list<string> parts = path.split("/");
+        string kind = parts[1];
+        string arg = parts[2] ?? "";
+        switch (kind) {
+            case "stream":
+                return arg == "identity"
+                    ? chunkedResponse(binary(Stream))
+                    : chunkedResponse(Encoders{arg}(binary(Stream)), arg);
+            # an event of the given size in one chunk
+            case "big": {
+                string body = "data: " + strmul("b", arg.toInt()) + "\n\n";
+                return binary(sprintf("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                    "Content-Length: %d\r\nConnection: close\r\n\r\n", body.size())) + binary(body);
+            }
+            case "bomb":
+                return binary("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Encoding: gzip\r\n"
+                    "Connection: close\r\n\r\n") + sse_bomb;
+        }
+        return binary("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+    }
+
+    # returns a reader for a stream from the server
+    private HttpClientStreamingIo::SseStreamReader getReader(string path, *string enc, int max_event_size = 0) {
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(url, "GET", path,
+            {"Accept": "text/event-stream"});
+        return new HttpClientStreamingIo::SseStreamReader(stream, enc, NOTHING, max_event_size);
+    }
+
+    decompressorCodingTest() {
+        string text = strmul("0123456789", 1000);
+        foreach hash<auto> i in (Encoders.pairIterator()) {
+            binary compressed = i.value(binary(text));
+            # the codings are case-insensitive
+            foreach string enc in ((i.key, i.key.upr())) {
+                HttpClientStreamingIo::StreamDecompressor dec(enc);
+                assertTrue(dec.isActive(), enc);
+                string rv;
+                for (int offset = 0; offset < compressed.size(); offset += 10) {
+                    rv += dec.decompressToString(compressed.substr(offset, 10));
+                }
+                assertEq(text, rv, enc);
+
+                dec = new HttpClientStreamingIo::StreamDecompressor(enc);
+                binary bin;
+                for (int offset = 0; offset < compressed.size(); offset += 10) {
+                    bin += dec.decompressToBinary(compressed.substr(offset, 10));
+                }
+                assertEq(binary(text), bin, enc);
+            }
+        }
+
+        # no decompression
+        foreach *string enc in ((NOTHING, "identity", "IDENTITY")) {
+            HttpClientStreamingIo::StreamDecompressor dec(enc);
+            assertFalse(dec.isActive());
+            assertEq("abc", dec.decompressToString(<616263>));
+            assertEq(<616263>, dec.decompressToBinary(<616263>));
+        }
+
+        assertThrows("ENCODING-ERROR", sub () { new HttpClientStreamingIo::StreamDecompressor("compress"); });
+    }
+
+    decompressorLimitTest() {
+        binary compressed = gzip(binary(strmul("x", 10000)));
+        # at the limit
+        HttpClientStreamingIo::StreamDecompressor dec("gzip", 10000);
+        assertEq(10000, dec.decompressToBinary(compressed).size());
+
+        # above the limit
+        dec = new HttpClientStreamingIo::StreamDecompressor("gzip", 9999);
+        assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", "maximum size of 9999 bytes", \dec.decompressToBinary(),
+            compressed);
+
+        # the limit applies to the data decompressed by one call, not to the total
+        dec = new HttpClientStreamingIo::StreamDecompressor("gzip", 6000);
+        int total;
+        for (int offset = 0; offset < compressed.size(); offset += 5) {
+            total += dec.decompressToString(compressed.substr(offset, 5)).size();
+        }
+        assertEq(10000, total);
+
+        # a bomb stops at the limit
+        binary bomb = makeBomb("", 64);
+        *int peak = getPeakMemory();
+        dec = new HttpClientStreamingIo::StreamDecompressor("gzip", 1024 * 1024);
+        assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", \dec.decompressToString(), bomb);
+        if (peak) {
+            assertLt(MaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+        }
+    }
+
+    readerStreamTest() {
+        foreach string enc in (("identity",) + keys Encoders) {
+            HttpClientStreamingIo::SseStreamReader reader = getReader("/stream/" + enc, enc);
+            on_exit reader.cancel();
+            list<string> data = ();
+            while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
+                data += evt.data;
+            }
+            assertEq(StreamData, data, enc);
+            assertTrue(reader.isDone(), enc);
+        }
+    }
+
+    readerLimitTest() {
+        assertEq(128 * 1024 * 1024, HttpClientStreamingIo::DefaultMaxEventSize);
+
+        # the default limit and no limit
+        foreach int max in ((0, -1)) {
+            HttpClientStreamingIo::SseStreamReader reader = getReader("/big/100000", NOTHING, max);
+            on_exit reader.cancel();
+            assertEq(100000, reader.readEvent(30s).data.size());
+        }
+
+        # an event that is complete but larger than the limit
+        {
+            HttpClientStreamingIo::SseStreamReader reader = getReader("/big/100000", NOTHING, 1000);
+            on_exit reader.cancel();
+            assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1000 bytes", \reader.readEvent(), 30s);
+            assertTrue(reader.isDone());
+        }
+
+        # a compressed event that never ends: decompression stops at the limit
+        {
+            *int peak = getPeakMemory();
+            HttpClientStreamingIo::SseStreamReader reader = getReader("/bomb", "gzip", 1024 * 1024);
+            on_exit reader.cancel();
+            assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes", \reader.readEvent(), 30s);
+            assertTrue(reader.isDone());
+            if (peak) {
+                assertLt(MaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+            }
+        }
+    }
+}

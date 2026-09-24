@@ -316,6 +316,11 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c protocol: protocol selection: \c "auto" (default), \c "h2", or \c "h3"
         - \c max_connections_per_host: maximum connections per host (0 = unlimited)
         - \c max_streams_per_connection: maximum streams per connection (0 = unlimited)
+        - \c max_response_body_size: the maximum size in bytes of a response body, as received and after its
+          content encoding is decoded (0, the default, means no limit); a larger body fails the request with
+          \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; see
+          @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size
+          "HttpClientConnectionManagerOptions::max_response_body_size"
         - \c ssl_verify_mode: SSL verification mode
         - \c accept_all_certs: if \c True, accept all certificates including self-signed
         - \c no_charset: if \c True, do not add charset to Content-Type header
@@ -728,6 +733,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "max_connections_per_host": True,
                 "max_streams_per_connection": True,
                 "max_redirects": True,
+                "max_response_body_size": True,
                 "redirect_passthru": True,
                 "enable_cookies": True,
                 "cookie": True,
@@ -1579,6 +1585,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             @ref HttpClientStreamingIo::SseStreamReader::isDone() to tell a
             timeout from the end of the stream
 
+            @note the reader decodes the stream according to the \c Content-Encoding of the response, and limits an
+            event, and the data decompressed from one received chunk, to
+            @ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize"
+
             @see restSseStream()
         */
         HttpClientStreamingIo::SseStreamReader restSseReader(string method, string path,
@@ -1656,9 +1666,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                         method, path, hdr, prepared.serialized_body,
                         response_start.first_data, response,
                         response_start.response_timeout, deadline);
-                    # the reader replays the data consumed while validating the response
-                    return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING,
-                        initial_data);
+                    # the reader replays the data consumed while validating the response, and decodes the stream
+                    # according to its content encoding
+                    return new HttpClientStreamingIo::SseStreamReader(stream,
+                        response.headers."content-encoding", initial_data);
                 } catch (hash<ExceptionInfo> ex) {
                     stream.cancel();
                     rethrow;
@@ -4170,6 +4181,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             if (exists opts.max_redirects) {
                 mgr_opts.max_redirects = opts.max_redirects;
+            }
+            if (exists opts.max_response_body_size) {
+                mgr_opts.max_response_body_size = opts.max_response_body_size;
             }
             if (opts.redirect_passthru) {
                 mgr_opts.redirect_passthru = opts.redirect_passthru.toBool();

@@ -118,7 +118,9 @@ public class TavilyRestClientBase {
     }
 
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        # the options have values of different types, so the hash must not take the narrow type of the
+        # defaults, which would prevent adding values of other types
+        hash<auto!> rv = DefaultOptions + opts;
         if (rv.apikey) {
             rv.token = rv.apikey;
             delete rv.apikey;

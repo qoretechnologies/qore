@@ -284,6 +284,18 @@ public:
         quic_stream_limit = limit;
     }
 
+    //! Sets the maximum size of a response body that is returned whole
+    /** The QUIC session reads the value from the socket on each poll; see
+        qore_socket_private::max_response_body_size
+
+        @param max_size the maximum size in bytes; <= 0 means no limit
+    */
+    DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
+        if (sock_obj) {
+            sock_obj->setMaxResponseBodySize(max_size);
+        }
+    }
+
     DLLLOCAL int64_t getSessionId() const {
         return session_id.load(std::memory_order_acquire);
     }

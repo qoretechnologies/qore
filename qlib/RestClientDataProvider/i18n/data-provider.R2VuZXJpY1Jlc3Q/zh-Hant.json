@@ -419,6 +419,18 @@
           "source": "Sets the maximum HTTP redirects to support in a single request",
           "message": "設定單一請求中支援的 HTTP 重新導向次數上限"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "回應本文大小上限"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "接收至記憶體的回應本文大小上限"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "接收至記憶體的回應本文大小上限（位元組），適用於接收時的大小以及解碼其內容編碼（例如 `gzip`）後的大小；`0`（預設值）表示沒有限制。\n\n較大的回應會使要求失敗，因此巨大的回應，或解壓縮後會膨脹成巨大大小的小型壓縮回應，都無法耗盡記憶體。"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "密碼"

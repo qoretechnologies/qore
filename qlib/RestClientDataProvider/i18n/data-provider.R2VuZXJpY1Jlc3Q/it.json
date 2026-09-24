@@ -419,6 +419,18 @@
           "source": "Sets the maximum HTTP redirects to support in a single request",
           "message": "Imposta il numero massimo di reindirizzamenti HTTP da supportare in una singola richiesta"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.display_name": {
+          "source": "Max Response Body Size",
+          "message": "Dimensione massima del corpo della risposta"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.short_desc": {
+          "source": "The maximum size of a response body received into memory",
+          "message": "La dimensione massima di un corpo di risposta ricevuto in memoria"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.bWF4X3Jlc3BvbnNlX2JvZHlfc2l6ZQ.desc": {
+          "source": "The maximum size in bytes of a response body that is received into memory, as received and after its content encoding (such as `gzip`) is decoded; `0` (the default) means no limit.\n\nA larger response fails the request, so a huge response, or a small compressed response that expands to a huge size, cannot exhaust memory.",
+          "message": "La dimensione massima in byte di un corpo di risposta ricevuto in memoria, così come ricevuto e dopo la decodifica della sua codifica del contenuto (come `gzip`); `0` (il valore predefinito) indica nessun limite.\n\nUna risposta più grande fa fallire la richiesta, quindi una risposta enorme, o una piccola risposta compressa che si espande fino a una dimensione enorme, non può esaurire la memoria."
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cGFzc3dvcmQ.display_name": {
           "source": "Password",
           "message": "Password"

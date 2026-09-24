@@ -264,6 +264,16 @@ public:
 
         @param timeout_us timeout in microseconds; <= 0 disables proactive timeout
     */
+    //! Sets the maximum size in bytes of a response body received into memory; <= 0 means no limit
+    /** The session reads the value from the socket when response data arrives; see
+        qore_socket_private::max_response_body_size
+    */
+    DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
+        if (sock_obj) {
+            sock_obj->setMaxResponseBodySize(max_size);
+        }
+    }
+
     DLLLOCAL void setIdleTimeout(int64_t timeout_us) {
         idle_timeout_us = timeout_us;
     }

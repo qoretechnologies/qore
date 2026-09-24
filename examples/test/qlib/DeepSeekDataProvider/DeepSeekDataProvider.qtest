@@ -475,6 +475,22 @@ public class DeepSeekDataProviderTest inherits QUnit::Test {
         assertEq("GET", fake.last_method);
         assertEq("/v1/models", fake.last_path);
         assertNothing(fake.last_request);
+        # the model details returned by the API are accepted by the response type
+        hash<auto> models = {"object": "list", "data": ({
+            "id": "deepseek-v4-pro",
+            "object": "model",
+            "owned_by": "deepseek",
+            "name": "DeepSeek-V4-Pro",
+            "context_window": 1048576,
+            "max_output_tokens": 393216,
+            "input_modalities": ("text", "image"),
+            "output_modalities": ("text",),
+            "effort": {"supported_levels": ("low", "high", "max"), "default_level": "high"},
+            "api_capabilities": {"anthropic_messages": {"system_prompt_update": "in-history"}},
+        },)};
+        fake.response_body = models;
+        auto rv = root.getChildProvider("list-models").doRequest();
+        assertEq(models, root.getChildProvider("list-models").getResponseType().acceptsValue(rv));
         fake.response_body = {"is_available": False, "balance_infos": ({"currency": "USD", "total_balance": "0.00",
             "granted_balance": "0.00", "topped_up_balance": "0.00"},)};
         assertFalse(root.getChildProvider("get-balance").doRequest().is_available);

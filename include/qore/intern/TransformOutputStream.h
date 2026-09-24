@@ -73,9 +73,12 @@ public:
 
     DLLLOCAL void write(const void* ptr, int64 len, ExceptionSink* xsink) override {
         assert(len >= 0);
+        if (!len) {
+            return;
+        }
         const char *src = static_cast<const char*>(ptr);
         char buf[bufsize];
-        while (len > 0) {
+        while (true) {
             std::pair<int64, int64> r = t->apply(src, len, buf, sizeof(buf), xsink);
             if (*xsink) {
                 return;
@@ -88,6 +91,12 @@ public:
             }
             src += r.first;
             len -= r.first;
+            // once all input is consumed, a full output buffer means that the transform can hold more output for
+            // the input written; it is drained with empty input, so that a decompressor that expands its input
+            // does not hold data back until the next write
+            if (!len && r.second < static_cast<int64>(sizeof(buf))) {
+                break;
+            }
         }
     }
 

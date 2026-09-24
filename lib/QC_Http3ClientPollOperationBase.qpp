@@ -1437,6 +1437,19 @@ nothing Http3ClientPollOperationBase::setQuicStreamLimit(int stream_limit) [flag
     priv->setQuicStreamLimit(stream_limit);
 }
 
+//! Sets the maximum size of a response body that is returned whole
+/** A response body that exceeds the limit as received fails the request with
+    \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon as the limit is exceeded, and the stream is canceled; a body
+    delivered incrementally to a streaming consumer is not limited.
+
+    @param max_size the maximum size in bytes; <= 0 means no limit
+
+    @since %Qore 3.0
+*/
+nothing Http3ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
+    priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
+}
+
 //! Returns the QUIC session ID (0 = not yet connected)
 /** @return session ID
 */

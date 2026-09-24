@@ -477,9 +477,15 @@ public:
     }
 
     //! Receives a body data chunk, accumulates and parses SSE events
+    /** An event that grows beyond the maximum event size before it ends is reported as an
+        \c SSE-EVENT-TOO-LARGE error, and the rest of the stream is discarded
+    */
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override;
 
     DLLLOCAL bool isStreaming() const override { return true; }
+
+    //! The maximum size of an event in bytes (128 MiB)
+    static constexpr int64 MaxEventSize = 128 * 1024 * 1024;
 
     //! Pushes NOTHING sentinel to the Queue (stream complete)
     DLLLOCAL void complete(ExceptionSink* xsink) override {
@@ -532,6 +538,12 @@ private:
     QoreObject* notifier_obj = nullptr; //!< ref'd EventNotifier object keeping fd valid
     std::mutex mtx;         //!< serializes buffered replay with I/O-thread delivery
     QoreString sse_buffer;  //!< accumulated SSE text (UTF-8)
+    bool too_large = false; //!< true once an event exceeded MaxEventSize; the rest of the stream is discarded
+    //! the size of @ref sse_buffer that has been searched for an event boundary
+    /** only the data received since is searched, so that an event received in many chunks is not searched from the
+        start for each chunk
+    */
+    size_t scanned = 0;
 };
 
 inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* notifier,

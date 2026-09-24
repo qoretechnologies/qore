@@ -1,0 +1,652 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Tests for the maximum size of an HTTP response body received by HTTPClient (max_response_body_size):
+    - HTTP/1.1 bodies with a Content-Length, chunked transfer encoding, and read until the connection closes
+    - decoded bodies for every supported Content-Encoding and a decompression bomb
+    - streaming delivery, the poll API, HTTP/2, and HTTP/3
+    - malformed chunk sizes
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpClientResponseLimitTest
+
+#! An HTTP/1.1 server that answers each request with the raw response a callback builds for its path
+/** Each connection gets one response and is closed.  The server is stopped with a request for \c /stop, so that
+    no accept timeout is needed.
+*/
+class RawResponseServer {
+    public {
+        int port;
+    }
+
+    private {
+        Socket listener();
+        Counter running(1);
+        code<binary(string)> respond;
+    }
+
+    constructor(code<binary(string)> respond) {
+        self.respond = respond;
+        listener.bindINET("127.0.0.1", 0);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    destructor() {
+        stop();
+    }
+
+    stop() {
+        if (!running.getCount()) {
+            return;
+        }
+        Socket s();
+        s.connect("127.0.0.1:" + port);
+        s.send("GET /stop HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        running.waitForZero();
+    }
+
+    private run() {
+        on_exit running.dec();
+        while (True) {
+            Socket s = listener.accept();
+            hash<auto> hdr = s.readHTTPHeader(30s);
+            if (hdr.path == "/stop") {
+                break;
+            }
+            try {
+                s.send(respond(hdr.path));
+            } catch (hash<ExceptionInfo> ex) {
+                # the client may close the connection before reading the whole response
+            }
+            s.close();
+        }
+    }
+}
+
+#! returns a response body of the size given by the last path element, optionally with a content encoding
+class SizedBodyHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        list<string> parts = hdr.path.split("/");
+        int size = parts.last().toInt();
+        # random bytes do not compress, so the server does not compress them itself
+        binary data = get_random_bytes(size);
+        if (parts[0] == "gzip") {
+            return makeResponse(200, gzip(binary(strmul("x", size))), {
+                "Content-Type": MimeTypeOctetStream,
+                "Content-Encoding": "gzip",
+            });
+        }
+        return makeResponse(200, data, {"Content-Type": MimeTypeOctetStream});
+    }
+}
+
+class HttpClientResponseLimitTest inherits QUnit::Test {
+    private {
+        # the maximum response body size of the tests
+        const Limit = 4096;
+
+        # the size of a decompression bomb
+        const BombSize = 256 * 1024 * 1024;
+
+        # the tolerated growth of the peak memory of the process in the decompression bomb test
+        const BombMaxPeakGrowth = 64 * 1024 * 1024;
+
+        # the encoders for each supported content encoding
+        const Encoders = {
+            "gzip": binary sub (binary b) { return gzip(b); },
+            "deflate": binary sub (binary b) { return compress(b); },
+            "bzip2": binary sub (binary b) { return bzip2(b); },
+            "br": binary sub (binary b) { return brotli(b); },
+            "zstd": binary sub (binary b) { return zstd(b); },
+        };
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+    }
+
+    private {
+        RawResponseServer raw;
+        string raw_url;
+
+        # a decompression bomb served by the raw server
+        binary bomb;
+
+        # a gzip-compressed server-sent event stream with an event that never ends
+        binary sse_bomb;
+
+        Logger logger;
+        HttpServer server;
+        int tls_port;
+    }
+
+    constructor() : Test("HttpClientResponseLimitTest", "1.0") {
+        addTestCase("options", \optionTest());
+        addTestCase("Content-Length body", \contentLengthTest());
+        addTestCase("chunked body", \chunkedTest());
+        addTestCase("body read until close", \closeDelimitedTest());
+        addTestCase("decoded body", \decodedTest());
+        addTestCase("decompression bomb", \bombTest());
+        addTestCase("streaming delivery", \streamingTest());
+        addTestCase("poll API", \pollTest());
+        addTestCase("malformed chunk sizes", \chunkSizeTest());
+        addTestCase("HTTP/2", \http2Test());
+        addTestCase("HTTP/3", \http3Test());
+        addTestCase("server-sent events", \sseTest());
+        addTestCase("streamed body read at once", \streamedBodyTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        bomb = makeBomb(BombSize);
+        {
+            BinaryOutputStream bos();
+            TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+            tos.write(binary("data: "));
+            binary chunk = binary(strmul("z", 1024 * 1024));
+            for (int i = 0; i < 64; ++i) {
+                tos.write(chunk);
+            }
+            tos.close();
+            sse_bomb = bos.getData();
+        }
+        raw = new RawResponseServer(\respond());
+        raw_url = "http://127.0.0.1:" + raw.port;
+
+        logger = new Logger("response-limit-test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        server.setHandler("sized", "", NOTHING, new SizedBodyHandler());
+        server.setDefaultHandler("sized", new SizedBodyHandler());
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete raw;
+        delete server;
+    }
+
+    # returns a body of the given size
+    private static binary makeBody(int size) {
+        return binary(strmul("x", size));
+    }
+
+    # returns gzip data that decompresses to the given number of spaces, without holding the decompressed data
+    private static binary makeBomb(int size) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+        binary chunk = binary(strmul(" ", 1024 * 1024));
+        for (int i = 0; i < size / chunk.size(); ++i) {
+            tos.write(chunk);
+        }
+        tos.close();
+        return bos.getData();
+    }
+
+    # returns the peak resident memory of the process in bytes, if available
+    private static *int getPeakMemory() {
+        try {
+            string status = ReadOnlyFile::readTextFile("/proc/self/status");
+            *string kb = (status =~ x/^VmHWM:\s+([0-9]+) kB/m)[0];
+            return kb ? kb.toInt() * 1024 : NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            # not available on this platform
+        }
+    }
+
+    # returns a raw response with a Content-Length
+    private static binary lengthResponse(binary body, string content_type = MimeTypeOctetStream, *string enc) {
+        string hdr = sprintf("HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n",
+            content_type, body.size());
+        if (enc) {
+            hdr += sprintf("Content-Encoding: %s\r\n", enc);
+        }
+        return binary(hdr + "\r\n") + body;
+    }
+
+    # returns a raw response with chunked transfer encoding
+    private static binary chunkedResponse(binary body, int chunk_size = 1000) {
+        binary rv = binary("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+            "Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n");
+        for (int offset = 0; offset < body.size(); offset += chunk_size) {
+            binary chunk = body.substr(offset, chunk_size);
+            rv += binary(sprintf("%x\r\n", chunk.size())) + chunk + binary("\r\n");
+        }
+        return rv + binary("0\r\n\r\n");
+    }
+
+    # returns a raw response whose body is read until the connection closes
+    private static binary closeResponse(binary body) {
+        return binary("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n")
+            + body;
+    }
+
+    # builds the raw response for a path of the raw server: /<kind>/<arg>
+    private binary respond(string path) {
+        list<string> parts = path.split("/");
+        # parts[0] is empty for the leading slash
+        string kind = parts[1];
+        string arg = parts[2] ?? "";
+        switch (kind) {
+            case "length": return lengthResponse(makeBody(arg.toInt()));
+            case "chunked": return chunkedResponse(makeBody(arg.toInt()));
+            case "close": return closeResponse(makeBody(arg.toInt()));
+            case "bomb": return lengthResponse(bomb, MimeTypeOctetStream, "gzip");
+            # a server-sent event stream read until the connection closes: /sse/<encoding>
+            case "sse": return sseResponse(arg, False);
+            # a chunked server-sent event stream: /sse-chunked/<encoding>
+            case "sse-chunked": return sseResponse(arg, True);
+            # a stream with one event of the given size: /sse-big/<size>
+            case "sse-big": return binary("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                "Connection: close\r\n\r\n") + binary("data: " + strmul("b", arg.toInt()) + "\n\n");
+            # a gzip-compressed stream with an event that never ends
+            case "sse-bomb": return binary("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                "Content-Encoding: gzip\r\nConnection: close\r\n\r\n") + sse_bomb;
+            # a Content-Length body that ends early because the server closes the connection
+            case "truncated": return binary("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                "Content-Length: 100\r\nConnection: close\r\n\r\n0123456789");
+            case "badchunk": return binary("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+                + decode_url(arg) + "\r\nabcde\r\n0\r\n\r\n");
+        }
+        # /<encoding>/<size>[/text]
+        binary body = Encoders{kind}(makeBody(arg.toInt()));
+        return lengthResponse(body, parts[3] == "text" ? MimeTypeText : MimeTypeOctetStream, kind);
+    }
+
+    # the events of the server-sent event streams
+    const SseStream = "data: one\n\nevent: two\ndata: second\r\n\r\ndata: three\n\n";
+
+    # returns a raw server-sent event stream response with the given content coding
+    private static binary sseResponse(string enc, bool chunked) {
+        binary body = enc == "identity" ? binary(SseStream) : Encoders{enc}(binary(SseStream));
+        string hdr = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n";
+        if (enc != "identity") {
+            hdr += sprintf("Content-Encoding: %s\r\n", enc);
+        }
+        if (!chunked) {
+            return binary(hdr + "\r\n") + body;
+        }
+        # the compressed stream is sent in small chunks, so that events and the compressed data span chunks
+        binary rv = binary(hdr + "Transfer-Encoding: chunked\r\n\r\n");
+        for (int offset = 0; offset < body.size(); offset += 7) {
+            binary chunk = body.substr(offset, 7);
+            rv += binary(sprintf("%x\r\n", chunk.size())) + chunk + binary("\r\n");
+        }
+        return rv + binary("0\r\n\r\n");
+    }
+
+    # returns a client for the raw server with the given limit
+    private HTTPClient getClient(int max_size = Limit, *hash<auto> opts) {
+        return new HTTPClient({"url": raw_url, "timeout": 30s, "max_response_body_size": max_size} + opts);
+    }
+
+    # asserts that a request fails because its response body is too large
+    private assertTooLarge(HTTPClient hc, string path, string desc_regex) {
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", desc_regex, sub () { hc.get(path); }, NOTHING, path);
+    }
+
+    optionTest() {
+        HTTPClient hc({"url": raw_url});
+        assertEq(0, hc.getMaxResponseBodySize());
+        assertFalse(hc.getHttpConfig().hasKey("max_response_body_size"));
+        hc.setMaxResponseBodySize(100);
+        assertEq(100, hc.getMaxResponseBodySize());
+        assertEq(100, hc.getHttpConfig().max_response_body_size);
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", \hc.setMaxResponseBodySize(), -1);
+        assertEq(100, hc.getMaxResponseBodySize());
+        assertThrows("HTTP-CLIENT-OPTION-ERROR", sub () { new HTTPClient({"max_response_body_size": -1}); });
+        assertEq(Limit, getClient().getMaxResponseBodySize());
+
+        # without a limit, a large body is received
+        hc = new HTTPClient({"url": raw_url});
+        assertEq(Limit * 16, hc.get("/length/" + (Limit * 16)).size());
+        # the limit can be set on a client that is already connected
+        hc.setMaxResponseBodySize(Limit);
+        assertTooLarge(hc, "/length/" + (Limit + 1), "declared by Content-Length");
+        assertEq(Limit, hc.get("/length/" + Limit).size());
+    }
+
+    contentLengthTest() {
+        HTTPClient hc = getClient();
+        assertEq(makeBody(Limit - 1), hc.get("/length/" + (Limit - 1)));
+        assertEq(makeBody(Limit), hc.get("/length/" + Limit));
+        assertTooLarge(hc, "/length/" + (Limit + 1), sprintf("at least %d bytes declared by Content-Length exceeds "
+            "the maximum response body size of %d bytes", Limit + 1, Limit));
+        # the client is still usable
+        assertEq(makeBody(10), hc.get("/length/10"));
+    }
+
+    chunkedTest() {
+        HTTPClient hc = getClient();
+        assertEq(makeBody(Limit), hc.get("/chunked/" + Limit));
+        assertTooLarge(hc, "/chunked/" + (Limit + 1), "received with chunked transfer encoding");
+        assertTooLarge(hc, "/chunked/" + (Limit * 100), "received with chunked transfer encoding");
+        assertEq(makeBody(10), hc.get("/chunked/10"));
+    }
+
+    closeDelimitedTest() {
+        HTTPClient hc = getClient();
+        assertEq(makeBody(Limit), hc.get("/close/" + Limit));
+        assertTooLarge(hc, "/close/" + (Limit * 100), "received before the connection closed");
+        assertEq(makeBody(10), hc.get("/close/10"));
+    }
+
+    decodedTest() {
+        HTTPClient hc = getClient();
+        foreach string enc in (keys Encoders) {
+            # a binary body
+            assertEq(makeBody(Limit), hc.get(sprintf("/%s/%d", enc, Limit)), enc);
+            assertTooLarge(hc, sprintf("/%s/%d", enc, Limit + 1), "decoded response body exceeds the maximum "
+                "response body size of " + Limit + " bytes");
+            # a text body
+            assertEq(LimitText(), hc.get(sprintf("/%s/%d/text", enc, Limit)), enc + " text");
+            assertTooLarge(hc, sprintf("/%s/%d/text", enc, Limit + 1), "decoded response body");
+        }
+        # without a limit, the body is decoded whole
+        assertEq(makeBody(Limit * 16), getClient(0).get(sprintf("/gzip/%d", Limit * 16)));
+    }
+
+    # returns the text body of the decoded tests
+    private static string LimitText() {
+        return strmul("x", Limit);
+    }
+
+    bombTest() {
+        HTTPClient hc = getClient(1024 * 1024);
+        *int peak = getPeakMemory();
+        assertTooLarge(hc, "/bomb", "decoded response body");
+        if (peak) {
+            assertLt(BombMaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+        }
+    }
+
+    streamingTest() {
+        HTTPClient hc = getClient();
+        # a body delivered chunk by chunk to a callback is not limited
+        int received = 0;
+        code<nothing(hash<auto>)> recv = sub (hash<auto> h) {
+            if (h.data) {
+                received += h.data.size();
+            }
+        };
+        hc.sendWithRecvCallback(recv, NOTHING, "GET", "/chunked/" + (Limit * 16));
+        assertEq(Limit * 16, received);
+
+        # a body that the client buffers to deliver it at once is limited
+        received = 0;
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", sub () {
+            hc.sendWithRecvCallback(recv, NOTHING, "GET", "/length/" + (Limit * 16));
+        });
+        received = 0;
+        hc.sendWithRecvCallback(recv, NOTHING, "GET", "/length/" + Limit);
+        assertEq(Limit, received);
+    }
+
+    # drives a poll operation on this thread and returns its output
+    private static auto drive(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete (state %y)", op.getGoal(),
+                    op.getState());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
+    }
+
+    pollTest() {
+        HTTPClient hc = getClient();
+        assertEq(makeBody(Limit), drive(hc.startPollSendRecv("GET", "/length/" + Limit))."response-body");
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "declared by Content-Length", \drive(),
+            hc.startPollSendRecv("GET", "/length/" + (Limit + 1)));
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "decoded response body", \drive(),
+            hc.startPollSendRecv("GET", "/gzip/" + (Limit + 1)));
+
+        # a request that fails after it was sent raises its error with the poll API as with the blocking API; the
+        # error was lost when the operation reported its goal as reached before continuePoll() raised it
+        string err;
+        try {
+            hc.get("/truncated");
+            fail("expected an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        assertThrows(err, \drive(), hc.startPollSendRecv("GET", "/truncated"));
+        # a client without a limit also gets the error
+        assertThrows(err, \drive(), getClient(0).startPollSendRecv("GET", "/truncated"));
+
+        # over TLS, the poll API negotiates the protocol of a new connection asynchronously; the concrete
+        # connection gets the limit too.  The body is not compressed, so only the limit of the connection applies.
+        hc = new HTTPClient({
+            "url": "https://localhost:" + tls_port,
+            "ssl_verify_cert": False,
+            "timeout": 30s,
+            "max_response_body_size": Limit,
+        });
+        hash<auto> identity = {"Accept-Encoding": "identity"};
+        assertEq(Limit, drive(hc.startPollSendRecv("GET", "/sized/" + Limit, NOTHING, identity))
+            ."response-body".size());
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "response body of stream|declared by Content-Length",
+            \drive(), hc.startPollSendRecv("GET", "/sized/" + (Limit * 16), NOTHING, identity));
+    }
+
+    chunkSizeTest() {
+        foreach string line in ("-5", "zz", "5 5", "", "fffffffffffffffff") {
+            foreach int max_size in (0, Limit) {
+                HTTPClient hc = getClient(max_size);
+                assertThrows("HTTP1-RECV-ERROR", "chunk size", sub () { hc.get("/badchunk/" + line); },
+                    NOTHING, sprintf("chunk size line %y with limit %d", line, max_size));
+            }
+        }
+        # a chunk size with an extension and surrounding whitespace is valid
+        HTTPClient hc = getClient();
+        assertEq("abcde", hc.get("/badchunk/" + " 5 ;ext=1"));
+    }
+
+    # reads the given number of events of a server-sent event stream
+    private static list<string> readEvents(HTTPClient hc, string path, int count, *int max_event_size) {
+        hash<auto> info;
+        hash<auto> hdr = hc.sendAndStream("GET", path, NOTHING, NOTHING, \info);
+        list<string> rv = ();
+        for (int i = 0; i < count; ++i) {
+            rv += hc.readServerSentEvent(hdr."content-encoding", 30s, max_event_size ?? 0).data;
+        }
+        return rv;
+    }
+
+    sseTest() {
+        # every content coding, read until the connection closes and with chunked transfer encoding
+        foreach string enc in (("identity",) + keys Encoders) {
+            foreach string kind in ("sse", "sse-chunked") {
+                assertEq(("one", "second", "three"), readEvents(getClient(0), sprintf("/%s/%s", kind, enc), 3),
+                    sprintf("%s %s", kind, enc));
+            }
+        }
+
+        # the maximum response body size of the client limits an event
+        assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of " + Limit + " bytes", \readEvents(),
+            (getClient(), "/sse-big/" + (Limit * 2), 1));
+        # the limit of the call takes precedence; a negative limit means no limit
+        assertEq(Limit * 2, readEvents(getClient(), "/sse-big/" + (Limit * 2), 1, Limit * 4)[0].size());
+        assertEq(Limit * 2, readEvents(getClient(), "/sse-big/" + (Limit * 2), 1, -1)[0].size());
+        assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 100 bytes", \readEvents(),
+            (getClient(0), "/sse-big/" + Limit, 1, 100));
+        # without a limit on the client, the default limit is 128 MiB
+        assertEq(128 * 1024 * 1024, getClient(0).getMaxSseEventSize());
+        assertEq(Limit, getClient().getMaxSseEventSize());
+
+        # the rest of the stream cannot be read after an event that is too large, so the response is abandoned
+        {
+            HTTPClient hc = getClient();
+            hash<auto> info;
+            hc.sendAndStream("GET", "/sse-big/" + (Limit * 2), NOTHING, NOTHING, \info);
+            assertThrows("SSE-EVENT-TOO-LARGE", \hc.readServerSentEvent(), (NOTHING, 30s));
+            # no stream is left to read from
+            assertThrows("SOCKET-NOT-OPEN", \hc.readHTTPChunk(), 30s);
+        }
+
+        # a compressed event that never ends: decompression stops at the limit
+        *int peak = getPeakMemory();
+        assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes", \readEvents(),
+            (getClient(1024 * 1024), "/sse-bomb", 1));
+        if (peak) {
+            assertLt(BombMaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+        }
+    }
+
+    # returns a client for the TLS listener with the given HTTP version, or skips the test if it is not negotiated
+    private HTTPClient getTlsClient(string version, string expected) {
+        HTTPClient hc({
+            "url": "https://localhost:" + tls_port,
+            "ssl_verify_cert": False,
+            "timeout": 30s,
+            "http_version": version,
+            "max_response_body_size": Limit,
+        });
+        try {
+            hc.get("/sized/1");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("%s is not available: %s: %s", expected, ex.err, ex.desc));
+        }
+        if (hc.getHttpVersion() != expected) {
+            testSkip(sprintf("%s was not negotiated: %s", expected, hc.getHttpVersion()));
+        }
+        return hc;
+    }
+
+    # checks the limit over a multiplexed protocol, where only the stream is canceled
+    private checkMultiplexed(HTTPClient hc) {
+        hash<auto> hdr = {"Accept-Encoding": "identity"};
+        assertEq(Limit, hc.send(NOTHING, "GET", "/sized/" + Limit, hdr).body.size());
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "exceeds the maximum response body size of " + Limit,
+            \hc.send(), (NOTHING, "GET", "/sized/" + (Limit * 64), hdr));
+        assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "decoded response body",
+            \hc.send(), (NOTHING, "GET", "/gzip/" + (Limit + 1), hdr));
+        # the connection is still usable
+        assertEq(10, hc.send(NOTHING, "GET", "/sized/10", hdr).body.size());
+    }
+
+    http2Test() {
+        checkMultiplexed(getTlsClient("2", "HTTP/2"));
+    }
+
+    http3Test() {
+        checkMultiplexed(getTlsClient("3", "HTTP/3"));
+    }
+
+    streamedBodyTest() {
+        # a streamed response body read at once is received into memory, so it is limited
+        foreach string path in (("/chunked/", "/close/")) {
+            HTTPClient hc = getClient();
+            hash<auto> info;
+            hc.sendAndStream("GET", path + (Limit * 2), NOTHING, NOTHING, \info);
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "maximum response body size of " + Limit,
+                \hc.recvBinary(), NOTHING, path);
+            # the response is abandoned, so no stream is left to read from
+            assertThrows("SOCKET-NOT-OPEN", \hc.readHTTPChunk(), 30s, path);
+
+            hc = getClient();
+            hc.sendAndStream("GET", path + (Limit * 2), NOTHING, NOTHING, \info);
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "maximum response body size of " + Limit,
+                \hc.readHTTPChunkedBody(), NOTHING, path);
+
+            hc = getClient();
+            hc.sendAndStream("GET", path + Limit, NOTHING, NOTHING, \info);
+            assertEq(Limit, hc.readHTTPChunkedBodyBinary().body.size(), path);
+        }
+    }
+}

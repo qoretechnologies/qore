@@ -1800,6 +1800,25 @@ public:
     DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
             int timeout_ms);
 
+    //! Read a server sent event with a maximum event size
+    /** Decompressed data left after an event, as well as any compressed data not decompressed yet, is kept for
+        the next call, so that an encoded stream can be read one event at a time.
+
+        @param xsink if an error occurs, the Qore-language exception information will be added here; an event larger
+        than @p max_event_size raises \c SSE-EVENT-TOO-LARGE
+        @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); may be
+        nullptr
+        @param timeout_ms timeout in milliseconds, -1=never timeout, 0=do not block, return immediately if there is no
+        data waiting
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+
+        @return a server sent event hash (caller owns the reference) or nullptr (error occurred)
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+            int timeout_ms, int64 max_event_size);
+
     //! Parse a string as a Server Sent Event (SSE) string
     /** @param xsink if an error occurs, the Qore-language exception information will be added here
         @param buf the string to parse as a Server Sent Event (SSE) string

@@ -157,6 +157,47 @@ while (*binary chunk = stream.readChunk()) {
 stream.close();
         @endcode
     */
+    #! @private Holds data written to it up to a maximum size until it is taken
+    class BoundedOutputStream inherits Qore::OutputStream {
+        private {
+            #! Buffered data
+            BinaryOutputStream buf();
+
+            #! The maximum size of the data held at once; <= 0 means no limit
+            int max_size;
+
+            #! The size of the data held
+            int size = 0;
+        }
+
+        #! Creates the stream
+        constructor(int max_size) {
+            self.max_size = max_size;
+        }
+
+        #! Closes the stream
+        close() {
+        }
+
+        #! Buffers data
+        /** @throw DECOMPRESSION-LIMIT-EXCEEDED the buffered data would exceed the maximum size
+        */
+        write(binary data) {
+            if (max_size > 0 && data.size() > max_size - size) {
+                throw "DECOMPRESSION-LIMIT-EXCEEDED", sprintf("the data decompressed from one chunk exceeds the "
+                    "maximum size of %d bytes", max_size);
+            }
+            buf.write(data);
+            size += data.size();
+        }
+
+        #! Returns and clears the buffered data
+        binary take() {
+            size = 0;
+            return buf.getData();
+        }
+    }
+
     public class HTTPResponseStream {
         private {
             #! The HTTP client
@@ -174,23 +215,11 @@ stream.close();
             #! Default read timeout
             timeout read_timeout = 30s;
 
-            #! Accumulated SSE text buffer for multi-chunk events
-            string sse_buffer = "";
-
-            #! String output stream for SSE decompression
-            StringOutputStream ostream;
-
-            #! Binary output stream for chunk decompression
-            BinaryOutputStream bostream;
-
-            #! Decompression transform stream for SSE (wraps ostream)
-            TransformOutputStream dstream;
+            #! Holds the output of chunk decompression, limited to the data decompressed from one chunk
+            BoundedOutputStream bostream;
 
             #! Decompression transform stream for binary chunks (wraps bostream)
             TransformOutputStream bdstream;
-
-            #! The decompressor transform for reuse
-            Transform decompressor;
 
             #! True if decompression is enabled
             bool use_decompressor = False;
@@ -221,10 +250,12 @@ stream.close();
         /** @param to optional timeout; uses the default timeout if not specified
             @return the SSE event or @ref nothing if EOF reached
 
-            This method reads and parses the next Server-Sent Event from the stream.
-            For chunked responses, it automatically handles decompression.
+            This method reads and parses the next Server-Sent Event from the stream, decompressing it according to
+            its content encoding.  An event is limited to the maximum response body size of the client if set, and
+            otherwise to 128 MiB; see HTTPClient::readServerSentEvent().
 
-            @throw ENCODING-ERROR if content encoding is not supported
+            @throw COMPRESS-ERROR if content encoding is not supported
+            @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size
         */
         *hash<SseMessageInfo> readServerSentEvent(*timeout to) {
             if (closed || eof) {
@@ -232,37 +263,8 @@ stream.close();
             }
             timeout use_to = to ?? read_timeout;
 
-            if (info.chunked) {
-                # Accumulate chunks until a complete SSE event (delimited by \n\n) is found
-                while (True) {
-                    # Check if the buffer already has a complete event
-                    int sep = sse_buffer.find("\n\n");
-                    if (sep >= 0) {
-                        string event_text = sse_buffer.substr(0, sep + 2);
-                        sse_buffer = sse_buffer.substr(sep + 2);
-                        return Socket::parseServerSentEvent(event_text);
-                    }
-                    # Read more data from the chunked stream
-                    hash<auto> chunk = client.readHTTPChunk(use_to);
-                    if (!chunk.body) {
-                        eof = True;
-                        # Parse any remaining buffered data
-                        if (sse_buffer.val()) {
-                            string remaining = sse_buffer;
-                            sse_buffer = "";
-                            return Socket::parseServerSentEvent(remaining);
-                        }
-                        return;
-                    }
-                    if (use_decompressor) {
-                        dstream.write(chunk.body);
-                        sse_buffer += ostream.getData();
-                    } else {
-                        sse_buffer += chunk.body.toString();
-                    }
-                }
-            }
-
+            # the client decodes the stream, including chunked transfer encoding and the content encoding, and
+            # limits the size of an event
             *hash<SseMessageInfo> evt;
             try {
                 evt = client.readServerSentEvent(info.content_encoding, use_to);
@@ -290,10 +292,17 @@ stream.close();
             it reads individual chunks. For content-length responses, it reads the entire body
             in one call.
 
-            By default, this method handles decompression (gzip, deflate, bzip2) transparently,
+            By default, this method handles decompression (gzip, deflate, bzip2, br, zstd) transparently,
             consistent with readServerSentEvent(). Set \a decompress to False to get raw bytes.
 
+            The data held in memory is limited: the data decompressed from one chunk is limited to the value of
+            HTTPClient::getMaxSseEventSize() of the client, and a body read at once, as received and decoded, to the
+            maximum response body size of the client if set (see HTTPClient::setMaxResponseBodySize()); the stream is
+            closed when a limit is exceeded.
+
             @throw ENCODING-ERROR if content encoding is not supported and decompress is True
+            @throw DECOMPRESSION-LIMIT-EXCEEDED the data decompressed from one chunk exceeds its limit
+            @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a body read at once exceeds the maximum response body size
         */
         *binary readChunk(*timeout to, bool decompress = True) {
             if (closed || eof) {
@@ -308,7 +317,7 @@ stream.close();
                         eof = True;
                         if (decompress && use_decompressor) {
                             # Return any remaining decompressed data
-                            *binary remaining = bostream.getData();
+                            *binary remaining = bostream.take();
                             if (remaining) {
                                 return remaining;
                             }
@@ -316,8 +325,15 @@ stream.close();
                         return;
                     }
                     if (decompress && use_decompressor) {
-                        bdstream.write(chunk.body);
-                        *binary result = bostream.getData();
+                        try {
+                            bdstream.write(chunk.body);
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (ex.err == "DECOMPRESSION-LIMIT-EXCEEDED") {
+                                close();
+                            }
+                            rethrow;
+                        }
+                        *binary result = bostream.take();
                         # Decompressor may need more input before producing output
                         if (result) {
                             return result;
@@ -328,7 +344,15 @@ stream.close();
                 }
             }
 
-            # For non-chunked, read the entire body at once
+            # For non-chunked, read the entire body at once; it is received into memory, so it is limited like a
+            # body that is returned whole
+            int max_size = client.getMaxResponseBodySize();
+            if (max_size > 0 && info.content_length > max_size) {
+                close();
+                throw "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", sprintf("the response body of %d bytes declared by "
+                    "Content-Length exceeds the maximum response body size of %d bytes", info.content_length,
+                    max_size);
+            }
             binary body;
             if (info.content_length) {
                 body = client.recvBinary(info.content_length, use_to);
@@ -352,7 +376,15 @@ stream.close();
 
             # Handle decompression for non-chunked responses
             if (decompress && info.content_encoding) {
-                return decompressBody(body);
+                try {
+                    return decompressBody(body, max_size);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "DECOMPRESSION-LIMIT-EXCEEDED") {
+                        throw "HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", sprintf("the decoded response body exceeds the "
+                            "maximum response body size of %d bytes", max_size);
+                    }
+                    rethrow;
+                }
             }
             return body;
         }
@@ -440,47 +472,40 @@ stream.close();
             if (!info.chunked) {
                 return;
             }
-            ostream = new StringOutputStream();
-            bostream = new BinaryOutputStream();
 
-            switch (info.content_encoding) {
+            *string alg = getAlgorithm(info.content_encoding);
+            if (!alg) {
+                return;
+            }
+            use_decompressor = True;
+            # the data decompressed from one chunk is limited
+            bostream = new BoundedOutputStream(client.getMaxSseEventSize());
+            bdstream = new TransformOutputStream(bostream, get_decompressor(alg));
+        }
+
+        #! @private Returns the decompression algorithm for a content coding, or NOTHING for no decompression
+        private static *string getAlgorithm(*string content_encoding) {
+            switch (content_encoding) {
                 case "deflate":
-                    use_decompressor = True;
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
-                    break;
+                case "x-deflate":
+                    return Qore::COMPRESSION_ALG_ZLIB;
                 case "gzip":
-                    use_decompressor = True;
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
-                    break;
+                case "x-gzip":
+                    return Qore::COMPRESSION_ALG_GZIP;
                 case "bzip2":
-                    use_decompressor = True;
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
-                    break;
+                case "x-bzip2":
+                    return Qore::COMPRESSION_ALG_BZIP2;
                 case "br":
-                    use_decompressor = True;
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_BROTLI);
-                    break;
+                    return Qore::COMPRESSION_ALG_BROTLI;
                 case "zstd":
-                    use_decompressor = True;
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZSTD);
-                    break;
+                    return Qore::COMPRESSION_ALG_ZSTD;
                 case "lz4":
-                    use_decompressor = True;
-                    decompressor = get_decompressor(Qore::COMPRESSION_ALG_LZ4);
-                    break;
+                    return Qore::COMPRESSION_ALG_LZ4;
                 case NOTHING:
                 case "identity":
-                    use_decompressor = False;
-                    break;
-
-                default:
-                    throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y",
-                        info.content_encoding);
+                    return;
             }
-            if (use_decompressor) {
-                dstream = new TransformOutputStream(ostream, decompressor);
-                bdstream = new TransformOutputStream(bostream, decompressor);
-            }
+            throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y", content_encoding);
         }
 
         #! @private
@@ -496,20 +521,31 @@ stream.close();
         }
 
         #! @private Decompress a binary body based on content encoding
-        private binary decompressBody(binary body) {
+        /** @param body the compressed body
+            @param max_size the maximum size of the decoded body; <= 0 means no limit
+        */
+        private binary decompressBody(binary body, int max_size) {
+            if (max_size < 0) {
+                max_size = 0;
+            }
             switch (info.content_encoding) {
                 case "deflate":
-                    return uncompress_to_binary(body);
+                case "x-deflate":
+                    return uncompress_to_binary(body, max_size);
                 case "gzip":
-                    return gunzip_to_binary(body);
+                case "x-gzip":
+                    return gunzip_to_binary(body, max_size);
                 case "bzip2":
-                    return bunzip2_to_binary(body);
+                case "x-bzip2":
+                    return bunzip2_to_binary(body, max_size);
                 case "br":
-                    return unbrotli_to_binary(body);
+                    return unbrotli_to_binary(body, max_size);
                 case "zstd":
-                    return unzstd_to_binary(body);
+                    return unzstd_to_binary(body, max_size);
                 case "lz4":
-                    return unlz4_to_binary(body);
+                    # an LZ4 block has no size header, so it is decompressed into a buffer of the maximum size, and a
+                    # larger block fails with LZ4-ERROR
+                    return unlz4_to_binary(body, max_size);
                 case NOTHING:
                 case "identity":
                     return body;

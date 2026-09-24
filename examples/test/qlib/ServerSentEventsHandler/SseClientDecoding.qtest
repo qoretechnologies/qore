@@ -1,0 +1,210 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    ServerSentEventClient decoding tests: chunked and compressed event streams, and the event size limit
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ServerSentEventClient
+
+%exec-class SseClientDecodingTest
+
+#! Returns data a few bytes at a time, so that events and compressed data span many chunks
+class TrickleInputStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+    }
+
+    constructor(binary data) {
+        self.data = data;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+
+    *binary read(int limit) {
+        if (limit <= 0 || pos >= data.size()) {
+            return;
+        }
+        int size = min(limit, 3, data.size() - pos);
+        binary rv = data.substr(pos, size);
+        pos += size;
+        return rv;
+    }
+}
+
+#! Returns a complete event stream as a chunked response body with the content encoding given in the request
+/** The Content-Type has a charset parameter, as sent by many servers; HttpServer handles a response with exactly
+    \c text/event-stream as a live stream that requires a server-sent event handler.  "%s" in the events is replaced
+    by the request path and body.
+*/
+class SseStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        const Encoders = {
+            "gzip": \gzip(),
+            "deflate": \compress(),
+            "br": \brotli(),
+            "zstd": \zstd(),
+        };
+    }
+
+    private {
+        string events;
+    }
+
+    constructor(string events) {
+        self.events = events;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr."x-test-status") {
+            return <HttpResponseInfo>{
+                "code": hdr."x-test-status".toInt(),
+                "hdr": {"Content-Type": MimeTypeText},
+                "body": "error",
+            };
+        }
+        binary stream;
+        if (hdr."x-test-bomb") {
+            # an event that never ends
+            stream = binary("data: " + strmul("x", 4 * 1024 * 1024));
+        } else {
+            stream = binary(replace(events, "%s", hdr.path + " " + (body ? body.toString() : "")));
+        }
+        hash<auto> rhdr = {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Transfer-Encoding": "chunked",
+        };
+        if (*string enc = hdr."x-test-encoding") {
+            stream = Encoders{enc}(stream);
+            rhdr."Content-Encoding" = enc;
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": rhdr,
+            "chunked_body": new TrickleInputStream(stream),
+        };
+    }
+}
+
+#! Queues the notifications of the client
+class QueueObserver inherits Observer {
+    public {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push({"id": event_id, "data": data_});
+    }
+
+    # returns the next notification with the given ID
+    hash<auto> waitFor(string event_id) {
+        while (True) {
+            hash<auto> h = q.get(20s);
+            if (h.id == event_id) {
+                return h;
+            }
+        }
+    }
+}
+
+#! Captures log messages
+class TestAppender inherits LoggerAppenderWithLayout {
+    public {
+        Queue msgs();
+    }
+
+    constructor() : LoggerAppenderWithLayout("test", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            msgs.push(params);
+        }
+    }
+}
+
+public class SseClientDecodingTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("SseClientDecodingTest", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        # line endings of all kinds
+        SseStreamHandler handler("data: one\n\nevent: e\r\ndata: two\r\n\r\ndata: three\r\r");
+        server.setHandler("sse", "", NOTHING, handler);
+        server.setDefaultHandler("sse", handler);
+        url = "sse://localhost:" + port;
+
+        addTestCase("chunked and compressed streams", \decodingTest());
+        addTestCase("event size limit", \limitTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    decodingTest() {
+        foreach *string enc in ((NOTHING,) + keys SseStreamHandler::Encoders) {
+            string label = enc ?? "identity";
+            ServerSentEventClient client({
+                "url": url,
+                "data": "none",
+                "headers": enc ? {"X-Test-Encoding": enc} : {},
+            });
+            QueueObserver observer();
+            client.registerObserver(observer);
+            client.observersReady();
+            on_exit client.disconnect();
+
+            # each event is delivered once, although the events and the compressed data span many chunks
+            list<string> data = ();
+            for (int i = 0; i < 3; ++i) {
+                data += observer.waitFor(EVENT_SSE_DATA).data.data;
+            }
+            assertEq(("one", "two", "three"), data, label);
+        }
+    }
+
+    limitTest() {
+        TestAppender appender();
+        Logger logger("client", LoggerLevel::getLevelError());
+        logger.addAppender(appender);
+        ServerSentEventClient client({
+            "url": url,
+            "data": "none",
+            "headers": {"X-Test-Encoding": "gzip", "X-Test-Bomb": "1"},
+            "max_response_body_size": 1024 * 1024,
+            "logger": logger,
+        });
+        QueueObserver observer();
+        client.registerObserver(observer);
+        client.observersReady();
+        on_exit client.disconnect();
+
+        # a compressed event that never ends: decompression stops at the limit, and the connection is closed
+        observer.waitFor(EVENT_SSE_CLOSED);
+        string msg = appender.msgs.get(20s);
+        assertRegex("SSE-EVENT-TOO-LARGE.*maximum event size of 1048576 bytes", msg);
+    }
+}

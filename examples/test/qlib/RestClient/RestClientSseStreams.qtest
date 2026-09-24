@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Server-sent event streams of the AI REST clients, synchronous and asynchronous, against a local server
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires OpenAiRestClient
+%requires AnthropicRestClient
+%requires GeminiRestClient
+%requires GrokRestClient
+%requires PerplexityRestClient
+
+%exec-class RestClientSseStreamsTest
+
+#! Returns data a few bytes at a time, so that events and compressed data span many chunks
+class TrickleInputStream inherits InputStream {
+    private {
+        binary data;
+        int pos = 0;
+    }
+
+    constructor(binary data) {
+        self.data = data;
+    }
+
+    int peek() {
+        return pos < data.size() ? data[pos] : -1;
+    }
+
+    *binary read(int limit) {
+        if (limit <= 0 || pos >= data.size()) {
+            return;
+        }
+        int size = min(limit, 3, data.size() - pos);
+        binary rv = data.substr(pos, size);
+        pos += size;
+        return rv;
+    }
+}
+
+#! Returns a complete event stream as a chunked response body with the content encoding given in the request
+/** The Content-Type has a charset parameter, as sent by many servers; HttpServer handles a response with exactly
+    \c text/event-stream as a live stream that requires a server-sent event handler.  "%s" in the events is replaced
+    by the request path and body.
+*/
+class SseStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        const Encoders = {
+            "gzip": \gzip(),
+            "deflate": \compress(),
+            "br": \brotli(),
+            "zstd": \zstd(),
+        };
+    }
+
+    private {
+        string events;
+    }
+
+    constructor(string events) {
+        self.events = events;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (hdr."x-test-status") {
+            return <HttpResponseInfo>{
+                "code": hdr."x-test-status".toInt(),
+                "hdr": {"Content-Type": MimeTypeText},
+                "body": "error",
+            };
+        }
+        binary stream;
+        if (hdr."x-test-bomb") {
+            # an event that never ends
+            stream = binary("data: " + strmul("x", 4 * 1024 * 1024));
+        } else {
+            stream = binary(replace(events, "%s", hdr.path + " " + (body ? body.toString() : "")));
+        }
+        hash<auto> rhdr = {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Transfer-Encoding": "chunked",
+        };
+        if (*string enc = hdr."x-test-encoding") {
+            stream = Encoders{enc}(stream);
+            rhdr."Content-Encoding" = enc;
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": rhdr,
+            "chunked_body": new TrickleInputStream(stream),
+        };
+    }
+}
+
+public class RestClientSseStreamsTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+    }
+
+    constructor() : Test("RestClientSseStreamsTest", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        # the first event gives the path and the request body; line endings of all kinds
+        SseStreamHandler handler("data: %s\n\nevent: e\r\ndata: one\r\n\r\ndata: two\r\rdata: three\n\n");
+        server.setHandler("sse", "", NOTHING, handler);
+        server.setDefaultHandler("sse", handler);
+        url = "http://localhost:" + port;
+
+        addTestCase("events", \eventTest());
+        addTestCase("limits and errors", \limitTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    # returns openers of the streams of all synchronous clients, with the path requested
+    private hash<string, list<auto>> getOpeners(int max_size = 0) {
+        hash<auto> opts = {"url": url, "max_response_body_size": max_size};
+        return getOpenersIntern(new OpenAiRestClient(opts + {"token": "x"}),
+            new AnthropicRestClient(opts + {"apikey": "x"}), new GeminiRestClient(opts + {"apikey": "x"}),
+            new GrokRestClient(opts + {"token": "x"}), new PerplexityRestClient(opts + {"token": "x"}));
+    }
+
+    # returns openers of the streams of all asynchronous clients, with the path requested
+    private hash<string, list<auto>> getOpenersIo() {
+        hash<auto> opts = {"url": url};
+        return getOpenersIntern(new OpenAiRestClientIo(opts + {"token": "x"}),
+            new AnthropicRestClientIo(opts + {"apikey": "x"}), new GeminiRestClientIo(opts + {"apikey": "x"}),
+            new GrokRestClientIo(opts + {"token": "x"}), new PerplexityRestClientIo(opts + {"token": "x"}));
+    }
+
+    private hash<string, list<auto>> getOpenersIntern(object oai, object ant, object gem, object grok, object ppx) {
+        return {
+            "OpenAi": (
+                "v1/responses",
+                object sub (hash<auto> req, *hash<auto> hdr) { return oai.openResponsesStream(req, hdr); },
+                oai,
+            ),
+            "Anthropic": (
+                "v1/messages",
+                object sub (hash<auto> req, *hash<auto> hdr) { return ant.openMessagesStream(req, hdr); },
+                ant,
+            ),
+            "Gemini": (
+                "v1beta/models/m1:streamGenerateContent?alt=sse",
+                object sub (hash<auto> req, *hash<auto> hdr) { return gem.openStreamingConnection("m1", req, hdr); },
+                gem,
+            ),
+            "Grok": (
+                "v1/responses",
+                object sub (hash<auto> req, *hash<auto> hdr) { return grok.openResponsesStream(req, hdr); },
+                grok,
+            ),
+            "Perplexity": (
+                "chat/completions",
+                object sub (hash<auto> req, *hash<auto> hdr) { return ppx.openChatStream(req, hdr); },
+                ppx,
+            ),
+        };
+    }
+
+    eventTest() {
+        foreach *string enc in ((NOTHING,) + keys SseStreamHandler::Encoders) {
+            # the synchronous and asynchronous clients: (suffix, name, opener info)
+            list<list<auto>> clients = (map ("", $1.key, $1.value), getOpeners().pairIterator())
+                + (map ("Io", $1.key, $1.value), getOpenersIo().pairIterator());
+            foreach list<auto> i in (clients) {
+                string label = sprintf("%s%s %s", i[1], i[0], enc ?? "identity");
+                list<auto> v = i[2];
+                # a hash request is serialized as JSON
+                object stream = v[1]({"model": "m"}, enc ? {"X-Test-Encoding": enc} : NOTHING);
+                list<string> data = ();
+                while (*hash<SseMessageInfo> evt = stream.readEvent(10s)) {
+                    data += evt.data;
+                }
+                assertEq((v[0] + " {\"model\":\"m\"}", "one", "two", "three"), data, label);
+                # the end of the stream is reported again
+                assertNothing(stream.readEvent(10s), label);
+            }
+        }
+    }
+
+    limitTest() {
+        foreach hash<auto> i in (getOpeners(1024 * 1024).pairIterator()) {
+            # a compressed event that never ends: decompression stops at the maximum response body size
+            object stream = i.value[1]({}, {"X-Test-Encoding": "gzip", "X-Test-Bomb": "1"});
+            assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes", \stream.readEvent(), 30s,
+                i.key);
+
+            # an error response raises an exception with the response
+            assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 500 received", i.value[1],
+                ({}, {"X-Test-Status": "500"}), i.key);
+        }
+        foreach hash<auto> i in (getOpenersIo().pairIterator()) {
+            assertThrows("REST-RESPONSE-ERROR", "500", i.value[1], ({}, {"X-Test-Status": "500"}), i.key + "Io");
+        }
+    }
+}

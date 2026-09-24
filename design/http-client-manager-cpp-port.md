@@ -614,11 +614,35 @@ Reuse Safety (curl-aligned model)".  Pieces specific to the C++ manager:
   that case.
 
 - **`Options::idle_timeout_ms`** (default 60000).  Wired through to
-  `Http{1,2}ClientPollOperationPriv::setIdleTimeout` in `createConnection`
-  via the virtual `HttpClientConnectionBase::setIdleTimeoutHook(int64_t
-  timeout_us)`.  Each protocol overrides; `Http3ClientConnection` keeps
-  the base no-op (ngtcp2 has its own keepalive).  Activates the nginx-style
-  proactive idle-close path on the I/O thread.
+  `Http{1,2}ClientPollOperationPriv::setIdleTimeout` by
+  `applyConnectionOptions()` via the virtual
+  `HttpClientConnectionBase::setIdleTimeoutHook(int64_t timeout_us)`.  Each
+  protocol overrides; `Http3ClientConnection` keeps the base no-op (ngtcp2
+  has its own keepalive).  Activates the nginx-style proactive idle-close
+  path on the I/O thread.
+
+- **`Options::max_response_body_size`** (default 0 = no limit).  The
+  maximum size of a response body received into memory, set from the
+  `HTTPClient` option of the same name; pushed by `applyConnectionOptions()`
+  via `HttpClientConnectionBase::setMaxResponseBodySizeHook(int64_t)`.
+  H1 stores it on the poll op priv and checks the declared Content-Length
+  before the body is allocated, the running total before each chunk, and
+  each read of a close-delimited body; a larger body fails the request with
+  `HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE` and closes the connection.  H2 and
+  H3 store it on the socket (`qore_socket_private::max_response_body_size`,
+  atomic): the H2 session reads it through its socket pointer when DATA
+  arrives, and the QUIC client poll operation copies it into its session on
+  every poll, as the QUIC session drops its socket pointer after creation.
+  Only the stream is canceled (`RST_STREAM(CANCEL)` /
+  `H3_REQUEST_CANCELLED`) and reported with the same error.  Bodies
+  delivered incrementally to a streaming consumer and CONNECT tunnels are
+  not limited.  `HTTPClient` applies the limit to the decoded body too.
+
+- **`applyConnectionOptions()`** pushes the per-connection options above.
+  It runs in `createConnection()` and again on the concrete connection in
+  `finalizeAsyncConnection()`: a `NegotiatingHttpClientConnection` (ALPN
+  over TLS) acquired asynchronously ignores the hooks, and the concrete H1
+  or H2 connection that `takeOver()` builds does not inherit them.
 
 - **`Options::max_age_ms`** (default 0 = off).  Born-at TTL.  Stored on
   `HttpClientConnectionBase::created_us_` (set in the protected ctor via

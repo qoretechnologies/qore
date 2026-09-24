@@ -43,6 +43,7 @@
 
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/CompressionTransforms.h"
 
 #include "qore/intern/Http2Session.h"
 // NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
@@ -163,6 +164,7 @@ class Transform;
 #define GETSOCKOPT_ARG_4 char*
 #define SETSOCKOPT_ARG_4 const char*
 #define SHUTDOWN_ARG SD_BOTH
+#define SHUTDOWN_WR_ARG SD_SEND
 #define QORE_INVALID_SOCKET ((int)INVALID_SOCKET)
 #define QORE_SOCKET_ERROR SOCKET_ERROR
 DLLLOCAL int check_windows_rc(int rc);
@@ -177,6 +179,7 @@ DLLLOCAL int windows_set_errno();
 #define GETSOCKOPT_ARG_4 void*
 #define SETSOCKOPT_ARG_4 void*
 #define SHUTDOWN_ARG SHUT_RDWR
+#define SHUTDOWN_WR_ARG SHUT_WR
 #define QORE_INVALID_SOCKET -1
 #define QORE_SOCKET_ERROR -1
 #endif
@@ -1056,6 +1059,34 @@ struct qore_socket_private : public QoreReferenceCounter {
         ssl_capture_remote_cert = false,
         event_data = false,
         sse_got_cr = false;
+
+    //! The decoder of a compressed server-sent event stream, kept across reads; see readServerSentEvent()
+    std::unique_ptr<StreamDecoder> sse_decoder;
+
+    //! Sets up the decoder of a server-sent event stream for the given decompression algorithm
+    /** An existing decoder for the same algorithm is kept, so that its buffered input and output survive between
+        reads of the same stream
+
+        @param alg the decompression algorithm, or nullptr if the stream is not compressed
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int setupSseDecoder(const char* alg, ExceptionSink* xsink) {
+        if (!alg) {
+            sse_decoder.reset();
+            return 0;
+        }
+        if (sse_decoder && sse_decoder->getAlgorithm() == alg) {
+            return 0;
+        }
+        std::unique_ptr<StreamDecoder> decoder(new StreamDecoder(alg, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        sse_decoder = std::move(decoder);
+        return 0;
+    }
     //! Tracks listen() state for platforms without reliable SO_ACCEPTCONN support.
     bool listening = false;
     int in_op = -1,
@@ -1171,6 +1202,13 @@ struct qore_socket_private : public QoreReferenceCounter {
         this limit causes the stream to be reset with REFUSED_STREAM.
     */
     std::atomic<int64> max_http2_body_size{0};
+
+    //! Maximum size in bytes of an HTTP/2 or HTTP/3 response body received into memory by a client (0 = unlimited)
+    /** Set by the HTTP client connection that owns the socket; client sessions read it when response data arrives,
+        so that it can change after the session was created.  A response body delivered incrementally to a
+        streaming consumer is not limited.
+    */
+    std::atomic<int64> max_response_body_size{0};
 
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
@@ -1468,6 +1506,16 @@ struct qore_socket_private : public QoreReferenceCounter {
         return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_ARG) : 0;
     }
 
+    //! Shuts down the sending side of the connection only (a half-close); the peer receives the end of the stream
+    /** Data already written is sent before the end of the stream, and data from the peer can still be received.
+
+        @return 0 for success, -1 for an error (see errno)
+    */
+    DLLLOCAL int shutdown_write_direct() {
+        CloseLockHelper cl(*this);
+        return sock != QORE_INVALID_SOCKET ? ::shutdown(sock, SHUTDOWN_WR_ARG) : 0;
+    }
+
     //! Returns the HTTP/2 session to mark closed; the reference is read under @ref close_m
     DLLLOCAL std::shared_ptr<Http2Session> getH2SessionForClose() {
         CloseLockHelper cl(*this);
@@ -1608,6 +1656,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (sse_got_cr) {
             sse_got_cr = false;
         }
+        sse_decoder.reset();
         listening = false;
         sfamily = AF_UNSPEC;
         stype = SOCK_STREAM;

@@ -118,6 +118,7 @@ public:
           - port: giving the port number
           - ssl: giving a boolean true or false value
         - max_redirects: sets the max_redirects option
+        - max_response_body_size: sets the maximum size of a response body received into memory
         - default_port: sets the default port number
         - proxy: sets the proxy URL
         - url: sets the default connection URL
@@ -559,6 +560,19 @@ public:
     //! returns the value of the max_redirects option
     DLLEXPORT int getMaxRedirects() const;
 
+    //! sets the maximum size in bytes of a response body received into memory; 0 = no limit
+    /** @param size the maximum size in bytes, as received and after decoding its content encoding
+        @param xsink raises \c HTTP-CLIENT-OPTION-ERROR if @p size is negative
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void setMaxResponseBodySize(int64 size, ExceptionSink* xsink);
+
+    //! returns the maximum size in bytes of a response body received into memory; 0 = no limit
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT int64 getMaxResponseBodySize() const;
+
     //! opens a connection and returns a code giving the result
     /** @return -1 if an exception was thrown, 0 for OK
     */
@@ -717,15 +731,37 @@ public:
     DLLEXPORT QoreHashNode* readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink);
 
     //! Reads a Server-Sent Event from the conn_mgr streaming channel or the raw socket
-    /** @param content_encoding optional content-encoding for decompression
+    /** Decompressed data left after the event, as well as compressed data not decompressed yet, is kept for the
+        next call.
+
+        @param content_encoding optional HTTP content coding for decompression
         @param timeout_ms timeout in milliseconds; -1 = use default
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit; a larger event raises
+        \c SSE-EVENT-TOO-LARGE
+        @param eof set to true if the conn_mgr stream ended, in which case there are no more events, and false
+        otherwise
         @param xsink exception sink
-        @return SseMessageInfo hash or nullptr for EOF
+        @return SseMessageInfo hash, or nullptr if there are no more events (\a eof is true), if no conn_mgr
+        streaming channel is active (\a eof is false; the event is then read from the raw socket), or if an
+        exception was raised
 
         @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readServerSentEventConnMgr(const QoreStringNode* content_encoding,
-        int timeout_ms, ExceptionSink* xsink);
+        int timeout_ms, int64 max_event_size, bool& eof, ExceptionSink* xsink);
+
+    //! Returns the default maximum size of a server-sent event in bytes
+    /** @return the maximum response body size if set (see setMaxResponseBodySize()), otherwise
+        QoreHttpClientObject::DefaultMaxSseEventSize
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int64 getMaxSseEventSize() const;
+
+    //! The default maximum size of a server-sent event in bytes when no maximum response body size is set (128 MiB)
+    /** @since %Qore 3.0
+    */
+    static constexpr int64 DefaultMaxSseEventSize = 128 * 1024 * 1024;
 
     //! Reads the full chunked body from the conn_mgr streaming channel or the raw socket
     /** @param timeout_ms timeout in milliseconds; -1 = use default

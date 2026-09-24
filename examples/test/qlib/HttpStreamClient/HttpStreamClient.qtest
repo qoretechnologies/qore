@@ -142,6 +142,86 @@ class BrotliChunkedHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Returns a compressed event stream in chunks; the type is not text/event-stream, as HttpServer requires an SSE
+#! handler for that type, but the client reads the stream as an event stream regardless
+class CompressedSseHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string enc = hdr.path.split("/").last();
+        string stream = "data: a\n\nevent: e\r\ndata: b\r\n\r\ndata: c\r\r";
+        binary compressed;
+        switch (enc) {
+            case "gzip": compressed = gzip(stream); break;
+            case "deflate": compressed = compress(stream); break;
+            case "br": compressed = brotli(stream); break;
+            case "zstd": compressed = zstd(stream); break;
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "text/plain",
+                "Content-Encoding": enc,
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new BinaryInputStream(compressed),
+        };
+    }
+}
+
+#! Returns a gzip bomb of 64 MiB in chunks
+class BombChunkedHandler inherits AbstractHttpRequestHandler {
+    private {
+        binary bomb;
+    }
+
+    constructor() {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+        binary chunk = binary(strmul("z", 1024 * 1024));
+        for (int i = 0; i < 64; ++i) {
+            tos.write(chunk);
+        }
+        tos.close();
+        bomb = bos.getData();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": MimeTypeOctetStream,
+                "Content-Encoding": "gzip",
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new BinaryInputStream(bomb),
+        };
+    }
+}
+
+#! Returns a body of 100000 bytes with a Content-Length, optionally gzip-compressed
+class BigContentLengthHandler inherits AbstractHttpRequestHandler {
+    private {
+        bool compressed;
+    }
+
+    constructor(bool compressed) {
+        self.compressed = compressed;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        binary data = binary(strmul("x", 100000));
+        hash<auto> rhdr = {"Content-Type": MimeTypeOctetStream};
+        if (compressed) {
+            data = gzip(data);
+            rhdr."Content-Encoding" = "gzip";
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": rhdr,
+            "body": data,
+        };
+    }
+}
+
 #! Handler that returns non-chunked response with Content-Length
 class PlainContentLengthHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -226,6 +306,7 @@ public class HttpStreamClientTest inherits QUnit::Test {
         addTestCase("Non-chunked response tests", \nonChunkedTests());
         addTestCase("SSE direct socket (non-chunked) tests", \sseDirectSocketTests());
         addTestCase("Headers merging tests", \headersMergingTests());
+        addTestCase("Compressed SSE and memory limit tests", \limitTests());
         set_return_value(main());
     }
 
@@ -251,6 +332,11 @@ public class HttpStreamClientTest inherits QUnit::Test {
         m_http.setHandler("/brotli-chunked", "/brotli-chunked", MimeTypeHtml, new BrotliChunkedHandler());
         m_http.setHandler("/plain-cl", "/plain-cl", MimeTypeHtml, new PlainContentLengthHandler());
         m_http.setHandler("/gzip-cl", "/gzip-cl", MimeTypeHtml, new GzipContentLengthHandler());
+        m_http.setHandler("/encoded-events", "/encoded-events/", MimeTypeHtml, new CompressedSseHandler());
+        m_http.setHandler("/bomb-chunked", "/bomb-chunked", MimeTypeHtml, new BombChunkedHandler());
+        m_http.setHandler("/large-body", "/large-body", MimeTypeHtml, new BigContentLengthHandler(False));
+        m_http.setHandler("/large-encoded-body", "/large-encoded-body", MimeTypeHtml,
+            new BigContentLengthHandler(True));
 
         port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
@@ -678,5 +764,53 @@ public class HttpStreamClientTest inherits QUnit::Test {
         assertTrue(stream.isEof(), "Stream should be at EOF after all events read");
 
         stream.close();
+    }
+
+    # returns a stream for the given path with a client with the given maximum response body size
+    private HTTPResponseStream getStream(string path, int max_size = 0, *hash<auto> hdr) {
+        HTTPClient client({"url": "http://localhost:" + port, "max_response_body_size": max_size});
+        hash<auto> info;
+        return HttpStreamClient::sendAndStream(client, "GET", path, NOTHING, hdr, \info);
+    }
+
+    limitTests() {
+        # compressed event streams with LF, CRLF, and CR line endings
+        foreach string enc in (("gzip", "deflate", "br", "zstd")) {
+            HTTPResponseStream stream = getStream("/encoded-events/" + enc);
+            on_exit stream.close();
+            list<string> data = ();
+            while (*hash<SseMessageInfo> evt = stream.readServerSentEvent(5s)) {
+                data += evt.data;
+            }
+            assertEq(("a", "b", "c"), data, enc);
+        }
+
+        # the data decompressed from one chunk is limited
+        {
+            HTTPResponseStream stream = getStream("/bomb-chunked", 1024 * 1024);
+            assertThrows("DECOMPRESSION-LIMIT-EXCEEDED", "maximum size of 1048576 bytes", \stream.readChunk(), 30s);
+            assertTrue(stream.isClosed());
+        }
+
+        # a body read at once is limited as received and decoded
+        {
+            # the server does not compress the body
+            HTTPResponseStream stream = getStream("/large-body", 1000, {"Accept-Encoding": "identity"});
+            assertNothing(stream.getInfo().content_encoding);
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "declared by Content-Length",
+                \stream.readChunk(), 5s);
+            assertTrue(stream.isClosed());
+        }
+        {
+            HTTPResponseStream stream = getStream("/large-encoded-body", 1000);
+            on_exit stream.close();
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "decoded response body", \stream.readChunk(), 5s);
+        }
+        # without a limit
+        foreach string path in (("/large-body", "/large-encoded-body")) {
+            HTTPResponseStream stream = getStream(path, 0, {"Accept-Encoding": "identity"});
+            on_exit stream.close();
+            assertEq(100000, stream.readChunk(5s).size(), path);
+        }
     }
 }

@@ -1570,8 +1570,19 @@ class WebSocketStreamProcessor {
                         "rsv2": frame.rsv2 ?? False,
                         "rsv3": frame.rsv3 ?? False,
                         "fin": True,
+                        # the limit applies to a decompressed message too
+                        "max_message_size": handler.getMaxMessageSize(),
                     };
-                    wsc.applyIncomingExtensions(\msg, ext_ctx);
+                    try {
+                        wsc.applyIncomingExtensions(\msg, ext_ctx);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err != "WEBSOCKET-MESSAGE-TOO-BIG") {
+                            rethrow;
+                        }
+                        handler.logError("H2/H3 WebSocket message rejected: %s", ex.desc);
+                        closeWithCode(ctx, WSCC_MessageTooBig, "Message too big");
+                        return;
+                    }
                     wsc.validateIncomingMessage(\msg);
                     # Wrap user-code dispatch in the handler's thread-local
                     # save/restore so any framework context (e.g., Qorus
@@ -1669,6 +1680,18 @@ class WebSocketStreamProcessor {
             try {
                 ctx.sendData(ws_encode_message("", WSOP_Close));
             } catch () {}
+        }
+    }
+
+    #! Marks the stream closed and sends a CLOSE frame with the given status code; called with process_mutex held
+    private closeWithCode(AsyncSocketIo::AbstractStreamContext ctx, int code, string reason) {
+        if (!markClosedOnce()) {
+            return;
+        }
+        try {
+            ctx.sendData(ws_encode_message(code.encodeMsb(2) + reason.toBinary(), WSOP_Close));
+        } catch (hash<ExceptionInfo> ex) {
+            # the peer may have closed the stream already
         }
     }
 
@@ -1888,7 +1911,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         #! Maximum WebSocket message size in bytes (0 = unlimited)
         /** Messages (including fragmented message accumulation) exceeding this limit will
-            cause the connection to be closed with status code 1009 (Message Too Big).
+            cause the connection to be closed with status code 1009 (Message Too Big).  The limit also applies to
+            a message after it is decompressed by the permessage-deflate extension; when it is not set, the
+            decompressed size is limited by
+            @ref WebSocketUtil::PerMessageDeflateExtension::DefaultMaxMessageSize
+            "PerMessageDeflateExtension::DefaultMaxMessageSize".
 
             @since WebSocketHandler 2.5
         */
@@ -2223,9 +2250,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             if (ext_result.response_header) {
                 rhdr."sec-websocket-extensions" = ext_result.response_header;
             }
-            # Store negotiated extensions on the handler for startImpl to access
+            # Store negotiated extensions on the handler for startImpl to access; the server starts a WebSocket on
+            # a multiplexed connection with the ID of its stream ("<connection id>:<stream id>"), as several streams
+            # share the connection
             if (ext_result.extensions) {
-                string cid = cx.id.toString();
+                string cid = sprintf("%y:%d", cx.id, cx."header-info".stream_id);
                 pending_extensions{cid} = {
                     "extensions": ext_result.extensions,
                     "rsv_mask": ext_result.rsv_mask,

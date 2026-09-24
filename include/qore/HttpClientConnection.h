@@ -111,6 +111,19 @@ public:
         (void)timeout_us;
     }
 
+    //! Hook for the connection manager to push the maximum size of a response body received into memory
+    /** Default no-op.  The H1, H2, and H3 connections override it.  A response body that is returned whole and
+        exceeds the maximum fails the request with \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; a body delivered
+        incrementally to a streaming consumer is not limited.
+
+        @param max_size the maximum size in bytes; <= 0 means no limit
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual void setMaxResponseBodySizeHook(int64_t max_size) {
+        (void)max_size;
+    }
+
     //! Returns the maximum concurrent streams this connection can host.
     /** Default 1 (HTTP/1.1 semantics).  H2 connections override to return
         their negotiated MAX_CONCURRENT_STREAMS setting (or the cap from

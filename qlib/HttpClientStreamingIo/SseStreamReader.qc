@@ -66,8 +66,17 @@ public class SseStreamReader {
         #! Decompressor for Content-Encoding support
         StreamDecompressor decompressor;
 
-        #! Accumulated SSE text buffer awaiting event boundary parsing
-        string sse_buffer = "";
+        #! Received SSE data (UTF-8) awaiting event boundary parsing
+        /** Kept as bytes, so that a boundary is found with byte offsets and a character split across chunks is only
+            decoded once the event is complete
+        */
+        binary sse_buffer = binary();
+
+        #! The size of @ref sse_buffer that has been searched for an event boundary
+        /** Only the data received since is searched, so that an event received in many chunks is not searched from
+            the start for each chunk
+        */
+        int scanned = 0;
 
         #! Data chunks consumed by a caller before constructing this reader
         list<auto> pending_data = ();
@@ -77,6 +86,9 @@ public class SseStreamReader {
 
         #! True when the stream has ended (end_stream received or error)
         bool done = False;
+
+        #! The maximum size of an event in bytes; <= 0 means no limit
+        int max_event_size;
     }
 
     #! Creates an SSE reader for the given stream handle
@@ -88,13 +100,21 @@ public class SseStreamReader {
         (e.g., \c "gzip", \c "br"); pass \c NOTHING for uncompressed streams
         @param initial_data optional stream data already read by the caller
         while validating response metadata
+        @param max_event_size the maximum size in bytes of an event and of the data decompressed from one received
+        chunk; an event that grows beyond it before it ends raises \c SSE-EVENT-TOO-LARGE and cancels the stream, so
+        that a stream that never ends an event, or a small compressed stream that expands to a huge one, cannot
+        exhaust memory; \c 0 (the default) means @ref HttpClientStreamingIo::DefaultMaxEventSize
+        "DefaultMaxEventSize"; a negative value means no limit
 
         @throw ENCODING-ERROR if the content encoding is not supported
+
+        @since %HttpClientStreamingIo 1.0 added the \a max_event_size parameter
     */
     constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding,
-            *list<auto> initial_data) {
+            *list<auto> initial_data, int max_event_size = 0) {
         self.stream = stream;
-        decompressor = new StreamDecompressor(content_encoding);
+        self.max_event_size = max_event_size ?: DefaultMaxEventSize;
+        decompressor = new StreamDecompressor(content_encoding, self.max_event_size);
         if (initial_data) {
             pending_data = initial_data;
         }
@@ -114,6 +134,8 @@ public class SseStreamReader {
         @return the parsed SSE event, or \c NOTHING on timeout or stream end
 
         @throw SSE-STREAM-ERROR if the stream reported an error
+        @throw SSE-EVENT-TOO-LARGE an event, or the data decompressed from one received chunk, exceeds the maximum
+        event size; the stream is canceled
 
         @par SSE Event Format
         Each event is delimited by \c "\\n\\n" and parsed into a
@@ -135,26 +157,37 @@ public class SseStreamReader {
             # flushed at end-of-stream, concatenating multiple JSON payloads
             # into one data field that then fails to parse.  Detect both forms
             # and consume up to whichever blank-line boundary appears first.
-            int sep_lf = sse_buffer.find("\n\n");
-            int sep_crlf = sse_buffer.find("\r\n\r\n");
-            int sep;
-            int sep_len;
-            if (sep_crlf >= 0 && (sep_lf < 0 || sep_crlf < sep_lf)) {
-                sep = sep_crlf;
-                sep_len = 4;
-            } else {
-                sep = sep_lf;
-                sep_len = 2;
+            # A line may also end with a CR alone, so "\r\r" is a blank line too.  A boundary can end in the data
+            # received last, so the search starts before its first byte.
+            int start = scanned > 3 ? scanned - 3 : 0;
+            int sep = -1;
+            int sep_len = 0;
+            foreach binary sep_bin in ((<0d0a0d0a>, <0a0a>, <0d0d>)) {
+                int pos = sse_buffer.find(sep_bin, start);
+                if (pos >= 0 && (sep < 0 || pos < sep)) {
+                    sep = pos;
+                    sep_len = sep_bin.size();
+                }
             }
             if (sep >= 0) {
-                string event_text = sse_buffer.substr(0, sep + sep_len);
+                # an event is limited even when it is complete
+                if (max_event_size > 0 && sep > max_event_size) {
+                    eventTooLarge();
+                }
+                string event_text = sse_buffer.substr(0, sep + sep_len).toString("UTF-8");
                 sse_buffer = sse_buffer.substr(sep + sep_len);
+                scanned = 0;
                 *hash<SseMessageInfo> evt =
                     Socket::parseServerSentEvent(event_text);
                 if (isCommentOnlyEvent(evt)) {
                     continue;
                 }
                 return evt;
+            }
+            scanned = sse_buffer.size();
+            # an event that has not ended is limited
+            if (max_event_size > 0 && sse_buffer.size() > max_event_size) {
+                eventTooLarge();
             }
 
             # Read more data from the stream.  RestClientIo may have
@@ -202,9 +235,16 @@ public class SseStreamReader {
 
             # Decompress and buffer the raw data
             if (data.typeCode() == NT_BINARY) {
-                sse_buffer += decompressor.decompressToString(data);
+                try {
+                    sse_buffer += decompressor.decompressToBinary(data);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "DECOMPRESSION-LIMIT-EXCEEDED") {
+                        eventTooLarge();
+                    }
+                    rethrow;
+                }
             } else {
-                sse_buffer += string(data);
+                sse_buffer += binary(string(data));
             }
         }
         return NOTHING;
@@ -221,12 +261,20 @@ public class SseStreamReader {
         done = True;
     }
 
+    #! Cancels the stream and raises SSE-EVENT-TOO-LARGE
+    private eventTooLarge() {
+        sse_buffer = binary();
+        cancel();
+        throw "SSE-EVENT-TOO-LARGE", sprintf("the server-sent event exceeds the maximum event size of %d bytes",
+            max_event_size);
+    }
+
     #! Marks the stream complete and returns any final buffered SSE event
     private *hash<SseMessageInfo> finishStream() {
         done = True;
-        if (sse_buffer.val()) {
-            *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(sse_buffer);
-            sse_buffer = "";
+        if (sse_buffer.size()) {
+            *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(sse_buffer.toString("UTF-8"));
+            sse_buffer = binary();
             if (last_evt && last_evt.data.val()) {
                 return last_evt;
             }

@@ -26,6 +26,8 @@
     asserts both where the request went and that the client is left exactly as it was configured.
 */
 
+%modern
+
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
 %requires QUnit
 %requires Util
@@ -715,8 +717,11 @@ public class HttpClientRequestUrlTest inherits QUnit::Test {
             hc.sendUrl("payload", "POST", url_a + "/h2-required");
             fail("an HTTP/2-required client reached an HTTP/1 server");
         } catch (hash<ExceptionInfo> ex) {
-            # the close is reported by whichever layer sees it first
-            assertTrue(ex.err == "HTTP2-CONNECTION-CLOSED" || ex.err == "SOCKET-CLOSED", ex.err);
+            # the close is reported by whichever layer sees it first; the server answers the preface with 501 and
+            # closes with a lingering close, which discards the rest of the preface and the client's frames instead
+            # of resetting the connection over them, so the client always sees the end of the stream
+            assertTrue(ex.err == "HTTP2-CONNECTION-CLOSED" || ex.err == "SOCKET-CLOSED",
+                sprintf("%s: %s", ex.err, ex.desc));
         }
 
         # with the default HTTP/2 mode the transport follows the target: the TLS origin negotiates HTTP/2 with

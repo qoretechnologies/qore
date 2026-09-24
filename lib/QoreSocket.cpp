@@ -37,6 +37,7 @@
 #include <cctype>
 #include <climits>
 #include <algorithm>
+#include <string_view>
 #include <atomic>
 #include <limits>
 #include <map>
@@ -609,6 +610,23 @@ static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int
 static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname);
 static int qore_socket_get_port_direct(QoreSocket* s);
 static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreString& str, int& eol_count, char c);
+
+//! Raises SSE-EVENT-TOO-LARGE if a server-sent event being read exceeds the maximum event size
+/** @param event_data the event read so far
+    @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+    @param xsink exception sink
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_socket_check_sse_event_size(const QoreString& event_data, int64 max_event_size,
+        ExceptionSink* xsink) {
+    if (max_event_size > 0 && static_cast<int64>(event_data.size()) > max_event_size) {
+        xsink->raiseException("SSE-EVENT-TOO-LARGE", "the server-sent event exceeds the maximum event size of %lld "
+            "bytes", static_cast<long long>(max_event_size));
+        return -1;
+    }
+    return 0;
+}
 
 static int qore_socket_close_private_from_controller(qore_socket_private* priv) {
     priv->prepareForClose();
@@ -1868,14 +1886,21 @@ private:
 
 class QoreSocketControllerReadServerSentEventPollOperation : public SocketPollOperationBase {
 public:
-    DLLLOCAL QoreSocketControllerReadServerSentEventPollOperation(QoreSocket* sock)
-            : sock(sock), event_data(QCS_UTF8), compressed_data(QCS_DEFAULT), out(nullptr) {
-    }
-
-    DLLLOCAL QoreSocketControllerReadServerSentEventPollOperation(QoreSocket* sock,
-            const QoreStringNode* content_encoding, ExceptionSink* xsink)
-            : sock(sock), event_data(QCS_UTF8), compressed_data(QCS_DEFAULT), out(xsink) {
-        initTransform(content_encoding, xsink);
+    //! Creates the operation
+    /** @param sock the socket
+        @param alg the decompression algorithm of the stream, or nullptr if it is not compressed
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+        @param xsink exception sink
+    */
+    DLLLOCAL QoreSocketControllerReadServerSentEventPollOperation(QoreSocket* sock, const char* alg,
+            int64 max_event_size, ExceptionSink* xsink) : sock(sock), event_data(QCS_UTF8), out(xsink),
+            max_event_size(max_event_size) {
+        // the decoder is kept on the socket, as decompressed data can remain after the event is read
+        qore_socket_private* priv = qore_socket_private::get(*sock);
+        if (priv->setupSseDecoder(alg, xsink)) {
+            return;
+        }
+        decoder = priv->sse_decoder.get();
     }
 
     DLLLOCAL virtual bool goalReached() const override {
@@ -1885,7 +1910,7 @@ public:
     DLLLOCAL virtual void abort(ExceptionSink*) override {
         bool close_socket = bytes_consumed;
         if (!close_socket && poll_state) {
-            if (transform) {
+            if (decoder) {
                 assert(dynamic_cast<SocketRecvSomePollState*>(poll_state.get()));
                 close_socket = reinterpret_cast<SocketRecvSomePollState*>(poll_state.get())->getBytesReceived() > 0;
             } else {
@@ -1900,29 +1925,9 @@ public:
         done = true;
     }
 
-    DLLLOCAL void initTransform(const QoreStringNode* content_encoding, ExceptionSink* xsink) {
-        if (!content_encoding) {
-            return;
-        }
-
-        transform = CompressionTransforms::getDecompressor(content_encoding, xsink);
-        if (*xsink) {
-            return;
-        }
-
-        transform_buf_size = transform->outputBufferSize();
-        if (!transform_buf_size) {
-            return;
-        }
-        transform_buf.reset(new (std::nothrow) char[transform_buf_size]);
-        if (!transform_buf) {
-            xsink->outOfMemory();
-        }
-    }
-
     DLLLOCAL bool processSseChar(ExceptionSink* xsink, qore_socket_private* priv, char c) {
         if (!qore_socket_exec_process_sse_char(priv, event_data, eol_count, c)) {
-            return false;
+            return qore_socket_check_sse_event_size(event_data, max_event_size, xsink) ? true : false;
         }
 
         out = QoreSocket::parseServerSentEvent(xsink, event_data);
@@ -1939,16 +1944,22 @@ public:
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
         while (true) {
-            if (transform && transform_pos < transform_len) {
-                char c = transform_buf[transform_pos++];
-                if (processSseChar(xsink, priv, c)) {
+            if (decoder) {
+                // decompressed data, including any left from the previous event, is processed before reading more
+                int c = decoder->next(xsink);
+                if (c == -2) {
                     return nullptr;
                 }
-                continue;
+                if (c >= 0) {
+                    if (processSseChar(xsink, priv, static_cast<char>(c))) {
+                        return nullptr;
+                    }
+                    continue;
+                }
             }
 
             if (!poll_state) {
-                poll_state.reset(transform
+                poll_state.reset(decoder
                     ? sock->startRecvSome(xsink, DEFAULT_SOCKET_BUFSIZE)
                     : sock->startRecv(xsink, 1));
                 if (*xsink || !poll_state) {
@@ -1973,21 +1984,8 @@ public:
             }
 
             bytes_consumed = true;
-            if (transform) {
-                compressed_data.concat(static_cast<const char*>(data->getPtr()), data->size());
-                transform_pos = 0;
-                std::pair<int64, int64> result = transform->apply(compressed_data.c_str(), compressed_data.size(),
-                    transform_buf.get(), transform_buf_size, xsink);
-                if (*xsink) {
-                    return nullptr;
-                }
-                if (result.first) {
-                    compressed_data.removeBytes(result.first);
-                }
-                transform_len = static_cast<size_t>(result.second);
-                if (!transform_len) {
-                    continue;
-                }
+            if (decoder) {
+                decoder->feed(data->getPtr(), data->size());
                 continue;
             }
 
@@ -2010,13 +2008,10 @@ private:
     QoreSocket* sock;
     std::unique_ptr<AbstractPollState> poll_state;
     QoreString event_data;
-    QoreString compressed_data;
     mutable ReferenceHolder<QoreHashNode> out;
-    SimpleRefHolder<Transform> transform;
-    std::unique_ptr<char[]> transform_buf;
-    size_t transform_buf_size = 0;
-    size_t transform_len = 0;
-    size_t transform_pos = 0;
+    //! the decoder of a compressed stream; owned by the socket
+    StreamDecoder* decoder = nullptr;
+    int64 max_event_size;
     int eol_count = 0;
     bool bytes_consumed = false;
     bool done = false;
@@ -5218,37 +5213,28 @@ static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreStr
     return false;
 }
 
-static QoreHashNode* qore_socket_exec_read_server_sent_event(QoreSocket* s, int timeout_ms, ExceptionSink* xsink) {
+//! Reads a server-sent event
+/** @param s the socket
+    @param alg the decompression algorithm of the stream, or nullptr if it is not compressed
+    @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+    @param timeout_ms the timeout
+    @param xsink exception sink
+*/
+static QoreHashNode* qore_socket_exec_read_server_sent_event(QoreSocket* s, const char* alg, int64 max_event_size,
+        int timeout_ms, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
     if (!io_guard) {
         return nullptr;
     }
 
-    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerReadServerSentEventPollOperation(s),
-        timeout_ms, "readServerSentEvent", "received", xsink), xsink);
+    std::unique_ptr<QoreSocketControllerReadServerSentEventPollOperation> op(
+        new QoreSocketControllerReadServerSentEventPollOperation(s, alg, max_event_size, xsink));
     if (*xsink) {
         return nullptr;
     }
-    if (rv->getType() != NT_HASH) {
-        xsink->raiseException("SOCKET-SSE-ERROR",
-            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
-        return nullptr;
-    }
-    return rv.release().get<QoreHashNode>();
-}
-
-static QoreHashNode* qore_socket_exec_read_server_sent_event_encoded(QoreSocket* s,
-        const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
-    if (!io_guard) {
-        return nullptr;
-    }
-
-    ValueHolder rv(qore_socket_exec_poll(s,
-        new QoreSocketControllerReadServerSentEventPollOperation(s, content_encoding, xsink),
-        timeout_ms, "readServerSentEvent", "received", xsink), xsink);
+    ValueHolder rv(qore_socket_exec_poll(s, op.release(), timeout_ms, "readServerSentEvent", "received", xsink),
+        xsink);
     if (*xsink) {
         return nullptr;
     }
@@ -9529,6 +9515,12 @@ QoreHashNode* parseSseEvent(ExceptionSink* xsink, const QoreString& buf) {
 void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lg(mtx);
 
+    // the stream is discarded after an event exceeded the maximum size
+    if (too_large) {
+        output.discard(xsink);
+        return;
+    }
+
     // Extract body data from the streaming data hash.  Intermediate H2/H3
     // chunks are binary, but an H2 DATA+END_STREAM completion can pass through
     // the regular completed-response path where text/event-stream is decoded
@@ -9564,16 +9556,25 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
             {"\n\n", 2},
             {"\r\r", 2},
         };
+        // a boundary can end in the data received last, so the search starts before its first byte
+        size_t start = scanned > 3 ? scanned - 3 : 0;
+        std::string_view unscanned(sse_buffer.c_str() + start, sse_buffer.size() - start);
         qore_offset_t pos = -1;
         size_t sep_len = 0;
         for (const auto& s : sse_separators) {
-            qore_offset_t p = sse_buffer.find(s.sep);
+            size_t f = unscanned.find(s.sep, 0, s.len);
+            qore_offset_t p = f == std::string_view::npos ? -1 : static_cast<qore_offset_t>(start + f);
             if (p >= 0 && (pos < 0 || p < pos || (p == pos && s.len > sep_len))) {
                 pos = p;
                 sep_len = s.len;
             }
         }
         if (pos < 0) {
+            scanned = sse_buffer.size();
+            break;
+        }
+        // an event is limited even when it is complete
+        if (pos > MaxEventSize) {
             break;
         }
         // Extract the event text (without the terminator)
@@ -9581,9 +9582,29 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
         event_text.concat("\n\n");  // parseSseEvent loop uses (i < size-1), needs double \n
         // Remove consumed bytes from buffer
         sse_buffer.replace(0, pos + sep_len, "");
+        scanned = 0;
         QoreHashNode* evt = parseSseEvent(xsink, event_text);
         if (evt && queue) {
             queue->pushAndTakeRef(evt);
+            pushed = true;
+        }
+    }
+
+    // an event is limited, including one that has not ended yet, so that a stream that never ends an event cannot
+    // exhaust memory; the buffer holds an event that is too large if it is larger than the limit and no event
+    // could be extracted from it
+    if (static_cast<int64>(sse_buffer.size()) > MaxEventSize) {
+        too_large = true;
+        sse_buffer.clear();
+        if (queue) {
+            ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+            err_hash->setKeyValue("err", new QoreStringNode("SSE-EVENT-TOO-LARGE"), xsink);
+            QoreStringNode* desc = new QoreStringNode;
+            desc->sprintf("the server-sent event exceeds the maximum event size of %lld bytes",
+                static_cast<long long>(MaxEventSize));
+            err_hash->setKeyValue("desc", desc, xsink);
+            queue->pushAndTakeRef(err_hash.release());
+            queue->pushAndTakeRef(QoreValue());  // sentinel
             pushed = true;
         }
     }
@@ -11231,14 +11252,14 @@ QoreHashNode* QoreSocket::parseServerSentEvent(ExceptionSink* xsink, const QoreS
 
 QoreHashNode* QoreSocket::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
         int timeout_ms) {
-    if (content_encoding && (*content_encoding != "identity")) {
-        SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(content_encoding, xsink));
-        if (*xsink) {
-            return nullptr;
-        }
-        return qore_socket_exec_read_server_sent_event_encoded(this, content_encoding, timeout_ms, xsink);
-    }
-    return qore_socket_exec_read_server_sent_event(this, timeout_ms, xsink);
+    return readServerSentEvent(xsink, content_encoding, timeout_ms, 0);
+}
+
+QoreHashNode* QoreSocket::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+        int timeout_ms, int64 max_event_size) {
+    return qore_socket_exec_read_server_sent_event(this,
+        CompressionTransforms::getContentCodingAlgorithm(content_encoding ? content_encoding->c_str() : nullptr),
+        max_event_size, timeout_ms, xsink);
 }
 
 bool QoreSocket::isDataAvailable(int timeout) const {
@@ -13303,6 +13324,162 @@ QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink)
     return getSocketPollInfoHash(xsink, rc);
 }
 
+SocketLingeringClosePollOperation::SocketLingeringClosePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        int64 max_discard) : SocketPollSocketOperationBase(sock), max_discard(max_discard > 0 ? max_discard : 0) {
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkValid(xsink) || !sock->priv->socket->isOpen()) {
+        phase = Phase::Closed;
+        return;
+    }
+    if (sock->priv->setNonBlock(xsink)) {
+        // the operation cannot be driven; the connection is closed without waiting
+        qore_socket_close_from_controller(sock->priv->socket);
+        phase = Phase::Closed;
+        return;
+    }
+    set_non_block = true;
+    qore_socket_private* qsp = qore_socket_private::get(*sock->priv->socket);
+    if (qsp->ssl) {
+        poll_state.reset(new SocketShutdownSslPollState(xsink, qsp));
+    } else {
+        startDrain();
+    }
+}
+
+QoreHashNode* SocketLingeringClosePollOperation::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(sock->priv->m);
+
+    if (phase == Phase::Closed) {
+        return nullptr;
+    }
+    if (!sock->priv->socket->isOpen()) {
+        // closed by another thread
+        if (set_non_block) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+        poll_state.reset();
+        phase = Phase::Closed;
+        return nullptr;
+    }
+
+    if (phase == Phase::TlsShutdown) {
+        assert(poll_state);
+        int rc = poll_state->continuePoll(xsink);
+        if (rc > 0) {
+            return getSocketPollInfoHash(xsink, rc);
+        }
+        poll_state.reset();
+        if (rc < 0) {
+            // the alert cannot be sent, because the connection is broken: there is nothing left to wait for
+            xsink->clear();
+            closeSocket();
+            return nullptr;
+        }
+        startDrain();
+        if (phase == Phase::Closed) {
+            return nullptr;
+        }
+    }
+
+    int rc = drain();
+    return rc ? getSocketPollInfoHash(xsink, rc) : nullptr;
+}
+
+void SocketLingeringClosePollOperation::startDrain() {
+    assert(sock->priv->m.trylock());
+    qore_socket_private* qsp = qore_socket_private::get(*sock->priv->socket);
+    phase = Phase::Drain;
+    // data already read from the connection into the socket buffer was not read by the application either
+    if (qsp->buflen) {
+        discarded += qsp->buflen;
+        qsp->buflen = 0;
+        qsp->bufoffset = 0;
+    }
+    // the peer receives the end of the stream after all data sent, while its data can still be received
+    if (qsp->shutdown_write_direct()) {
+        // the connection is no longer connected, e.g. because it was reset by the peer
+        closeSocket();
+    }
+}
+
+int SocketLingeringClosePollOperation::drain() {
+    assert(sock->priv->m.trylock());
+    assert(phase == Phase::Drain);
+    qore_socket_private* qsp = qore_socket_private::get(*sock->priv->socket);
+    char buf[16384];
+    for (unsigned loop = 0; loop < max_nonblock_ops; ++loop) {
+        if (max_discard && discarded >= max_discard) {
+            max_discard_reached = true;
+            closeSocket();
+            return 0;
+        }
+        ssize_t rc = ::recv(qsp->sock, buf, sizeof(buf), 0);
+        if (rc > 0) {
+            discarded += rc;
+            continue;
+        }
+        if (!rc) {
+            // the peer closed its side after reading what was sent: the connection closes without a reset
+            peer_closed = true;
+            closeSocket();
+            return 0;
+        }
+        int e = sock_get_error();
+        if (e == EINTR) {
+            continue;
+        }
+        if (e == EAGAIN
+#ifdef EWOULDBLOCK
+                || e == EWOULDBLOCK
+#endif
+                ) {
+            return SOCK_POLLIN;
+        }
+        // any other error, such as a reset by the peer, ends the connection
+        closeSocket();
+        return 0;
+    }
+    // more data may be available; polling returns immediately in that case
+    return SOCK_POLLIN;
+}
+
+void SocketLingeringClosePollOperation::closeSocket() {
+    assert(sock->priv->m.trylock());
+    if (set_non_block) {
+        sock->priv->clearNonBlock();
+        set_non_block = false;
+    }
+    qore_socket_close_from_controller(sock->priv->socket);
+    phase = Phase::Closed;
+}
+
+QoreValue SocketLingeringClosePollOperation::getOutput() const {
+    if (phase != Phase::Closed) {
+        return QoreValue();
+    }
+    // the members have plain int and bool values, so initializing and setting them cannot raise an exception
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclLingeringCloseInfo, &xsink), &xsink);
+    h->setKeyValue("discarded", discarded, &xsink);
+    h->setKeyValue("peer_closed", peer_closed, &xsink);
+    h->setKeyValue("max_discard_reached", max_discard_reached, &xsink);
+    assert(!xsink);
+    return h.release();
+}
+
+const char* SocketLingeringClosePollOperation::getStateImpl() const {
+    switch (phase) {
+        case Phase::TlsShutdown:
+            return "tls-close-notify";
+        case Phase::Drain:
+            return "draining";
+        case Phase::Closed:
+            break;
+    }
+    return "closed";
+}
+
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
         bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindUnix), name(name),
         has_name(true), reuseaddr(reuseaddr), socktype(SOCK_STREAM),
@@ -15131,47 +15308,30 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
 }
 
 SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
-        QoreSocketObject* sock) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8),
-        compressed_data(QCS_DEFAULT), out(xsink) {
+        QoreSocketObject* sock) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8), out(xsink) {
     init(xsink, false);
 }
 
 SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
         QoreSocketObject* sock, bool defer_init) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8),
-        compressed_data(QCS_DEFAULT), out(xsink) {
+        out(xsink) {
     init(xsink, defer_init);
 }
 
 SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
         QoreSocketObject* sock, const QoreStringNode* content_encoding, bool defer_init)
-        : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8), compressed_data(QCS_DEFAULT),
-        out(xsink) {
-    initTransform(xsink, content_encoding);
-    if (*xsink) {
-        return;
-    }
-    init(xsink, defer_init);
+        : SocketReadServerSentEventPollOperation(xsink, sock, content_encoding, 0, defer_init) {
 }
 
-void SocketReadServerSentEventPollOperation::initTransform(ExceptionSink* xsink,
-        const QoreStringNode* content_encoding) {
-    if (!content_encoding) {
-        return;
+SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock, const QoreStringNode* content_encoding, int64 max_event_size, bool defer_init)
+        : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8), out(xsink),
+        max_event_size(max_event_size) {
+    if (const char* alg = CompressionTransforms::getContentCodingAlgorithm(content_encoding
+            ? content_encoding->c_str() : nullptr)) {
+        decode_alg = alg;
     }
-
-    transform = CompressionTransforms::getDecompressor(content_encoding, xsink);
-    if (*xsink) {
-        return;
-    }
-
-    transform_buf_size = transform->outputBufferSize();
-    if (!transform_buf_size) {
-        return;
-    }
-    transform_buf.reset(new (std::nothrow) char[transform_buf_size]);
-    if (!transform_buf) {
-        xsink->outOfMemory();
-    }
+    init(xsink, defer_init);
 }
 
 void SocketReadServerSentEventPollOperation::init(ExceptionSink* xsink, bool defer_init) {
@@ -15191,6 +15351,12 @@ int SocketReadServerSentEventPollOperation::initPollState(ExceptionSink* xsink) 
     if (initialized) {
         return 0;
     }
+    // the decoder is kept on the socket, as decompressed data can remain after the event is read
+    qore_socket_private* sp = qore_socket_private::get(*my_socket_priv::getPriv(*sock)->socket);
+    if (sp->setupSseDecoder(decode_alg.empty() ? nullptr : decode_alg.c_str(), xsink)) {
+        return -1;
+    }
+    decoder = sp->sse_decoder.get();
     if (initIntern(xsink)) {
         return -1;
     }
@@ -15202,6 +15368,13 @@ int SocketReadServerSentEventPollOperation::initPollState(ExceptionSink* xsink) 
 bool SocketReadServerSentEventPollOperation::processSseChar(ExceptionSink* xsink, qore_socket_private* sp,
         char c) {
     if (!qore_socket_exec_process_sse_char(sp, event_data, eol_count, c)) {
+        if (qore_socket_check_sse_event_size(event_data, max_event_size, xsink)) {
+            if (set_non_block) {
+                my_socket_priv::getPriv(*sock)->clearNonBlock(NB_RECV);
+                set_non_block = false;
+            }
+            return true;
+        }
         return false;
     }
 
@@ -15236,16 +15409,26 @@ QoreHashNode* SocketReadServerSentEventPollOperation::continuePoll(ExceptionSink
 
     qore_socket_private* sp = qore_socket_private::get(*priv->socket);
     while (true) {
-        if (transform && transform_pos < transform_len) {
-            char c = transform_buf[transform_pos++];
-            if (processSseChar(xsink, sp, c)) {
+        if (decoder) {
+            // decompressed data, including any left from the previous event, is processed before reading more
+            int c = decoder->next(xsink);
+            if (c == -2) {
+                if (set_non_block) {
+                    priv->clearNonBlock(NB_RECV);
+                    set_non_block = false;
+                }
                 return nullptr;
             }
-            continue;
+            if (c >= 0) {
+                if (processSseChar(xsink, sp, static_cast<char>(c))) {
+                    return nullptr;
+                }
+                continue;
+            }
         }
 
         if (!poll_state) {
-            poll_state.reset(transform
+            poll_state.reset(decoder
                 ? priv->socket->startRecvSome(xsink, DEFAULT_SOCKET_BUFSIZE)
                 : priv->socket->startRecv(xsink, 1));
             if (*xsink || !poll_state) {
@@ -15282,25 +15465,8 @@ QoreHashNode* SocketReadServerSentEventPollOperation::continuePoll(ExceptionSink
         }
 
         bytes_consumed = true;
-        if (transform) {
-            compressed_data.concat(static_cast<const char*>(data->getPtr()), data->size());
-            transform_pos = 0;
-            std::pair<int64, int64> result = transform->apply(compressed_data.c_str(), compressed_data.size(),
-                transform_buf.get(), transform_buf_size, xsink);
-            if (*xsink) {
-                if (set_non_block) {
-                    priv->clearNonBlock(NB_RECV);
-                    set_non_block = false;
-                }
-                return nullptr;
-            }
-            if (result.first) {
-                compressed_data.removeBytes(result.first);
-            }
-            transform_len = static_cast<size_t>(result.second);
-            if (!transform_len) {
-                continue;
-            }
+        if (decoder) {
+            decoder->feed(data->getPtr(), data->size());
             continue;
         }
 
@@ -15335,7 +15501,7 @@ bool SocketReadServerSentEventPollOperation::abortNeedsClose() const {
         return true;
     }
     if (poll_state) {
-        if (transform) {
+        if (decoder) {
             assert(dynamic_cast<SocketRecvSomePollState*>(poll_state.get()));
             return reinterpret_cast<SocketRecvSomePollState*>(poll_state.get())->getBytesReceived() ? true : false;
         } else {
@@ -17902,6 +18068,22 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     // the partial body bubble up as a successful short response (observed as
     // FUTURE-TIMEOUT with a Content-Length mismatch, because the H1 body
     // reader would otherwise spin waiting for the declared byte count).
+    // the stream was canceled because its response body exceeded the maximum response body size
+    if (stream->body_too_large) {
+        QoreStringNode* desc = new QoreStringNode;
+        desc->sprintf("the HTTP/2 response body of stream %d exceeds the maximum response body size of %lld bytes",
+            stream_id, (long long)stream->max_body_size);
+        response->setKeyValue("err", new QoreStringNode("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE"), xsink);
+        response->setKeyValue("desc", desc, xsink);
+        response->setKeyValue("stream_id", stream_id, xsink);
+        response->setKeyValue("end_stream", true, xsink);
+        {
+            AutoLocker al(response_lock);
+            completed_responses.push_back(response.release());
+        }
+        return;
+    }
+
     if (stream->reset && stream->error_code != 0) {
         char errbuf[64];
         snprintf(errbuf, sizeof(errbuf), "HTTP/2 stream %d reset by peer "

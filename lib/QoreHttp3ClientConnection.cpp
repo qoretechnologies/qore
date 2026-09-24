@@ -153,6 +153,23 @@ Http3ClientConnection::~Http3ClientConnection() {
     xsink.clear();
 }
 
+void Http3ClientConnection::setMaxResponseBodySizeHook(int64_t max_size) {
+    MethodGuard g(this);
+    if (!g.acquired()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lk(attempts_mu_);
+    max_response_body_size_ = max_size;
+    for (auto& a : attempts_) {
+        if (a && a->sock_priv) {
+            a->sock_priv->setMaxResponseBodySize(max_size);
+        }
+    }
+    if (sock_priv) {
+        sock_priv->setMaxResponseBodySize(max_size);
+    }
+}
+
 int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
         ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
@@ -264,6 +281,7 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     priv_raw->armHappyEyeballsOwner(this);
 
     std::lock_guard<std::mutex> lk(attempts_mu_);
+    sock_priv_raw->setMaxResponseBodySize(max_response_body_size_);
     int idx = static_cast<int>(attempts_.size());
     attempts_.push_back(std::move(a));
     return idx;

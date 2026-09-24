@@ -1020,7 +1020,7 @@ public namespace RestHandler {
                     bool found = (ex.desc.find(sn) != -1);
                     if (found) {
                         if (cx.hdr."transfer-encoding" == "chunked") {
-                            cx.body = rh.getMessageBody(s, cx.hdr, NOTHING);
+                            cx.body = rh.getMessageBody(s, cx.hdr, NOTHING, True, listener);
                         }
 
                         return cast<hash<HttpHandlerResponseInfo>>(dispatch(rh, mn, ah, cx));

@@ -21,6 +21,8 @@ public class WebSocketUtilTest inherits QUnit::Test {
         addTestCase("Extension header parsing", \extensionHeaderTests());
         addTestCase("Extension registry", \extensionRegistryTests());
         addTestCase("PerMessageDeflate extension", \perMessageDeflateTests());
+        addTestCase("PerMessageDeflate negotiation without context takeover", \perMessageDeflateContextTests());
+        addTestCase("PerMessageDeflate decompressed message size", \perMessageDeflateLimitTests());
         addTestCase("Extension corner cases and negative tests", \extensionNegativeTests());
         addTestCase("ws_get_frame_size tests", \wsGetFrameSizeTests());
         set_return_value(main());
@@ -639,5 +641,96 @@ public class WebSocketUtilTest inherits QUnit::Test {
             assertEq(expected_size, ws_get_frame_size(header_only),
                 "large frame size from header (HTTP/2 fragmentation scenario)");
         }
+    }
+
+    # messages as a client sends them with client_no_context_takeover: each is compressed on its own and ends with
+    # a sync flush whose trailing 0x00 0x00 0xff 0xff is removed (RFC 7692 section 7.2.1)
+    const ClientMessages = (
+        ("first message from a browser", <4acb2c2a2e51c84d2d2e4e4c4f55482bcacf554854482aca2f2f4e2d0200>),
+        ("second message from a browser", <2a4e4dcecf4b51c84d2d2e4e4c4f55482bcacf554854482aca2f2f4e2d0200>),
+    );
+
+    # returns the number of occurrences of a string in another
+    private static int countOf(string str, string needle) {
+        int count = 0;
+        for (int pos = str.find(needle); pos != -1; pos = str.find(needle, pos + needle.size())) {
+            ++count;
+        }
+        return count;
+    }
+
+    perMessageDeflateContextTests() {
+        # a server always requires the client to compress each message on its own
+        PerMessageDeflateExtension ext();
+        *string response = ext.negotiateServerResponse();
+        assertEq(1, countOf(response, "client_no_context_takeover"));
+        ext = new PerMessageDeflateExtension();
+        response = ext.negotiateServerResponse((<WsExtensionParamInfo>{"name": "client_no_context_takeover"},));
+        assertEq(1, countOf(response, "client_no_context_takeover"), "not repeated when offered");
+
+        # a client always asks the server to compress each message on its own, and requires it
+        ext = new PerMessageDeflateExtension();
+        assertEq(1, countOf(ext.getOfferString(), "server_no_context_takeover"));
+        assertFalse(ext.parseServerResponse());
+        assertFalse(ext.isActive());
+        assertFalse(ext.parseServerResponse((<WsExtensionParamInfo>{"name": "client_max_window_bits",
+            "value": "12"},)));
+        ext = new PerMessageDeflateExtension();
+        assertTrue(ext.parseServerResponse((<WsExtensionParamInfo>{"name": "server_no_context_takeover"},)));
+        assertTrue(ext.isActive());
+
+        # messages that end with a sync flush are decompressed one after the other
+        ext = new PerMessageDeflateExtension();
+        ext.negotiateServerResponse();
+        foreach list<auto> m in (ClientMessages) {
+            assertEq(m[0], ext.transformIncoming(m[1], {"op": WSOP_Text, "rsv1": True}));
+            assertEq(binary(m[0]), ext.transformIncoming(m[1], {"op": WSOP_Binary, "rsv1": True}));
+        }
+    }
+
+    perMessageDeflateLimitTests() {
+        assertEq(128 * 1024 * 1024, PerMessageDeflateExtension::DefaultMaxMessageSize);
+
+        string msg = strmul("x", 100000);
+        binary compressed = deflate_raw(msg);
+        hash<auto> ctx = {"op": WSOP_Text, "rsv1": True};
+
+        PerMessageDeflateExtension ext();
+        ext.setActive(True);
+        assertEq(0, ext.getMaxMessageSize());
+        # the default limit
+        assertEq(msg, ext.transformIncoming(compressed, ctx));
+
+        # the limit of the extension
+        ext.setMaxMessageSize(msg.size());
+        assertEq(msg.size(), ext.getMaxMessageSize());
+        assertEq(msg, ext.transformIncoming(compressed, ctx));
+        ext.setMaxMessageSize(msg.size() - 1);
+        assertThrows("WEBSOCKET-MESSAGE-TOO-BIG", "maximum message size of 99999 bytes", \ext.transformIncoming(),
+            (compressed, ctx));
+
+        # no limit
+        ext.setMaxMessageSize(-1);
+        assertEq(msg, ext.transformIncoming(compressed, ctx));
+
+        # the limit of the peer takes precedence
+        assertThrows("WEBSOCKET-MESSAGE-TOO-BIG", "maximum message size of 1000 bytes", \ext.transformIncoming(),
+            (compressed, ctx + {"max_message_size": 1000}));
+        ext.setMaxMessageSize(1000);
+        assertEq(msg, ext.transformIncoming(compressed, ctx + {"max_message_size": msg.size()}));
+        # a peer without a limit leaves the limit of the extension
+        assertThrows("WEBSOCKET-MESSAGE-TOO-BIG", \ext.transformIncoming(),
+            (compressed, ctx + {"max_message_size": 0}));
+
+        # the constructor option and clone()
+        ext = new PerMessageDeflateExtension({"max_message_size": 1000});
+        assertEq(1000, ext.getMaxMessageSize());
+        PerMessageDeflateExtension cloned = cast<PerMessageDeflateExtension>(ext.clone());
+        assertEq(1000, cloned.getMaxMessageSize());
+        cloned.setActive(True);
+        assertThrows("WEBSOCKET-MESSAGE-TOO-BIG", \cloned.transformIncoming(), (compressed, ctx));
+
+        # corrupt data is still an extension error
+        assertThrows("WEBSOCKET-EXTENSION-ERROR", \cloned.transformIncoming(), (<deadbeef>, ctx));
     }
 }

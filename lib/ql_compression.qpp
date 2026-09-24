@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -57,6 +57,168 @@
 #endif
 
 #define COMPRESSION_LEVEL_DEFAULT CompressionTransforms::LEVEL_DEFAULT
+
+// The smallest initial output buffer of a one-shot decompression
+static constexpr size_t DECOMPRESSION_MIN_INITIAL_SIZE = 1024;
+
+void qore_raise_decompression_limit_exceeded(const char* alg, size_t max_size, ExceptionSink* xsink) {
+    xsink->raiseException("DECOMPRESSION-LIMIT-EXCEEDED", "%s decompressed data exceeds the maximum size of %lld "
+        "byte%s", alg, static_cast<int64>(max_size), max_size == 1 ? "" : "s");
+}
+
+int qore_check_decompression_max_size(int64 max_size, ExceptionSink* xsink) {
+    if (max_size < 0) {
+        xsink->raiseException("DECOMPRESSION-LIMIT-ERROR", "the maximum decompressed size must not be negative "
+            "(value passed: %lld)", max_size);
+        return -1;
+    }
+    return 0;
+}
+
+// The output buffer of a one-shot decompression, bounded by an optional maximum decompressed size
+/* The buffer never grows beyond the maximum size plus one byte; the extra byte detects output beyond the
+    maximum without decompressing any further, so a small input that expands to a huge output never allocates more
+    than the maximum.
+*/
+class DecompressionOutput {
+public:
+    /* @param alg the name of the algorithm for exception messages
+        @param max_size the maximum decompressed size in bytes; 0 = no limit
+        @param initial_size the size of the first allocation
+    */
+    DLLLOCAL DecompressionOutput(const char* alg, size_t max_size, size_t initial_size) : alg(alg),
+            max_size(max_size) {
+        setInitialSize(initial_size);
+    }
+
+    DLLLOCAL ~DecompressionOutput() {
+        free(buf);
+    }
+
+    // Sets the size of the first allocation; must be called before reserve()
+    DLLLOCAL void setInitialSize(size_t size) {
+        assert(!buf);
+        initial_size = size ? size : 1;
+        if (max_size && initial_size > max_size) {
+            initial_size = max_size + 1;
+        }
+    }
+
+    // Returns true if the given number of decompressed bytes exceeds the maximum size
+    DLLLOCAL bool exceedsMaxSize(unsigned long long size) const {
+        return max_size && size > max_size;
+    }
+
+    // Raises the exception for decompressed data that exceeds the maximum size
+    DLLLOCAL void raiseMaxSizeExceeded(ExceptionSink* xsink) const {
+        qore_raise_decompression_limit_exceeded(alg, max_size, xsink);
+    }
+
+    // Returns the position for the next decompressed byte
+    DLLLOCAL char* next() const {
+        return buf + used;
+    }
+
+    // Returns the free space in the buffer
+    DLLLOCAL size_t avail() const {
+        return cap - used;
+    }
+
+    // Ensures that the buffer has free space
+    /* @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int reserve(ExceptionSink* xsink) {
+        if (used < cap) {
+            return 0;
+        }
+        // a full buffer at the limit has already raised an exception in produced()
+        assert(!max_size || cap <= max_size);
+        size_t ncap;
+        if (!cap) {
+            ncap = initial_size;
+        } else {
+            ncap = cap * 2;
+            if (ncap < cap) {
+                xsink->outOfMemory();
+                return -1;
+            }
+        }
+        if (max_size && ncap > max_size) {
+            ncap = max_size + 1;
+        }
+        void* p = realloc(buf, ncap);
+        if (!p) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        buf = static_cast<char*>(p);
+        cap = ncap;
+        return 0;
+    }
+
+    // Records decompressed bytes written at next()
+    /* @return 0 for OK, -1 if the output exceeds the maximum size (an exception has been raised)
+    */
+    DLLLOCAL int produced(size_t n, ExceptionSink* xsink) {
+        assert(n <= avail());
+        used += n;
+        if (exceedsMaxSize(used)) {
+            raiseMaxSizeExceeded(xsink);
+            return -1;
+        }
+        return 0;
+    }
+
+    // Returns the decompressed data as a binary object and releases the buffer
+    DLLLOCAL BinaryNode* takeBinary() {
+        // release the unused part of the buffer, which can be as large as the data
+        if (buf && used < cap) {
+            if (!used) {
+                free(buf);
+                buf = nullptr;
+            } else if (void* p = realloc(buf, used)) {
+                buf = static_cast<char*>(p);
+            }
+        }
+        BinaryNode* rv = new BinaryNode(buf, used);
+        buf = nullptr;
+        cap = used = 0;
+        return rv;
+    }
+
+    // Returns the decompressed data as a string and releases the buffer
+    DLLLOCAL QoreStringNode* takeString(const QoreEncoding* enc) {
+        if (!buf) {
+            return new QoreStringNode(enc);
+        }
+        // passing the length as the allocated size makes the constructor add the terminator
+        QoreStringNode* rv = new QoreStringNode(buf, used, used, enc);
+        buf = nullptr;
+        cap = used = 0;
+        return rv;
+    }
+
+private:
+    const char* alg;
+    size_t max_size;
+    size_t initial_size = 1;
+    char* buf = nullptr;
+    size_t cap = 0;
+    size_t used = 0;
+};
+
+// Returns the initial output buffer size for a one-shot decompression from the compressed size
+static size_t get_initial_decompression_size(size_t compressed_size, size_t factor) {
+    if (compressed_size > (SIZE_MAX / 2 - DECOMPRESSION_MIN_INITIAL_SIZE) / factor) {
+        return SIZE_MAX / 2;
+    }
+    return compressed_size * factor + DECOMPRESSION_MIN_INITIAL_SIZE;
+}
+
+// Returns a length clamped to the range of the 32-bit length fields of the zlib and bzip2 APIs
+static unsigned api_len(size_t len) {
+    return len > UINT_MAX ? UINT_MAX : static_cast<unsigned>(len);
+}
 
 extern QoreClass* QC_TRANSFORM;
 
@@ -155,77 +317,53 @@ public:
     }
     DLLLOCAL operator bool() const { return ok; }
 
-    DLLLOCAL BinaryNode* decompress(const void* ptr, unsigned long len, ExceptionSink* xsink) {
-        char* p = (char*)ptr;
-
-        size_t bs = len << 1;
-
-        next_in = p;
-        avail_in = len;
-
-        SimpleRefHolder<BinaryNode> b(new BinaryNode);
-
-        if (b->preallocate(bs)) {
-            xsink->outOfMemory();
-            return nullptr;
-        }
+    // Decompresses bzip2 data into the given buffer
+    /* @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int decompress(DecompressionOutput& out, const void* ptr, size_t len, ExceptionSink* xsink) {
+        next_in = static_cast<char*>(const_cast<void*>(ptr));
+        avail_in = api_len(len);
+        size_t remaining = len - avail_in;
 
         int iter = 0;
         while (true) {
             if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing bzip2 data")) {
-                return nullptr;
+                return -1;
             }
-            int64 done = (int64)total_out_lo32 + (((int64)total_out_hi32) << 32);
-            next_out = ((char*)b->getPtr()) + done;
-            avail_out = (unsigned)(bs - done);
+            if (!avail_in && remaining) {
+                avail_in = api_len(remaining);
+                remaining -= avail_in;
+            }
+            if (out.reserve(xsink)) {
+                return -1;
+            }
+            unsigned avail = api_len(out.avail());
+            next_out = out.next();
+            avail_out = avail;
 
             int rc = BZ2_bzDecompress(this);
-            //printd(5, "bs: %d, done: %lld, avail_out: %d, rc: %d, total_out_lo32: %d, total_out_hi32 = %d\n", bs,
-            //    done, avail_out, rc, total_out_lo32, total_out_hi32);
-            if (rc == BZ_STREAM_END)
-                break;
-            if (rc != BZ_OK) {
+            //printd(5, "avail_out: %d, rc: %d\n", avail_out, rc);
+            if (rc != BZ_OK && rc != BZ_STREAM_END) {
                 xsink->raiseException("BZIP2-DECOMPRESS-ERROR", "error code %d returned from BZ2_bzDecompress()", rc);
-                return nullptr;
+                return -1;
             }
-            bs *= 2;
-                // if we get over size of an int, then we have to abort, since avail_out is an unsigned_int
-                if ((bs - done) > UINT_MAX) {
-                    xsink->raiseException("BZIP2-DECOMPRESS-ERROR", "the bzip2 library requested a buffer that is "
-                        "too large to be handled by the API");
-                    return nullptr;
-                }
-
-            if (b->preallocate(bs)) {
-                xsink->raiseException("BZIP2-DECOMPRESS-ERROR", "the bzip2 library requested a buffer that is too "
-                    "large to be handled by the API");
-                return nullptr;
+            if (out.produced(avail - avail_out, xsink)) {
+                return -1;
+            }
+            if (rc == BZ_STREAM_END) {
+                break;
+            }
+            // all input consumed with free output space left: the stream has not ended
+            if (!avail_in && !remaining && avail_out) {
+                xsink->raiseException("BZIP2-DECOMPRESS-ERROR", "Unexpected end of compressed data");
+                return -1;
             }
         }
-        if (avail_in > 0) {
+        if (avail_in || remaining) {
             xsink->raiseException("BZIP2-DECOMPRESS-ERROR", "Unexpected bytes at the end of compressed data");
-            return nullptr;
+            return -1;
         }
-        b->setSize((int64)total_out_lo32 + (((int64)total_out_hi32) << 32));
-
-        return b.release();
-    }
-
-    DLLLOCAL QoreStringNode* decompress_to_string(const void* ptr, unsigned long len, const QoreEncoding* enc,
-            ExceptionSink* xsink) {
-        static char np[] = {'\0'};
-
-        SimpleRefHolder<BinaryNode> b(decompress(ptr, len, xsink));
-        if (!b) {
-            return nullptr;
-        }
-
-        len = b->size();
-
-        // terminate the string
-        b->append(np, 1);
-
-        return new QoreStringNode((char*)b->giveBuffer(), len, len + 1, enc);
+        return 0;
     }
 };
 
@@ -239,21 +377,32 @@ BinaryNode* qore_bzip2(const void* ptr, unsigned long len, int level, ExceptionS
 }
 
 BinaryNode* qore_bunzip2_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
+    return qore_bunzip2_to_binary(b, 0, xsink);
+}
+
+BinaryNode* qore_bunzip2_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink) {
     qore_bz_decompressor c(xsink);
     if (!c) {
         return nullptr;
     }
 
-    return c.decompress(b->getPtr(), b->size(), xsink);
+    DecompressionOutput out("bzip2", max_size, get_initial_decompression_size(b->size(), 2));
+    return c.decompress(out, b->getPtr(), b->size(), xsink) ? nullptr : out.takeBinary();
 }
 
 QoreStringNode* qore_bunzip2_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
+    return qore_bunzip2_to_string(b, enc, 0, xsink);
+}
+
+QoreStringNode* qore_bunzip2_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+        ExceptionSink* xsink) {
     qore_bz_decompressor c(xsink);
     if (!c) {
         return nullptr;
     }
 
-    return c.decompress_to_string(b->getPtr(), b->size(), enc, xsink);
+    DecompressionOutput out("bzip2", max_size, get_initial_decompression_size(b->size(), 2));
+    return c.decompress(out, b->getPtr(), b->size(), xsink) ? nullptr : out.takeString(enc);
 }
 
 #ifdef HAVE_GZ_HEADER
@@ -398,66 +547,102 @@ static BinaryNode* qore_deflate_intern(const void* ptr, unsigned long len, int l
    return new BinaryNode(buf, bsize - c_stream.avail_out);
 }
 
-static char* qore_inflate_intern(const BinaryNode* b, int &len, bool gzipFormat, ExceptionSink* xsink) {
+// Decompresses zlib, gzip, or raw DEFLATE data
+/* @param out the output buffer
+    @param b the compressed data
+    @param window_bits the window bits for inflateInit2(); negative for raw DEFLATE
+    @param raw true for raw DEFLATE data, which has no trailer: the data may end at any block boundary, as with the
+    RFC 7692 permessage-deflate WebSocket extension, where a message ends with a sync flush and not with a final
+    block, and bytes after the end of the stream are ignored
+    @param xsink exception sink
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_inflate_intern(DecompressionOutput& out, const BinaryNode* b, int window_bits, bool raw,
+        ExceptionSink* xsink) {
     z_stream d_stream; // decompression stream
     d_stream.zalloc = Z_NULL;
     d_stream.zfree = Z_NULL;
     d_stream.opaque = Z_NULL;
-    d_stream.next_in = (Bytef*)b->getPtr();
-    d_stream.avail_in = b->size();
+    d_stream.next_in = const_cast<Bytef*>(static_cast<const Bytef*>(b->getPtr()));
+    d_stream.avail_in = api_len(b->size());
+    size_t remaining = b->size() - d_stream.avail_in;
 
-    int rc = inflateInit2(&d_stream, 15 + (gzipFormat ? 16 : 0));
+    int rc = inflateInit2(&d_stream, window_bits);
     if (rc != Z_OK) {
-        do_zlib_exception(rc, "inflateInit", xsink);
-        return 0;
+        do_zlib_exception(rc, "inflateInit2", xsink);
+        return -1;
     }
 
     ON_BLOCK_EXIT(do_inflate_end, &d_stream, xsink);
 
-    // allocate new buffer
-    unsigned long bsize = b->size() * 2 + 100;
-    void* buf = malloc(bsize);
-
-    d_stream.next_out = (Bytef*)buf;
-    d_stream.avail_out = bsize;
-
+    const char* desc = raw ? "decompressing raw deflate data" : "decompressing zlib data";
     int iter = 0;
     while (true) {
-        if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing zlib data")) {
-            free(buf);
-            return nullptr;
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, desc)) {
+            return -1;
         }
+        if (!d_stream.avail_in && remaining) {
+            d_stream.avail_in = api_len(remaining);
+            remaining -= d_stream.avail_in;
+        }
+        if (out.reserve(xsink)) {
+            return -1;
+        }
+        unsigned avail = api_len(out.avail());
+        d_stream.next_out = reinterpret_cast<Bytef*>(out.next());
+        d_stream.avail_out = avail;
+
         rc = inflate(&d_stream, Z_NO_FLUSH);
-        if (rc == Z_STREAM_END)
-            break;
-        if (rc == Z_BUF_ERROR) {
-            if (d_stream.avail_in == 0 && d_stream.avail_out > 0) {
-                xsink->raiseException("ZLIB-ERROR", "Unexpected end of compressed data");
-                free(buf);
-                return nullptr;
-            }
-            int new_space = ((b->size() * 3) + 100);
-            bsize += new_space;
-            d_stream.avail_out += new_space;
-            buf = realloc(buf, bsize);
-            d_stream.next_out = ((Bytef*)buf) + d_stream.total_out;
-        }
-        else if (rc != Z_OK) {
-            free(buf);
+        if (rc != Z_OK && rc != Z_STREAM_END && rc != Z_BUF_ERROR) {
             do_zlib_exception(rc, "inflate", xsink);
-            return nullptr;
+            return -1;
+        }
+        if (out.produced(avail - d_stream.avail_out, xsink)) {
+            return -1;
+        }
+        if (rc == Z_STREAM_END) {
+            break;
+        }
+        // all input consumed with free output space left: the stream has not ended
+        if (!d_stream.avail_in && !remaining && d_stream.avail_out) {
+            // raw DEFLATE data may end at a block boundary
+            if (raw && (d_stream.data_type & 128)) {
+                return 0;
+            }
+            xsink->raiseException("ZLIB-ERROR", "Unexpected end of compressed data");
+            return -1;
         }
     }
 
-    if (d_stream.avail_in > 0) {
+    // raw DEFLATE data may be followed by other bytes; see RFC 7692
+    if (!raw && (d_stream.avail_in || remaining)) {
         xsink->raiseException("ZLIB-ERROR", "Unexpected bytes at the end of compressed data");
-        free(buf);
-        return nullptr;
+        return -1;
     }
+    return 0;
+}
 
-    // how much data was decompressed
-    len = bsize - d_stream.avail_out;
-    return static_cast<char*>(buf);
+// The zlib window bits for zlib or gzip data
+static int get_inflate_window_bits(bool gzip_format) {
+    return 15 + (gzip_format ? 16 : 0);
+}
+
+// The zlib window bits for raw DEFLATE data (no zlib or gzip header or trailer)
+static constexpr int INFLATE_RAW_WINDOW_BITS = -15;
+
+// Decompresses zlib, gzip, or raw DEFLATE data to a binary object
+static BinaryNode* qore_inflate_to_binary_intern(const char* alg, const BinaryNode* b, int window_bits, bool raw,
+        size_t max_size, ExceptionSink* xsink) {
+    DecompressionOutput out(alg, max_size, get_initial_decompression_size(b->size(), 2));
+    return qore_inflate_intern(out, b, window_bits, raw, xsink) ? nullptr : out.takeBinary();
+}
+
+// Decompresses zlib, gzip, or raw DEFLATE data to a string
+static QoreStringNode* qore_inflate_to_string_intern(const char* alg, const BinaryNode* b, int window_bits, bool raw,
+        const QoreEncoding* enc, size_t max_size, ExceptionSink* xsink) {
+    DecompressionOutput out(alg, max_size, get_initial_decompression_size(b->size(), 2));
+    return qore_inflate_intern(out, b, window_bits, raw, xsink) ? nullptr : out.takeString(enc);
 }
 
 BinaryNode* qore_deflate(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
@@ -465,16 +650,20 @@ BinaryNode* qore_deflate(const void* ptr, unsigned long len, int level, Exceptio
 }
 
 QoreStringNode* qore_inflate_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
-    int len;
-    char *buf = qore_inflate_intern(b, len, false, xsink);
-    // NOTE: the null terminator is added by the QoreStringNode constructor
-    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+    return qore_inflate_to_string(b, enc, 0, xsink);
+}
+
+QoreStringNode* qore_inflate_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+        ExceptionSink* xsink) {
+    return qore_inflate_to_string_intern("zlib", b, get_inflate_window_bits(false), false, enc, max_size, xsink);
 }
 
 BinaryNode* qore_inflate_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
-    int len;
-    char* buf = qore_inflate_intern(b, len, false, xsink);
-    return buf ? new BinaryNode(buf, len) : nullptr;
+    return qore_inflate_to_binary(b, 0, xsink);
+}
+
+BinaryNode* qore_inflate_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink) {
+    return qore_inflate_to_binary_intern("zlib", b, get_inflate_window_bits(false), false, max_size, xsink);
 }
 
 BinaryNode* qore_gzip(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
@@ -482,16 +671,20 @@ BinaryNode* qore_gzip(const void* ptr, unsigned long len, int level, ExceptionSi
 }
 
 QoreStringNode* qore_gunzip_to_string(const BinaryNode* bin, const QoreEncoding* enc, ExceptionSink* xsink) {
-    int len;
-    char* buf = qore_inflate_intern(bin, len, true, xsink);
-    // NOTE: the null terminator is added by the QoreStringNode constructor
-    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+    return qore_gunzip_to_string(bin, enc, 0, xsink);
+}
+
+QoreStringNode* qore_gunzip_to_string(const BinaryNode* bin, const QoreEncoding* enc, size_t max_size,
+        ExceptionSink* xsink) {
+    return qore_inflate_to_string_intern("gzip", bin, get_inflate_window_bits(true), false, enc, max_size, xsink);
 }
 
 BinaryNode* qore_gunzip_to_binary(const BinaryNode* bin, ExceptionSink* xsink) {
-    int len;
-    char *buf = qore_inflate_intern(bin, len, true, xsink);
-    return buf ? new BinaryNode(buf, len) : nullptr;
+    return qore_gunzip_to_binary(bin, 0, xsink);
+}
+
+BinaryNode* qore_gunzip_to_binary(const BinaryNode* bin, size_t max_size, ExceptionSink* xsink) {
+    return qore_inflate_to_binary_intern("gzip", bin, get_inflate_window_bits(true), false, max_size, xsink);
 }
 
 // Raw DEFLATE compression (windowBits = -15, no zlib/gzip header or trailer)
@@ -566,83 +759,17 @@ static BinaryNode* qore_deflate_raw_intern(const void* ptr, unsigned long len, i
     return new BinaryNode(buf, bsize - c_stream.avail_out);
 }
 
-// Raw DEFLATE decompression (windowBits = -15, no zlib/gzip header or trailer)
-// Used by RFC 7692 permessage-deflate WebSocket extension
-static char* qore_inflate_raw_intern(const BinaryNode* b, int &len, ExceptionSink* xsink) {
-    z_stream d_stream; // decompression stream
-    d_stream.zalloc = Z_NULL;
-    d_stream.zfree = Z_NULL;
-    d_stream.opaque = Z_NULL;
-    d_stream.next_in = (Bytef*)b->getPtr();
-    d_stream.avail_in = b->size();
-
-    // windowBits = -15 expects raw deflate input (no zlib/gzip header or trailer)
-    int rc = inflateInit2(&d_stream, -15);
-    if (rc != Z_OK) {
-        do_zlib_exception(rc, "inflateInit2", xsink);
-        return nullptr;
-    }
-
-    ON_BLOCK_EXIT(do_inflate_end, &d_stream, xsink);
-
-    // allocate new buffer
-    unsigned long bsize = b->size() * 2 + 100;
-    void* buf = malloc(bsize);
-
-    d_stream.next_out = (Bytef*)buf;
-    d_stream.avail_out = bsize;
-
-    int iter = 0;
-    while (true) {
-        if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing raw deflate data")) {
-            free(buf);
-            return nullptr;
-        }
-        rc = inflate(&d_stream, Z_NO_FLUSH);
-        if (rc == Z_STREAM_END)
-            break;
-        if (rc == Z_BUF_ERROR) {
-            if (d_stream.avail_in == 0 && d_stream.avail_out > 0) {
-                xsink->raiseException("ZLIB-ERROR", "Unexpected end of compressed data");
-                free(buf);
-                return nullptr;
-            }
-            int new_space = ((b->size() * 3) + 100);
-            bsize += new_space;
-            d_stream.avail_out += new_space;
-            buf = realloc(buf, bsize);
-            d_stream.next_out = ((Bytef*)buf) + d_stream.total_out;
-        }
-        else if (rc != Z_OK) {
-            free(buf);
-            do_zlib_exception(rc, "inflate", xsink);
-            return nullptr;
-        }
-    }
-
-    // Note: For raw deflate, we don't check for trailing bytes since RFC 7692
-    // may append trailing bytes like 0x00 0x00 0xff 0xff
-
-    // how much data was decompressed
-    len = bsize - d_stream.avail_out;
-    return static_cast<char*>(buf);
-}
-
 BinaryNode* qore_deflate_raw(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
     return qore_deflate_raw_intern(ptr, len, level, xsink);
 }
 
-QoreStringNode* qore_inflate_raw_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
-    int len;
-    char *buf = qore_inflate_raw_intern(b, len, xsink);
-    // NOTE: the null terminator is added by the QoreStringNode constructor
-    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+QoreStringNode* qore_inflate_raw_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+        ExceptionSink* xsink) {
+    return qore_inflate_to_string_intern("raw deflate", b, INFLATE_RAW_WINDOW_BITS, true, enc, max_size, xsink);
 }
 
-BinaryNode* qore_inflate_raw_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
-    int len;
-    char* buf = qore_inflate_raw_intern(b, len, xsink);
-    return buf ? new BinaryNode(buf, len) : nullptr;
+BinaryNode* qore_inflate_raw_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink) {
+    return qore_inflate_to_binary_intern("raw deflate", b, INFLATE_RAW_WINDOW_BITS, true, max_size, xsink);
 }
 
 BinaryNode* qore_brotli(const void* ptr, unsigned long len, int quality, ExceptionSink* xsink) {
@@ -679,97 +806,68 @@ BinaryNode* qore_brotli(const void* ptr, unsigned long len, int quality, Excepti
     return b.release();
 }
 
-static char* qore_unbrotli_intern(const BinaryNode* b, size_t& decoded_size, ExceptionSink* xsink) {
-    // Start with a buffer 4x the compressed size
-    size_t buf_size = b->size() * 4;
-    if (buf_size < 1024) {
-        buf_size = 1024;
-    }
-
-    void* buf = malloc(buf_size);
-    if (!buf) {
-        xsink->outOfMemory();
-        return nullptr;
-    }
-
+// Decompresses Brotli data
+/* @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_unbrotli_intern(DecompressionOutput& out, const BinaryNode* b, ExceptionSink* xsink) {
     BrotliDecoderState* state = BrotliDecoderCreateInstance(nullptr, nullptr, nullptr);
     if (!state) {
-        free(buf);
         xsink->raiseException("BROTLI-ERROR", "failed to create Brotli decoder instance");
-        return nullptr;
+        return -1;
     }
+    ON_BLOCK_EXIT(BrotliDecoderDestroyInstance, state);
 
     const uint8_t* next_in = static_cast<const uint8_t*>(b->getPtr());
     size_t avail_in = b->size();
-    uint8_t* next_out = static_cast<uint8_t*>(buf);
-    size_t avail_out = buf_size;
-    size_t total_out = 0;
 
-    BrotliDecoderResult result;
     int iter = 0;
     while (true) {
         if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing Brotli data")) {
-            free(buf);
-            BrotliDecoderDestroyInstance(state);
-            return nullptr;
+            return -1;
         }
-        result = BrotliDecoderDecompressStream(state, &avail_in, &next_in, &avail_out, &next_out, &total_out);
+        if (out.reserve(xsink)) {
+            return -1;
+        }
+        size_t avail = out.avail();
+        uint8_t* next_out = reinterpret_cast<uint8_t*>(out.next());
+        size_t avail_out = avail;
 
+        BrotliDecoderResult result = BrotliDecoderDecompressStream(state, &avail_in, &next_in, &avail_out,
+            &next_out, nullptr);
+        if (result == BROTLI_DECODER_RESULT_ERROR) {
+            xsink->raiseException("BROTLI-ERROR", "Brotli decompression failed: %s",
+                BrotliDecoderErrorString(BrotliDecoderGetErrorCode(state)));
+            return -1;
+        }
+        if (out.produced(avail - avail_out, xsink)) {
+            return -1;
+        }
         if (result == BROTLI_DECODER_RESULT_SUCCESS) {
             break;
-        } else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT) {
-            // Expand buffer
-            size_t new_size = buf_size * 2;
-            void* new_buf = realloc(buf, new_size);
-            if (!new_buf) {
-                free(buf);
-                BrotliDecoderDestroyInstance(state);
-                xsink->outOfMemory();
-                return nullptr;
-            }
-            buf = new_buf;
-            next_out = static_cast<uint8_t*>(buf) + total_out;
-            avail_out = new_size - total_out;
-            buf_size = new_size;
-        } else if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT) {
-            free(buf);
-            BrotliDecoderDestroyInstance(state);
-            xsink->raiseException("BROTLI-ERROR", "Unexpected end of compressed data");
-            return nullptr;
-        } else {
-            // Error
-            BrotliDecoderErrorCode error = BrotliDecoderGetErrorCode(state);
-            free(buf);
-            BrotliDecoderDestroyInstance(state);
-            xsink->raiseException("BROTLI-ERROR", "Brotli decompression failed: %s",
-                BrotliDecoderErrorString(error));
-            return nullptr;
         }
+        if (result == BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT) {
+            xsink->raiseException("BROTLI-ERROR", "Unexpected end of compressed data");
+            return -1;
+        }
+        assert(result == BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT);
     }
 
-    if (avail_in > 0) {
-        free(buf);
-        BrotliDecoderDestroyInstance(state);
+    if (avail_in) {
         xsink->raiseException("BROTLI-ERROR", "Unexpected bytes at the end of compressed data");
-        return nullptr;
+        return -1;
     }
-
-    BrotliDecoderDestroyInstance(state);
-    decoded_size = total_out;
-    return static_cast<char*>(buf);
+    return 0;
 }
 
-BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
-    size_t len;
-    char* buf = qore_unbrotli_intern(b, len, xsink);
-    return buf ? new BinaryNode(buf, len) : nullptr;
+BinaryNode* qore_unbrotli_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink) {
+    DecompressionOutput out("Brotli", max_size, get_initial_decompression_size(b->size(), 4));
+    return qore_unbrotli_intern(out, b, xsink) ? nullptr : out.takeBinary();
 }
 
-QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
-    size_t len;
-    char* buf = qore_unbrotli_intern(b, len, xsink);
-    // NOTE: the null terminator is added by the QoreStringNode constructor
-    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+QoreStringNode* qore_unbrotli_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+        ExceptionSink* xsink) {
+    DecompressionOutput out("Brotli", max_size, get_initial_decompression_size(b->size(), 4));
+    return qore_unbrotli_intern(out, b, xsink) ? nullptr : out.takeString(enc);
 }
 
 BinaryNode* qore_zstd(const void* ptr, unsigned long len, int level, ExceptionSink* xsink) {
@@ -800,116 +898,83 @@ BinaryNode* qore_zstd(const void* ptr, unsigned long len, int level, ExceptionSi
     return b.release();
 }
 
-static char* qore_unzstd_intern(const BinaryNode* b, size_t& decoded_size, ExceptionSink* xsink) {
-    // Get the decompressed size from the frame header if available
-    unsigned long long decompressed_size = ZSTD_getFrameContentSize(b->getPtr(), b->size());
-
-    size_t buf_size;
-    if (decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN) {
-        // Unknown size, start with 4x compressed size
-        buf_size = b->size() * 4;
-        if (buf_size < 1024) {
-            buf_size = 1024;
-        }
-    } else if (decompressed_size == ZSTD_CONTENTSIZE_ERROR) {
+// Decompresses Zstd data, which may consist of several frames
+/* @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_unzstd_intern(DecompressionOutput& out, const BinaryNode* b, ExceptionSink* xsink) {
+    // the frame header may declare the decompressed size of the first frame
+    unsigned long long content_size = ZSTD_getFrameContentSize(b->getPtr(), b->size());
+    if (content_size == ZSTD_CONTENTSIZE_ERROR) {
         xsink->raiseException("ZSTD-ERROR", "Invalid Zstd frame header");
-        return nullptr;
+        return -1;
+    }
+    if (content_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+        out.setInitialSize(get_initial_decompression_size(b->size(), 4));
     } else {
-        buf_size = decompressed_size;
+        // the decoder verifies the declared size, so data that declares more than the maximum exceeds it
+        if (out.exceedsMaxSize(content_size)) {
+            out.raiseMaxSizeExceeded(xsink);
+            return -1;
+        }
+        out.setInitialSize(content_size > SIZE_MAX / 2 ? SIZE_MAX / 2 : static_cast<size_t>(content_size));
     }
 
-    void* buf = malloc(buf_size);
-    if (!buf) {
-        xsink->outOfMemory();
-        return nullptr;
+    ZSTD_DStream* dstream = ZSTD_createDStream();
+    if (!dstream) {
+        xsink->raiseException("ZSTD-ERROR", "failed to create Zstd decompression stream");
+        return -1;
+    }
+    ON_BLOCK_EXIT(ZSTD_freeDStream, dstream);
+
+    size_t rc = ZSTD_initDStream(dstream);
+    if (ZSTD_isError(rc)) {
+        xsink->raiseException("ZSTD-ERROR", "failed to initialize Zstd decompression: %s", ZSTD_getErrorName(rc));
+        return -1;
     }
 
-    // Use streaming decompression for unknown sizes
-    if (decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN) {
-        ZSTD_DStream* dstream = ZSTD_createDStream();
-        if (!dstream) {
-            free(buf);
-            xsink->raiseException("ZSTD-ERROR", "failed to create Zstd decompression stream");
-            return nullptr;
+    ZSTD_inBuffer input = { b->getPtr(), b->size(), 0 };
+    int iter = 0;
+    while (true) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing Zstd data")) {
+            return -1;
         }
-
-        size_t init_result = ZSTD_initDStream(dstream);
-        if (ZSTD_isError(init_result)) {
-            free(buf);
-            ZSTD_freeDStream(dstream);
-            xsink->raiseException("ZSTD-ERROR", "failed to initialize Zstd decompression: %s",
-                ZSTD_getErrorName(init_result));
-            return nullptr;
+        if (out.reserve(xsink)) {
+            return -1;
         }
-
-        ZSTD_inBuffer input = { b->getPtr(), b->size(), 0 };
-        size_t total_out = 0;
-
-        int iter = 0;
-        while (input.pos < input.size) {
-            if (++iter % 10 == 0 && qore_check_cancel(xsink, "decompressing Zstd data")) {
-                free(buf);
-                ZSTD_freeDStream(dstream);
-                return nullptr;
+        ZSTD_outBuffer output = { out.next(), out.avail(), 0 };
+        rc = ZSTD_decompressStream(dstream, &output, &input);
+        if (ZSTD_isError(rc)) {
+            xsink->raiseException("ZSTD-ERROR", "Zstd decompression failed: %s", ZSTD_getErrorName(rc));
+            return -1;
+        }
+        if (out.produced(output.pos, xsink)) {
+            return -1;
+        }
+        // a return value of 0 means that a frame has been completely decoded and flushed; any further input is
+        // decoded as another frame
+        if (input.pos == input.size) {
+            if (!rc) {
+                break;
             }
-            ZSTD_outBuffer output = { static_cast<char*>(buf) + total_out, buf_size - total_out, 0 };
-            size_t result = ZSTD_decompressStream(dstream, &output, &input);
-
-            if (ZSTD_isError(result)) {
-                free(buf);
-                ZSTD_freeDStream(dstream);
-                xsink->raiseException("ZSTD-ERROR", "Zstd decompression failed: %s",
-                    ZSTD_getErrorName(result));
-                return nullptr;
-            }
-
-            total_out += output.pos;
-
-            // If we need more output space
-            if (output.pos == output.size && result > 0) {
-                size_t new_size = buf_size * 2;
-                void* new_buf = realloc(buf, new_size);
-                if (!new_buf) {
-                    free(buf);
-                    ZSTD_freeDStream(dstream);
-                    xsink->outOfMemory();
-                    return nullptr;
-                }
-                buf = new_buf;
-                buf_size = new_size;
+            // all input consumed with free output space left: the frame has not ended
+            if (output.pos < output.size) {
+                xsink->raiseException("ZSTD-ERROR", "Unexpected end of compressed data");
+                return -1;
             }
         }
-
-        ZSTD_freeDStream(dstream);
-        decoded_size = total_out;
-    } else {
-        // Simple decompression when size is known
-        size_t result = ZSTD_decompress(buf, buf_size, b->getPtr(), b->size());
-
-        if (ZSTD_isError(result)) {
-            free(buf);
-            xsink->raiseException("ZSTD-ERROR", "Zstd decompression failed: %s",
-                ZSTD_getErrorName(result));
-            return nullptr;
-        }
-
-        decoded_size = result;
     }
-
-    return static_cast<char*>(buf);
+    return 0;
 }
 
-BinaryNode* qore_unzstd_to_binary(const BinaryNode* b, ExceptionSink* xsink) {
-    size_t len;
-    char* buf = qore_unzstd_intern(b, len, xsink);
-    return buf ? new BinaryNode(buf, len) : nullptr;
+BinaryNode* qore_unzstd_to_binary(const BinaryNode* b, size_t max_size, ExceptionSink* xsink) {
+    DecompressionOutput out("Zstd", max_size, 0);
+    return qore_unzstd_intern(out, b, xsink) ? nullptr : out.takeBinary();
 }
 
-QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* enc, ExceptionSink* xsink) {
-    size_t len;
-    char* buf = qore_unzstd_intern(b, len, xsink);
-    // NOTE: the null terminator is added by the QoreStringNode constructor
-    return buf ? new QoreStringNode(buf, len, len, enc) : nullptr;
+QoreStringNode* qore_unzstd_to_string(const BinaryNode* b, const QoreEncoding* enc, size_t max_size,
+        ExceptionSink* xsink) {
+    DecompressionOutput out("Zstd", max_size, 0);
+    return qore_unzstd_intern(out, b, xsink) ? nullptr : out.takeString(enc);
 }
 
 BinaryNode* qore_lz4(const void* ptr, unsigned long len, int acceleration, ExceptionSink* xsink) {
@@ -1165,19 +1230,31 @@ nothing compress() [flags=RUNTIME_NOOP] {
 /**
     @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a string
 
     @par Example:
     @code{.py}
 string str = uncompress_to_string(bin, "iso-8859-1");
+string str = uncompress_to_string(bin, "iso-8859-1", 10 * 1024 * 1024);
     @endcode
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
+    @since %Qore 3.0 added the \a max_size parameter
 */
-string uncompress_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
+string uncompress_to_string(binary compressed_data, *string encoding, int max_size = 0) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_inflate_to_string(compressed_data, qe, xsink);
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_inflate_to_string(compressed_data, qe, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1188,18 +1265,30 @@ nothing uncompress_to_string() [flags=RUNTIME_NOOP] {
 
 //! Performs zlib-based decompression of data compressed by the "deflate" algorithm (<a href="http://www.ietf.org/rfc/rfc1951.txt">RFC 1951</a>) and returns a binary object of the decompressed data
 /** @param compressed_data the data to decompress
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return a binary object of the decompressed data
 
     @par Example:
     @code{.py}
 binary bin = uncompress_to_binary(data);
+binary bin = uncompress_to_binary(data, max_size: 10 * 1024 * 1024);
     @endcode
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
+    @since %Qore 3.0 added the \a max_size parameter
 */
-binary uncompress_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
-   return qore_inflate_to_binary(compressed_data, xsink);
+binary uncompress_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_inflate_to_binary(compressed_data, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1286,21 +1375,31 @@ nothing deflate_raw() [flags=RUNTIME_NOOP] {
 
     @param compressed_data the compressed data to decompress (in raw DEFLATE format)
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a string
 
     @par Example:
     @code{.py}
 string str = inflate_raw_to_string(bin, "utf-8");
+string str = inflate_raw_to_string(bin, "utf-8", 10 * 1024 * 1024);
     @endcode
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
 
     @since %Qore 3.0
 */
-string inflate_raw_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
+string inflate_raw_to_string(binary compressed_data, *string encoding, int max_size = 0) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_inflate_raw_to_string(compressed_data, qe, xsink);
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_inflate_raw_to_string(compressed_data, qe, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1316,20 +1415,30 @@ nothing inflate_raw_to_string() [flags=RUNTIME_NOOP] {
     This is used by the WebSocket permessage-deflate extension (<a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>).
 
     @param compressed_data the compressed data to decompress (in raw DEFLATE format)
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a binary object
 
     @par Example:
     @code{.py}
 binary bin = inflate_raw_to_binary(data);
+binary bin = inflate_raw_to_binary(data, max_size: 10 * 1024 * 1024);
     @endcode
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
 
     @since %Qore 3.0
 */
-binary inflate_raw_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
-   return qore_inflate_raw_to_binary(compressed_data, xsink);
+binary inflate_raw_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_inflate_raw_to_binary(compressed_data, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1398,19 +1507,31 @@ nothing gzip() [flags=RUNTIME_NOOP] {
 //! Performs <a href="http://zlib.net/">zlib</a>-based decompression of data compressed with the "gzip" algorithm (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a string of the uncompressed datas
 /** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a string
 
     @par Example:
     @code{.py}
 string str = gunzip_to_string(bin, "iso-8859-1");
+string str = gunzip_to_string(bin, "iso-8859-1", 10 * 1024 * 1024);
     @endcode
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
+    @since %Qore 3.0 added the \a max_size parameter
 */
-string gunzip_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
+string gunzip_to_string(binary compressed_data, *string encoding, int max_size = 0) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_gunzip_to_string(compressed_data, qe, xsink);
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_gunzip_to_string(compressed_data, qe, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1421,18 +1542,30 @@ nothing gunzip_to_string() [flags=RUNTIME_NOOP] {
 
 //! Performs <a href="http://zlib.net/">zlib</a>-based decompression of data compressed with the \c "gzip" algorithm (<a href="http://www.ietf.org/rfc/rfc1952.txt">RFC 1952</a>) and returns a binary object of the uncompressed data
 /** @param compressed_data the compressed data to decompress
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a binary object
 
     @par Example:
     @code{.py}
 binary bin = gunzip_to_binary(data);
+binary bin = gunzip_to_binary(data, max_size: 10 * 1024 * 1024);
     @endcode
 
     @throw ZLIB-ERROR The zlib library returned an error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
+    @since %Qore 3.0 added the \a max_size parameter
 */
-binary gunzip_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
-   return qore_gunzip_to_binary(compressed_data, xsink);
+binary gunzip_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_gunzip_to_binary(compressed_data, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1493,18 +1626,30 @@ nothing bzip2() [flags=RUNTIME_NOOP] {
 
 //! Uncompresses the given data with the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a> and returns the uncompressed data as a binary object
 /** @param compressed_data the compressed data to decompress
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a binary object
 
     @par Example:
     @code{.py}
 binary bin = bunzip2_to_binary(bzip2_string);
+binary bin = bunzip2_to_binary(bzip2_string, max_size: 10 * 1024 * 1024);
     @endcode
 
     @throw BZIP2-DECOMPRESS-ERROR the bzip2 library returned an internal error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
+    @since %Qore 3.0 added the \a max_size parameter
 */
-binary bunzip2_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
-   return qore_bunzip2_to_binary(compressed_data, xsink);
+binary bunzip2_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_bunzip2_to_binary(compressed_data, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1516,19 +1661,31 @@ nothing bunzip2_to_binary() [flags=RUNTIME_NOOP] {
 //! Uncompresses the given data with the <a href="http://en.wikipedia.org/wiki/Bzip2">bzip2 algorithm</a> and returns the uncompressed data as a string
 /** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a string
 
     @par Example:
     @code{.py}
 string str = bunzip2_to_string(bzip2_string, "iso-8859-1");
+string str = bunzip2_to_string(bzip2_string, "iso-8859-1", 10 * 1024 * 1024);
     @endcode
 
     @throw BZIP2-DECOMPRESS-ERROR the bzip2 library returned an internal error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
+    @since %Qore 3.0 added the \a max_size parameter
 */
-string bunzip2_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
+string bunzip2_to_string(binary compressed_data, *string encoding, int max_size = 0) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_bunzip2_to_string(compressed_data, qe, xsink);
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_bunzip2_to_string(compressed_data, qe, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1608,20 +1765,32 @@ nothing brotli() [flags=RUNTIME_NOOP] {
 
 //! Decompresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the decompressed data as a binary object
 /** @param compressed_data the compressed data to decompress
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a binary object
 
     @par Example:
     @code{.py}
 binary bin = unbrotli_to_binary(brotli_data);
+binary bin = unbrotli_to_binary(brotli_data, max_size: 10 * 1024 * 1024);
     @endcode
 
     @throw BROTLI-ERROR the Brotli library returned an internal error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
 
-    @since %Qore 2.1
+    @since
+    - %Qore 2.1
+    - %Qore 3.0 added the \a max_size parameter
 */
-binary unbrotli_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
-   return qore_unbrotli_to_binary(compressed_data, xsink);
+binary unbrotli_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_unbrotli_to_binary(compressed_data, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1634,21 +1803,33 @@ nothing unbrotli_to_binary() [flags=RUNTIME_NOOP] {
 //! Decompresses the given data with the <a href="https://github.com/google/brotli">Brotli</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc7932">RFC 7932</a>) and returns the decompressed data as a string
 /** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a string
 
     @par Example:
     @code{.py}
 string str = unbrotli_to_string(brotli_data, "utf-8");
+string str = unbrotli_to_string(brotli_data, "utf-8", 10 * 1024 * 1024);
     @endcode
 
     @throw BROTLI-ERROR the Brotli library returned an internal error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
 
-    @since %Qore 2.1
+    @since
+    - %Qore 2.1
+    - %Qore 3.0 added the \a max_size parameter
 */
-string unbrotli_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
+string unbrotli_to_string(binary compressed_data, *string encoding, int max_size = 0) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_unbrotli_to_string(compressed_data, qe, xsink);
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_unbrotli_to_string(compressed_data, qe, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1729,20 +1910,32 @@ nothing zstd() [flags=RUNTIME_NOOP] {
 
 //! Decompresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the decompressed data as a binary object
 /** @param compressed_data the compressed data to decompress
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a binary object
 
     @par Example:
     @code{.py}
 binary bin = unzstd_to_binary(zstd_data);
+binary bin = unzstd_to_binary(zstd_data, max_size: 10 * 1024 * 1024);
     @endcode
 
     @throw ZSTD-ERROR the Zstd library returned an internal error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
 
-    @since %Qore 2.1
+    @since
+    - %Qore 2.1
+    - %Qore 3.0 added the \a max_size parameter
 */
-binary unzstd_to_binary(binary compressed_data) [flags=NAMED_ARGS] {
-   return qore_unzstd_to_binary(compressed_data, xsink);
+binary unzstd_to_binary(binary compressed_data, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_unzstd_to_binary(compressed_data, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1755,21 +1948,33 @@ nothing unzstd_to_binary() [flags=RUNTIME_NOOP] {
 //! Decompresses the given data with the <a href="https://github.com/facebook/zstd">Zstandard</a> algorithm (<a href="https://www.rfc-editor.org/rfc/rfc8878">RFC 8878</a>) and returns the decompressed data as a string
 /** @param compressed_data the compressed data to decompress
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed.
+    @param max_size the maximum size of the decompressed data in bytes; 0 (the default) means no limit; decompression
+    stops with a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as the decompressed data would exceed this size, so
+    no more than this size is ever allocated for the output; set this argument when decompressing data from an
+    untrusted source to guard against a "decompression bomb", a small input that expands to a huge output
 
     @return the uncompressed data as a string
 
     @par Example:
     @code{.py}
 string str = unzstd_to_string(zstd_data, "utf-8");
+string str = unzstd_to_string(zstd_data, "utf-8", 10 * 1024 * 1024);
     @endcode
 
     @throw ZSTD-ERROR the Zstd library returned an internal error during processing (possibly due to corrupt input data)
+    @throw DECOMPRESSION-LIMIT-EXCEEDED the decompressed data exceeds \a max_size
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
 
-    @since %Qore 2.1
+    @since
+    - %Qore 2.1
+    - %Qore 3.0 added the \a max_size parameter
 */
-string unzstd_to_string(binary compressed_data, *string encoding) [flags=NAMED_ARGS] {
+string unzstd_to_string(binary compressed_data, *string encoding, int max_size = 0) [flags=NAMED_ARGS] {
    const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-   return qore_unzstd_to_string(compressed_data, qe, xsink);
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   return qore_unzstd_to_string(compressed_data, qe, static_cast<size_t>(max_size), xsink);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1939,16 +2144,33 @@ Qore::FileOutputStream of("my-file.txt.bz2");
 Qore::TransformOutputStream ts(of, get_decompressor(Qore::COMPRESSION_ALG_BZIP2));
     @endcode
 
+    @par Example:
+    @code
+# limits the decompressed data to 10 MiB
+Qore::TransformOutputStream ts(of, get_decompressor(Qore::COMPRESSION_ALG_GZIP, 10 * 1024 * 1024));
+    @endcode
+
     @param algorithm the transformation algorithm; see @ref compression_transformations for possible values
+    @param max_size the maximum total size of the decompressed data in bytes; 0 (the default) means no limit; the
+    transformation raises a \c DECOMPRESSION-LIMIT-EXCEEDED exception as soon as its output would exceed this size;
+    set this argument when decompressing data from an untrusted source to guard against a "decompression bomb", a
+    small input that expands to a huge output
 
     @return a @ref Transform object for decompressing data using the given @ref compression_transformations "algorithm" for use with @ref TransformInputStream and @ref TransformOutputStream
 
+    @throw DECOMPRESSION-LIMIT-ERROR \a max_size is negative
+
     @see @ref Qore::get_compressor()
 
-    @since %Qore 0.8.13
+    @since
+    - %Qore 0.8.13
+    - %Qore 3.0 added the \a max_size parameter
  */
-Transform get_decompressor(string algorithm) [flags=NAMED_ARGS] {
-   SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(algorithm, xsink));
+Transform get_decompressor(string algorithm, int max_size = 0) [flags=NAMED_ARGS] {
+   if (qore_check_decompression_max_size(max_size, xsink)) {
+      return QoreValue();
+   }
+   SimpleRefHolder<Transform> t(CompressionTransforms::getDecompressor(algorithm, static_cast<size_t>(max_size), xsink));
    if (*xsink) {
       return 0;
    }

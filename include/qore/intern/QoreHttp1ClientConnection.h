@@ -313,6 +313,9 @@ public:
     //! @ref buildAndSubmit hasn't completed yet.
     DLLEXPORT void setIdleTimeoutHook(int64_t timeout_us) override;
 
+    //! Pushes the maximum size of a response body received into memory down to the H1 poll op priv
+    DLLEXPORT void setMaxResponseBodySizeHook(int64_t max_size) override;
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 

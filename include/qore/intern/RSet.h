@@ -859,6 +859,12 @@ private:
     // objects of invalidated recursive sets that are not scanned
     rset_t tr_out;
 
+    //! Objects of the invalidated recursive sets that this scan did not reach and that may now be garbage
+    /** Each is held with a weak reference and rechecked by recheckOrphans() once the scan's locks are released;
+        see commit().
+    */
+    std::vector<RObject*> recheck_objects;
+
     // RSectionLock notification helper when waiting on locks
     RNotifier notifier;
 
@@ -914,6 +920,9 @@ private:
 
     // commit transaction
     DLLLOCAL void commit();
+
+    //! Rechecks the objects in recheck_objects, releasing the weak references held on them
+    DLLLOCAL void recheckOrphans();
 
     // rollback transaction due to a lock error, or to start over with exclusive rsections
     DLLLOCAL void rollback(bool yield = true);

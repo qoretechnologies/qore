@@ -63,6 +63,11 @@ module HttpClientStreamingIo {
       SSE events to callers.
     - @ref HttpClientStreamingIo::SseObservable "SseObservable" supports AsyncAPI 3.0 validation of
       deserialized SSE event data via the \c asyncapi, \c validator, and \c asyncapi_channel options.
+    - the data held in memory at once is bounded: @ref HttpClientStreamingIo::SseStreamReader "SseStreamReader"
+      limits an event and the data decompressed from one received chunk to a maximum event size
+      (@ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize" by default), and
+      @ref HttpClientStreamingIo::StreamDecompressor "StreamDecompressor" accepts a maximum size for the data
+      decompressed at once, so that a small compressed stream that expands to a huge one cannot exhaust memory
 */
 
 #! Main namespace for the HttpClientStreamingIo module
@@ -85,5 +90,10 @@ public const string EVENT_SSE_CONNECTED = "sse-connected-event";
     @since %HttpClientStreamingIo 1.0.1
 */
 public const string EVENT_SSE_HEARTBEAT = "sse-heartbeat-event";
+
+#! The default maximum size of a server-sent event in bytes (128 MiB)
+/** @see @ref HttpClientStreamingIo::SseStreamReader::constructor() "SseStreamReader::constructor()"
+*/
+public const int DefaultMaxEventSize = 128 * 1024 * 1024;
 
 }

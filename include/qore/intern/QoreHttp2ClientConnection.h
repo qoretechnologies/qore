@@ -227,6 +227,9 @@ public:
     //! are active.  No-op if @ref buildAndSubmit hasn't completed yet.
     DLLEXPORT void setIdleTimeoutHook(int64_t timeout_us) override;
 
+    //! Pushes the maximum size of a response body received into memory down to the socket of the H2 session
+    DLLEXPORT void setMaxResponseBodySizeHook(int64_t max_size) override;
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 

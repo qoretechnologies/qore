@@ -682,6 +682,13 @@ private:
         }
         if (complete) {
             done = true;
+            // a body that exceeded the maximum size ends with an error after its buffered bytes, so it can never be
+            // taken for a complete body
+            if (session->isStreamBodyTooLarge(stream_id)) {
+                xsink->raiseException("HTTP-BODY-TOO-LARGE", "HTTP/3 request body on stream %lld exceeds the "
+                    "maximum request body size", (long long)stream_id);
+                return -1;
+            }
             return 0;
         }
         return 1;
@@ -3983,28 +3990,11 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
     }
 }
 
-static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s, int timeout_ms,
-        ExceptionSink* xsink) {
+static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s,
+        const QoreStringNode* content_encoding, int64 max_event_size, int timeout_ms, ExceptionSink* xsink) {
     s->ref();
     ValueHolder rv(qore_socket_object_exec_recv_poll(s,
-        new SocketReadServerSentEventPollOperation(xsink, s, true), timeout_ms, "readServerSentEvent", xsink),
-        xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (rv->getType() != NT_HASH) {
-        xsink->raiseException("SOCKET-SSE-ERROR",
-            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
-        return nullptr;
-    }
-    return rv.release().get<QoreHashNode>();
-}
-
-static QoreHashNode* qore_socket_object_exec_read_server_sent_event_encoded(QoreSocketObject* s,
-        const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
-    s->ref();
-    ValueHolder rv(qore_socket_object_exec_recv_poll(s,
-        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, true), timeout_ms,
+        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, max_event_size, true), timeout_ms,
         "readServerSentEvent", xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -5202,9 +5192,13 @@ QoreStringNode* QoreSocketObject::readHTTPHeaderString(ExceptionSink* xsink, int
 
 QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
         int timeout_ms) {
-    return content_encoding
-        ? qore_socket_object_exec_read_server_sent_event_encoded(this, content_encoding, timeout_ms, xsink)
-        : qore_socket_object_exec_read_server_sent_event(this, timeout_ms, xsink);
+    return readServerSentEvent(xsink, content_encoding, timeout_ms, 0);
+}
+
+QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+        int timeout_ms, int64 max_event_size) {
+    return qore_socket_object_exec_read_server_sent_event(this, content_encoding, max_event_size, timeout_ms,
+        xsink);
 }
 
 int QoreSocketObject::setSendTimeout(int ms) {
@@ -5859,6 +5853,11 @@ bool QoreSocketObject::isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) 
     return !h2 || h2->isStreamRemoteClosed(stream_id);
 }
 
+bool QoreSocketObject::isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 && h2->isStreamBodyTooLarge(stream_id);
+}
+
 std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
@@ -6249,6 +6248,10 @@ QoreObject* QoreSocketObject::getRemoteCertificate(ExceptionSink* xsink) const {
 int64 QoreSocketObject::getConnectionId() const {
     AutoLocker al(priv->m);
     return priv->socket->getConnectionId();
+}
+
+void QoreSocketObject::setMaxResponseBodySize(int64 size) {
+    priv->socket->priv->max_response_body_size.store(size, std::memory_order_relaxed);
 }
 
 void QoreSocketObject::setMaxChunkedBodySize(int64 size) {

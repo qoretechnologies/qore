@@ -484,6 +484,13 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
       unavailable); @ref HTTP3Mode enum values are also accepted
     - \c http_version: The HTTP version to use: \c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0"
     - \c max_redirects: The maximum number of redirects before throwing an exception (the default is 5)
+    - \c max_response_body_size: The maximum size in bytes of a response body that is received into memory, both
+      as received and after its content encoding is decoded; a larger response body fails the request with a
+      \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE exception as soon as the limit is exceeded, so a huge or
+      "decompression bomb" response cannot exhaust memory; \c 0 (the default) means no limit.  A response body
+      delivered incrementally to a callback or an output stream is not limited, except when it has to be buffered
+      to decode its content encoding.  Over HTTP/1.x the connection is closed when the limit is exceeded; over HTTP/2
+      and HTTP/3 only the stream is canceled; see HTTPClient::setMaxResponseBodySize()
     - \c password: The password for HTTP basic authentication; only used if no username or password is set in the URL
       and if the \c username option is also used
     - \c pre_encoded_urls: If @ref True "True" then all URI paths in URLs are assumed to be already
@@ -557,8 +564,9 @@ HTTPClient httpclient(("url":"http://hostname:8080/path"));
     - %Qore 2.0 added the following options:
       - \c username
       - \c password
-    - %Qore 3.0 added the following option:
+    - %Qore 3.0 added the following options:
       - \c http3_mode
+      - \c max_response_body_size
 */
 HTTPClient::constructor(hash<auto> options) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHttpClientObject> client(new QoreHttpClientObject, xsink);
@@ -1860,46 +1868,75 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 }
 
 //! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
-/** @param content_encoding optional content-encoding for decompression
+/** When the stream is compressed, decompressed data left after the event, as well as any compressed data not
+    decompressed yet, is kept for the next call, so that a compressed stream can be read one event at a time.
+
+    @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); \c "identity"
+    or no value means no compression
     @param timeout_ms timeout for the read operation
+    @param max_event_size the maximum size of an event in bytes; an event that grows beyond this size before it
+    ends raises \c SSE-EVENT-TOO-LARGE, so that a stream that never ends an event, or a small compressed stream that
+    expands to a huge event, cannot exhaust memory; \c 0 (the default) means the maximum response body size of the
+    client if set (see setMaxResponseBodySize()), and otherwise a limit of 128 MiB; a negative value means no limit
+
     @return SseMessageInfo hash or NOTHING for EOF
+
+    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size; the rest of a streamed response cannot be
+    read, so the response is abandoned by disconnecting the client (see disconnect())
+
     @since %Qore 3.0
 */
-*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1)
-        [flags=NAMED_ARGS] {
+*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
+        int max_event_size = 0) [flags=NAMED_ARGS] {
+    // a negative value means no limit
+    int64 max = max_event_size ? max_event_size : client->getMaxSseEventSize();
+    bool eof;
     ReferenceHolder<QoreHashNode> rv(
-        client->readServerSentEventConnMgr(content_encoding, timeout_ms, xsink), xsink);
-    if (*xsink) {
+        client->readServerSentEventConnMgr(content_encoding, timeout_ms, max, eof, xsink), xsink);
+    if (*xsink || eof) {
         return QoreValue();
     }
     if (rv) {
         return rv.release();
     }
     // Fall back to Socket::readServerSentEvent
-    return client->readServerSentEvent(xsink, content_encoding, timeout_ms);
+    return client->readServerSentEvent(xsink, content_encoding, timeout_ms, max);
 }
 
 //! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
-/** @param timeout_ms timeout for the read operation
+/** An event is limited to the maximum response body size of the client if set (see setMaxResponseBodySize()), and
+    otherwise to 128 MiB; a larger event raises \c SSE-EVENT-TOO-LARGE
+
+    @param timeout_ms timeout for the read operation
     @return SseMessageInfo hash or NOTHING for EOF
+
+    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size; the rest of a streamed response cannot be
+    read, so the response is abandoned by disconnecting the client (see disconnect())
+
     @since %Qore 3.0
 */
 *hash<SseMessageInfo> HTTPClient::readServerSentEvent(timeout timeout_ms = -1) {
+    int64 max = client->getMaxSseEventSize();
+    bool eof;
     ReferenceHolder<QoreHashNode> rv(
-        client->readServerSentEventConnMgr(nullptr, timeout_ms, xsink), xsink);
-    if (*xsink) {
+        client->readServerSentEventConnMgr(nullptr, timeout_ms, max, eof, xsink), xsink);
+    if (*xsink || eof) {
         return QoreValue();
     }
     if (rv) {
         return rv.release();
     }
     // Fall back to Socket::readServerSentEvent
-    return client->readServerSentEvent(xsink, nullptr, timeout_ms);
+    return client->readServerSentEvent(xsink, nullptr, timeout_ms, max);
 }
 
 //! Reads a full HTTP chunked body; overrides Socket::readHTTPChunkedBody to support conn_mgr
 /** @param timeout_ms timeout for the read operation
     @return hash with "body" key containing the accumulated body
+
+    @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body exceeds the maximum response body size (see
+    setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
+
     @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -1916,6 +1953,10 @@ hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED
 //! Reads a full HTTP chunked body as binary; overrides Socket::readHTTPChunkedBodyBinary
 /** @param timeout_ms timeout for the read operation
     @return hash with "body" key containing the accumulated binary body
+
+    @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body exceeds the maximum response body size (see
+    setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
+
     @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -1936,6 +1977,9 @@ hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags
     @param size number of bytes to read; 0 = read all available
     @param timeout_ms timeout for the read operation
     @return binary data
+
+    @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body read at once exceeds the maximum response
+    body size (see setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
 
     @since %Qore 3.0
 */
@@ -3008,6 +3052,71 @@ int mr = httpclient.getMaxRedirects();
 */
 int HTTPClient::getMaxRedirects() [flags=CONSTANT] {
     return client->getMaxRedirects();
+}
+
+//! Sets the maximum size in bytes of a response body that is received into memory
+/** The limit applies to a response body as received and after its content encoding is decoded; a larger response
+    body fails the request with a \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE exception as soon as the limit is exceeded,
+    so that a huge response or a "decompression bomb" (a small compressed body that expands to a huge one) cannot
+    exhaust the memory of the process.  Over HTTP/1.x the connection is closed when the limit is exceeded, as the
+    rest of the body cannot be skipped; over HTTP/2 and HTTP/3 only the stream of the response is canceled.
+
+    A response body delivered incrementally to a callback or an output stream is not limited, except when it has
+    to be buffered to decode its content encoding.
+
+    @param max_response_body_size the maximum size in bytes; \c 0 means no limit
+
+    @par Example:
+    @code{.py}
+# limit response bodies to 10 MiB
+httpclient.setMaxResponseBodySize(10 * 1024 * 1024);
+    @endcode
+
+    @throw HTTP-CLIENT-OPTION-ERROR \a max_response_body_size is negative
+
+    @see
+    - HTTPClient::getMaxResponseBodySize()
+    - the \c max_response_body_size option of HTTPClient::constructor()
+
+    @since %Qore 3.0
+*/
+nothing HTTPClient::setMaxResponseBodySize(int max_response_body_size) [flags=NAMED_ARGS] {
+    client->setMaxResponseBodySize(max_response_body_size, xsink);
+}
+
+//! Returns the maximum size in bytes of a response body that is received into memory
+/** @return the maximum size in bytes of a response body that is received into memory; \c 0 means no limit
+
+    @par Example:
+    @code{.py}
+int max = httpclient.getMaxResponseBodySize();
+    @endcode
+
+    @see HTTPClient::setMaxResponseBodySize()
+
+    @since %Qore 3.0
+*/
+int HTTPClient::getMaxResponseBodySize() [flags=CONSTANT] {
+    return client->getMaxResponseBodySize();
+}
+
+//! Returns the default maximum size of a server-sent event in bytes
+/** A server-sent event or a buffered part of a response stream is limited to the maximum response body size of the
+    client if set, and otherwise to 128 MiB; see readServerSentEvent()
+
+    @return the default maximum size of a server-sent event in bytes
+
+    @par Example:
+    @code{.py}
+int max = httpclient.getMaxSseEventSize();
+    @endcode
+
+    @see HTTPClient::setMaxResponseBodySize()
+
+    @since %Qore 3.0
+*/
+int HTTPClient::getMaxSseEventSize() [flags=CONSTANT] {
+    return client->getMaxSseEventSize();
 }
 
 //! Clears any Queue object that may be set on the HTTPClient object so that @ref event_handling "I/O events" are no longer captured on the object

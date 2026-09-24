@@ -74,6 +74,7 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketUpgradeClientSslPollOperation;
     friend class SocketUpgradeServerSslPollOperation;
     friend class SocketShutdownSslPollOperation;
+    friend class SocketLingeringClosePollOperation;
     friend class SocketSetupPollOperation;
     friend class HttpClientConnectPollOperation;
     friend class SocketHttp2ServerPollOperation;
@@ -353,6 +354,18 @@ public:
 
     DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
             int timeout_ms);
+
+    //! Reads a server sent event with a maximum event size
+    /** @param xsink exception sink; an event larger than @p max_event_size raises \c SSE-EVENT-TOO-LARGE
+        @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); may be
+        nullptr
+        @param timeout_ms the timeout in milliseconds
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+            int timeout_ms, int64 max_event_size);
 
     //! Returns the underlying file descriptor; -1 if not open
     /** @return the underlying file descriptor; -1 if not open
@@ -660,6 +673,8 @@ public:
     DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
     //! Internal async-poll helper for HTTP/2 remote stream closed checks.
     DLLLOCAL bool isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) const;
+    //! Internal async-poll helper: True if the request body of an HTTP/2 server stream exceeded the maximum size
+    DLLLOCAL bool isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const;
 
     //! Drains stream IDs reset by the peer since the last call (I/O thread only)
     /** Used by the HTTP/2 server poll operation to surface peer RST_STREAMs for
@@ -732,6 +747,11 @@ public:
 
     //! Returns the maximum body size for chunked HTTP reads
     DLLEXPORT int64 getMaxChunkedBodySize() const;
+
+    //! Sets the maximum size in bytes of an HTTP/2 or HTTP/3 response body received into memory (0 = unlimited)
+    /** Can be called from any thread; client sessions on this socket read the value when response data arrives.
+    */
+    DLLLOCAL void setMaxResponseBodySize(int64 size);
 
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);

@@ -641,6 +641,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             rethrow;
         }
         stream.markReservationHeld();
+        stream.setMaxResponseBodySize(opts.max_response_body_size);
         if (from_pool) {
             stream.markConnectionReused();
         }
@@ -3218,6 +3219,17 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 # Set keepalive ping at half the idle timeout so dead connections
                 # are detected before the idle timer fires and evicts them.
                 cast<Http2ClientPollOperation>(op).setPingInterval(opts.idle_timeout / 2);
+            }
+
+            # a response body that is returned whole is limited as it is received
+            if (opts.max_response_body_size > 0) {
+                if (op instanceof Http1ClientPollOperation) {
+                    cast<Http1ClientPollOperation>(op).setMaxResponseBodySize(opts.max_response_body_size);
+                } else if (op instanceof Http2ClientPollOperation) {
+                    cast<Http2ClientPollOperation>(op).setMaxResponseBodySize(opts.max_response_body_size);
+                } else if (op instanceof Http3ClientPollOperation) {
+                    cast<Http3ClientPollOperation>(op).setMaxResponseBodySize(opts.max_response_body_size);
+                }
             }
         }
 

@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTPClient::disconnect() racing HTTPClient::close() from another thread, as when a client disconnects while its
+    event thread closes the connection at the end of a stream: disconnect() waited for the async I/O thread to close
+    the pooled connections while holding the lock of the client, which the I/O thread needed to close the client's
+    own socket for the other thread, so both threads hung
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+
+%exec-class HttpClientCloseRaceTest
+
+#! returns a small chunked body
+class ChunkedHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": MimeTypeOctetStream,
+                "Transfer-Encoding": "chunked",
+            },
+            "chunked_body": new BinaryInputStream(binary("data")),
+        };
+    }
+}
+
+public class HttpClientCloseRaceTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        string url;
+
+        # the number of races; the threads hung only when both sockets were handled by the same I/O thread and the
+        # commands were queued in a particular order
+        const Iterations = 100;
+    }
+
+    constructor() : Test("HttpClientCloseRaceTest", "1.0") {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        ChunkedHandler handler();
+        server.setHandler("chunked", "", NOTHING, handler);
+        server.setDefaultHandler("chunked", handler);
+        url = "http://localhost:" + port;
+
+        addTestCase("disconnect racing close", \raceTest());
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    raceTest() {
+        for (int i = 0; i < Iterations; ++i) {
+            HTTPClient hc({"url": url});
+            hash<auto> info;
+            hc.sendAndStream("GET", "/", NOTHING, NOTHING, \info);
+            # read the stream to its end
+            binary body;
+            while (True) {
+                hash<auto> chunk = hc.readHTTPChunk(10s);
+                if (!chunk.body) {
+                    break;
+                }
+                body += chunk.body;
+            }
+            assertEq(binary("data"), body);
+
+            # one thread closes the client, as the event thread of a streaming client does at the end of a stream,
+            # while this thread disconnects it; both must return
+            Counter start(1);
+            Counter done(1);
+            background sub () {
+                on_exit done.dec();
+                start.waitForZero();
+                hc.close();
+            }();
+            start.dec();
+            hc.disconnect();
+            done.waitForZero();
+            assertFalse(hc.isConnected());
+        }
+    }
+}

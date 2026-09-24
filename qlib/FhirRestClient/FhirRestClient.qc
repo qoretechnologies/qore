@@ -92,7 +92,9 @@ public class FhirRestClientBase {
         @return FHIR-aware REST client options with JSON serialization and FHIR JSON headers applied
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        # the options have values of different types, so the hash must not take the narrow type of the
+        # defaults, which would prevent adding values of other types
+        hash<auto!> rv = DefaultOptions + opts;
         rv.headers = DefaultHeaders + opts.headers;
         rv.ping_headers = DefaultHeaders + opts.ping_headers;
         return rv;

@@ -112,6 +112,9 @@ module HttpServerAsyncIo {
       @c Socket HTTP/2 methods that wake the owning controller.  All built-in
       response paths (regular, send_callback, InputStream, SSE setup,
       RST_STREAM-on-error) use this convention.
+    - HTTP/1.x connections that the server closes after a response are closed with a lingering close (see
+      @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" option
+      \c lingering_close_timeout), so a client still sending unread data receives the response instead of a reset
     - SSE streams send comment heartbeats by default across HTTP/1.x, HTTP/2,
       and HTTP/3; callers can opt out with the stream's \c setHeartbeat(0)
       method.
@@ -135,6 +138,11 @@ public namespace HttpServerAsyncIo {
 
     #! Default idle connection timeout (75 seconds)
     public const DefaultIdleTimeout = 75s;
+
+    #! Default maximum time to wait for an HTTP/1.x client to close its side after the last response (5 seconds)
+    /** @see HttpAsyncSocketIoController::lingeringClose()
+    */
+    public const DefaultLingeringCloseTimeout = 5s;
 
     #! Default SSE heartbeat interval in milliseconds
     public const DefaultSseHeartbeatIntervalMs = 20000;
@@ -239,7 +247,14 @@ public namespace HttpServerAsyncIo {
           no body); when \c True, \c body_streaming is \c False and there is no body to read
         - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread
         - \c register_body_queue: only present in \c body_streaming mode — a closure that takes an
-          unlimited @ref Qore::Thread::Queue "Queue" and connects it to the I/O thread's stream reader
+          unlimited @ref Qore::Thread::Queue "Queue" and connects it to the I/O thread's stream reader; the
+          I/O thread pushes one binary value per inbound DATA chunk, and ends the body with either
+          @ref nothing (END_STREAM) or, if the buffered body exceeds the maximum request body size, a hash
+          with \c err (\c "HTTP-BODY-TOO-LARGE") and \c desc keys; the rest of such a body is discarded,
+          and the server resets the stream with \c NO_ERROR once the response is sent (RFC 9113 section 8.1); a
+          Queue with a maximum size is rejected with \c HTTP2-QUEUE-ERROR; a reader can cancel the body read with
+          @ref Qore::Thread::Queue::setError() "Queue::setError()", after which the data received for the stream is
+          discarded
 
         For HTTP/3 connections, \c header_info contains:
         - \c http3: \c True for HTTP/3 requests

@@ -298,6 +298,17 @@ public:
         idle_timeout_us = timeout_us;
     }
 
+    //! Sets the maximum size in bytes of a response body that is received into memory
+    /** Applies to responses whose body is returned whole; a body delivered incrementally to a streaming consumer
+        is not limited.  A larger body fails the request with \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE and closes
+        the connection, as the rest of the body cannot be skipped.
+
+        @param max_size the maximum size in bytes; <= 0 means no limit
+    */
+    DLLLOCAL void setMaxResponseBodySize(int64_t max_size) {
+        max_response_body_size = max_size;
+    }
+
     //! Sets the connect-phase timeout for this connection (microseconds)
     /** Bounds the time the connection may spend establishing itself — TCP connect,
         TLS handshake and proxy \c CONNECT tunnel — independently of the caller's
@@ -493,6 +504,11 @@ private:
     // the I/O thread reads it to arm the idle deadline
     std::atomic<int64_t> idle_timeout_us{-1};
 
+    //! Maximum size in bytes of a response body received into memory; <= 0 = no limit
+    // atomic: setMaxResponseBodySize() is called from the thread configuring the connection while the I/O thread
+    // reads it for each response
+    std::atomic<int64_t> max_response_body_size{0};
+
     //! Deadline for the current idle period (epoch us); 0 = not yet in idle wait
     /** Set on first handleIdle entry with no pending request; cleared when a
         pending request is picked up or the connection leaves the idle state.
@@ -663,6 +679,15 @@ private:
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);
 
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+
+    //! Fails the response if a response body of the given size exceeds the maximum response body size
+    /** @param size the size of the response body in bytes
+        @param desc what the size refers to, for the error message
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if the body is too large (the error has been set)
+    */
+    DLLLOCAL int checkResponseBodySize(int64_t size, const char* desc, ExceptionSink* xsink);
     DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);

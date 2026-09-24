@@ -96,13 +96,7 @@ public class ServerSentEventClient inherits Logger::LoggerWrapper, ConnectionPro
         bool chunked;
 
         #! The content encoding used by the server
-        string content_encoding;
-
-        #! The decompression output stream
-        StringOutputStream ostream;
-
-        #! The decompression transform stream
-        TransformOutputStream dstream;
+        *string content_encoding;
 
         timeout timeout_ms = DefaultTimeout;
 
@@ -881,33 +875,6 @@ sse.setEventQueue();
         }
     }
 
-    private setupDecompression() {
-        Transform decompressor;
-        switch (content_encoding) {
-            case "deflate":
-                decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
-                break;
-
-            case "gzip":
-                decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
-                break;
-
-            case "bzip2":
-                decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
-                break;
-
-            case NOTHING:
-            case "identity":
-                return;
-
-            default:
-                throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y",
-                    content_encoding);
-        }
-        ostream = new StringOutputStream();
-        dstream = new TransformOutputStream(ostream, decompressor);
-    }
-
     #! Runs one iteration of the event loop body.
     /** @return @c 0 to continue, non-zero to break out of the loop
 
@@ -936,18 +903,12 @@ sse.setEventQueue();
 %endif
             return 0;
         }
-        hash<SseMessageInfo> h;
-        if (chunked) {
-            hash<auto> hh = hc.readHTTPChunk(timeout_ms);
-            if (hh.body) {
-                dstream.write(hh.body);
-            } else {
-                logInfo("Server closed the stream");
-                return 1;
-            }
-            h = hc.parseServerSentEvent(ostream.getData());
-        } else {
-            h = hc.readServerSentEvent(content_encoding, timeout_ms);
+        # the client decodes the stream, including chunked transfer encoding and the content encoding, keeping the
+        # decoding state between events, and limits the size of an event
+        *hash<SseMessageInfo> h = hc.readServerSentEvent(content_encoding, timeout_ms);
+        if (!h) {
+            logInfo("Server closed the stream");
+            return 1;
         }
         int disp = handleEvent(h);
         if (disp == SSEEDC_CONTINUE) {
@@ -1015,19 +976,6 @@ sse.setEventQueue();
         # Background thread now holds only a weak reference; signal the
         # caller that it is safe to return from start().
         started.dec();
-
-        # Decompression setup runs on the weak ref; if the client is
-        # already gone, exit immediately.
-        try {
-            if (client) {
-                client.setupDecompression();
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "OBJECT-ALREADY-DELETED") {
-                return;
-            }
-            rethrow;
-        }
 
         # Main loop — each iteration is a short instance method call
         # that lets the destructor fire between iterations.
@@ -1302,25 +1250,28 @@ sse.setEventQueue();
             raiseError("HTTP server at URL %y return Content-Length: %d; invalid server response", hc.getURL(),
                 rh."content-length");
         }
-        if (rh."content-encoding".val()) {
-            content_encoding = rh."content-encoding";
+        # the encoding of each connection is set from its response
+        content_encoding = rh."content-encoding".val() ? rh."content-encoding".lwr() : NOTHING;
+        switch (content_encoding) {
+            case "deflate":
+            case "x-deflate":
+            case "gzip":
+            case "x-gzip":
+            case "bzip2":
+            case "x-bzip2":
+            case "br":
+            case "zstd":
+            case NOTHING:
+            case "identity":
+                break;
+
+            default:
+                throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y", content_encoding);
         }
+        chunked = False;
         if (rh."transfer-encoding".val()) {
             if (rh."transfer-encoding" == "chunked") {
                 chunked = True;
-                Transform decompressor;
-                switch (content_encoding) {
-                    case "deflate":
-                    case "gzip":
-                    case "bzip2":
-                    case NOTHING:
-                    case "identity":
-                        break;
-
-                    default:
-                        throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y",
-                            content_encoding);
-                }
             } else {
                 raiseError("HTTP server at URL %y returned unsupported Transfer-Encoding: %y", hc.getURL(),
                     rh."transfer-encoding");

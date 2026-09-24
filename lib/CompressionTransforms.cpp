@@ -41,6 +41,9 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/CompressionTransforms.h"
+#include "qore/intern/ql_compression.h"
+
+#include <string>
 
 class CompressionErrorHelper {
 
@@ -133,6 +136,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (state != STATE_OK) {
             xsink->raiseException("ZLIB-ERROR", "invalid zlib stream state");
             return std::make_pair(0, 0);
@@ -184,7 +191,7 @@ public:
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
         if (state == STATE_END) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("ZLIB-ERROR", "Unexpected extra bytes at the end of the compressed data stream");
                 state = STATE_ERROR;
             }
@@ -210,7 +217,8 @@ public:
             xsink->raiseException("ZLIB-ERROR", "Unexpected end of compressed data stream");
             state = STATE_ERROR;
             return std::make_pair(0, 0);
-        } else if (rc != Z_OK) {
+        } else if (rc != Z_OK && (rc != Z_BUF_ERROR || !src)) {
+            // Z_BUF_ERROR means that no progress was possible, as when empty input is given to drain the output
             CompressionErrorHelper::mapZlibError(rc, xsink);
             state = STATE_ERROR;
             return std::make_pair(0, 0);
@@ -259,6 +267,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (state == STATE_END) {
             return std::make_pair(0, 0);
         }
@@ -316,7 +328,7 @@ public:
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) {
         if (state == STATE_END) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("BZIP2-ERROR", "Unexpected extra bytes at the end of the compressed data stream");
                 state = STATE_ERROR;
             }
@@ -389,6 +401,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (!state) {
             xsink->raiseException("BROTLI-ERROR", "invalid Brotli encoder state");
             return std::make_pair(0, 0);
@@ -437,7 +453,7 @@ public:
         }
 
         if (finished) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("BROTLI-ERROR", "Unexpected extra bytes at the end of compressed data stream");
             }
             return std::make_pair(0, 0);
@@ -513,6 +529,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (!cstream) {
             xsink->raiseException("ZSTD-ERROR", "invalid Zstd compression stream state");
             return std::make_pair(0, 0);
@@ -587,7 +607,7 @@ public:
         }
 
         if (finished) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("ZSTD-ERROR", "Unexpected extra bytes at the end of compressed data stream");
             }
             return std::make_pair(0, 0);
@@ -645,6 +665,10 @@ public:
     }
 
     std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen, ExceptionSink *xsink) override {
+        // empty input writes nothing; the output is flushed at the end of the stream
+        if (src && !srcLen) {
+            return std::make_pair(0, 0);
+        }
         if (!initialized) {
             xsink->raiseException("LZ4-ERROR", "invalid LZ4 compressor state");
             return std::make_pair(0, 0);
@@ -690,7 +714,7 @@ public:
         }
 
         if (finished) {
-            if (src) {
+            if (src && srcLen) {
                 xsink->raiseException("LZ4-ERROR", "Unexpected extra bytes at the end of compressed data stream");
             }
             return std::make_pair(0, 0);
@@ -699,6 +723,11 @@ public:
         if (!src) {
             // No more input, done
             finished = true;
+            return std::make_pair(0, 0);
+        }
+
+        // a block is decompressed as a whole, so empty input produces nothing
+        if (!srcLen) {
             return std::make_pair(0, 0);
         }
 
@@ -740,20 +769,135 @@ Transform *CompressionTransforms::getCompressor(const QoreStringNode *alg, int64
     return nullptr;
 }
 
-Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, ExceptionSink *xsink) {
-    if (*alg == ALG_ZLIB) {
+static Transform *get_unlimited_decompressor(const QoreStringNode *alg, ExceptionSink *xsink) {
+    if (*alg == CompressionTransforms::ALG_ZLIB) {
         return new ZlibInflateTransform(xsink, false);
-    } else if (*alg == ALG_GZIP) {
+    } else if (*alg == CompressionTransforms::ALG_GZIP) {
         return new ZlibInflateTransform(xsink, true);
-    } else if (*alg == ALG_BZIP2) {
+    } else if (*alg == CompressionTransforms::ALG_BZIP2) {
         return new Bzip2DecompressTransform(xsink);
-    } else if (*alg == ALG_BROTLI) {
+    } else if (*alg == CompressionTransforms::ALG_BROTLI) {
         return new BrotliDecompressTransform(xsink);
-    } else if (*alg == ALG_ZSTD) {
+    } else if (*alg == CompressionTransforms::ALG_ZSTD) {
         return new ZstdDecompressTransform(xsink);
-    } else if (*alg == ALG_LZ4) {
+    } else if (*alg == CompressionTransforms::ALG_LZ4) {
         return new Lz4DecompressTransform(xsink);
     }
     xsink->raiseException("COMPRESS-ERROR", "Unknown compression algorithm: %s", alg->getBuffer());
     return nullptr;
+}
+
+//! Limits the total output of a decompression transform
+/** The output of each call is bounded by the destination buffer of the caller, so no more than the maximum size plus
+    one destination buffer is ever decompressed; output beyond the maximum is discarded with an exception.
+*/
+class LimitedDecompressionTransform : public Transform {
+public:
+    DLLLOCAL LimitedDecompressionTransform(Transform *t, const char *alg, size_t max_size) : t(t), alg(alg),
+            max_size(max_size) {
+    }
+
+    std::pair<int64, int64> apply(const void *src, int64 srcLen, void *dst, int64 dstLen,
+            ExceptionSink *xsink) override {
+        if (exceeded) {
+            qore_raise_decompression_limit_exceeded(alg.c_str(), max_size, xsink);
+            return std::make_pair(0, 0);
+        }
+        std::pair<int64, int64> rv = t->apply(src, srcLen, dst, dstLen, xsink);
+        if (*xsink) {
+            return rv;
+        }
+        assert(rv.second >= 0);
+        total += rv.second;
+        if (total > max_size) {
+            exceeded = true;
+            qore_raise_decompression_limit_exceeded(alg.c_str(), max_size, xsink);
+            return std::make_pair(0, 0);
+        }
+        return rv;
+    }
+
+    DLLLOCAL size_t outputBufferSize() override {
+        return t->outputBufferSize();
+    }
+
+    DLLLOCAL size_t inputBufferSize() override {
+        return t->inputBufferSize();
+    }
+
+private:
+    SimpleRefHolder<Transform> t;
+    std::string alg;
+    size_t max_size;
+    size_t total = 0;
+    bool exceeded = false;
+};
+
+const char* CompressionTransforms::getContentCodingAlgorithm(const char* content_coding) {
+    if (!content_coding || !*content_coding || !strcasecmp(content_coding, "identity")) {
+        return nullptr;
+    }
+    if (!strcasecmp(content_coding, "deflate") || !strcasecmp(content_coding, "x-deflate")) {
+        return ALG_ZLIB;
+    }
+    if (!strcasecmp(content_coding, "x-gzip")) {
+        return ALG_GZIP;
+    }
+    if (!strcasecmp(content_coding, "x-bzip2")) {
+        return ALG_BZIP2;
+    }
+    return content_coding;
+}
+
+StreamDecoder::StreamDecoder(const char* alg, ExceptionSink* xsink) : alg(alg) {
+    SimpleRefHolder<QoreStringNode> alg_str(new QoreStringNode(alg));
+    transform = CompressionTransforms::getDecompressor(*alg_str, 0, xsink);
+    if (*xsink) {
+        return;
+    }
+    buf_size = transform->outputBufferSize();
+    if (!buf_size) {
+        buf_size = 4096;
+    }
+    buf.reset(new (std::nothrow) char[buf_size]);
+    if (!buf) {
+        xsink->outOfMemory();
+    }
+}
+
+int StreamDecoder::next(ExceptionSink* xsink) {
+    while (true) {
+        if (pos < len) {
+            return static_cast<unsigned char>(buf[pos++]);
+        }
+        // a full output buffer means that the transform can hold more output for the input it has consumed, which
+        // is drained with empty input
+        if (input.empty() && len < buf_size) {
+            return -1;
+        }
+        std::pair<int64, int64> rv = transform->apply(input.data(), input.size(), buf.get(), buf_size, xsink);
+        if (*xsink) {
+            return -2;
+        }
+        if (rv.first) {
+            input.erase(0, rv.first);
+        }
+        pos = 0;
+        len = static_cast<size_t>(rv.second);
+        // the transform needs more input to produce output
+        if (!rv.first && !rv.second) {
+            return -1;
+        }
+    }
+}
+
+Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, size_t max_size, ExceptionSink *xsink) {
+    SimpleRefHolder<Transform> t(get_unlimited_decompressor(alg, xsink));
+    if (!t || *xsink) {
+        return nullptr;
+    }
+    if (!max_size) {
+        return t.release();
+    }
+    return new LimitedDecompressionTransform(t.release(), alg->c_str(), max_size);
 }
