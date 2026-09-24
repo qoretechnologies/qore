@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    REST client option handling tests: getOptions() of the REST client modules with options of a single type
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class RestClientOptionTypesTest
+
+public class RestClientOptionTypesTest inherits QUnit::Test {
+    public {
+        # module name and the class providing the static getOptions() method that merges the default options of the
+        # module with the given options
+        const Classes = (
+            ("AftershipRestClient", "AftershipRestClient::AftershipRestClientBase"),
+            ("AnthropicRestClient", "AnthropicRestClient::AnthropicRestClientBase"),
+            ("ApolloRestClient", "ApolloRestClient::ApolloRestClientBase"),
+            ("AssemblyAiRestClient", "AssemblyAiRestClient::AssemblyAiRestClientBase"),
+            ("BaseLinkerRestClient", "BaseLinkerRestClient::BaseLinkerRestClientBase"),
+            ("BflRestClient", "BflRestClient::BflRestClientBase"),
+            ("BgeM3RestClient", "BgeM3RestClient::BgeM3RestClientBase"),
+            ("BigCommerceRestClient", "BigCommerceRestClient::BigCommerceRestClientBase"),
+            ("BitlyRestClient", "BitlyRestClient::BitlyRestClientBase"),
+            ("ChargebeeRestClient", "ChargebeeRestClient::ChargebeeRestClientBase"),
+            ("ChromaRestClient", "ChromaRestClient::ChromaRestClientBase"),
+            ("Cin7CoreRestClient", "Cin7CoreRestClient::Cin7CoreRestClientBase"),
+            ("CircleRestClient", "CircleRestClient::CircleRestClientBase"),
+            ("ClickFunnelsRestClient", "ClickFunnelsRestClient::ClickFunnelsRestClientBase"),
+            ("CloseRestClient", "CloseRestClient::CloseRestClientBase"),
+            ("CohereRestClient", "CohereRestClient::CohereRestClientBase"),
+            ("ConstantContactRestClient", "ConstantContactRestClient::ConstantContactRestClientBase"),
+            ("CustomerIoRestClient", "CustomerIoRestClient::CustomerIoRestClientBase"),
+            ("DeelRestClient", "DeelRestClient::DeelRestClientBase"),
+            ("DeepSeekRestClient", "DeepSeekRestClient::DeepSeekRestClientBase"),
+            ("EasyPostRestClient", "EasyPostRestClient::EasyPostRestClientBase"),
+            ("FhirRestClient", "FhirRestClient::FhirRestClientBase"),
+            ("FireworksRestClient", "FireworksRestClient::FireworksRestClientBase"),
+            ("FreshBooksRestClient", "FreshBooksRestClient::FreshBooksRestClientBase"),
+            ("FreshsalesRestClient", "FreshsalesRestClient::FreshsalesRestClientBase"),
+            ("GoHighLevelRestClient", "GoHighLevelRestClient::GoHighLevelRestClientBase"),
+            ("GorgiasRestClient", "GorgiasRestClient::GorgiasRestClientBase"),
+            ("GrokRestClient", "GrokRestClient::GrokRestClientBase"),
+            ("GroqRestClient", "GroqRestClient::GroqRestClientBase"),
+            ("HuggingFaceRestClient", "HuggingFaceRestClient::HuggingFaceRestClientBase"),
+            ("InsightlyRestClient", "InsightlyRestClient::InsightlyRestClientBase"),
+            ("InstantlyRestClient", "InstantlyRestClient::InstantlyRestClientBase"),
+            ("JinaRestClient", "JinaRestClient::JinaRestClientBase"),
+            ("JotformRestClient", "JotformRestClient::JotformRestClientBase"),
+            ("KatanaRestClient", "KatanaRestClient::KatanaRestClientBase"),
+            ("KeapRestClient", "KeapRestClient::KeapRestClientBase"),
+            ("KitRestClient", "KitRestClient::KitRestClientBase"),
+            ("LemlistRestClient", "LemlistRestClient::LemlistRestClientBase"),
+            ("LinearRestClient", "LinearRestClient::LinearRestClientBase"),
+            ("LlamaParseRestClient", "LlamaParseRestClient::LlamaParseRestClientBase"),
+            ("MailgunRestClient", "MailgunRestClient::MailgunRestClientBase"),
+            ("MilvusRestClient", "MilvusRestClient::MilvusRestClientBase"),
+            ("MistralRestClient", "MistralRestClient::MistralRestClientBase"),
+            ("OllamaRestClient", "OllamaRestClient::OllamaRestClientBase"),
+            ("PdfCoRestClient", "PdfCoRestClient::PdfCoRestClientBase"),
+            ("SGLangRestClient", "SGLangRestClient::SGLangRestClientBase"),
+            ("SegmentRestClient", "SegmentRestClient::SegmentRestClientBase"),
+            ("SendCloudRestClient", "SendCloudRestClient::SendCloudRestClientBase"),
+            ("ShipStationRestClient", "ShipStationRestClient::ShipStationRestClientBase"),
+            ("ShippoRestClient", "ShippoRestClient::ShippoRestClientBase"),
+            ("SmartSheetRestClient", "SmartSheetRestClient::SmartSheetRestClientBase"),
+            ("SquareRestClient", "SquareRestClient::SquareRestClientBase"),
+            ("SquarespaceRestClient", "SquarespaceRestClient::SquarespaceRestClientBase"),
+            ("StabilityAiRestClient", "StabilityAiRestClient::StabilityAiRestClientBase"),
+            ("SystemeIoRestClient", "SystemeIoRestClient::SystemeIoRestClientBase"),
+            ("TableauRestClient", "TableauRestClient::TableauRestClientBase"),
+            ("TallyRestClient", "TallyRestClient::TallyRestClientBase"),
+            ("TavilyRestClient", "TavilyRestClient::TavilyRestClientBase"),
+            ("TogetherRestClient", "TogetherRestClient::TogetherRestClientBase"),
+            ("UnbounceRestClient", "UnbounceRestClient::UnbounceRestClientBase"),
+            ("UnleashedRestClient", "UnleashedRestClient::UnleashedRestClientBase"),
+            ("WaveRestClient", "WaveRestClient::WaveRestClientBase"),
+            ("WeaviateRestClient", "WeaviateRestClient::WeaviateRestClientBase"),
+            ("WooCommerceRestClient", "WooCommerceRestClient::WooCommerceRestClient"),
+            ("ZohoBooksRestClient", "ZohoBooksRestClient::ZohoBooksRestClientBase"),
+            ("ZohoInventoryRestClient", "ZohoInventoryRestClient::ZohoInventoryRestClientBase"),
+            ("ZohoInvoiceRestClient", "ZohoInvoiceRestClient::ZohoInvoiceRestClientBase"),
+        );
+    }
+
+    constructor() : Test("RestClientOptionTypesTest", "1.0") {
+        addTestCase("string options", \stringOptionsTest());
+        set_return_value(main());
+    }
+
+    stringOptionsTest() {
+        # options given only as strings, as when read from a configuration; the merged options hash must accept the
+        # headers and values of other types added by getOptions(); a module accepts one of the authentication
+        # option variants
+        hash<string, string> common = {
+            "url": "http://localhost:1",
+            "account_id": "account",
+            "organization": "org",
+        };
+        list<hash<auto>> variants = (
+            common + {"apikey": "key"},
+            common + {"token": "token"},
+            # options required by modules with their own authentication options
+            common + {
+                "api_key": "key",
+                "apikey": "key",
+                "api_secret": "secret",
+                "api_id": "id",
+                "consumer_key": "key",
+                "consumer_secret": "secret",
+                "site": "site",
+                "public_key": "public",
+                "secret_key": "secret",
+                "store_url": "http://localhost:1",
+                "subdomain": "pod",
+            },
+        );
+        assertEq("hash<string, string>", variants[0].fullType());
+        foreach list<string> c in (Classes) {
+            load_module(c[0]);
+            int ok = 0;
+            foreach hash<auto> opts in (variants) {
+                *hash<auto> rv;
+                *hash<ExceptionInfo> err;
+                try {
+                    rv = call_static_method_args(c[1], "getOptions", opts);
+                } catch (hash<ExceptionInfo> ex) {
+                    err = ex;
+                }
+                if (err) {
+                    # an authentication option the module does not support may be rejected, but never with a type
+                    # error
+                    assertNeq("RUNTIME-TYPE-ERROR", err.err, sprintf("%s: %s: %s", c[1], err.err, err.desc));
+                    continue;
+                }
+                # the options are returned with the (possibly normalized) URL
+                assertTrue(rv.url.val(), c[1]);
+                ++ok;
+            }
+            assertGt(0, ok, c[1]);
+        }
+    }
+}

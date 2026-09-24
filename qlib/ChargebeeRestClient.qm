@@ -132,7 +132,9 @@ public class ChargebeeRestClientBase {
 
     #! returns options for ChargebeeRestClient constructors
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        # the options have values of different types, so the hash must not take the narrow type of the
+        # defaults, which would prevent adding values of other types
+        hash<auto!> rv = DefaultOptions + opts;
 
         # Validate required options
         if (!opts.api_key) {
