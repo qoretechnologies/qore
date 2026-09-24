@@ -601,6 +601,8 @@ private:
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 
+class StreamDecoder;
+
 //! Non-blocking Server-Sent Event reader
 /** Reads a single Server-Sent Event message from a connected socket.
 
@@ -628,6 +630,18 @@ public:
     */
     DLLEXPORT SocketReadServerSentEventPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
             const QoreStringNode* content_encoding, bool defer_init);
+    //! Creates the SSE read operation with optional content decompression and a maximum event size
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"), or nullptr
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit; a larger event raises
+        \c SSE-EVENT-TOO-LARGE
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT SocketReadServerSentEventPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+            const QoreStringNode* content_encoding, int64 max_event_size, bool defer_init);
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
@@ -642,18 +656,17 @@ protected:
 
 private:
     QoreString event_data;
-    QoreString compressed_data;
     mutable ReferenceHolder<QoreHashNode> out;
-    SimpleRefHolder<Transform> transform;
-    std::unique_ptr<char[]> transform_buf;
-    size_t transform_buf_size = 0;
-    size_t transform_len = 0;
-    size_t transform_pos = 0;
+    //! the decompression algorithm of a compressed stream
+    std::string decode_alg;
+    //! the decoder of a compressed stream; owned by the socket, so that data left after an event is kept
+    StreamDecoder* decoder = nullptr;
+    //! the maximum size of an event in bytes; <= 0 means no limit
+    int64 max_event_size = 0;
     int eol_count = 0;
     bool bytes_consumed = false;
 
     DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
-    DLLEXPORT void initTransform(ExceptionSink* xsink, const QoreStringNode* content_encoding);
     DLLEXPORT bool processSseChar(ExceptionSink* xsink, qore_socket_private* sp, char c);
     DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;

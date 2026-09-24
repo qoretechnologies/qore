@@ -1868,15 +1868,29 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 }
 
 //! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
-/** @param content_encoding optional content-encoding for decompression
+/** When the stream is compressed, decompressed data left after the event, as well as any compressed data not
+    decompressed yet, is kept for the next call, so that a compressed stream can be read one event at a time.
+
+    @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); \c "identity"
+    or no value means no compression
     @param timeout_ms timeout for the read operation
+    @param max_event_size the maximum size of an event in bytes; an event that grows beyond this size before it
+    ends raises \c SSE-EVENT-TOO-LARGE, so that a stream that never ends an event, or a small compressed stream that
+    expands to a huge event, cannot exhaust memory; \c 0 (the default) means the maximum response body size of the
+    client if set (see setMaxResponseBodySize()), and otherwise a limit of 128 MiB; a negative value means no limit
+
     @return SseMessageInfo hash or NOTHING for EOF
+
+    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size
+
     @since %Qore 3.0
 */
-*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1)
-        [flags=NAMED_ARGS] {
+*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
+        int max_event_size = 0) [flags=NAMED_ARGS] {
+    // a negative value means no limit
+    int64 max = max_event_size ? max_event_size : client->getMaxSseEventSize();
     ReferenceHolder<QoreHashNode> rv(
-        client->readServerSentEventConnMgr(content_encoding, timeout_ms, xsink), xsink);
+        client->readServerSentEventConnMgr(content_encoding, timeout_ms, max, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1884,17 +1898,24 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
         return rv.release();
     }
     // Fall back to Socket::readServerSentEvent
-    return client->readServerSentEvent(xsink, content_encoding, timeout_ms);
+    return client->readServerSentEvent(xsink, content_encoding, timeout_ms, max);
 }
 
 //! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
-/** @param timeout_ms timeout for the read operation
+/** An event is limited to the maximum response body size of the client if set (see setMaxResponseBodySize()), and
+    otherwise to 128 MiB; a larger event raises \c SSE-EVENT-TOO-LARGE
+
+    @param timeout_ms timeout for the read operation
     @return SseMessageInfo hash or NOTHING for EOF
+
+    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size
+
     @since %Qore 3.0
 */
 *hash<SseMessageInfo> HTTPClient::readServerSentEvent(timeout timeout_ms = -1) {
+    int64 max = client->getMaxSseEventSize();
     ReferenceHolder<QoreHashNode> rv(
-        client->readServerSentEventConnMgr(nullptr, timeout_ms, xsink), xsink);
+        client->readServerSentEventConnMgr(nullptr, timeout_ms, max, xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -1902,7 +1923,7 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
         return rv.release();
     }
     // Fall back to Socket::readServerSentEvent
-    return client->readServerSentEvent(xsink, nullptr, timeout_ms);
+    return client->readServerSentEvent(xsink, nullptr, timeout_ms, max);
 }
 
 //! Reads a full HTTP chunked body; overrides Socket::readHTTPChunkedBody to support conn_mgr
@@ -3058,6 +3079,25 @@ int max = httpclient.getMaxResponseBodySize();
 */
 int HTTPClient::getMaxResponseBodySize() [flags=CONSTANT] {
     return client->getMaxResponseBodySize();
+}
+
+//! Returns the default maximum size of a server-sent event in bytes
+/** A server-sent event or a buffered part of a response stream is limited to the maximum response body size of the
+    client if set, and otherwise to 128 MiB; see readServerSentEvent()
+
+    @return the default maximum size of a server-sent event in bytes
+
+    @par Example:
+    @code{.py}
+int max = httpclient.getMaxSseEventSize();
+    @endcode
+
+    @see HTTPClient::setMaxResponseBodySize()
+
+    @since %Qore 3.0
+*/
+int HTTPClient::getMaxSseEventSize() [flags=CONSTANT] {
+    return client->getMaxSseEventSize();
 }
 
 //! Clears any Queue object that may be set on the HTTPClient object so that @ref event_handling "I/O events" are no longer captured on the object

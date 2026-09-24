@@ -354,6 +354,18 @@ public:
     DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
             int timeout_ms);
 
+    //! Reads a server sent event with a maximum event size
+    /** @param xsink exception sink; an event larger than @p max_event_size raises \c SSE-EVENT-TOO-LARGE
+        @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); may be
+        nullptr
+        @param timeout_ms the timeout in milliseconds
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT QoreHashNode* readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+            int timeout_ms, int64 max_event_size);
+
     //! Returns the underlying file descriptor; -1 if not open
     /** @return the underlying file descriptor; -1 if not open
 

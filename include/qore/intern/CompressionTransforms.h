@@ -34,6 +34,9 @@
 
 #include "qore/Transform.h"
 
+#include <memory>
+#include <string>
+
 class CompressionTransforms {
 public:
    static constexpr const char *ALG_ZLIB = "zlib";
@@ -53,6 +56,61 @@ public:
        @param xsink exception sink
    */
    DLLLOCAL static Transform *getDecompressor(const QoreStringNode *alg, size_t max_size, ExceptionSink *xsink);
+
+   //! Returns the decompression algorithm for an HTTP content coding
+   /** Maps \c "deflate" and \c "x-deflate" to \c "zlib", \c "x-gzip" to \c "gzip", and \c "x-bzip2" to
+       \c "bzip2" (compared case-insensitively); any other value, including an algorithm name, is returned unchanged
+
+       @param content_coding the HTTP content coding or algorithm name
+
+       @return the algorithm name, or nullptr for \c "identity" or an empty value, which need no decompression
+   */
+   DLLLOCAL static const char* getContentCodingAlgorithm(const char* content_coding);
+};
+
+//! Decompresses a stream incrementally for a consumer that reads the decompressed data byte by byte
+/** Keeps the compressed input that has not been decompressed yet and the decompressed output that has not been read
+    yet, so that a stream can be read across several read operations.  The decompressed output held at any time is
+    bounded by the output buffer size of the transform.
+*/
+class StreamDecoder {
+public:
+   //! Creates the decoder
+   /** @param alg the decompression algorithm; see CompressionTransforms::getDecompressor()
+       @param xsink raises an exception if the algorithm is unknown
+   */
+   DLLLOCAL StreamDecoder(const char* alg, ExceptionSink* xsink);
+
+   //! Returns the decompression algorithm
+   DLLLOCAL const std::string& getAlgorithm() const {
+      return alg;
+   }
+
+   //! Adds compressed input
+   DLLLOCAL void feed(const void* data, size_t len) {
+      input.append(static_cast<const char*>(data), len);
+   }
+
+   //! Returns the next decompressed byte
+   /** @return the next decompressed byte (0 - 255), -1 if more input is needed, or -2 if an exception was raised
+   */
+   DLLLOCAL int next(ExceptionSink* xsink);
+
+   //! Returns true if decompressed output or compressed input is buffered
+   DLLLOCAL bool hasData() const {
+      return pos < len || !input.empty();
+   }
+
+private:
+   std::string alg;
+   SimpleRefHolder<Transform> transform;
+   //! compressed input not consumed by the transform yet
+   std::string input;
+   //! decompressed output
+   std::unique_ptr<char[]> buf;
+   size_t buf_size = 0;
+   size_t len = 0;
+   size_t pos = 0;
 };
 
 #endif // _QORE_COMPRESSIONTRANSFORMS_H

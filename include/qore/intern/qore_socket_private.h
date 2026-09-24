@@ -43,6 +43,7 @@
 
 #include "qore/intern/SSLSocketHelper.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/CompressionTransforms.h"
 
 #include "qore/intern/Http2Session.h"
 // NOTE: QuicSession.h pulls in ngtcp2, nghttp3, and OpenSSL headers transitively.
@@ -1056,6 +1057,34 @@ struct qore_socket_private : public QoreReferenceCounter {
         ssl_capture_remote_cert = false,
         event_data = false,
         sse_got_cr = false;
+
+    //! The decoder of a compressed server-sent event stream, kept across reads; see readServerSentEvent()
+    std::unique_ptr<StreamDecoder> sse_decoder;
+
+    //! Sets up the decoder of a server-sent event stream for the given decompression algorithm
+    /** An existing decoder for the same algorithm is kept, so that its buffered input and output survive between
+        reads of the same stream
+
+        @param alg the decompression algorithm, or nullptr if the stream is not compressed
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int setupSseDecoder(const char* alg, ExceptionSink* xsink) {
+        if (!alg) {
+            sse_decoder.reset();
+            return 0;
+        }
+        if (sse_decoder && sse_decoder->getAlgorithm() == alg) {
+            return 0;
+        }
+        std::unique_ptr<StreamDecoder> decoder(new StreamDecoder(alg, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        sse_decoder = std::move(decoder);
+        return 0;
+    }
     //! Tracks listen() state for platforms without reliable SO_ACCEPTCONN support.
     bool listening = false;
     int in_op = -1,
@@ -1615,6 +1644,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (sse_got_cr) {
             sse_got_cr = false;
         }
+        sse_decoder.reset();
         listening = false;
         sfamily = AF_UNSPEC;
         stype = SOCK_STREAM;

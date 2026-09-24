@@ -1154,7 +1154,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "s.readHTTPChunkedBodyToOutputStream(output_stream: output_stream, timeout_ms: 0); "
             "s.readHTTPChunkedBodyWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
             "s.readHTTPChunkedBodyBinaryWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
-            "s.readServerSentEvent(content_encoding: \"identity\", timeout_ms: 0); }",
+            "s.readServerSentEvent(content_encoding: \"identity\", timeout_ms: 0, max_event_size: 1024); }",
             "socket-http-named");
     }
 
@@ -1541,7 +1541,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "hc.isHttp2DataAvailable(stream_id: 1, timeout_ms: 0); hc.isDataAvailable(timeout_ms: 0); "
             "hc.readHTTPChunk(timeout_ms: 0); hc.readHTTPChunkedBody(timeout_ms: 0); "
             "hc.readHTTPChunkedBodyBinary(timeout_ms: 0); "
-            "hc.readServerSentEvent(content_encoding: \"gzip\", timeout_ms: 0); "
+            "hc.readServerSentEvent(content_encoding: \"gzip\", timeout_ms: 0, max_event_size: -1); "
             "hc.readServerSentEvent(timeout_ms: 0); "
             "hc.recvBinary(size: 1, timeout_ms: 0); "
             "hc.startPollSendRecv(method: \"POST\", path: \"/path\", body: \"body\", headers: NOTHING); "

@@ -807,6 +807,62 @@ private:
     bool exceeded = false;
 };
 
+const char* CompressionTransforms::getContentCodingAlgorithm(const char* content_coding) {
+    if (!content_coding || !*content_coding || !strcasecmp(content_coding, "identity")) {
+        return nullptr;
+    }
+    if (!strcasecmp(content_coding, "deflate") || !strcasecmp(content_coding, "x-deflate")) {
+        return ALG_ZLIB;
+    }
+    if (!strcasecmp(content_coding, "x-gzip")) {
+        return ALG_GZIP;
+    }
+    if (!strcasecmp(content_coding, "x-bzip2")) {
+        return ALG_BZIP2;
+    }
+    return content_coding;
+}
+
+StreamDecoder::StreamDecoder(const char* alg, ExceptionSink* xsink) : alg(alg) {
+    SimpleRefHolder<QoreStringNode> alg_str(new QoreStringNode(alg));
+    transform = CompressionTransforms::getDecompressor(*alg_str, 0, xsink);
+    if (*xsink) {
+        return;
+    }
+    buf_size = transform->outputBufferSize();
+    if (!buf_size) {
+        buf_size = 4096;
+    }
+    buf.reset(new (std::nothrow) char[buf_size]);
+    if (!buf) {
+        xsink->outOfMemory();
+    }
+}
+
+int StreamDecoder::next(ExceptionSink* xsink) {
+    while (true) {
+        if (pos < len) {
+            return static_cast<unsigned char>(buf[pos++]);
+        }
+        if (input.empty()) {
+            return -1;
+        }
+        std::pair<int64, int64> rv = transform->apply(input.data(), input.size(), buf.get(), buf_size, xsink);
+        if (*xsink) {
+            return -2;
+        }
+        if (rv.first) {
+            input.erase(0, rv.first);
+        }
+        pos = 0;
+        len = static_cast<size_t>(rv.second);
+        // the transform needs more input to produce output
+        if (!rv.first && !rv.second) {
+            return -1;
+        }
+    }
+}
+
 Transform *CompressionTransforms::getDecompressor(const QoreStringNode *alg, size_t max_size, ExceptionSink *xsink) {
     SimpleRefHolder<Transform> t(get_unlimited_decompressor(alg, xsink));
     if (!t || *xsink) {

@@ -1754,28 +1754,11 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
     }
 }
 
-static QoreHashNode* socket_exec_read_server_sent_event(QoreObject* self, QoreSocketObject* s, int timeout_ms,
-        ExceptionSink* xsink) {
+static QoreHashNode* socket_exec_read_server_sent_event(QoreObject* self, QoreSocketObject* s,
+        const QoreStringNode* content_encoding, int64 max_event_size, int timeout_ms, ExceptionSink* xsink) {
     s->ref();
     ValueHolder rv(socket_exec_recv_poll(self, s,
-        new SocketReadServerSentEventPollOperation(xsink, s, true), timeout_ms, "readServerSentEvent", xsink),
-        xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (rv->getType() != NT_HASH) {
-        xsink->raiseException("SOCKET-SSE-ERROR",
-            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
-        return nullptr;
-    }
-    return rv.release().get<QoreHashNode>();
-}
-
-static QoreHashNode* socket_exec_read_server_sent_event_encoded(QoreObject* self, QoreSocketObject* s,
-        const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
-    s->ref();
-    ValueHolder rv(socket_exec_recv_poll(self, s,
-        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, true), timeout_ms,
+        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, max_event_size, true), timeout_ms,
         "readServerSentEvent", xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -5704,27 +5687,42 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout tim
 }
 
 //! Read a server sent event message
-/**
-    @param content_encoding any content encoding to use to decode the stream (ex: \c "deflate")
+/** When the stream is compressed, decompressed data left after the event, as well as any compressed data not
+    decompressed yet, is kept for the next call, so that a compressed stream can be read one event at a time.
+
+    @param content_encoding the HTTP content coding of the stream (ex: \c "gzip" or \c "deflate"); \c "deflate",
+    \c "x-deflate", \c "x-gzip", and \c "x-bzip2" are accepted as well as the
+    @ref compression_transformations "compression algorithm" names; \c "identity" means no compression
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed,
     then the call will not time out and will not return until all the data has been read or the remote end closes the
     connection. If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and
     methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
     clear (i.e. \c 2m = two minutes, etc.)
+    @param max_event_size the maximum size of an event in bytes; \c 0 (the default) or a negative value means no
+    limit; an event that grows beyond this size before it ends raises \c SSE-EVENT-TOO-LARGE, so that a stream
+    that never ends an event, or a small compressed stream that expands to a huge event, cannot exhaust memory
+
+    @par Example:
+    @code{.py}
+# read events from a gzip-compressed stream with at most 1 MiB per event
+*hash<SseMessageInfo> event = sock.readServerSentEvent("gzip", 30s, 1024 * 1024);
+    @endcode
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
     @throw SOCKET-RECV-ERROR There was an error receiving the data
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
+    @throw SSE-EVENT-TOO-LARGE the event exceeds \a max_event_size
+    @throw COMPRESS-ERROR the content coding is not supported
 
-    @since %Qore 2.0
+    @since
+    - %Qore 2.0
+    - %Qore 3.0 added the \a max_event_size parameter
 */
-hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
-    if (!content_encoding || (*content_encoding == "identity")) {
-        return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
-    }
-    return socket_exec_read_server_sent_event_encoded(self, s, content_encoding, timeout_ms, xsink);
+hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1,
+        int max_event_size = 0) [flags=NAMED_ARGS] {
+    return socket_exec_read_server_sent_event(self, s, content_encoding, max_event_size, timeout_ms, xsink);
 }
 
 //! Read a server sent event message
@@ -5744,7 +5742,7 @@ hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeo
     @since %Qore 2.0
 */
 hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
-    return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
+    return socket_exec_read_server_sent_event(self, s, nullptr, 0, timeout_ms, xsink);
 }
 
 //! Closes an open socket

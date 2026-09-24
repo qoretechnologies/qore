@@ -1237,7 +1237,8 @@ class ReflectionTest inherits QUnit::Test {
             ("receive_callback", "timeout_ms"));
         assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyBinaryWithCallback",
             ("receive_callback", "timeout_ms"));
-        assertNamedClassMethodVariantCount("Socket", "readServerSentEvent", ("content_encoding", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readServerSentEvent",
+            ("content_encoding", "timeout_ms", "max_event_size"));
         foreach AbstractMethodVariant v in (Class::forName("Socket").getMethod("readServerSentEvent").getVariants()) {
             if (v.getParamNames() == ("timeout_ms",)) {
                 assertFalse(v.isNamedCallable());
@@ -1608,7 +1609,8 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunkedBodyBinary", ("timeout_ms",));
         assertNamedClassMethodVariantCount("HTTPClient", "readHttp2StreamData", ("stream_id", "timeout_ms"));
         assertNamedClassMethodVariantCount("HTTPClient", "readHttp3StreamData", ("stream_id", "timeout_ms"));
-        assertNamedClassMethodVariantCount("HTTPClient", "readServerSentEvent", ("content_encoding", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "readServerSentEvent",
+            ("content_encoding", "timeout_ms", "max_event_size"));
         assertNamedClassMethodVariantCount("HTTPClient", "recvBinary", ("size", "timeout_ms"));
         assertNamedClassMethodVariantCount("HTTPClient", "get", ("path", "headers", "info"));
         assertNamedClassMethodVariantCount("HTTPClient", "head", ("path", "headers", "info"));

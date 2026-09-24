@@ -1144,6 +1144,12 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       response body that @ref Qore::HTTPClient "HTTPClient" receives into memory, both as received and after its
       content encoding is decoded, over HTTP/1.x, HTTP/2, and HTTP/3; a larger body raises
       \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE as soon as the limit is exceeded
+    - Added a \c max_event_size argument to @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()"
+      and @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()": an event that grows
+      beyond it before it ends raises \c SSE-EVENT-TOO-LARGE, so that a stream that never ends an event, or a small
+      compressed stream that expands to a huge event, cannot exhaust memory; @ref Qore::HTTPClient "HTTPClient"
+      limits events to its maximum response body size, or to 128 MiB by default
+      (@ref Qore::HTTPClient::getMaxSseEventSize() "HTTPClient::getMaxSseEventSize()")
 
     - Added the @ref char "char" value type for single Unicode codepoints, including
       \c c'...' and \c c"..." literals, the @ref char_type "char" and
@@ -3295,6 +3301,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" with a content encoding
+      returning only the first event of a compressed stream: each call started a new decompressor and discarded the
+      data already received and decompressed, so the next call waited for data that had already arrived; the
+      decompression state of the stream is now kept across calls
+    - Fixed @ref Qore::Socket::readServerSentEvent() "Socket::readServerSentEvent()" raising
+      \c COMPRESS-ERROR for the \c "deflate", \c "x-deflate", \c "x-gzip", and \c "x-bzip2" HTTP content codings;
+      they were taken as compression algorithm names
     - Fixed @ref Qore::unzstd_to_binary() "unzstd_to_binary()" and
       @ref Qore::unzstd_to_string() "unzstd_to_string()" failing with "Destination buffer is too small" for data
       with several frames when the first frame declares its size; the output buffer was sized for the first frame

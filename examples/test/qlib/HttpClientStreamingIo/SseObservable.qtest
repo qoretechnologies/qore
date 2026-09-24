@@ -119,6 +119,20 @@ class InvalidJsonSseHandler inherits ServerSentEventHandler {
     }
 }
 
+#! Sends one event that is larger than the maximum event size of the client
+class HugeEventSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        # the maximum event size of the I/O thread SSE parser is 128 MiB
+        conn.send(<SseMessageInfo>{
+            "event": "huge",
+            "data": strmul("x", 128 * 1024 * 1024 + 1024),
+        });
+    }
+}
+
 #! Observable whose destructor widens the object teardown window
 /** %Qore destroys an object's members only after its destructor returns, and
     entering a method is still allowed in that window — so a slow destructor
@@ -220,6 +234,7 @@ class SseObservableTest inherits Test {
             \testAsyncApiIncomingValidationFailure());
         addTestCase("SSE AsyncAPI option and outbound validation",
             \testAsyncApiOptionsAndOutboundValidation());
+        addTestCase("SseObservable reports an event that exceeds the maximum size", \testEventTooLarge());
         set_return_value(main());
     }
 
@@ -752,6 +767,36 @@ class SseObservableTest inherits Test {
         assertEq("SCHEMA-VALIDATION-ERROR", closed_events[0].data.error.err);
 
         obs.stopEvents();
+    }
+
+    testEventTooLarge() {
+        HttpServer endless_server(<HttpServerOptionInfo>{
+            "logger": new Logger("endless-sse", LoggerLevel::getLevelInfo()),
+            "debug": True,
+        });
+        on_exit endless_server.stop();
+        endless_server.setDefaultHandler("huge", new HugeEventSseHandler());
+        int endless_port = endless_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        string url = sprintf("http://localhost:%d/sse", endless_port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+        HttpClientStreamingIo::SseObservable obs(mgr, url, "GET", "/sse");
+        on_exit obs.stopEvents();
+
+        TestObserver observer(2);
+        obs.registerObserver(observer);
+        obs.observersReady();
+
+        assertTrue(observer.waitForEvent(HttpClientStreamingIo::EVENT_SSE_CLOSED, 1, 120s),
+            "received the closed event");
+        list<hash<auto>> closed_events = (
+            select observer.events,
+            $1.event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED
+        );
+        assertEq(1, closed_events.size(), "one closed event");
+        assertEq("stream-error", closed_events[0].data.reason, sprintf("%N", closed_events[0]));
+        assertEq("SSE-EVENT-TOO-LARGE", closed_events[0].data.error.err);
+        assertRegex("maximum event size of 134217728 bytes", closed_events[0].data.error.desc);
     }
 
     testAsyncApiOptionsAndOutboundValidation() {

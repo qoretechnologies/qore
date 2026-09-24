@@ -3983,28 +3983,11 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
     }
 }
 
-static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s, int timeout_ms,
-        ExceptionSink* xsink) {
+static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s,
+        const QoreStringNode* content_encoding, int64 max_event_size, int timeout_ms, ExceptionSink* xsink) {
     s->ref();
     ValueHolder rv(qore_socket_object_exec_recv_poll(s,
-        new SocketReadServerSentEventPollOperation(xsink, s, true), timeout_ms, "readServerSentEvent", xsink),
-        xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-    if (rv->getType() != NT_HASH) {
-        xsink->raiseException("SOCKET-SSE-ERROR",
-            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
-        return nullptr;
-    }
-    return rv.release().get<QoreHashNode>();
-}
-
-static QoreHashNode* qore_socket_object_exec_read_server_sent_event_encoded(QoreSocketObject* s,
-        const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
-    s->ref();
-    ValueHolder rv(qore_socket_object_exec_recv_poll(s,
-        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, true), timeout_ms,
+        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, max_event_size, true), timeout_ms,
         "readServerSentEvent", xsink), xsink);
     if (*xsink) {
         return nullptr;
@@ -5202,9 +5185,13 @@ QoreStringNode* QoreSocketObject::readHTTPHeaderString(ExceptionSink* xsink, int
 
 QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
         int timeout_ms) {
-    return content_encoding
-        ? qore_socket_object_exec_read_server_sent_event_encoded(this, content_encoding, timeout_ms, xsink)
-        : qore_socket_object_exec_read_server_sent_event(this, timeout_ms, xsink);
+    return readServerSentEvent(xsink, content_encoding, timeout_ms, 0);
+}
+
+QoreHashNode* QoreSocketObject::readServerSentEvent(ExceptionSink* xsink, const QoreStringNode* content_encoding,
+        int timeout_ms, int64 max_event_size) {
+    return qore_socket_object_exec_read_server_sent_event(this, content_encoding, max_event_size, timeout_ms,
+        xsink);
 }
 
 int QoreSocketObject::setSendTimeout(int ms) {

@@ -74,6 +74,8 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreUriReference.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/CompressionTransforms.h"
+#include "qore/intern/SseEventFramer.h"
 
 #include <atomic>
 #include <cassert>
@@ -1144,8 +1146,88 @@ struct qore_httpclient_priv {
     int64_t h3_connect_stream_id = 0;
     bool h3_connect_stream_closed = false;
 
-    //! Buffer for accumulating partial SSE event text across channel messages
+    //! Data received on the streaming channel that has not been processed yet
     std::string sse_recv_buffer;
+    //! The decoder of a compressed server-sent event stream, kept across reads
+    std::unique_ptr<StreamDecoder> sse_decoder;
+    //! Splits the server-sent event stream into events
+    SseEventFramer sse_framer;
+
+    //! Sets up the decoder of the server-sent event stream; called with priv->m held
+    /** @param alg the decompression algorithm, or nullptr if the stream is not compressed
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int setupSseDecoder(const char* alg, ExceptionSink* xsink) {
+        if (!alg) {
+            sse_decoder.reset();
+            return 0;
+        }
+        if (sse_decoder && sse_decoder->getAlgorithm() == alg) {
+            return 0;
+        }
+        std::unique_ptr<StreamDecoder> decoder(new StreamDecoder(alg, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        sse_decoder = std::move(decoder);
+        return 0;
+    }
+
+    //! Processes received server-sent event data until an event is complete; called with priv->m held
+    /** @param event_text receives a complete event
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit
+        @param xsink exception sink
+
+        @return 1 if an event is complete, 0 if more data is needed, -1 if an exception was raised
+    */
+    DLLLOCAL int processSseData(std::string& event_text, int64 max_event_size, ExceptionSink* xsink) {
+        if (sse_decoder && !sse_recv_buffer.empty()) {
+            sse_decoder->feed(sse_recv_buffer.data(), sse_recv_buffer.size());
+            sse_recv_buffer.clear();
+        }
+        size_t pos = 0;
+        int rc = 0;
+        while (true) {
+            int c;
+            if (sse_decoder) {
+                c = sse_decoder->next(xsink);
+                if (c == -2) {
+                    rc = -1;
+                    break;
+                }
+                if (c == -1) {
+                    break;
+                }
+            } else {
+                if (pos == sse_recv_buffer.size()) {
+                    break;
+                }
+                c = static_cast<unsigned char>(sse_recv_buffer[pos++]);
+            }
+            if (sse_framer.add(static_cast<char>(c))) {
+                event_text = sse_framer.take();
+                rc = 1;
+                break;
+            }
+            if (max_event_size > 0 && static_cast<int64>(sse_framer.size()) > max_event_size) {
+                xsink->raiseException("SSE-EVENT-TOO-LARGE", "the server-sent event exceeds the maximum event size "
+                    "of %lld bytes", static_cast<long long>(max_event_size));
+                rc = -1;
+                break;
+            }
+        }
+        if (pos) {
+            sse_recv_buffer.erase(0, pos);
+        }
+        return rc;
+    }
+
+    //! Returns true if received server-sent event data has not been processed yet; called with priv->m held
+    DLLLOCAL bool hasSseData() const {
+        return !sse_recv_buffer.empty() || (sse_decoder && sse_decoder->hasData());
+    }
 
     DLLLOCAL std::string getConnMgrProxyUrl() const {
         if (!proxy_connection.has_url()) {
@@ -1764,6 +1846,8 @@ struct qore_httpclient_priv {
             streaming_recv_channel = nullptr;
         }
         sse_recv_buffer.clear();
+        sse_decoder.reset();
+        sse_framer.reset();
     }
 
     //! Clears the conn_mgr-backed HTTP/2 extended CONNECT stream state.
@@ -9164,33 +9248,34 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
 }
 
 QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringNode* content_encoding,
-        int timeout_ms, ExceptionSink* xsink) {
+        int timeout_ms, int64 max_event_size, ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readServerSentEvent", xsink);
     if (*xsink) {
         return nullptr;
     }
 
-    // Check buffer for complete SSE event (double newline delimiter)
+    const char* alg = CompressionTransforms::getContentCodingAlgorithm(content_encoding
+        ? content_encoding->c_str() : nullptr);
     while (true) {
-        bool have_event = false;
+        // process received data until an event is complete
         std::string event_text;
         {
             SafeLocker sl(priv->m);
             if (!http_priv->streaming_recv_channel) {
                 return nullptr;
             }
-            size_t sep = http_priv->sse_recv_buffer.find("\n\n");
-            if (sep != std::string::npos) {
-                event_text = http_priv->sse_recv_buffer.substr(0, sep + 2);
-                http_priv->sse_recv_buffer.erase(0, sep + 2);
-                have_event = true;
+            if (http_priv->setupSseDecoder(alg, xsink)) {
+                return nullptr;
             }
-        }
-        if (have_event) {
-            // Parse SSE event using the static Socket method
-            SimpleRefHolder<QoreStringNode> event_str(
-                new QoreStringNode(event_text.c_str(), event_text.size(), QCS_UTF8));
-            return parseSseEvent(xsink, **event_str);
+            int rc = http_priv->processSseData(event_text, max_event_size, xsink);
+            if (rc < 0) {
+                return nullptr;
+            }
+            if (rc > 0) {
+                sl.unlock();
+                QoreString event_str(event_text.c_str(), event_text.size(), QCS_UTF8);
+                return parseSseEvent(xsink, event_str);
+            }
         }
 
         // Read more data from channel
@@ -9204,40 +9289,43 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 
         QoreValue body_val = chunk->getKeyValue("body");
         if (body_val.isNullOrNothing()) {
-            // EOF — parse any remaining buffer
+            // EOF: an event that did not end with an empty line is returned as it is
             std::string remaining;
             {
                 SafeLocker sl(priv->m);
-                if (!http_priv->sse_recv_buffer.empty()) {
-                    remaining = http_priv->sse_recv_buffer;
-                    http_priv->sse_recv_buffer.clear();
-                }
+                remaining = http_priv->sse_framer.take();
             }
             if (!remaining.empty()) {
-                SimpleRefHolder<QoreStringNode> event_str(
-                    new QoreStringNode(remaining.c_str(), remaining.size(), QCS_UTF8));
-                return parseSseEvent(xsink, **event_str);
+                QoreString event_str(remaining.c_str(), remaining.size(), QCS_UTF8);
+                return parseSseEvent(xsink, event_str);
             }
             return nullptr;
         }
 
-        // Append body to buffer
-        std::string body;
+        const char* ptr = nullptr;
+        size_t len = 0;
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
-            body.assign(reinterpret_cast<const char*>(bin->getPtr()), bin->size());
+            ptr = static_cast<const char*>(bin->getPtr());
+            len = bin->size();
         } else if (body_val.getType() == NT_STRING) {
-            QoreStringValueHelper str(body_val);
-            body.assign(str->c_str(), str->size());
+            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+            ptr = str->c_str();
+            len = str->size();
         }
-        if (!body.empty()) {
+        if (len) {
             SafeLocker sl(priv->m);
             if (!http_priv->streaming_recv_channel) {
                 return nullptr;
             }
-            http_priv->sse_recv_buffer.append(body);
+            http_priv->sse_recv_buffer.append(ptr, len);
         }
     }
+}
+
+int64 QoreHttpClientObject::getMaxSseEventSize() const {
+    SafeLocker sl(priv->m);
+    return http_priv->max_response_body_size > 0 ? http_priv->max_response_body_size : DefaultMaxSseEventSize;
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink) {
@@ -9334,7 +9422,7 @@ QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* 
 bool QoreHttpClientObject::hasStreamingChannel() const {
     SafeLocker sl(priv->m);
     return http_priv->streaming_recv_channel != nullptr
-        || !http_priv->sse_recv_buffer.empty();
+        || http_priv->hasSseData();
 }
 
 bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink) const {
@@ -9348,7 +9436,7 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         SafeLocker sl(priv->m);
         // Consider buffered SSE text as immediately-pending — matches
         // readServerSentEventConnMgr which drains this buffer first.
-        if (!http_priv->sse_recv_buffer.empty()) {
+        if (http_priv->hasSseData()) {
             return true;
         }
         if (http_priv->streaming_recv_channel) {

@@ -731,15 +731,33 @@ public:
     DLLEXPORT QoreHashNode* readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink);
 
     //! Reads a Server-Sent Event from the conn_mgr streaming channel or the raw socket
-    /** @param content_encoding optional content-encoding for decompression
+    /** Decompressed data left after the event, as well as compressed data not decompressed yet, is kept for the
+        next call.
+
+        @param content_encoding optional HTTP content coding for decompression
         @param timeout_ms timeout in milliseconds; -1 = use default
+        @param max_event_size the maximum size of an event in bytes; <= 0 means no limit; a larger event raises
+        \c SSE-EVENT-TOO-LARGE
         @param xsink exception sink
         @return SseMessageInfo hash or nullptr for EOF
 
         @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readServerSentEventConnMgr(const QoreStringNode* content_encoding,
-        int timeout_ms, ExceptionSink* xsink);
+        int timeout_ms, int64 max_event_size, ExceptionSink* xsink);
+
+    //! Returns the default maximum size of a server-sent event in bytes
+    /** @return the maximum response body size if set (see setMaxResponseBodySize()), otherwise
+        QoreHttpClientObject::DefaultMaxSseEventSize
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int64 getMaxSseEventSize() const;
+
+    //! The default maximum size of a server-sent event in bytes when no maximum response body size is set (128 MiB)
+    /** @since %Qore 3.0
+    */
+    static constexpr int64 DefaultMaxSseEventSize = 128 * 1024 * 1024;
 
     //! Reads the full chunked body from the conn_mgr streaming channel or the raw socket
     /** @param timeout_ms timeout in milliseconds; -1 = use default

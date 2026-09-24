@@ -190,6 +190,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # a decompression bomb served by the raw server
         binary bomb;
 
+        # a gzip-compressed server-sent event stream with an event that never ends
+        binary sse_bomb;
+
         Logger logger;
         HttpServer server;
         int tls_port;
@@ -207,11 +210,23 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("malformed chunk sizes", \chunkSizeTest());
         addTestCase("HTTP/2", \http2Test());
         addTestCase("HTTP/3", \http3Test());
+        addTestCase("server-sent events", \sseTest());
         set_return_value(main());
     }
 
     globalSetUp() {
         bomb = makeBomb(BombSize);
+        {
+            BinaryOutputStream bos();
+            TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+            tos.write(binary("data: "));
+            binary chunk = binary(strmul("z", 1024 * 1024));
+            for (int i = 0; i < 64; ++i) {
+                tos.write(chunk);
+            }
+            tos.close();
+            sse_bomb = bos.getData();
+        }
         raw = new RawResponseServer(\respond());
         raw_url = "http://127.0.0.1:" + raw.port;
 
@@ -304,6 +319,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             case "chunked": return chunkedResponse(makeBody(arg.toInt()));
             case "close": return closeResponse(makeBody(arg.toInt()));
             case "bomb": return lengthResponse(bomb, MimeTypeOctetStream, "gzip");
+            # a server-sent event stream read until the connection closes: /sse/<encoding>
+            case "sse": return sseResponse(arg, False);
+            # a chunked server-sent event stream: /sse-chunked/<encoding>
+            case "sse-chunked": return sseResponse(arg, True);
+            # a stream with one event of the given size: /sse-big/<size>
+            case "sse-big": return binary("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                "Connection: close\r\n\r\n") + binary("data: " + strmul("b", arg.toInt()) + "\n\n");
+            # a gzip-compressed stream with an event that never ends
+            case "sse-bomb": return binary("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
+                "Content-Encoding: gzip\r\nConnection: close\r\n\r\n") + sse_bomb;
             # a Content-Length body that ends early because the server closes the connection
             case "truncated": return binary("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
                 "Content-Length: 100\r\nConnection: close\r\n\r\n0123456789");
@@ -313,6 +338,28 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # /<encoding>/<size>[/text]
         binary body = Encoders{kind}(makeBody(arg.toInt()));
         return lengthResponse(body, parts[3] == "text" ? MimeTypeText : MimeTypeOctetStream, kind);
+    }
+
+    # the events of the server-sent event streams
+    const SseStream = "data: one\n\nevent: two\ndata: second\r\n\r\ndata: three\n\n";
+
+    # returns a raw server-sent event stream response with the given content coding
+    private static binary sseResponse(string enc, bool chunked) {
+        binary body = enc == "identity" ? binary(SseStream) : Encoders{enc}(binary(SseStream));
+        string hdr = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n";
+        if (enc != "identity") {
+            hdr += sprintf("Content-Encoding: %s\r\n", enc);
+        }
+        if (!chunked) {
+            return binary(hdr + "\r\n") + body;
+        }
+        # the compressed stream is sent in small chunks, so that events and the compressed data span chunks
+        binary rv = binary(hdr + "Transfer-Encoding: chunked\r\n\r\n");
+        for (int offset = 0; offset < body.size(); offset += 7) {
+            binary chunk = body.substr(offset, 7);
+            rv += binary(sprintf("%x\r\n", chunk.size())) + chunk + binary("\r\n");
+        }
+        return rv + binary("0\r\n\r\n");
     }
 
     # returns a client for the raw server with the given limit
@@ -487,6 +534,47 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # a chunk size with an extension and surrounding whitespace is valid
         HTTPClient hc = getClient();
         assertEq("abcde", hc.get("/badchunk/" + " 5 ;ext=1"));
+    }
+
+    # reads the given number of events of a server-sent event stream
+    private static list<string> readEvents(HTTPClient hc, string path, int count, *int max_event_size) {
+        hash<auto> info;
+        hash<auto> hdr = hc.sendAndStream("GET", path, NOTHING, NOTHING, \info);
+        list<string> rv = ();
+        for (int i = 0; i < count; ++i) {
+            rv += hc.readServerSentEvent(hdr."content-encoding", 30s, max_event_size ?? 0).data;
+        }
+        return rv;
+    }
+
+    sseTest() {
+        # every content coding, read until the connection closes and with chunked transfer encoding
+        foreach string enc in (("identity",) + keys Encoders) {
+            foreach string kind in ("sse", "sse-chunked") {
+                assertEq(("one", "second", "three"), readEvents(getClient(0), sprintf("/%s/%s", kind, enc), 3),
+                    sprintf("%s %s", kind, enc));
+            }
+        }
+
+        # the maximum response body size of the client limits an event
+        assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of " + Limit + " bytes", \readEvents(),
+            (getClient(), "/sse-big/" + (Limit * 2), 1));
+        # the limit of the call takes precedence; a negative limit means no limit
+        assertEq(Limit * 2, readEvents(getClient(), "/sse-big/" + (Limit * 2), 1, Limit * 4)[0].size());
+        assertEq(Limit * 2, readEvents(getClient(), "/sse-big/" + (Limit * 2), 1, -1)[0].size());
+        assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 100 bytes", \readEvents(),
+            (getClient(0), "/sse-big/" + Limit, 1, 100));
+        # without a limit on the client, the default limit is 128 MiB
+        assertEq(128 * 1024 * 1024, getClient(0).getMaxSseEventSize());
+        assertEq(Limit, getClient().getMaxSseEventSize());
+
+        # a compressed event that never ends: decompression stops at the limit
+        *int peak = getPeakMemory();
+        assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes", \readEvents(),
+            (getClient(1024 * 1024), "/sse-bomb", 1));
+        if (peak) {
+            assertLt(BombMaxPeakGrowth, getPeakMemory() - peak, "peak memory stays bounded");
+        }
     }
 
     # returns a client for the TLS listener with the given HTTP version, or skips the test if it is not negotiated

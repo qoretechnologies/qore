@@ -170,6 +170,8 @@ class SocketTest inherits QUnit::Test {
         addTestCase("HTTP response header test", \httpResponseHeaderTest());
         addTestCase("SSE read test", \serverSentEventReadTest());
         addTestCase("SSE parse line terminator test", \sseParseLineTerminatorTest());
+        addTestCase("SSE encoded stream test", \sseEncodedStreamTest());
+        addTestCase("SSE maximum event size test", \sseMaxEventSizeTest());
         addTestCase("concurrent sync send/recv test", \concurrentSyncSendRecvTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
@@ -956,6 +958,113 @@ class SocketTest inherits QUnit::Test {
                 encoded_server_result.desc));
         }
         assertTrue(encoded_server_result);
+    }
+
+    # returns a client connected to a server that sends the given data and keeps the connection open until the
+    # client closes it
+    private Socket serveSseStream(binary payload) {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind("localhost:0");
+                server.listen();
+                q.push(server.getSocketInfo(False));
+                Socket peer = server.accept(5s);
+                peer.send(payload, 5s);
+                # wait for the client to close the connection
+                try {
+                    peer.recv(1, 30s);
+                } catch (hash<ExceptionInfo> ex) {
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+        hash<auto> info = q.get(5s);
+        if (info.err) {
+            throw info.err, info.desc;
+        }
+        Socket client();
+        client.connectINET(info.address, info.port, 10s, info.family);
+        return client;
+    }
+
+    #! A compressed event stream is read one event at a time with every supported content coding; the decompressed
+    #! data left after an event is kept for the next one
+    sseEncodedStreamTest() {
+        hash<string, code<binary(string)>> encoders = {
+            "gzip": binary sub (string str) { return gzip(str); },
+            "x-gzip": binary sub (string str) { return gzip(str); },
+            "deflate": binary sub (string str) { return compress(str); },
+            "x-deflate": binary sub (string str) { return compress(str); },
+            "zlib": binary sub (string str) { return compress(str); },
+            "bzip2": binary sub (string str) { return bzip2(str); },
+            "x-bzip2": binary sub (string str) { return bzip2(str); },
+            "br": binary sub (string str) { return brotli(str); },
+            "zstd": binary sub (string str) { return zstd(str); },
+        };
+        string stream = "data: one\n\nevent: two\ndata: second\r\n\r\ndata: three\n\n";
+        foreach hash<auto> i in (encoders.pairIterator()) {
+            Socket client = serveSseStream(i.value(stream));
+            on_exit client.close();
+            assertEq("one", client.readServerSentEvent(i.key, 5s).data, i.key);
+            hash<SseMessageInfo> e = client.readServerSentEvent(i.key, 5s);
+            assertEq("two", e.event, i.key);
+            assertEq("second", e.data, i.key);
+            assertEq("three", client.readServerSentEvent(i.key, 5s).data, i.key);
+        }
+
+        # an event that decompresses to more than one output buffer is followed by another event in the same
+        # compressed data
+        {
+            string big = strmul("x", 200000);
+            Socket client = serveSseStream(gzip("data: " + big + "\n\ndata: after\n\n"));
+            on_exit client.close();
+            assertEq(big, client.readServerSentEvent("gzip", 5s).data);
+            assertEq("after", client.readServerSentEvent("gzip", 5s).data);
+        }
+
+        # an unknown content coding
+        {
+            Socket client = serveSseStream(binary("data: x\n\n"));
+            on_exit client.close();
+            assertThrows("COMPRESS-ERROR", \client.readServerSentEvent(), ("x-unknown", 5s));
+        }
+    }
+
+    #! An event that grows beyond the maximum event size raises SSE-EVENT-TOO-LARGE
+    sseMaxEventSizeTest() {
+        string event = "data: " + strmul("y", 10000) + "\n\n";
+        # the limit includes the field names and line endings
+        {
+            Socket client = serveSseStream(binary(event + event));
+            on_exit client.close();
+            assertEq(10000, client.readServerSentEvent(NOTHING, 5s, event.size()).data.size());
+            assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1000 bytes", \client.readServerSentEvent(),
+                (NOTHING, 5s, 1000));
+        }
+        # no limit
+        {
+            Socket client = serveSseStream(binary(event));
+            on_exit client.close();
+            assertEq(10000, client.readServerSentEvent("identity", 5s, 0).data.size());
+        }
+        # a compressed event that never ends: decompression stops at the limit
+        {
+            BinaryOutputStream bos();
+            TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+            tos.write(binary("data: "));
+            binary chunk = binary(strmul("z", 1024 * 1024));
+            for (int i = 0; i < 64; ++i) {
+                tos.write(chunk);
+            }
+            tos.close();
+            Socket client = serveSseStream(bos.getData());
+            on_exit client.close();
+            assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes",
+                sub () { client.readServerSentEvent("gzip", 30s, 1024 * 1024); });
+        }
     }
 
     concurrentSyncSendRecvTest() {
