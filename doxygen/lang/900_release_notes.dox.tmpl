@@ -2966,7 +2966,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref mcpserverhandlerintro "McpServerHandler" module
       - new module providing an <a href="https://modelcontextprotocol.io">MCP</a> server handler for use
-        with the @ref httpserverintro "HttpServer" module
+        with the @ref httpserverintro "HttpServer" module; tools can be registered from type descriptions, such as
+        those in the data provider index, without loading the modules that define the types, and tool input
+        schemas include the validation constraints of their types
 
     - @ref memcacheddataproviderintro "MemcachedDataProvider" module
       - new module providing a data provider API for <a href="https://memcached.org/">Memcached</a> caching servers

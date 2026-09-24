@@ -684,6 +684,33 @@ public class McpServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
         tmap{name} = getTool(name, desc, input, tool, input_initialized, extra, prov);
     }
 
+    #! Registers a tool whose input is described by a data type description
+    /** The tool's input schema is the same as that of @ref registerTool() for a type with this description, but no
+        type object is needed, so a tool can be registered from a description read from the data provider index
+        without loading the provider module that defines the type.
+
+        @param name the name of the tool
+        @param desc the description of the tool
+        @param input the description of the tool's input type, as returned by
+        @ref DataProvider::AbstractDataProviderType::getInfo() "AbstractDataProviderType::getInfo()", if any
+        @param tool the code to call the tool
+        @param input_initialized if the input has been fully initialized
+        @param extra extra free-form info to store for the tool
+        @param prov a data provider to resolve reference data for allowed values, if any
+
+        @par Example:
+        @code{.py}
+# the option's type is described in the data provider index; the Stripe module is not loaded
+hash<auto> action = ProviderIndexUtil::tryGetActionMetadata("Stripe", "create-customer");
+handler.registerToolWithTypeInfo("set-customer-address", "Sets a customer's address",
+    action.options.address.type_info, \setCustomerAddress());
+        @endcode
+    */
+    registerToolWithTypeInfo(string name, string desc, *hash<DataTypeInfo> input, code<auto(auto)> tool,
+            *bool input_initialized, *hash<auto> extra, *AbstractDataProvider prov) {
+        tmap{name} = getToolFromTypeInfo(name, desc, input, tool, input_initialized, extra, prov);
+    }
+
     #! Unregisters a tool
     /** @param name the name of the tool to unregister
         @return True if the tool was unregistered, False if it was not found
@@ -2497,30 +2524,65 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 MaxMcpToolNameLength);
         }
         *hash<auto> input_desc;
-        bool needs_map;
+        bool needs_map = False;
         if (input) {
             input_desc = getTypeDescriptionIntern("input", input, prov);
             debug("Creating tool %y (%y) input: %y (%s: %y) -> %y", name, desc, input ? input.getName() : "n/a",
                 input ? input.className() : "n/a", keys (input ? input.getFields() : NOTHING), input_desc);
-            # A wildcard input has no structure to publish.  An optional one keeps the no-input description it
-            # has always had, so its tool still receives the arguments hash; a mandatory one could not be
-            # published at all before, and is wrapped like any other non-object input
-            if (exists input_desc && !input_desc && !input.isMandatory()) {
-                remove input_desc;
-            }
-            if (exists input_desc && input_desc.type != "object") {
-                needs_map = True;
-                input_desc = {
-                    "type": "object",
-                    "properties": {
-                        "data": input_desc,
-                    },
-                };
-                if (input.isMandatory()) {
-                    input_desc.required = ("data",);
-                }
+            input_desc = getToolInputDescription(input_desc, input.isMandatory(), \needs_map);
+        }
+        return makeTool(name, desc, input_desc, needs_map, tool, input_initialized, extra);
+    }
+
+    #! Returns the tool for the given input type description
+    private hash<McpToolInfo> getToolFromTypeInfo(string name, string desc, *hash<DataTypeInfo> input,
+            code<auto(auto)> tool, *bool input_initialized, *hash<auto> extra, *AbstractDataProvider prov) {
+        if (name.length() > MaxMcpToolNameLength) {
+            throw "MCP-SERVER-ARG-ERROR", sprintf("Tool name %y is too long (max %y)", name,
+                MaxMcpToolNameLength);
+        }
+        *hash<auto> input_desc;
+        bool needs_map = False;
+        if (input) {
+            hash<string, hash<auto!>> memo;
+            input_desc = getTypeInfoDescriptionIntern("input", input, prov, \memo);
+            input_desc = getToolInputDescription(input_desc, input.mandatory, \needs_map);
+        }
+        return makeTool(name, desc, input_desc, needs_map, tool, input_initialized, extra);
+    }
+
+    #! Returns the tool's input schema for the given description of its input type
+    /** @param input_desc the JSON schema of the input type, if any
+        @param mandatory whether the input is mandatory
+        @param needs_map set to @ref True if the input is not an object and is wrapped in a \c "data" property
+
+        @return the tool's input schema, if any
+    */
+    private *hash<auto> getToolInputDescription(*hash<auto> input_desc, bool mandatory, reference<bool> needs_map) {
+        # A wildcard input has no structure to publish.  An optional one keeps the no-input description it
+        # has always had, so its tool still receives the arguments hash; a mandatory one could not be
+        # published at all before, and is wrapped like any other non-object input
+        if (exists input_desc && !input_desc && !mandatory) {
+            return;
+        }
+        if (exists input_desc && input_desc.type != "object") {
+            needs_map = True;
+            input_desc = {
+                "type": "object",
+                "properties": {
+                    "data": input_desc,
+                },
+            };
+            if (mandatory) {
+                input_desc.required = ("data",);
             }
         }
+        return input_desc;
+    }
+
+    #! Returns the tool info
+    private hash<McpToolInfo> makeTool(string name, string desc, *hash<auto> input_desc, bool needs_map,
+            code<auto(auto)> tool, *bool input_initialized, *hash<auto> extra) {
         return <McpToolInfo>{
             "name": name,
             "description": getToolDescription(name, input_initialized, extra, desc),
@@ -2630,15 +2692,15 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
                 };
             }
             tmap{uh} = True;
-            return getObjectDescription(fields, prov, tmap);
+            return McpServerHandler::addConstraints(getObjectDescription(fields, prov, tmap), t.getConstraints());
         }
         int type = t.getBaseTypeCode();
         if ((type == NT_LIST) && (*AbstractDataProviderType et = t.getElementType())
             && exists (*hash<auto> h = getTypeDescriptionIntern("items", et, prov, tmap))) {
-            return {
+            return McpServerHandler::addConstraints({
                 "type": "array",
                 "items": getTypeDescription("items", "array items", et, prov, tmap),
-            };
+            }, t.getConstraints());
         }
 
         hash<auto> info;
@@ -2707,7 +2769,190 @@ handler.registerUiResource("ui://weather/dashboard", "weather_dashboard",
         if (exists (auto v = t.getDefaultValue())) {
             info."default" = v;
         }
+        return McpServerHandler::addConstraints(info, t.getConstraints());
+    }
+
+    #! Adds the JSON schema keywords for the given validation constraints to a JSON schema
+    /** @param info the JSON schema
+        @param constraints the validation constraints of the type described by \a info, if any
+
+        @return the JSON schema with the keywords for the constraints that apply to its type
+    */
+    private static hash<auto> addConstraints(hash<auto> info, *hash<auto> constraints) {
+        if (!constraints) {
+            return info;
+        }
+        switch (info.type) {
+            case "integer":
+            case "number":
+                map info{$1.value} = constraints{$1.key}, {
+                    "minimum": "minimum", "maximum": "maximum", "exclusive_minimum": "exclusiveMinimum",
+                    "exclusive_maximum": "exclusiveMaximum", "multiple_of": "multipleOf",
+                }.pairIterator(), exists constraints{$1.key};
+                break;
+            case "string":
+                map info{$1.value} = constraints{$1.key}, {
+                    "min_length": "minLength", "max_length": "maxLength", "pattern": "pattern",
+                }.pairIterator(), exists constraints{$1.key};
+                # enumerated values are compared as strings, so they describe string values only
+                if (constraints.enum_values && !info."enum") {
+                    info."enum" = constraints.enum_values;
+                }
+                break;
+            case "array":
+                map info{$1.value} = constraints{$1.key}, {
+                    "min_items": "minItems", "max_items": "maxItems", "unique_items": "uniqueItems",
+                }.pairIterator(), exists constraints{$1.key};
+                break;
+            case "object":
+                map info{$1.value} = constraints{$1.key}, {
+                    "min_properties": "minProperties", "max_properties": "maxProperties",
+                }.pairIterator(), exists constraints{$1.key};
+                break;
+        }
         return info;
+    }
+
+    #! Returns the JSON schema for a type description; descriptions shared in the description are converted once
+    /** @param name the name of the value
+        @param info the type description
+        @param prov a data provider to resolve reference data for allowed values, if any
+        @param memo JSON schemas by unique key and name, for the duration of the conversion
+
+        @return the JSON schema, or @ref nothing if the value is omitted
+
+        @throw TOOL-ARG-ERROR the type cannot be described
+    */
+    private *hash<auto> getTypeInfoDescriptionIntern(string name, hash<auto> info, *AbstractDataProvider prov,
+            reference<hash<string, hash<auto!>>> memo) {
+        *string ck = info.unique_key.val() ? info.unique_key + "-" + name : NOTHING;
+        if (ck && (*hash<auto!> cached = memo{ck})) {
+            return cached.value;
+        }
+        *hash<auto> rv = getTypeInfoDescriptionImpl(name, info, prov, \memo);
+        if (ck) {
+            memo{ck} = {"value": rv};
+        }
+        return rv;
+    }
+
+    #! Returns the JSON schema for a type description, like getTypeDescriptionImpl() for a type object
+    private *hash<auto> getTypeInfoDescriptionImpl(string name, hash<auto> info, *AbstractDataProvider prov,
+            reference<hash<string, hash<auto!>>> memo) {
+        if (info.fields) {
+            return McpServerHandler::addConstraints(getObjectInfoDescription(info.fields, prov, \memo),
+                info.constraints);
+        }
+        # a type truncated by a cycle in its description
+        if (info.recursive && info.base_type == "hash") {
+            return {
+                "type": "object",
+            };
+        }
+        if (info.base_type == "list" && info.element_type
+            && exists (*hash<auto> h = getTypeInfoDescriptionIntern("items", info.element_type, prov, \memo))) {
+            return McpServerHandler::addConstraints({
+                "type": "array",
+                "items": getTypeInfoDescription("items", "array items", info.element_type, prov, \memo),
+            }, info.constraints);
+        }
+
+        hash<auto!> rv;
+        switch (info.base_type) {
+            case "date":
+            case "string":
+                rv.type = "string";
+                break;
+            case "int":
+                rv.type = "integer";
+                break;
+            case "bool":
+                rv.type = "boolean";
+                break;
+            case "number":
+            case "float":
+                rv.type = "number";
+                break;
+            case "list":
+                rv = {
+                    "type": "array",
+                    "items": {},
+                };
+                break;
+            case "hash":
+                rv.type = "object";
+                break;
+            case "binary":
+                rv = {
+                    "type": "string",
+                    "format": "base64",
+                };
+                break;
+            case "auto":
+            case "all":
+                rv = {};
+                break;
+            case "object":
+                if (!info.mandatory) {
+                    return;
+                }
+                throw "TOOL-ARG-ERROR", sprintf("Tool parameter %y requires a value of type %y", name,
+                    info.base_type);
+            case "nothing":
+            case "null":
+                return;
+            default:
+                throw "TOOL-ARG-ERROR", sprintf("Tool parameter %y has unsupported type %y (%s)", name,
+                    info.base_type, info.name);
+        }
+        if (exists info.default_value) {
+            rv."default" = info.default_value;
+        }
+        return McpServerHandler::addConstraints(rv, info.constraints);
+    }
+
+    #! Returns the JSON schema for a type description with the given description text
+    private *hash<auto> getTypeInfoDescription(string name, *string desc, hash<auto> info,
+            *AbstractDataProvider prov, reference<hash<string, hash<auto!>>> memo) {
+        *hash<auto> rv = getTypeInfoDescriptionIntern(name, info, prov, \memo);
+        if (exists rv && desc.val()) {
+            rv += {"description": desc};
+        }
+        return rv;
+    }
+
+    #! Returns the JSON schema for the field descriptions of an object, like getObjectDescription()
+    private hash<auto> getObjectInfoDescription(hash<auto> fields, *AbstractDataProvider prov,
+            reference<hash<string, hash<auto!>>> memo) {
+        hash<auto!> rv = {
+            "type": "object",
+        };
+        list<string> required;
+        foreach hash<auto> field in (fields.iterator()) {
+            *hash<auto> info = getTypeInfoDescription(field.name, field.short_desc, field.type, prov, \memo);
+            # NOTHING omits the field; an empty description is a field of any value
+            if (!exists info) {
+                continue;
+            }
+            if (field.type.mandatory) {
+                required += field.name;
+            }
+            *list<auto> av = field.allowed_values;
+            if (!av && prov && field.attr.ref_data.val()) {
+                av = prov.getReferenceDataSafe(field.attr.ref_data);
+            }
+            if (av) {
+                info."enum" = map $1.value, av;
+            }
+            if (exists field.default_value) {
+                info."default" = field.default_value;
+            }
+            rv.properties{field.name} = info;
+        }
+        if (required) {
+            rv.required = required;
+        }
+        return rv;
     }
 
     #

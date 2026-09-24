@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. SPDX-License-Identifier: MIT
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires json
+%requires QUnit
+%requires HttpServerUtil
+%requires DataProvider
+%requires McpServerHandler
+%exec-class McpServerHandlerTypeInfoTest
+
+#! Exposes the registered input schemas
+class TestMcpServerHandler inherits McpServerHandler {
+    constructor() : McpServerHandler(new PermissiveAuthenticator()) {
+    }
+
+    *hash<auto> getInput(string name) {
+        return tmap{name}.input;
+    }
+
+    bool getNeedsMap(string name) {
+        return tmap{name}.needs_map ?? False;
+    }
+}
+
+public class McpServerHandlerTypeInfoTest inherits QUnit::Test {
+    constructor() : Test("McpServerHandler tools from type descriptions", "1.0") {
+        addTestCase("a type description gives the schema of its type", \equivalenceTest());
+        addTestCase("constraints are published as JSON schema keywords", \constraintTest());
+        set_return_value(main());
+    }
+
+    #! Returns an input type covering the described kinds of values
+    private static HashDataType getInputType() {
+        HashDataType inner("Inner");
+        inner.addQoreFields({"flag": {"name": "flag", "type": AbstractDataProviderTypeMap."*bool"}});
+        HashDataType type("Input");
+        type.addQoreFields({
+            "name": {"name": "name", "type": AbstractDataProviderTypeMap."string",
+                "desc": "The name of the thing"},
+            "code": {"name": "code", "type": AbstractDataProviderTypeMap."softstring".copyWithConstraints(
+                <DataTypeConstraintInfo>{"min_length": 2, "max_length": 4, "pattern": "^[A-Z]"})},
+            "count": {"name": "count", "type": AbstractDataProviderTypeMap."*int".copyWithConstraints(
+                <DataTypeConstraintInfo>{"minimum": 1, "exclusive_maximum": 10})},
+            "tags": {"name": "tags", "type": (new ListDataType(AbstractDataProviderTypeMap."string", True))
+                .copyWithConstraints(<DataTypeConstraintInfo>{"max_items": 3, "unique_items": True})},
+            "mode": {"name": "mode", "type": AbstractDataProviderTypeMap."*string", "allowed_values": (
+                <AllowedValueInfo>{"value": "fast"}, <AllowedValueInfo>{"value": "slow"})},
+            "either": {"name": "either", "type": new QoreUnionDataType((AbstractDataProviderTypeMap."string",
+                AbstractDataProviderTypeMap."int"))},
+            "data": {"name": "data", "type": AbstractDataProviderTypeMap."*binary"},
+            "inner": {"name": "inner", "type": inner},
+        });
+        return type;
+    }
+
+    equivalenceTest() {
+        TestMcpServerHandler handler();
+        foreach AbstractDataProviderType type in ((getInputType(), AbstractDataProviderTypeMap."softint",
+                AbstractDataProviderTypeMap."*string", new ListDataType(AbstractDataProviderTypeMap."int"))) {
+            handler.registerTool("from-type", "a tool", type, sub (auto v) {});
+            handler.registerToolWithTypeInfo("from-info", "a tool", type.getInfo(), sub (auto v) {});
+            assertEq(make_json(handler.getInput("from-type")), make_json(handler.getInput("from-info")),
+                type.getName());
+            assertEq(handler.getNeedsMap("from-type"), handler.getNeedsMap("from-info"), type.getName());
+        }
+        # no input
+        handler.registerTool("from-type", "a tool", NOTHING, sub (auto v) {});
+        handler.registerToolWithTypeInfo("from-info", "a tool", NOTHING, sub (auto v) {});
+        assertEq(handler.getInput("from-type"), handler.getInput("from-info"));
+    }
+
+    constraintTest() {
+        TestMcpServerHandler handler();
+        handler.registerToolWithTypeInfo("tool", "a tool", getInputType().getInfo(), sub (auto v) {});
+        hash<auto> props = handler.getInput("tool").properties;
+        assertEq({"type": "string", "minLength": 2, "maxLength": 4, "pattern": "^[A-Z]"}, props.code);
+        assertEq({"type": "integer", "minimum": 1n, "exclusiveMaximum": 10n}, props.count);
+        assertEq(3, props.tags.maxItems);
+        assertTrue(props.tags.uniqueItems);
+        assertEq(("fast", "slow"), props.mode."enum");
+        assertEq({}, props.either);
+        assertEq(("name", "code", "either", "inner"), handler.getInput("tool").required);
+    }
+}
