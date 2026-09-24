@@ -131,6 +131,21 @@ server-controller shape in `dgc-scan-avoidance` walked half as much again (4,500
 3,000). `examples/test/qore/misc/dgc-deferred-scan-sets.qtest` covers the grown containers and the removals, for
 list and hash containers.
 
+### Members left behind by a replaced set
+
+A scan that replaces a recursive set releases the members of the old set that it did not reach (`tr_out` in
+`RSetHelper::commit()`). Such a member can be garbage: a cycle that was attached to the rest of the set only through
+a reference that has since been removed, for example a connection taken out of a manager's pool while the manager's
+scan was deferred. Its dereferences found the stale set, and no dereference may follow them, so nothing would ever
+recheck it. `commit()` therefore holds each such member that has no real reference and no more references than the
+old set counted as internal with a weak reference, and `RSetHelper::recheckOrphans()` rechecks it once the scan's
+locks are released, by taking and releasing a temporary reference (taken with a compare-and-swap only while the
+object still has references), like a watched node below. An object that the scan finds is no longer in a cycle
+(an acyclic component) loses its set in the same way, so `prepareCommit()` handles objects in acyclic components
+too, and the other members of their old sets reach `tr_out`.
+
+`examples/test/qlib/HttpClientIo/HttpClientIoRetiredConnection.qtest` covers a connection retired from a pool this way.
+
 ### Watched nodes
 
 Releasing an outside reference to a list, hash, closure or reference in a recursive set does not dereference any

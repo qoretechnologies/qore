@@ -1570,7 +1570,9 @@ bool RSetHelper::matchesComponent(RSet& rs, int component) {
 bool RSetHelper::prepareCommit() {
     int tid = q_gettid();
     for (const ScanNode& n : nodes) {
-        if (n.kind != NodeKind::Object || !component_cyclic[n.component]) {
+        // an object that is no longer in a cycle loses its set too: commit() assigns it none, and the members of
+        // that set that the scan did not reach have to be handled like those of a replaced set
+        if (n.kind != NodeKind::Object) {
             continue;
         }
         if (component_unchanged[n.component]) {
@@ -1781,6 +1783,35 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
 RSetHelper::~RSetHelper() {
     assert(!lcnt);
     releaseHeld();
+    recheckOrphans();
+}
+
+void RSetHelper::recheckOrphans() {
+    if (recheck_objects.empty()) {
+        return;
+    }
+    std::vector<RObject*> ovec;
+    ovec.swap(recheck_objects);
+    ExceptionSink tmp;
+    for (RObject* o : ovec) {
+        // a temporary reference to the object is released like any other reference, which rechecks its set, and
+        // collects it if it is garbage; it is only taken if the object still has references, and dereferences can
+        // release them with no lock (RObject::tryFastDeref()), so the test and the increment are one
+        // compare-and-swap
+        bool valid = false;
+        int r = o->references.load(std::memory_order_relaxed);
+        while (r > 0) {
+            if (o->references.compare_exchange_weak(r, r + 1, std::memory_order_acq_rel,
+                    std::memory_order_relaxed)) {
+                valid = true;
+                break;
+            }
+        }
+        if (valid) {
+            o->releaseCycleReference(xsink ? xsink : &tmp);
+        }
+        o->tDeref();
+    }
 }
 
 void RSetHelper::releaseHeld() {
@@ -1838,7 +1869,21 @@ void RSetHelper::commit() {
     // unlock rsection
     for (rset_t::iterator i = tr_out.begin(), e = tr_out.end(); i != e; ++i) {
         assert(node_map.find(*i) == node_map.end() || node_map.find(*i)->second < 0);
-        (*i)->rml.rSectionUnlock();
+        RObject* o = *i;
+        // A member of a replaced set that this scan did not reach can be garbage now: a cycle that was only
+        // attached to the rest of the set through a reference that has been removed - an object taken out of a
+        // container of the object this scan started at, whose scan was deferred while the set was stale.  Its
+        // dereferences found the stale set, which is kept until the deferred scan is made (see
+        // RObject::checkDeferScan()), and no dereference may follow it: with no real reference, and no more
+        // references than the set counted as internal, it is rechecked once the locks are released, like a watched
+        // member (see qore_dgc_node_dereferenced()).  A member that is still held from outside the set has more
+        // references than that, and is rechecked by its next dereference.
+        if (!o->rrefs.load(std::memory_order_acquire)
+                && o->references.load(std::memory_order_acquire) <= o->rcount) {
+            o->tRef();
+            recheck_objects.push_back(o);
+        }
+        o->rml.rSectionUnlock();
         deccnt();
     }
 
