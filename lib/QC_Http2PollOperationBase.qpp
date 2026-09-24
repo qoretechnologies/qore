@@ -744,11 +744,10 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 }
             } else {
                 ++drain_count;
-                info.queue->push(xsink, data);
-                if (*xsink) {
-                    data->deref(xsink);
-                    return;
-                }
+                // the queue takes the reference; a queue whose reader cancelled the body read (Queue::setError(),
+                // e.g. for a service stop) or that was deleted discards the value instead: data received for a
+                // body that is no longer read affects neither the other streams nor the connection
+                info.queue->pushAndTakeRef(data);
             }
         }
 
@@ -766,10 +765,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
             err->setKeyValue("err", new QoreStringNode("HTTP-BODY-TOO-LARGE"), xsink);
             err->setKeyValue("desc", new QoreStringNodeMaker("HTTP/2 request body on stream %d exceeds the "
                 "maximum request body size", stream_id), xsink);
-            info.queue->push(xsink, err.release());
-            if (*xsink) {
-                return;
-            }
+            info.queue->pushAndTakeRef(err.release());
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
                 data_ready_streams.push_back(stream_id);
@@ -787,10 +783,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 || sock->isHttp2StreamClosedForAsyncPoll(stream_id)
                 || !sock->isOpen()) {
             // Push NOTHING sentinel so the handler thread knows the stream is done
-            info.queue->push(xsink, QoreValue());
-            if (*xsink) {
-                return;
-            }
+            info.queue->pushAndTakeRef(QoreValue());
             // Also mark as data-ready so the handler wakes up for the sentinel
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
@@ -1173,8 +1166,12 @@ nothing Http2PollOperationBase::continueReading() {
     Qore interpreter calls.
 
     @param stream_id the HTTP/2 stream ID
-    @param queue the Queue for data delivery (unlimited)
+    @param queue the Queue for data delivery; must be unlimited (size -1); once the reader sets an error on the Queue
+    (@ref Qore::Thread::Queue::setError() "Queue::setError()", e.g. to cancel the read), the data received for the
+    stream is discarded
     @param notifier optional EventNotifier for cross-thread wake-up
+
+    @throw HTTP2-QUEUE-ERROR the Queue has a maximum size
 
     @note Must be called on the I/O controller thread before the handler starts reading.
 
@@ -1182,6 +1179,12 @@ nothing Http2PollOperationBase::continueReading() {
 */
 nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
+    // the I/O thread must never block pushing to the queue
+    if (queue->getMax() != -1) {
+        xsink->raiseException("HTTP2-QUEUE-ERROR", "the Queue passed to register a stream's body has a maximum size "
+            "of %d; an unlimited Queue (size -1) is required", queue->getMax());
+        return QoreValue();
+    }
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv
     Queue* queue_ptr = queue.release();
     // Ref the QoreObject for DGC preventing garbage collection

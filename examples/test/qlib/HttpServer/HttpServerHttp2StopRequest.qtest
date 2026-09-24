@@ -26,6 +26,9 @@
     the client to stop sending with RST_STREAM(NO_ERROR) after the response, and only then.  The tests speak raw
     HTTP/2 frames over a cleartext (prior knowledge) connection, so they see every frame the server sends and control
     exactly which request frames are sent.
+
+    Also covers a handler that cancels its body read (as AbstractStreamRequest does for a service stop) while the
+    client is still sending: the DATA that arrives afterwards must be discarded without affecting the connection.
 */
 
 %modern
@@ -53,6 +56,48 @@ class EarlyResponseHandler inherits AbstractHttpRequestHandler {
 class BodySizeHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(200, sprintf("%d", body ? body.size() : 0), {"Content-Type": "text/plain"});
+    }
+}
+
+#! reads the first body chunk, cancels the body read, and waits for the test before answering
+class CancelBodyHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! receives True when the body read has been cancelled
+        Queue cancelled();
+        #! the handler answers when this receives a value
+        Queue release();
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        Queue body_queue(-1);
+        cx."header-info".register_body_queue(body_queue);
+        auto chunk = body_queue.get(30s);
+        # a cancel from another thread, e.g. a service stop, sets an error on the body queue
+        body_queue.setError("TEST-CANCELLED", "the body read was cancelled");
+        cancelled.push(chunk instanceof binary);
+        release.get(30s);
+        return makeResponse(200, "cancelled", {"Content-Type": "text/plain"});
+    }
+}
+
+#! tries to register a bounded Queue for the request body and answers with the error
+class BoundedQueueHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string rv = "registered";
+        try {
+            cx."header-info".register_body_queue(new Queue(10));
+        } catch (hash<ExceptionInfo> ex) {
+            rv = ex.err;
+        }
+        return makeResponse(200, rv, {"Content-Type": "text/plain"});
     }
 }
 
@@ -87,6 +132,7 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
     private {
         HttpServer server;
         int port;
+        CancelBodyHandler cancel_handler();
     }
 
     constructor() : Test("HttpServerHttp2StopRequestTest", "1.0") {
@@ -95,6 +141,8 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         addTestCase("413 for an incomplete oversized request is followed by RST_STREAM(NO_ERROR)",
             \oversizedRequestTest());
         addTestCase("a response to a complete request is not followed by RST_STREAM", \completeRequestTest());
+        addTestCase("DATA for a cancelled body read is discarded", \cancelledBodyReadTest());
+        addTestCase("a bounded body Queue is rejected", \boundedQueueTest());
         set_return_value(main());
     }
 
@@ -109,6 +157,8 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         });
         server.setHandler("early", "/early", NOTHING, new EarlyResponseHandler(), NOTHING, False);
         server.setHandler("size", "/size", NOTHING, new BodySizeHandler(), NOTHING, False);
+        server.setHandler("cancel", "/cancel", NOTHING, cancel_handler, NOTHING, False);
+        server.setHandler("bounded", "/bounded", NOTHING, new BoundedQueueHandler(), NOTHING, False);
         port = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
             "service": 0,
@@ -168,6 +218,44 @@ class HttpServerHttp2StopRequestTest inherits QUnit::Test {
         s.send(frame(DATA, END_STREAM, 1, binary(strmul("x", ChunkSize))));
         list<hash<H2Frame>> frames = readResponse(s, 1);
         assertNoStop(s, frames, 1);
+    }
+
+    cancelledBodyReadTest() {
+        Socket s = connect();
+        on_exit s.close();
+        on_exit cancel_handler.release.push(True);
+
+        sendRequest(s, 1, "/cancel", False);
+        s.send(frame(DATA, 0, 1, binary(strmul("x", 1000))));
+        assertTrue(cancel_handler.cancelled.get(30s), "the handler received the first chunk before cancelling");
+
+        # DATA for the stream whose body read was cancelled, then a second request on the same connection; the
+        # server processes the connection's frames in order, so the DATA has been handled when stream 3 is
+        # answered
+        s.send(frame(DATA, 0, 1, binary(strmul("y", 1000))));
+        sendRequest(s, 3, "/size", True);
+        list<hash<H2Frame>> frames = readResponse(s, 3);
+        assertEq((), (select frames, $1.type == GOAWAY), "the connection is not closed");
+        list<hash<H2Frame>> stream = getStreamFrames(frames, 3);
+        assertEq(HEADERS, stream[0].type, "the second request is answered");
+        assertEq(END_STREAM, stream.last().flags & END_STREAM, "the second response is complete");
+
+        # the cancelled request is answered as well
+        cancel_handler.release.push(True);
+        frames = readResponse(s, 1);
+        stream = getStreamFrames(frames, 1);
+        assertEq(HEADERS, stream[0].type, "the cancelled request is answered");
+    }
+
+    boundedQueueTest() {
+        Socket s = connect();
+        on_exit s.close();
+
+        sendRequest(s, 1, "/bounded", False);
+        s.send(frame(DATA, END_STREAM, 1, binary("body")));
+        list<hash<H2Frame>> stream = getStreamFrames(readResponse(s, 1), 1);
+        binary body = foldl $1 + $2, (map $1.payload, stream, $1.type == DATA);
+        assertEq("HTTP2-QUEUE-ERROR", body.toString(), "the bounded Queue was rejected");
     }
 
     #! asserts that the frames of the stream are a complete response followed by RST_STREAM(NO_ERROR)

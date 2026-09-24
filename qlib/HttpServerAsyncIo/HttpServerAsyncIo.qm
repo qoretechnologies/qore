@@ -251,7 +251,10 @@ public namespace HttpServerAsyncIo {
           I/O thread pushes one binary value per inbound DATA chunk, and ends the body with either
           @ref nothing (END_STREAM) or, if the buffered body exceeds the maximum request body size, a hash
           with \c err (\c "HTTP-BODY-TOO-LARGE") and \c desc keys; the rest of such a body is discarded,
-          and the server resets the stream with \c NO_ERROR once the response is sent (RFC 9113 section 8.1)
+          and the server resets the stream with \c NO_ERROR once the response is sent (RFC 9113 section 8.1); a
+          Queue with a maximum size is rejected with \c HTTP2-QUEUE-ERROR; a reader can cancel the body read with
+          @ref Qore::Thread::Queue::setError() "Queue::setError()", after which the data received for the stream is
+          discarded
 
         For HTTP/3 connections, \c header_info contains:
         - \c http3: \c True for HTTP/3 requests
