@@ -1251,17 +1251,31 @@ struct qore_httpclient_priv {
         return conn_mgr;
     }
 
-    DLLLOCAL void dropConnMgr(bool close_old) {
-        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
-        {
-            std::lock_guard<std::mutex> lk(conn_mgr_lock);
-            old_mgr = std::move(conn_mgr);
-            conn_mgr.reset();
-        }
-        if (close_old && old_mgr) {
+    //! Detaches the connection manager; a new one is created on the next request
+    DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> detachConnMgr() {
+        std::lock_guard<std::mutex> lk(conn_mgr_lock);
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr = std::move(conn_mgr);
+        conn_mgr.reset();
+        return old_mgr;
+    }
+
+    //! Closes all connections of a detached connection manager
+    /** Closing a connection waits for the async I/O thread, which may need to lock this client's socket to close
+        it, so this must never be called with priv->m held.
+    */
+    DLLLOCAL static void closeDetachedConnMgr(const std::shared_ptr<HttpClientConnectionManagerBase>& old_mgr) {
+        if (old_mgr) {
             ExceptionSink xsink;
             old_mgr->closeAll(&xsink);
             xsink.clear();
+        }
+    }
+
+    //! Detaches the connection manager and optionally closes its connections; must not be called with priv->m held
+    DLLLOCAL void dropConnMgr(bool close_old) {
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr = detachConnMgr();
+        if (close_old) {
+            closeDetachedConnMgr(old_mgr);
         }
     }
 
@@ -1715,14 +1729,18 @@ struct qore_httpclient_priv {
         closeReferencedSocket(disconnect_unlocked_prepare_close());
     }
 
-    //! User-initiated conn_mgr reset.  Drains the pool so pending poll ops
-    //! get errors, and destroys the manager so a fresh one is created on the
-    //! next request.  Sets user_disconnect_in_progress which poll ops use
-    //! to distinguish user disconnect from other errors.  The flag stays
-    //! set until the next new conn_mgr is created (see getConnMgr).
-    DLLLOCAL void resetConnMgr() {
+    //! User-initiated conn_mgr reset; called with priv->m held
+    /** Detaches the manager so a fresh one is created on the next request, and returns it; the caller drains its
+        pool with closeDetachedConnMgr() after releasing priv->m, so pending poll ops get errors.  The pool is not
+        drained here: closing a connection waits for the async I/O thread, which may be waiting for priv->m to close
+        this client's own socket for another thread.
+
+        Sets user_disconnect_in_progress which poll ops use to distinguish user disconnect from other errors.  The
+        flag stays set until the next new conn_mgr is created (see getConnMgr).
+    */
+    DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> resetConnMgr() {
         user_disconnect_in_progress.store(true, std::memory_order_release);
-        dropConnMgr(true);
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr = detachConnMgr();
         // Flag stays set — cleared on next getConnMgr() that creates
         // a new manager.  This ensures poll ops whose futures are
         // rejected asynchronously (after resetConnMgr returns) still
@@ -1731,6 +1749,7 @@ struct qore_httpclient_priv {
         // set them again for the new manager's protocol.
         http2_active = false;
         http3_active = false;
+        return old_mgr;
     }
 
     DLLLOCAL int adoptH1SocketIntoMsock(Http1ClientConnection* h1, bool detach_manager,
@@ -4700,6 +4719,7 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
 
 int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  {
     qore_socket_private* close_priv = nullptr;
+    std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     int rc;
 
     {
@@ -4716,8 +4736,9 @@ int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  
         } else {
             rc = http_priv->setProxyUrlUnlocked(proxy, xsink);
         }
-        http_priv->resetConnMgr();
+        old_mgr = http_priv->resetConnMgr();
     }
+    qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     return rc;
 }
@@ -4743,12 +4764,14 @@ QoreStringNode* QoreHttpClientObject::getSafeProxyURL()  {
 
 void QoreHttpClientObject::clearProxyURL() {
     qore_socket_private* close_priv = nullptr;
+    std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     {
         SafeLocker sl(priv->m);
         close_priv = http_priv->disconnect_unlocked_prepare_close();
         http_priv->proxy_connection.clear();
-        http_priv->resetConnMgr();
+        old_mgr = http_priv->resetConnMgr();
     }
+    qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
@@ -4825,13 +4848,16 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
 
 void QoreHttpClientObject::disconnect() {
     qore_socket_private* close_priv = nullptr;
+    std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     {
         SafeLocker sl(priv->m);
         close_priv = http_priv->disconnect_unlocked_prepare_close();
         // User-initiated disconnect: reset conn_mgr so pending poll ops fail
         // with SOCKET-NOT-OPEN and new connections are created on next request
-        http_priv->resetConnMgr();
+        old_mgr = http_priv->resetConnMgr();
     }
+    // the connections are closed after the lock is released; see qore_httpclient_priv::resetConnMgr()
+    qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
@@ -9673,12 +9699,14 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
 
 void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
     qore_socket_private* close_priv = nullptr;
+    std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
     {
         AutoLocker al(priv->m);
         close_priv = http_priv->disconnect_unlocked_prepare_close();
-        http_priv->resetConnMgr();
+        old_mgr = http_priv->resetConnMgr();
         priv->invalidate();
     }
+    qore_httpclient_priv::closeDetachedConnMgr(old_mgr);
     qore_httpclient_priv::closeReferencedSocket(close_priv);
     http_priv->getEventSink()->clear(xsink);
     priv->socket->cleanup(xsink);
