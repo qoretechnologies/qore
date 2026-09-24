@@ -1881,7 +1881,8 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 
     @return SseMessageInfo hash or NOTHING for EOF
 
-    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size
+    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size; the rest of a streamed response cannot be
+    read, so the response is abandoned by disconnecting the client (see disconnect())
 
     @since %Qore 3.0
 */
@@ -1889,9 +1890,10 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
         int max_event_size = 0) [flags=NAMED_ARGS] {
     // a negative value means no limit
     int64 max = max_event_size ? max_event_size : client->getMaxSseEventSize();
+    bool eof;
     ReferenceHolder<QoreHashNode> rv(
-        client->readServerSentEventConnMgr(content_encoding, timeout_ms, max, xsink), xsink);
-    if (*xsink) {
+        client->readServerSentEventConnMgr(content_encoding, timeout_ms, max, eof, xsink), xsink);
+    if (*xsink || eof) {
         return QoreValue();
     }
     if (rv) {
@@ -1908,15 +1910,17 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
     @param timeout_ms timeout for the read operation
     @return SseMessageInfo hash or NOTHING for EOF
 
-    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size
+    @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size; the rest of a streamed response cannot be
+    read, so the response is abandoned by disconnecting the client (see disconnect())
 
     @since %Qore 3.0
 */
 *hash<SseMessageInfo> HTTPClient::readServerSentEvent(timeout timeout_ms = -1) {
     int64 max = client->getMaxSseEventSize();
+    bool eof;
     ReferenceHolder<QoreHashNode> rv(
-        client->readServerSentEventConnMgr(nullptr, timeout_ms, max, xsink), xsink);
-    if (*xsink) {
+        client->readServerSentEventConnMgr(nullptr, timeout_ms, max, eof, xsink), xsink);
+    if (*xsink || eof) {
         return QoreValue();
     }
     if (rv) {
@@ -1929,6 +1933,10 @@ hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS]
 //! Reads a full HTTP chunked body; overrides Socket::readHTTPChunkedBody to support conn_mgr
 /** @param timeout_ms timeout for the read operation
     @return hash with "body" key containing the accumulated body
+
+    @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body exceeds the maximum response body size (see
+    setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
+
     @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -1945,6 +1953,10 @@ hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED
 //! Reads a full HTTP chunked body as binary; overrides Socket::readHTTPChunkedBodyBinary
 /** @param timeout_ms timeout for the read operation
     @return hash with "body" key containing the accumulated binary body
+
+    @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body exceeds the maximum response body size (see
+    setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
+
     @since %Qore 3.0
 */
 hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
@@ -1965,6 +1977,9 @@ hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags
     @param size number of bytes to read; 0 = read all available
     @param timeout_ms timeout for the read operation
     @return binary data
+
+    @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE a streamed response body read at once exceeds the maximum response
+    body size (see setMaxResponseBodySize()); the response is abandoned by disconnecting the client (see disconnect())
 
     @since %Qore 3.0
 */

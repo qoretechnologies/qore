@@ -738,13 +738,17 @@ public:
         @param timeout_ms timeout in milliseconds; -1 = use default
         @param max_event_size the maximum size of an event in bytes; <= 0 means no limit; a larger event raises
         \c SSE-EVENT-TOO-LARGE
+        @param eof set to true if the conn_mgr stream ended, in which case there are no more events, and false
+        otherwise
         @param xsink exception sink
-        @return SseMessageInfo hash or nullptr for EOF
+        @return SseMessageInfo hash, or nullptr if there are no more events (\a eof is true), if no conn_mgr
+        streaming channel is active (\a eof is false; the event is then read from the raw socket), or if an
+        exception was raised
 
         @since %Qore 3.0
     */
     DLLEXPORT QoreHashNode* readServerSentEventConnMgr(const QoreStringNode* content_encoding,
-        int timeout_ms, int64 max_event_size, ExceptionSink* xsink);
+        int timeout_ms, int64 max_event_size, bool& eof, ExceptionSink* xsink);
 
     //! Returns the default maximum size of a server-sent event in bytes
     /** @return the maximum response body size if set (see setMaxResponseBodySize()), otherwise

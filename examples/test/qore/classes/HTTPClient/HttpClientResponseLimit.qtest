@@ -211,6 +211,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HTTP/2", \http2Test());
         addTestCase("HTTP/3", \http3Test());
         addTestCase("server-sent events", \sseTest());
+        addTestCase("streamed body read at once", \streamedBodyTest());
         set_return_value(main());
     }
 
@@ -568,6 +569,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(128 * 1024 * 1024, getClient(0).getMaxSseEventSize());
         assertEq(Limit, getClient().getMaxSseEventSize());
 
+        # the rest of the stream cannot be read after an event that is too large, so the response is abandoned
+        {
+            HTTPClient hc = getClient();
+            hash<auto> info;
+            hc.sendAndStream("GET", "/sse-big/" + (Limit * 2), NOTHING, NOTHING, \info);
+            assertThrows("SSE-EVENT-TOO-LARGE", \hc.readServerSentEvent(), (NOTHING, 30s));
+            # no stream is left to read from
+            assertThrows("SOCKET-NOT-OPEN", \hc.readHTTPChunk(), 30s);
+        }
+
         # a compressed event that never ends: decompression stops at the limit
         *int peak = getPeakMemory();
         assertThrows("SSE-EVENT-TOO-LARGE", "maximum event size of 1048576 bytes", \readEvents(),
@@ -615,5 +626,27 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     http3Test() {
         checkMultiplexed(getTlsClient("3", "HTTP/3"));
+    }
+
+    streamedBodyTest() {
+        # a streamed response body read at once is received into memory, so it is limited
+        foreach string path in (("/chunked/", "/close/")) {
+            HTTPClient hc = getClient();
+            hash<auto> info;
+            hc.sendAndStream("GET", path + (Limit * 2), NOTHING, NOTHING, \info);
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "maximum response body size of " + Limit,
+                \hc.recvBinary(), NOTHING, path);
+            # the response is abandoned, so no stream is left to read from
+            assertThrows("SOCKET-NOT-OPEN", \hc.readHTTPChunk(), 30s, path);
+
+            hc = getClient();
+            hc.sendAndStream("GET", path + (Limit * 2), NOTHING, NOTHING, \info);
+            assertThrows("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "maximum response body size of " + Limit,
+                \hc.readHTTPChunkedBody(), NOTHING, path);
+
+            hc = getClient();
+            hc.sendAndStream("GET", path + Limit, NOTHING, NOTHING, \info);
+            assertEq(Limit, hc.readHTTPChunkedBodyBinary().body.size(), path);
+        }
     }
 }

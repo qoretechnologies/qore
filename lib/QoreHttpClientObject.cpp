@@ -9248,7 +9248,8 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
 }
 
 QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringNode* content_encoding,
-        int timeout_ms, int64 max_event_size, ExceptionSink* xsink) {
+        int timeout_ms, int64 max_event_size, bool& eof, ExceptionSink* xsink) {
+    eof = false;
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readServerSentEvent", xsink);
     if (*xsink) {
         return nullptr;
@@ -9256,19 +9257,27 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 
     const char* alg = CompressionTransforms::getContentCodingAlgorithm(content_encoding
         ? content_encoding->c_str() : nullptr);
+    // true once the stream has been read from the channel; if the channel is then gone, the stream has ended
+    bool reading = false;
     while (true) {
         // process received data until an event is complete
         std::string event_text;
         {
             SafeLocker sl(priv->m);
             if (!http_priv->streaming_recv_channel) {
+                eof = reading;
                 return nullptr;
             }
-            if (http_priv->setupSseDecoder(alg, xsink)) {
-                return nullptr;
+            reading = true;
+            int rc = http_priv->setupSseDecoder(alg, xsink);
+            if (!rc) {
+                rc = http_priv->processSseData(event_text, max_event_size, xsink);
             }
-            int rc = http_priv->processSseData(event_text, max_event_size, xsink);
             if (rc < 0) {
+                // the rest of the stream cannot be read, and the connection would otherwise keep receiving it into
+                // the channel
+                sl.unlock();
+                disconnect();
                 return nullptr;
             }
             if (rc > 0) {
@@ -9284,6 +9293,8 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
             return nullptr;
         }
         if (!chunk) {
+            // the channel was closed while reading
+            eof = true;
             return nullptr;
         }
 
@@ -9299,6 +9310,7 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
                 QoreString event_str(remaining.c_str(), remaining.size(), QCS_UTF8);
                 return parseSseEvent(xsink, event_str);
             }
+            eof = true;
             return nullptr;
         }
 
@@ -9316,6 +9328,8 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
         if (len) {
             SafeLocker sl(priv->m);
             if (!http_priv->streaming_recv_channel) {
+                // the channel was closed while reading
+                eof = true;
                 return nullptr;
             }
             http_priv->sse_recv_buffer.append(ptr, len);
@@ -9342,11 +9356,12 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
     }
 
     // Drain all chunks into a string
-    QoreStringNode* body = new QoreStringNode();
+    // the body is received into memory, so it is limited like a body that is returned whole
+    int64 max_size = getMaxResponseBodySize();
+    SimpleRefHolder<QoreStringNode> body(new QoreStringNode());
     while (true) {
         ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
         if (*xsink) {
-            body->deref(xsink);
             return nullptr;
         }
         if (!chunk) {
@@ -9363,10 +9378,18 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
             QoreStringValueHelper str(body_val);
             body->concat(str->c_str(), str->size());
         }
+        if (max_size > 0 && static_cast<int64>(body->size()) > max_size) {
+            xsink->raiseException("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "the response body of at least %lld bytes "
+                "exceeds the maximum response body size of %lld bytes", static_cast<long long>(body->size()),
+                static_cast<long long>(max_size));
+            // abandon the response, as the connection would otherwise keep receiving it into the channel
+            disconnect();
+            return nullptr;
+        }
     }
 
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-    result->setKeyValue("body", body, xsink);
+    result->setKeyValue("body", body.release(), xsink);
     return result.release();
 }
 
@@ -9384,11 +9407,12 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
     }
 
     // Drain all chunks into a binary node
-    BinaryNode* body = new BinaryNode();
+    // the body is received into memory, so it is limited like a body that is returned whole
+    int64 max_size = getMaxResponseBodySize();
+    SimpleRefHolder<BinaryNode> body(new BinaryNode());
     while (true) {
         ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
         if (*xsink) {
-            body->deref(xsink);
             return nullptr;
         }
         if (!chunk) {
@@ -9405,10 +9429,18 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout
             QoreStringValueHelper str(body_val);
             body->append(str->c_str(), str->size());
         }
+        if (max_size > 0 && static_cast<int64>(body->size()) > max_size) {
+            xsink->raiseException("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "the response body of at least %lld bytes "
+                "exceeds the maximum response body size of %lld bytes", static_cast<long long>(body->size()),
+                static_cast<long long>(max_size));
+            // abandon the response, as the connection would otherwise keep receiving it into the channel
+            disconnect();
+            return nullptr;
+        }
     }
 
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-    result->setKeyValue("body", body, xsink);
+    result->setKeyValue("body", body.release(), xsink);
     return result.release();
 }
 
