@@ -652,9 +652,12 @@ response, the `SendStreamResponse` completion, and the streamed `send_callback`/
 connection's dedicated thread, which sends its responses itself, hands a connection that must close to
 `HttpServer::closeConnectionAfterResponse()` (`HttpAsyncSocketIoController::closeConnection()`), in the same way as it
 hands a connection that stays open to `returnConnectionToAsyncIo()`; the initial persistent response returns
-`close` to the controller.  Not covered: a response that a handler wrote to the socket itself outside of a persistent
-session (`processNativeRequest()` returns an empty result, and the socket may still be in the handler's use), and
-HTTP/2 connection closes after GOAWAY.
+`close` to the controller.  A response that a handler writes to the socket itself (an `AbstractStreamRequest`
+returning `reply_sent`) is covered as well: on HTTP/1.x, `handleRequest()` marks it sent and `translateToRequestResult()`
+returns `close` or keep-alive as for any other response.  The empty result that `processNativeRequest()` returns for
+a response "sent directly by the handler" is only reached for HTTP/2 and HTTP/3 streams (the connection stays open),
+and a WebSocket upgrade is a dedicated connection that closes itself.  HTTP/2 connections are not affected: the server
+never closes one after a response (no GOAWAY is sent), and responses travel on streams.
 
 `examples/test/qore/classes/Socket/SocketLingeringClose.qtest` tests the operation; `HttpServerLingeringClose.qtest`
 tests the server, asserting on the controller's DEBUG record of each lingering close (bytes discarded, whether the

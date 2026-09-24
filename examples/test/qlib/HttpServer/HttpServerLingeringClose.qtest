@@ -168,6 +168,29 @@ class PersistentHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! writes its response to the socket itself and reports it with reply_sent
+class SelfReplyRequest inherits AbstractStreamRequest {
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    hash<HttpHandlerResponseInfo> handleRequest() {
+        s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain", "Connection": "close"}, "self-reply");
+        return <HttpHandlerResponseInfo>{"code": 200, "reply_sent": True};
+    }
+}
+
+#! a handler whose stream request sends the response itself
+class SelfReplyHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new SelfReplyRequest(listener, self, s, cx, hdr, body);
+    }
+}
+
 class HttpServerLingeringCloseTest inherits QUnit::Test {
     private {
         LingeringCloseCapture capture();
@@ -186,6 +209,7 @@ class HttpServerLingeringCloseTest inherits QUnit::Test {
         addTestCase("Connection: close with nothing unread", \nothingUnreadTest());
         addTestCase("client that does not close its side", \clientDoesNotCloseTest());
         addTestCase("TLS", \tlsTest());
+        addTestCase("response sent by the handler itself", \selfReplyTest());
         addTestCase("persistent connection: the first request has the close option", \persistentFirstRequestTest());
         addTestCase("persistent connection: a later request has the close option", \persistentLaterRequestTest());
         addTestCase("persistent connection: the session end request has the close option",
@@ -205,6 +229,7 @@ class HttpServerLingeringCloseTest inherits QUnit::Test {
         });
         server.setDefaultHandler("path", new PathHandler());
         server.setHandler("persist", "/persist", NOTHING, new PersistentHandler(), NOTHING, False);
+        server.setHandler("self-reply", "/self-reply", NOTHING, new SelfReplyHandler(), NOTHING, False);
         port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
         ssl_port = server.addListener(<HttpListenerOptionInfo>{
             "node": "127.0.0.1",
@@ -310,6 +335,24 @@ class HttpServerLingeringCloseTest inherits QUnit::Test {
         hash<auto> info = getLingeringClose();
         # the unread record, as encrypted on the wire, and the client's closing alert
         assertGt(16384, info.discarded, "the unread data was discarded");
+        assertTrue(info.peer_closed, "the connection ended when the client closed it");
+    }
+
+    #! a handler that writes the response to the socket itself; the request requires the connection to close
+    selfReplyTest() {
+        Socket s = connect(port);
+        on_exit s.close();
+
+        string pipelined = "GET /second HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        s.send("GET /self-reply HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" + pipelined);
+        hash<auto> resp = readResponse(s);
+        assertEq(200, resp.status_code);
+        assertEq("self-reply", resp.body, "the handler's response is read");
+        assertThrows("SOCKET-CLOSED", \s.recv(), (1, 10s), "the response is followed by the end of the stream");
+        s.close();
+
+        hash<auto> info = getLingeringClose();
+        assertEq(pipelined.size(), info.discarded, "the pipelined request was discarded");
         assertTrue(info.peer_closed, "the connection ended when the client closed it");
     }
 
