@@ -79,7 +79,17 @@ void ThreadPoolThread::worker(ExceptionSink* xsink) {
         // Task complete — decrement thread_counter that was incremented at submit time
         thread_counter.dec();
 
-        if (stopflag || tp.done(this)) {
+        if (stopflag) {
+            break;
+        }
+        // ThreadPool::done() takes the pool's lock, and ThreadPool::worker() takes this thread's lock while it holds
+        // the pool's (submit(), stop(), stopWait()), so the pool's lock must not be requested while this one is
+        // held.  Once done() has returned this thread to the idle list, the pool can hand it a task or stop it
+        // before the lock is taken again; the loop condition sees either.
+        sl.unlock();
+        int rc = tp.done(this);
+        sl.lock();
+        if (rc) {
             break;
         }
     }

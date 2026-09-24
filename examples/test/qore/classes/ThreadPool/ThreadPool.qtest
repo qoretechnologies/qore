@@ -38,7 +38,59 @@ class ThreadPoolTest inherits QUnit::Test {
         addTestCase("ref test", \refTest());
         addTestCase("stopWait() test", \stopWaitTest());
         addTestCase("ThreadPoolTest", \ThreadPoolTest());
+        addTestCase("rapid worker reuse", \rapidReuseTest());
+        addTestCase("idle release under load", \idleReleaseTest());
+        addTestCase("stopWait() with busy workers", \stopWaitBusyTest());
         set_return_value(main());
+    }
+
+    #! a worker is handed a new task right after it returns itself to the idle list
+    /** A worker returns itself to the pool with ThreadPool::done() without holding its own lock, so the pool can
+        hand it a task before it waits for one; the task must still run exactly once.
+    */
+    rapidReuseTest() {
+        int n = 0;
+        Mutex m();
+        ThreadPool tp(2, 0, 1);
+        for (int i = 0; i < 1000; ++i) {
+            tp.submit(sub () { m.lock(); on_exit m.unlock(); ++n; });
+        }
+        tp.stopWait();
+        assertEq(1000, n);
+    }
+
+    #! idle workers are released while other workers return themselves to the idle list
+    idleReleaseTest() {
+        int n = 0;
+        Mutex m();
+        ThreadPool tp(4, 0, 4, 1ms);
+        for (int round = 0; round < 20; ++round) {
+            Counter done(10);
+            for (int i = 0; i < 10; ++i) {
+                tp.submit(sub () { m.lock(); on_exit m.unlock(); ++n; done.dec(); });
+            }
+            done.waitForZero();
+        }
+        tp.stopWait();
+        assertEq(200, n);
+    }
+
+    #! the pool is stopped while its workers are still running tasks
+    stopWaitBusyTest() {
+        int n = 0;
+        Mutex m();
+        Counter started(4);
+        Counter go(1);
+        ThreadPool tp(4, 0, 2);
+        for (int i = 0; i < 4; ++i) {
+            tp.submit(sub () { started.dec(); go.waitForZero(); m.lock(); on_exit m.unlock(); ++n; });
+        }
+        # a task queued behind the busy workers runs before the pool stops
+        tp.submit(sub () { m.lock(); on_exit m.unlock(); ++n; });
+        started.waitForZero();
+        background sub () { go.dec(); }();
+        tp.stopWait();
+        assertEq(5, n);
     }
 
     # issue #3939

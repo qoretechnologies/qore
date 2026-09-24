@@ -69,7 +69,7 @@ int qore_rsection_priv::tryRSectionLockNotifyWaitRead(RNotifier* rn) {
             return -1;
         }
 
-        if (!rs_shared) {
+        if (!rs_shared.load(std::memory_order_relaxed)) {
             break;
         }
 
@@ -122,7 +122,7 @@ int qore_rsection_priv::tryRSectionLockSharedNotifyWaitRead(RNotifier* rn, bool&
 
     // grab the read lock and the rsection in shared mode
     ++readers;
-    ++rs_shared;
+    rs_shared.fetch_add(1, std::memory_order_relaxed);
     shared = true;
     return 0;
 }

@@ -112,7 +112,7 @@ public:
         AutoLocker al(l);
         assert(write_tid == -1);
 
-        while (rs_tid != -1 || rs_shared) {
+        while (rs_tid != -1 || rs_shared.load(std::memory_order_relaxed)) {
             ++rsection_waiting;
             rsection_cond.wait(l);
             --rsection_waiting;
@@ -135,12 +135,12 @@ public:
         // Threads that registered a notification while this thread also held the write lock cannot
         // acquire the rsection until that lock is released, and qore_var_rwlock_priv::unlock() notifies
         // them then; waking them here would only make them restart their scans and register again.
-        if (write_tid == -1 && !rs_shared) {
+        if (write_tid == -1 && !rs_shared.load(std::memory_order_relaxed)) {
             qore_rsection_priv::notifyIntern();
         }
 
         // a thread waiting for the rsection can only take it once no shared holder is left
-        if (rsection_waiting && !rs_shared)
+        if (rsection_waiting && !rs_shared.load(std::memory_order_relaxed))
             rsection_cond.signal();
 
         if (!--readers)
@@ -152,10 +152,10 @@ public:
         AutoLocker al(l);
         assert(write_tid == -1);
         assert(rs_tid == -1);
-        assert(rs_shared > 0);
+        assert(rs_shared.load(std::memory_order_relaxed) > 0);
         assert(readers);
 
-        if (!--rs_shared) {
+        if (rs_shared.fetch_sub(1, std::memory_order_relaxed) == 1) {
             // the rsection is free now, so scans and threads waiting for it can take it
             qore_rsection_priv::notifyIntern();
             if (rsection_waiting) {
@@ -177,7 +177,7 @@ public:
 
     //! Returns true if the rsection is held, in either mode; for assertions only
     DLLLOCAL bool checkRSectionHeld(int tid = q_gettid()) {
-        return checkRSectionExclusive(tid) || rs_shared > 0;
+        return checkRSectionExclusive(tid) || rs_shared.load(std::memory_order_relaxed) > 0;
     }
 
     DLLLOCAL int rSectionTid() const {
@@ -194,7 +194,8 @@ protected:
 
     // the number of scans holding the rsection in shared mode; they exclude writers and exclusive holders
     // but not each other
-    int rs_shared = 0;
+    // written under l; atomic because checkRSectionHeld() reads it without l
+    std::atomic_int rs_shared{0};
 
     // rsection condition variablt
     QoreCondition rsection_cond;
@@ -211,7 +212,7 @@ protected:
     }
 
     DLLLOCAL void setNotificationIntern(RNotifier* rn) {
-        assert(write_tid != -1 || rs_tid != -1 || rs_shared || rsection_waiting);
+        assert(write_tid != -1 || rs_tid != -1 || rs_shared.load(std::memory_order_relaxed) || rsection_waiting);
         list.push_back(rn);
         rn->owner_tid = write_tid != -1 ? write_tid : rs_tid;
         rn->set();
