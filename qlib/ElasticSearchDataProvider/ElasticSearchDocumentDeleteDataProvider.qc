@@ -119,7 +119,7 @@ public class ElasticSearchDocumentDeleteDataProvider inherits ElasticSearchDataP
 }
 
 #! Document delete API request data type
-class ElasticSearchDocumentDeleteRequestDataType inherits DataProvider::HashDataType {
+public class ElasticSearchDocumentDeleteRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {

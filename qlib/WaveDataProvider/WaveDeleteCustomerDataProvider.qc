@@ -26,7 +26,7 @@
 public namespace WaveDataProvider {
 
 #! Request type for deleting a customer
-class WaveDeleteCustomerRequestDataType inherits HashDataType {
+public class WaveDeleteCustomerRequestDataType inherits HashDataType {
     private {
         const Fields = {
             "id": {
@@ -45,7 +45,7 @@ class WaveDeleteCustomerRequestDataType inherits HashDataType {
 }
 
 #! Response type for deleting a customer
-class WaveDeleteCustomerResponseDataType inherits HashDataType {
+public class WaveDeleteCustomerResponseDataType inherits HashDataType {
     private {
         const Fields = {
             "didSucceed": {

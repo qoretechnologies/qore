@@ -118,7 +118,7 @@ public class ElasticSearchIndexDeleteDataProvider inherits ElasticSearchDataProv
 }
 
 #! Index delete API request data type
-class ElasticSearchIndexDeleteRequestDataType inherits DataProvider::HashDataType {
+public class ElasticSearchIndexDeleteRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {

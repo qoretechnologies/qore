@@ -26,7 +26,7 @@
 public namespace WaveDataProvider {
 
 #! Request type for executing an arbitrary GraphQL query
-class WaveExecuteGraphQLRequestDataType inherits HashDataType {
+public class WaveExecuteGraphQLRequestDataType inherits HashDataType {
     private {
         const Fields = {
             "query": {

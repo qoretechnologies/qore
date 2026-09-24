@@ -117,8 +117,8 @@ public class ElasticSearchPipelineDeleteDataProvider inherits ElasticSearchDataP
     }
 }
 
-#! Pipeline delete API response
-class ElasticSearchPipelineDeleteRequestDataType inherits HashDataType {
+#! Pipeline delete API request data type
+public class ElasticSearchPipelineDeleteRequestDataType inherits HashDataType {
     private {
         #! Field descriptions
         const Fields = {

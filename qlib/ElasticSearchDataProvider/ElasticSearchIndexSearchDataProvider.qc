@@ -130,7 +130,7 @@ public class ElasticSearchIndexSearchDataProvider inherits ElasticSearchDataProv
 }
 
 #! ElasticSearch index search API request
-class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataType {
+public class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {
@@ -807,7 +807,7 @@ class ElasticSearchIndexSearchRequestDataType inherits DataProvider::HashDataTyp
 }
 
 #! ElasticSearch index search API response
-class ElasticSearchIndexSearchResponseDataType inherits DataProvider::HashDataType {
+public class ElasticSearchIndexSearchResponseDataType inherits DataProvider::HashDataType {
     #! Creates the object
     constructor() {
         setDefaultOtherFieldType(new ElasticSearchIndexDataTypeBase());

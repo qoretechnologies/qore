@@ -207,7 +207,7 @@ public class OpenSearchIndexReadRequestDataType inherits DataProvider::HashDataT
 }
 
 #! OpenSearch index read API response
-class OpenSearchIndexReadResponseDataType inherits HashDataType {
+public class OpenSearchIndexReadResponseDataType inherits HashDataType {
     #! Creates the object
     constructor() {
         setDefaultOtherFieldType(new OpenSearchIndexDataTypeBase());

@@ -26,7 +26,7 @@
 public namespace WaveDataProvider {
 
 #! Request type for creating an income or expense entry
-class WaveIncomeExpenseCreateDataType inherits HashDataType {
+public class WaveIncomeExpenseCreateDataType inherits HashDataType {
     private {
         const Fields = {
             "businessId": {

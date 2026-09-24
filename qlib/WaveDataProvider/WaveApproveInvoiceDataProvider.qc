@@ -26,7 +26,7 @@
 public namespace WaveDataProvider {
 
 #! Request type for approving an invoice
-class WaveApproveInvoiceRequestDataType inherits HashDataType {
+public class WaveApproveInvoiceRequestDataType inherits HashDataType {
     private {
         const Fields = {
             "invoiceId": {

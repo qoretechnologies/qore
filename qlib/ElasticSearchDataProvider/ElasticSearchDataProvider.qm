@@ -261,6 +261,8 @@ module ElasticSearchDataProvider {
     - minimum `json` module version bumped to 1.11 (the version that introduced NDJSON
       support); environments on older `json` will now get a clearer error pointing at the
       version requirement instead of silently running the old slow path
+    - the request and response data type classes are now public, so types serialized in a provider index can be
+      restored by programs that import the module
 
     @subsection elasticsearchdataprovider_v1_1 ElasticSearchDataProvider v1.1
     - added support for the data provider action catalog API

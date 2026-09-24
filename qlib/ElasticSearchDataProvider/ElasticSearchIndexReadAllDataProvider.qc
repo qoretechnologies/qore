@@ -118,7 +118,7 @@ public class ElasticSearchIndexReadAllDataProvider inherits ElasticSearchDataPro
 }
 
 #! ElasticSearch index read-all API request
-class ElasticSearchIndexReadAllRequestDataType inherits DataProvider::HashDataType {
+public class ElasticSearchIndexReadAllRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = ElasticSearchIndexReadRequestDataType::Fields - "name";

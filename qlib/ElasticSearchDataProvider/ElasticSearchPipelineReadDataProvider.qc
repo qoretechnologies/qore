@@ -121,7 +121,7 @@ public class ElasticSearchPipelineReadDataProvider inherits ElasticSearchDataPro
 }
 
 #! ElasticSearch pipeline read API request
-class ElasticSearchPipelineReadRequestDataType inherits DataProvider::HashDataType {
+public class ElasticSearchPipelineReadRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {
@@ -151,7 +151,7 @@ class ElasticSearchPipelineReadRequestDataType inherits DataProvider::HashDataTy
 }
 
 #! ElasticSearch pipeline read API response
-class ElasticSearchPipelineReadResponseDataType inherits DataProvider::HashDataType {
+public class ElasticSearchPipelineReadResponseDataType inherits DataProvider::HashDataType {
     #! Creates the object
     constructor() {
         setDefaultOtherFieldType(new ElasticSearchPipelineDataTypeBase());

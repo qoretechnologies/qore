@@ -151,7 +151,7 @@ public class OpenSearchPipelineReadRequestDataType inherits DataProvider::HashDa
 }
 
 #! OpenSearch pipeline read API response
-class OpenSearchPipelineReadResponseDataType inherits DataProvider::HashDataType {
+public class OpenSearchPipelineReadResponseDataType inherits DataProvider::HashDataType {
     #! Creates the object
     constructor() {
         setDefaultOtherFieldType(new OpenSearchPipelineDataTypeBase());

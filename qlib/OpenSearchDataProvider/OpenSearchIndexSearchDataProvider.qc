@@ -807,7 +807,7 @@ public class OpenSearchIndexSearchRequestDataType inherits DataProvider::HashDat
 }
 
 #! OpenSearch index search API response
-class OpenSearchIndexSearchResponseDataType inherits DataProvider::HashDataType {
+public class OpenSearchIndexSearchResponseDataType inherits DataProvider::HashDataType {
     #! Creates the object
     constructor() {
         setDefaultOtherFieldType(new OpenSearchIndexDataTypeBase());

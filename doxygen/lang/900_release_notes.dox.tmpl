@@ -1811,6 +1811,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
+      - the request and response data type classes are now public, so types serialized in a provider index can be
+        restored by programs that import the module
 
     - @ref filelocationhandlerintro "FileLocationHandler" module
       - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()"

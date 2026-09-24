@@ -117,8 +117,8 @@ public class ElasticSearchPipelineReadAllDataProvider inherits ElasticSearchData
     }
 }
 
-#! ElasticSearch pipeline read API request
-class ElasticSearchPipelineReadAllRequestDataType inherits DataProvider::HashDataType {
+#! ElasticSearch pipeline read-all API request
+public class ElasticSearchPipelineReadAllRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {

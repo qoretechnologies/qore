@@ -119,7 +119,7 @@ public class ElasticSearchDocumentReadDataProvider inherits ElasticSearchDataPro
 }
 
 #! Document read API request data type
-class ElasticSearchDocumentReadRequestDataType inherits DataProvider::HashDataType {
+public class ElasticSearchDocumentReadRequestDataType inherits DataProvider::HashDataType {
     private {
         #! Field descriptions
         const Fields = {
