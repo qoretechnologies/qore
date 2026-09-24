@@ -19,6 +19,7 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         addTestCase("union constraints", \unionTest());
         addTestCase("restored types have the original conversions", \conversionTest());
         addTestCase("examples are accepted by their fields", \exampleTest());
+        addTestCase("a type known only in its program is restored from its value types", \programTypeTest());
         set_return_value(main());
     }
 
@@ -190,6 +191,34 @@ public class DataTypeConstraintsTest inherits QUnit::Test {
         closed.setDefaultOtherFieldType();
         AbstractDataProviderType restored = AbstractDataProviderType::get(closed.getInfo());
         assertEq(NOTHING, restored.getInfo().default_field_type_info);
+    }
+
+    programTypeTest() {
+        # a description of a type based on a custom Qore type that only its own program knows
+        hash<DataTypeInfo> info = <DataTypeInfo>{
+            "name": "workflow",
+            "display_name": "Workflow",
+            "short_desc": "A workflow",
+            "desc": "A workflow",
+            "base_type": "workflow",
+            "mandatory": True,
+            "types_accepted": ("string", "int", "float"),
+            "types_returned": ("string",),
+            "unique_key": "1",
+            "recursive": False,
+        };
+        AbstractDataProviderType t = AbstractDataProviderType::get(info);
+        assertEq("5", t.acceptsValue(5));
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), NOTHING);
+
+        # a type that accepts only its own value type is not a soft type
+        info.types_accepted = ("string",);
+        t = AbstractDataProviderType::get(info);
+        assertThrows("RUNTIME-TYPE-ERROR", \t.acceptsValue(), 5);
+
+        # a description returning several value types cannot be restored
+        info.types_returned = ("string", "int");
+        assertThrows("TYPE-ERROR", \AbstractDataProviderType::get(), (info,));
     }
 
     exampleTest() {

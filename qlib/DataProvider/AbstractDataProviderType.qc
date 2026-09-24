@@ -1399,7 +1399,38 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return AbstractDataProviderType::setDataTypeInfo(rv, info);
         }
 
+        # a type whose name and base type are known only in the program defining it, such as a type based on a custom
+        # Qore type, is restored from the value type it returns and the values it accepts
+        if (*Type value_type = AbstractDataProviderType::getValueTypeFromInfo(info)) {
+            AbstractDataProviderType rv = AbstractDataProviderType::get(value_type, info.options, info.tags,
+                info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            return AbstractDataProviderType::setDataTypeInfo(rv, info);
+        }
+
         throw "TYPE-ERROR", sprintf("No match for type: %y", info);
+    }
+
+    #! Returns the Qore type for a description from the value type it returns and the values it accepts
+    /** @param info the type description
+
+        @return the Qore type returning the single value type the description returns, as a soft type if it also
+        accepts values of other types; @ref nothing if the description returns more than one value type or one that
+        is not a Qore type
+
+        @since DataProvider 3.8
+    */
+    private static *Type getValueTypeFromInfo(hash<DataTypeInfo> info) {
+        list<string> returned = select info.types_returned, $1 != "nothing" && $1 != "null";
+        if (returned.size() != 1 || !DataTypeMap{returned[0]}) {
+            return;
+        }
+        string value_type = returned[0];
+        bool converts = (select info.types_accepted,
+            $1 != value_type && $1 != "nothing" && $1 != "null").size() > 0;
+        if (converts && (*string soft_name = OptimalQoreSoftDataTypeMap{value_type})) {
+            return DataTypeMap{soft_name} ?? new Type(soft_name);
+        }
+        return DataTypeMap{value_type};
     }
 
     #! Returns True if the given name is a Qore type name
