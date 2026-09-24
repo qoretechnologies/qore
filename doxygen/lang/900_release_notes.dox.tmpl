@@ -1827,6 +1827,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         configured (previously hardcoded to 1 minute)
 
     - @ref geminirestclientintro "GeminiRestClient" module
+      - fixed the synchronous @ref GeminiRestClient::GeminiResponseSseStream "GeminiResponseSseStream" class: it read
+        the whole event stream before returning, so no event could be read, and it failed for a request given as a hash;
+        events are now read incrementally with @ref Qore::HTTPClient::readServerSentEvent()
+        "HTTPClient::readServerSentEvent()", which decodes a compressed stream across chunks and limits the size of an
+        event
       - request/response body shapers extracted into the standalone
         @ref geminibodyshapeintro "GeminiBodyShape" module so the upcoming
         Vertex AI Gemini-on-Vertex pathway can reuse them without forcing a
@@ -1867,6 +1872,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c DefaultConnectionUrl
 
     - @ref grokrestclientintro "GrokRestClient" module
+      - fixed the synchronous @ref GrokRestClient::GrokResponseSseStream "GrokResponseSseStream" class: it read the
+        whole event stream before returning, so no event could be read, and it failed for a request given as a hash;
+        events are now read incrementally with @ref Qore::HTTPClient::readServerSentEvent()
+        "HTTPClient::readServerSentEvent()", which decodes a compressed stream across chunks and limits the size of an
+        event
+      - the asynchronous @ref GrokRestClient::GrokResponseSseStreamIo "GrokResponseSseStreamIo" class now opens the
+        stream with @ref RestClientIo::RestClientIo::restSseReader() "RestClientIo::restSseReader()", so the response is
+        validated before any event is read and a compressed stream is decoded
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
         \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin
         subclass of @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" with the xAI default URL applied
@@ -1945,6 +1958,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
+      - fixed the synchronous @ref OpenAiRestClient::OpenAiResponseSseStream "OpenAiResponseSseStream" class: it read
+        the whole event stream before returning, so no event could be read, and it failed for a request given as a hash;
+        events are now read incrementally with @ref Qore::HTTPClient::readServerSentEvent()
+        "HTTPClient::readServerSentEvent()", which decodes a compressed stream across chunks and limits the size of an
+        event; its request path also no longer repeats the API version (\c /v1/v1/responses)
+      - the asynchronous @ref OpenAiRestClient::OpenAiResponseSseStreamIo "OpenAiResponseSseStreamIo" class now opens
+        the stream with @ref RestClientIo::RestClientIo::restSseReader() "RestClientIo::restSseReader()", so the
+        response is validated before any event is read and a compressed stream is decoded
       - native OpenAI reasoning requests now use Responses behind the existing LLM interface, including
         strict structured output, streaming, encrypted reasoning continuation, and completion status
       - OpenAI-compatible servers keep Chat Completions unless provider_options.openai_api selects Responses
@@ -1979,6 +2000,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         inheriting the OpenAI default
 
     - @ref perplexityrestclientintro "PerplexityRestClient" module
+      - fixed the synchronous @ref PerplexityRestClient::PerplexityChatSseStream "PerplexityChatSseStream" class: it
+        read the whole event stream before returning, so no event could be read, and it failed for a request given as a
+        hash; events are now read incrementally with @ref Qore::HTTPClient::readServerSentEvent()
+        "HTTPClient::readServerSentEvent()", which decodes a compressed stream across chunks and limits the size of an
+        event
+      - the asynchronous @ref PerplexityRestClient::PerplexityChatSseStreamIo "PerplexityChatSseStreamIo" class now
+        opens the stream with @ref RestClientIo::RestClientIo::restSseReader() "RestClientIo::restSseReader()", so the
+        response is validated before any event is read and a compressed stream is decoded
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
         \c perplexity via @ref PerplexityRestClient::PerplexityLlmProvider
         "PerplexityLlmProvider" — overrides \c getChatCompletionsPath() to
@@ -2036,6 +2065,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
     - @ref restclientiointro "RestClientIo" module
+      - fixed @ref RestClientIo::RestClientIo::restSseReader() "restSseReader()" not decoding an event stream with a
+        \c Content-Encoding; the returned reader now decodes it
       - fixed @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" children becoming
         unusable when the originating client was destroyed: internally created connection managers
         now remain active until the last related client is destroyed, while explicitly shared
@@ -2075,7 +2106,16 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - added @ref SchemaReverse::SchemaReverse::toQore() "SchemaReverse::toQore()" for structured hash output compatible with @ref Schema::DataSchema "DataSchema"
       - fixed numeric scale extraction and trigger accumulation bugs
 
+    - @ref segmentrestclientintro "SegmentRestClient" module
+      - fixed creating a client with options that are all strings, such as options read from a configuration,
+        failing with \c RUNTIME-TYPE-ERROR
+
     - @ref serversenteventclientintro "ServerSentEventClient" module
+      - fixed chunked event streams: each received chunk was parsed as exactly one event, so an event spanning chunks or
+        several events in one chunk were misparsed, and an uncompressed chunked stream failed; events are now read with
+        @ref Qore::HTTPClient::readServerSentEvent() "HTTPClient::readServerSentEvent()", which also decodes \c br and
+        \c zstd streams and limits the size of an event to the \c max_response_body_size option, or to 128 MiB by
+        default
       - added \c "3.0" to the \c http_version data provider option for HTTP/3 SSE connections
       - added optional AsyncAPI 3.0 validation for received SSE event data via the \c asyncapi,
         \c validator, and \c asyncapi_channel options
