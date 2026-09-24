@@ -1683,7 +1683,8 @@ public:
     }
 };
 
-RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
+RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<const RObject*>* write_removed)
+        : xsink(xsink), write_removed(write_removed) {
     if (q_disable_gc) {
         return;
     }
@@ -1877,9 +1878,14 @@ void RSetHelper::commit() {
         // RObject::checkDeferScan()), and no dereference may follow it: with no real reference, and no more
         // references than the set counted as internal, it is rechecked once the locks are released, like a watched
         // member (see qore_dgc_node_dereferenced()).  A member that is still held from outside the set has more
-        // references than that, and is rechecked by its next dereference.
+        // references than that, and is rechecked by its next dereference.  So is an object that the write whose scan
+        // this is removed: the write still holds it, and its release of it is the dereference that follows - which
+        // deletes it, or finds the set invalidated here and rescans - so a recheck before that release only walks it
+        // again.
         if (!o->rrefs.load(std::memory_order_acquire)
-                && o->references.load(std::memory_order_acquire) <= o->rcount) {
+                && o->references.load(std::memory_order_acquire) <= o->rcount
+                && !(write_removed
+                    && std::find(write_removed->begin(), write_removed->end(), o) != write_removed->end())) {
             o->tRef();
             recheck_objects.push_back(o);
         }

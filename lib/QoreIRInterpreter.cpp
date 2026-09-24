@@ -12897,6 +12897,7 @@ load_local_done:
                                     lvh.ensureUnique();
                                     QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                                     res = h->takeKeyValue(last_step.name.c_str());
+                                    lvh.removedValue(res);
                                     pending_delete_finish = true;
                                 } else if ((last_step.kind == LVPathStepKind::HashKeyConst
                                         || last_step.kind == LVPathStepKind::HashKey)
@@ -12906,6 +12907,7 @@ load_local_done:
                                         : lvh.getValue().get<const WeakReferenceNode>()->get();
                                     if (o) {
                                         res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                                        lvh.removedValue(res);
                                         pending_delete_finish = true;
                                     }
                                 } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
@@ -12920,6 +12922,7 @@ load_local_done:
                                         // "remove", and for "delete" it keeps the value alive until the
                                         // destructor can be run with the lvalue locks released
                                         res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                                        lvh.removedValue(res);
                                         pending_delete_finish = true;
                                         l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                                     }

@@ -1,0 +1,131 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcRemovedValuesTest
+
+class Hub {
+    public {
+        hash<auto> reg = {};
+        list<auto> items = ();
+
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Hub::destroyed;
+    }
+}
+
+class Entry {
+    public {
+        Hub hub;
+        *Entry peer;
+
+        static int destroyed = 0;
+    }
+
+    constructor(Hub hub) {
+        self.hub = hub;
+    }
+
+    destructor() {
+        ++Entry::destroyed;
+    }
+}
+
+#! Values removed by a write are collected by the write's own release of them
+/** A removal scan replaces the recursive set of the object the value was removed from, and leaves the removed value
+    behind as a member of the old set that it did not reach.  Such a member is rechecked once the scan is over when
+    no dereference may follow it (RSetHelper::commit()), but a value the write removed is still held by the write,
+    and its release is the dereference that follows: it deletes the value, or finds the set invalidated and rescans.
+    The write's scan therefore does not recheck it (LValueHelper::removedValue()).  These checks make sure that a
+    removed value is still collected by that release, including a cycle that was only attached to the rest of the
+    set through the removed edge.
+*/
+class DgcRemovedValuesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("DgcRemovedValuesTest", "1.0") {
+        addTestCase("a removed entry is destroyed when the removal releases it", \removedEntry());
+        addTestCase("a removed cycle is collected when the removal releases it", \removedCycle());
+        addTestCase("a removed cycle that is still held is kept until it is released", \removedCycleHeld());
+        addTestCase("a removed list holding a cycle is collected when it is released", \removedListCycle());
+        set_return_value(main());
+    }
+
+    removedEntry() {
+        int entries = Entry::destroyed;
+        int hubs = Hub::destroyed;
+        {
+            Entry e(new Hub());
+            for (int i = 0; i < 10; ++i) {
+                e.hub.reg{"k" + i} = new Entry(e.hub);
+            }
+            for (int i = 0; i < 10; ++i) {
+                remove e.hub.reg{"k" + i};
+                assertEq(entries + i + 1, Entry::destroyed, sprintf("entry %d destroyed on removal", i));
+            }
+            assertEq(hubs, Hub::destroyed, "the hub is still held");
+        }
+        assertEq(entries + 11, Entry::destroyed, "every entry destroyed");
+        assertEq(hubs + 1, Hub::destroyed, "the hub destroyed");
+    }
+
+    removedCycle() {
+        int entries = Entry::destroyed;
+        {
+            Entry e(new Hub());
+            for (int i = 0; i < 10; ++i) {
+                Entry x(e.hub);
+                # a cycle of its own, attached to the registry only through the entry removed below
+                x.peer = new Entry(e.hub);
+                x.peer.peer = x;
+                e.hub.reg{"k" + i} = x;
+            }
+            for (int i = 0; i < 10; ++i) {
+                remove e.hub.reg{"k" + i};
+                assertEq(entries + (i + 1) * 2, Entry::destroyed, sprintf("removed cycle %d collected", i));
+            }
+        }
+        assertEq(entries + 21, Entry::destroyed, "every entry destroyed");
+    }
+
+    removedCycleHeld() {
+        int entries = Entry::destroyed;
+        {
+            Entry e(new Hub());
+            Entry x(e.hub);
+            x.peer = new Entry(e.hub);
+            x.peer.peer = x;
+            e.hub.reg.k = x;
+            remove x;
+            *Entry kept = remove e.hub.reg.k;
+            assertEq(entries, Entry::destroyed, "a removed cycle that is still held is kept");
+            assertEq(kept, kept.peer.peer, "the removed cycle is intact");
+            remove kept;
+            assertEq(entries + 2, Entry::destroyed, "the removed cycle is collected once it is released");
+        }
+        assertEq(entries + 3, Entry::destroyed, "every entry destroyed");
+    }
+
+    removedListCycle() {
+        int entries = Entry::destroyed;
+        {
+            Entry e(new Hub());
+            Entry x(e.hub);
+            x.peer = new Entry(e.hub);
+            x.peer.peer = x;
+            e.hub.items += x;
+            e.hub.items += new Entry(e.hub);
+            remove x;
+            remove e.hub.items;
+            assertEq(entries + 3, Entry::destroyed, "the cycle and the entry in the removed list are collected");
+        }
+        assertEq(entries + 4, Entry::destroyed, "every entry destroyed");
+    }
+}

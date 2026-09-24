@@ -528,6 +528,8 @@ private:
     bool removal_object_scan = false;
     //! objects other than \a robj that a value needing a scan was removed from; each holds a weak reference
     std::vector<RObject*> removal_objects;
+    //! the objects removed by this write, which it still holds while it scans; see removedValue()
+    std::vector<const RObject*> removed_objects;
 
     // recursive delta: change to recursive reference count
     int rdt = 0;
@@ -658,6 +660,14 @@ public:
         from outside it.  Such an object is therefore recorded in \a removal_objects, and the destructor scans
         from it when the scan of the root was deferred.
     */
+    //! Records the objects in a value that this write removed, which the write still holds while it scans
+    /** A removal scan leaves the objects it took out behind as members of the replaced recursive set that it did
+        not reach; the write's own release of them is the dereference that follows, so its scan does not recheck
+        them as orphans (see RSetHelper::commit()).  Objects directly in the value, or in lists and hashes it holds,
+        are recorded; the value must stay referenced until the scan is over.
+    */
+    DLLLOCAL void removedValue(const QoreValue& v);
+
     DLLLOCAL void objectRemoved(RObject& obj, bool scan_value_removed) {
         removal_object_reported = true;
         if (scan_value_removed) {

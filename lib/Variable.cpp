@@ -739,7 +739,7 @@ LValueHelper::~LValueHelper() {
                     // no value was removed, so there are no other objects to scan either
                     deferred = false;
                 } else {
-                    RSetHelper rsh(*robj, vl.xsink);
+                    RSetHelper rsh(*robj, vl.xsink, removed_objects.empty() ? nullptr : &removed_objects);
                     deferred = rsh.deferred();
                 }
             }
@@ -750,7 +750,7 @@ LValueHelper::~LValueHelper() {
 #ifdef DEBUG
                     ++lvalue_scan_count;
 #endif
-                    RSetHelper rsh(*o, vl.xsink);
+                    RSetHelper rsh(*o, vl.xsink, removed_objects.empty() ? nullptr : &removed_objects);
                 }
             }
         }
@@ -771,6 +771,34 @@ LValueHelper::~LValueHelper() {
 
     for (RObject* o : removal_objects) {
         o->tDeref();
+    }
+}
+
+void LValueHelper::removedValue(const QoreValue& v) {
+    switch (v.getType()) {
+        case NT_OBJECT: {
+            const RObject* o = qore_object_private::get(*v.get<const QoreObject>());
+            if (std::find(removed_objects.begin(), removed_objects.end(), o) == removed_objects.end()) {
+                removed_objects.push_back(o);
+            }
+            break;
+        }
+        case NT_LIST: {
+            ConstListIterator i(v.get<const QoreListNode>());
+            while (i.next()) {
+                removedValue(i.getValue());
+            }
+            break;
+        }
+        case NT_HASH: {
+            ConstHashIterator i(v.get<const QoreHashNode>());
+            while (i.next()) {
+                removedValue(i.get());
+            }
+            break;
+        }
+        default:
+            break;
     }
 }
 
@@ -2713,9 +2741,10 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     if (member->getType() == NT_LIST) {
         const QoreListNode* l = member->get<const QoreListNode>();
 
-        if (o)
+        if (o) {
             qore_object_private::takeMembers(*o, rv, lvh, l);
-        else {
+            lvh.removedValue(rv.getValue());
+        } else {
             unsigned old_count = qore_hash_private::getScanCount(*h);
 
             QoreHashNode* rvh = new QoreHashNode(autoTypeInfo);
@@ -2743,6 +2772,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
 
             if (old_count && !qore_hash_private::getScanCount(*h))
                 lvh.setDelta(-1);
+            lvh.removedValue(rvh);
         }
 
         return;
@@ -2762,6 +2792,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
                 lvh.setDelta(-1);
         }
     }
+    lvh.removedValue(v);
 
     discard(rv.assignInitial(v), xsink);
 }
@@ -2902,6 +2933,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                     lvh.setDelta(-1);
             }
             discard(rv.assignInitial(v.release()), xsink);
+            lvh.removedValue(rv.getValue());
             return;
         }
 
@@ -2947,6 +2979,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             discard(rv.assignInitial(v.release()), xsink);
+            lvh.removedValue(rv.getValue());
             return;
         }
 
@@ -2978,6 +3011,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
                 }
             }
             discard(rv.assignInitial(v.release()), xsink);
+            lvh.removedValue(rv.getValue());
             return;
         }
     }
@@ -3059,6 +3093,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     lvh.setDelta(-1);
             }
             discard(rv.assignInitial(v.release()), xsink);
+            lvh.removedValue(rv.getValue());
             return;
         }
 
@@ -3107,6 +3142,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                     xsink->assimilate(xsink2);
             }
             discard(rv.assignInitial(v.release()), xsink);
+            lvh.removedValue(rv.getValue());
             return;
         }
 
@@ -3141,6 +3177,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
                 bin->splice(i, 1);
             }
             discard(rv.assignInitial(v.release()), xsink);
+            lvh.removedValue(rv.getValue());
             return;
         }
     }
@@ -3206,6 +3243,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
                         break;
                 }
                 discard(rv.assignInitial(v), xsink);
+                lvh.removedValue(rv.getValue());
             }
             return;
         }
@@ -3280,6 +3318,8 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     }
 
     discard(rv.assignInitial(v.release()), xsink);
+
+    lvh.removedValue(rv.getValue());
 }
 
 bool LocalVarValue::TypeSubstitutionCache::matches(const QoreTypeInfo* typeInfo, const QoreTypeInfo* refTypeInfo,

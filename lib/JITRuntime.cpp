@@ -12986,6 +12986,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         if (old_count && !qore_hash_private::getScanCount(*h)) {
             lvh.setDelta(-1);
         }
+        lvh.removedValue(QoreValue(*rvh));
         if (is_delete) {
             // dereference the removed values once the lvalue locks are released: a destructor is
             // Qore code that can re-enter the runtime for the container this lvalue came from
@@ -13021,6 +13022,7 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             return QoreValue();
         }
         QoreValue result = rv.removeValue(true);
+        lvh.removedValue(result);
         if (is_delete) {
             // dereference the removed values once the lvalue locks are released: a destructor is
             // Qore code that can re-enter the runtime for the container this lvalue came from
@@ -13472,6 +13474,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 lvh.ensureUnique();
                 QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                 res = h->takeKeyValue(last_step.name.c_str());
+                lvh.removedValue(res);
                 pending_delete_finish = true;
                 handled_multistep_remove = true;
             } else if (last_is_hash && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
@@ -13480,6 +13483,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     : lvh.getValue().get<const WeakReferenceNode>()->get();
                 if (o) {
                     res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                    lvh.removedValue(res);
                     pending_delete_finish = true;
                 }
                 handled_multistep_remove = true;
@@ -13495,6 +13499,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     // "delete" it keeps the value alive until the destructor can be run below, with the
                     // lvalue locks released
                     res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                    lvh.removedValue(res);
                     pending_delete_finish = true;
                     l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                 }

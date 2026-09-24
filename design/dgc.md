@@ -146,6 +146,17 @@ too, and the other members of their old sets reach `tr_out`.
 
 `examples/test/qlib/HttpClientIo/HttpClientIoRetiredConnection.qtest` covers a connection retired from a pool this way.
 
+A value that the write whose scan this is removed is not rechecked. The write still holds it while it scans - the
+compiled tiers keep a removed value as the expression's result, the AST interpreter in the remove helper - and its
+release is the dereference that follows: the last one deletes it, and any earlier one finds the old set invalidated
+and rescans. A recheck before that release only walked the removed value once more, which cost the compiled tiers an
+extra walked object per removal in the `registry-cycle-unregister` shape of `dgc-scan-avoidance`, 5151 objects
+instead of 5050. `LValueHelper::removedValue()` records the objects a removal takes out - the value itself, or the
+objects in lists and hashes it holds - in each removal path (the AST `LValueRemoveHelper`, the IR interpreter's
+`LValuePathUnary`, `qore_rt_lv_path_unary()` and `executeLVHashKeySliceRemove()`), and the write passes them to its
+scans, whose `commit()` skips them. `examples/test/qore/misc/dgc-removed-values.qtest` checks that such a value,
+including a cycle attached only through the removed edge, is collected by the write's release of it.
+
 ### Watched nodes
 
 Releasing an outside reference to a list, hash, closure or reference in a recursive set does not dereference any
