@@ -83,6 +83,53 @@ DLLLOCAL int64 q_get_deref_locked_count();
 #endif
 
 class RObject;
+
+//! A closed region: the part of the graph walked by a committed scan that cannot reach the scan's root
+/** A scan that commits has found the strongly connected components of everything reachable from its root; a
+    component other than the root's cannot reach the root, and one whose every edge leads into such a component, or
+    into a region the scan skipped because it was current, has a completely known subgraph.  Those components make up
+    the region.  A later scan does not enter an object of a current region (other than in its own root's component):
+    nothing in it can reach that scan's root either.
+
+    A region is current while no edge has been added to any of its objects since it was recorded (the object's
+    RObject::edgesAdded() sets \c invalid), no object has been taken out of it by a later scan, the untracked edge
+    epoch is the one it recorded, and every region it depends on is current.  Removing an edge never ends currency:
+    it cannot make a node reach a root it could not reach before.
+
+    Reference counted: each object holds a reference to its region and each region to the regions it depends on,
+    which only exist longer than it (a region only depends on regions recorded before it), so the references cannot
+    form a cycle.  See design/dgc.md, "Closed regions".
+*/
+class RRegion {
+public:
+    //! set when an edge is added to an object of the region, or an object is taken out of it
+    std::atomic_bool invalid{false};
+    //! RSet::untracked_edge_epoch as read by the scan that recorded the region
+    const unsigned epoch;
+    //! the regions that edges from the region's objects enter; each is referenced
+    std::vector<RRegion*> deps;
+    //! objects of closed recursive sets that edges from the region's objects enter, each held with a weak reference
+    /** A closed set references nothing outside it, so it is a complete region of its own for as long as it is
+        closed; the region is only current while each of these objects is still in a closed set.
+    */
+    std::vector<RObject*> closed_deps;
+
+    DLLLOCAL explicit RRegion(unsigned epoch) : epoch(epoch) {
+    }
+
+    DLLLOCAL void ref() {
+        refs.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    //! Releases a reference; deletes the region, and releases the ones it depends on, with the last one
+    DLLLOCAL static void deref(RRegion* r);
+
+private:
+    std::atomic<int> refs{1};
+
+    DLLLOCAL ~RRegion() = default;
+};
+
 //! Returns true if this thread has a dereference of the object in progress; for assertions
 DLLLOCAL bool qore_robject_deref_inprogress_on_this_thread(const RObject* o);
 
@@ -281,6 +328,38 @@ public:
     DLLLOCAL void edgesAdded() {
         // sequentially consistent, so that a scan that reads edge_gen after this cannot miss the new edge
         edge_gen.fetch_add(1, std::memory_order_seq_cst);
+        // the object's closed region no longer describes what it reaches
+        if (region_word.load(std::memory_order_seq_cst)) {
+            invalidateRegion();
+        }
+    }
+
+    //! The closed region the object is in, or 0; bit 0 is a spin lock guarding the pointer and region_comp
+    /** Read and written without the object's other locks: edgesAdded() is called by containers under their own
+        locks.  The lock is held for a few instructions and nothing is acquired while it is held.
+    */
+    std::atomic<uintptr_t> region_word{0};
+    //! the object's component in its region; guarded by the lock bit of region_word
+    int region_comp = -1;
+
+    //! Marks the object's region, if any, as no longer current
+    DLLLOCAL void invalidateRegion();
+
+    //! Returns the object's region with a new reference, or nullptr, and the object's component in it
+    DLLLOCAL RRegion* getRegionRef(int& comp);
+
+    //! Puts the object in a region, taking over the caller's reference, or in none
+    /** A region the object leaves is marked invalid: its other objects can still reach this one, whose edges it
+        no longer tracks.
+    */
+    DLLLOCAL void setRegion(RRegion* r, int comp);
+
+    //! Returns true if the object can be part of a closed region
+    /** A closure-bound variable can be written through its frame without a scan (see
+        design/closure-bound-locals.md), so it is never part of one.
+    */
+    DLLLOCAL virtual bool canBeInRegion() const {
+        return true;
     }
 
     //! Returns true if no edge from this object was added since the scan that assigned or confirmed its set
@@ -781,6 +860,9 @@ private:
         int internal = 0;
         // for an object, RObject::edge_gen as read before the scan followed its edges
         unsigned edge_gen = 0;
+        // true if the node references an object the scan did not enter because it is in a closed set or a current
+        // closed region: its component is not closed, but can be part of a new region
+        bool refs_skipped = false;
 
         DLLLOCAL ScanNode(void* ptr, NodeKind kind) : ptr(ptr), kind(kind) {
         }
@@ -824,6 +906,17 @@ private:
     RSet* root_rset = nullptr;
     // RSet::untracked_edge_epoch as read before the current pass followed any edge
     unsigned scan_epoch = 0;
+
+    // the root's closed region, referenced, and the root's component in it: an object of that component is always
+    // entered (see checkNode())
+    RRegion* root_region = nullptr;
+    int root_region_comp = -1;
+    // whether each region reached is current, as decided in this pass; every key is referenced
+    std::unordered_map<RRegion*, char> region_memo;
+    // edges into regions that were not entered: the node, and the region (referenced by region_memo)
+    std::vector<std::pair<int, RRegion*>> region_edges;
+    // edges into closed sets that were not entered: the node, and the object reached (held with a weak reference)
+    std::vector<std::pair<int, RObject*>> closed_edges;
     // true when the scan takes the rsection of every object it enters to itself, which it has to do to
     // change a recursive set; set from the root object's last outcome (RObject::scan_wrote)
     bool exclusive = false;
@@ -931,6 +1024,17 @@ private:
 
     // rollback transaction due to a lock error, or to start over with exclusive rsections
     DLLLOCAL void rollback(bool yield = true);
+
+    //! Returns true if the region, and every region it depends on, is current; memoized in region_memo
+    DLLLOCAL bool regionCurrent(RRegion* r);
+
+    //! Records the components of the committed scan that cannot reach its root as a closed region
+    /** Called by commit() while the scan still holds the rsections of the objects it entered; see RRegion.
+    */
+    DLLLOCAL void assignRegions();
+
+    //! Releases the references to the regions held by the pass
+    DLLLOCAL void releaseRegionState();
 
     //! Releases the rsection that the scan took for an object, in the mode it took it in
     DLLLOCAL void unlockNode(const ScanNode& n);

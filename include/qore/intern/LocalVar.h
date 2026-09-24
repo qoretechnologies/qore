@@ -331,6 +331,11 @@ public:
 };
 
 struct ClosureVarValue : public VarValueBase, public RObject {
+    //! A closure-bound variable is never part of a closed region: its frame can write it without a scan
+    DLLLOCAL virtual bool canBeInRegion() const override {
+        return false;
+    }
+
 public:
     const QoreTypeInfo* typeInfo = nullptr; // type restriction for lvalue
     const QoreTypeInfo* refTypeInfo;

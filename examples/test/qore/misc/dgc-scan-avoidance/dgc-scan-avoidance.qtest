@@ -149,7 +149,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
             # the same registry holding its entries with opaque references: no scan follows them
             "registry-opaque-scans": 100,
-            "registry-opaque-walked": 200,
+            "registry-opaque-walked": 101,
             "registry-opaque-sets": 0,
             "registry-opaque-unregister-scans": 0,
             "registry-opaque-unregister-walked": 0,
@@ -160,7 +160,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
             # a long-lived holder of an open cycle: each write confirms the sets in place and creates none
             "confirm-scans": 100,
-            "confirm-walked": 500,
+            "confirm-walked": 200,
             "confirm-sets": 0,
             "confirm-release-scans": 1,
             "confirm-release-walked": 0,
@@ -171,7 +171,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             # scan made when the method returns replaces it, as the operation joins or leaves the controller's
             # component - two sets per request
             "server-scans": 300,
-            "server-walked": 3000,
+            "server-walked": 1005,
             "server-sets": 200,
             "server-release-scans": 1,
             "server-release-walked": 3,
@@ -191,7 +191,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             # the first dereference to find it so rescans it once (one new set, with the TreeMap in it), and the
             # releases after that rescan nothing
             "marked-scans": 0,
-            "marked-walked": 4,
+            "marked-walked": 3,
             "marked-sets": 1,
             "marked-release-scans": 1,
             "marked-release-walked": 1,
@@ -235,15 +235,65 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
 
             # the edge that closes the cycle is replaced while a list holds the root
             "cut-list-scans": 2,
-            "cut-list-walked": 8,
+            "cut-list-walked": 6,
             "cut-list-sets": 0,
             "cut-list-release-scans": 1,
             "cut-list-release-walked": 0,
             "cut-list-release-sets": 0,
 
+            # new holders each store a reference to an 85-node tree that is already scanned and unchanged: the first
+            # scan records the tree as a closed region (see RRegion), and the later ones do not enter it.  The AST
+            # interpreter makes no scan here at all: the holder's constructor defers it and the holder is handed
+            # over to the list (see CompiledScanCounts)
+            "dag-holder-scans": 100,
+            "dag-holder-walked": 0,
+            "dag-holder-sets": 0,
+            "dag-holder-release-scans": 1,
+            "dag-holder-release-walked": 0,
+            "dag-holder-release-sets": 0,
+
+            # the same with each node of the tree in a 2-cycle with a peer, as a schema object is with its cached
+            # data type: the pairs are closed sets, which a region can depend on
+            "dag-holder-cyclic-scans": 100,
+            "dag-holder-cyclic-walked": 0,
+            "dag-holder-cyclic-sets": 0,
+            "dag-holder-cyclic-release-scans": 1,
+            "dag-holder-cyclic-release-walked": 0,
+            "dag-holder-cyclic-release-sets": 0,
+
+            # an edge added deep inside the recorded tree back to a holder: the region is no longer current, and
+            # the scan finds the cycle through the holder, the root and the path down to the edge
+            "dag-back-edge-scans": 1,
+            "dag-back-edge-walked": 14,
+            "dag-back-edge-sets": 1,
+            "dag-back-edge-release-scans": 1,
+            "dag-back-edge-release-walked": 8,
+            "dag-back-edge-release-sets": 0,
+
+            # a region depending on another: an edge added inside the one depended on ends both, and the cycle through
+            # them is found
+            "dag-dependent-back-edge-scans": 2,
+            "dag-dependent-back-edge-walked": 15,
+            "dag-dependent-back-edge-sets": 1,
+            "dag-dependent-back-edge-release-scans": 1,
+            "dag-dependent-back-edge-release-walked": 10,
+            "dag-dependent-back-edge-release-sets": 0,
+
+            # a reference stored in a Queue ends every region (RSet::untracked_edge_epoch): the next scan enters the
+            # tree again, the one after does not (the compiled tiers make these scans; see CompiledScanCounts)
+            "dag-epoch-first-scans": 1,
+            "dag-epoch-first-walked": 0,
+            "dag-epoch-first-sets": 0,
+            "dag-epoch-second-scans": 1,
+            "dag-epoch-second-walked": 0,
+            "dag-epoch-second-sets": 0,
+            "dag-epoch-release-scans": 1,
+            "dag-epoch-release-walked": 0,
+            "dag-epoch-release-sets": 0,
+
             # the same through the public C++ API (debug builds only: dbg_object_set_value())
             "cut-api-scans": 1,
-            "cut-api-walked": 8,
+            "cut-api-walked": 6,
             "cut-api-sets": 0,
             "cut-api-release-scans": 1,
             "cut-api-release-walked": 0,
@@ -260,6 +310,15 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             rescan, as the set they belong to has gained no edge (see the "release" shape).
         */
         const CompiledScanCounts = {
+            # a compiled assignment releases its reference to the new holder after linking it in, which makes the
+            # scan its constructor deferred: the first one records the tree as a closed region and walks it, the
+            # later ones only enter the holder
+            "dag-holder-walked": 101,
+            "dag-holder-cyclic-walked": 102,
+            "dag-epoch-first-walked": 86,
+            "dag-epoch-second-walked": 1,
+            # measured
+            "server-walked": 1000,
             # removing a closure-bound variable writes it through an lvalue helper, whose scan the frame's real
             # reference to the variable defers
             "closure-remove-scans": 101,
@@ -347,6 +406,21 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
             "pinned-close-held-dtors": 0,
             "pinned-close-dtors": 2,
             "pinned-close-leaf-dtors": 100,
+            "dag-holder-held-dtors": 0,
+            "dag-holder-dtors": 85,
+            "dag-holder-leaf-dtors": 100,
+            "dag-holder-cyclic-held-dtors": 0,
+            "dag-holder-cyclic-dtors": 170,
+            "dag-holder-cyclic-leaf-dtors": 100,
+            "dag-dependent-back-edge-held-dtors": 0,
+            "dag-dependent-back-edge-dtors": 86,
+            "dag-dependent-back-edge-leaf-dtors": 3,
+            "dag-epoch-held-dtors": 0,
+            "dag-epoch-dtors": 86,
+            "dag-epoch-leaf-dtors": 3,
+            "dag-back-edge-held-dtors": 0,
+            "dag-back-edge-dtors": 85,
+            "dag-back-edge-leaf-dtors": 100,
             # nothing is collected while the list holds the root; both are once it is released
             "cut-list-held-dtors": 0,
             "cut-list-dtors": 2,
@@ -373,6 +447,7 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         addTestCase("concurrent writes", \testConcurrentWrites());
         addTestCase("concurrent marks", \testConcurrentMarks());
         addTestCase("concurrent pinned writes", \testConcurrentPinned());
+        addTestCase("concurrent region writes", \testConcurrentRegions());
         addTestCase("each execution mode", \testExecModes());
         addTestCase("compiled module", \testCompiledModule());
 
@@ -408,6 +483,14 @@ class DgcScanAvoidanceTest inherits QUnit::Test {
         assertEq(0, rv."held-dtors", "no object collected while the set is held");
         assertEq(2, rv."dtors", "every object of the set collected once it is released");
         assertEq(Threads * DgcScanAvoidanceChecks::Writes, rv."leaf-dtors", "every value written released");
+    }
+
+    #! several threads store a recorded tree in new holders while another adds and removes an edge inside it
+    testConcurrentRegions() {
+        hash<string, int> rv = DgcScanAvoidanceChecks::concurrent_regions(Threads);
+        assertEq(0, rv."held-dtors", "no node of the tree collected while it is held");
+        assertEq(DgcScanAvoidanceChecks::DagNodes, rv."dtors", "every node collected once the tree is released");
+        assertEq((Threads + 1) * DgcScanAvoidanceChecks::Writes, rv."leaf-dtors", "every holder released");
     }
 
     testExecModes() {

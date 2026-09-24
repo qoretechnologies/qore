@@ -36,6 +36,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <map>
@@ -400,6 +401,85 @@ int64 q_get_deref_locked_count() {
 
 RObject::~RObject() {
    assert(!rset.load(std::memory_order_relaxed));
+   // an object that is destroyed only removes edges, so its region stays current
+   uintptr_t w = region_word.load(std::memory_order_acquire);
+   assert(!(w & 1));
+   if (w) {
+       RRegion::deref(reinterpret_cast<RRegion*>(w));
+   }
+}
+
+void RRegion::deref(RRegion* r) {
+    // iterative, as a chain of regions depending on each other can be long
+    std::vector<RRegion*> todo;
+    todo.push_back(r);
+    while (!todo.empty()) {
+        RRegion* x = todo.back();
+        todo.pop_back();
+        if (x->refs.fetch_sub(1, std::memory_order_acq_rel) != 1) {
+            continue;
+        }
+        for (RRegion* d : x->deps) {
+            todo.push_back(d);
+        }
+        for (RObject* o : x->closed_deps) {
+            o->tDeref();
+        }
+        delete x;
+    }
+}
+
+// the lock bit of RObject::region_word; see RObject::invalidateRegion()
+static RRegion* region_lock(std::atomic<uintptr_t>& word) {
+    uintptr_t w = word.load(std::memory_order_relaxed);
+    while (true) {
+        if (w & 1) {
+            // held for a few instructions by another thread
+            w = word.load(std::memory_order_relaxed);
+            continue;
+        }
+        if (word.compare_exchange_weak(w, w | 1, std::memory_order_seq_cst, std::memory_order_relaxed)) {
+            return reinterpret_cast<RRegion*>(w);
+        }
+    }
+}
+
+static void region_unlock(std::atomic<uintptr_t>& word, RRegion* r) {
+    word.store(reinterpret_cast<uintptr_t>(r), std::memory_order_seq_cst);
+}
+
+void RObject::invalidateRegion() {
+    RRegion* r = region_lock(region_word);
+    if (r) {
+        r->invalid.store(true, std::memory_order_seq_cst);
+    }
+    region_unlock(region_word, r);
+}
+
+RRegion* RObject::getRegionRef(int& comp) {
+    if (!region_word.load(std::memory_order_acquire)) {
+        return nullptr;
+    }
+    RRegion* r = region_lock(region_word);
+    if (r) {
+        r->ref();
+        comp = region_comp;
+    }
+    region_unlock(region_word, r);
+    return r;
+}
+
+void RObject::setRegion(RRegion* r, int comp) {
+    RRegion* old = region_lock(region_word);
+    region_comp = r ? comp : -1;
+    region_unlock(region_word, r);
+    if (old && old != r) {
+        // the region's other objects can still reach this one, whose edges it no longer tracks
+        old->invalid.store(true, std::memory_order_seq_cst);
+    }
+    if (old) {
+        RRegion::deref(old);
+    }
 }
 
 RSetDerefHelper::~RSetDerefHelper() {
@@ -1187,6 +1267,27 @@ bool RSetHelper::checkNode(AbstractQoreNode* n) {
 
 bool RSetHelper::checkNode(RObject& robj) {
     assert(current >= 0);
+    // An object of a current closed region is not entered: nothing in the region can reach this scan's root, so no
+    // cycle through the root can pass through it, and what it reaches is already known.  The edge is recorded as
+    // entering the region, which lets the component holding it be part of a new region in turn.  An object in the
+    // root's own component of the root's region is entered: the root's region can be current when the scan is a
+    // rescan rather than a write, and the root's component has to be walked to find its cycles.  See RRegion.
+    int comp = -1;
+    RRegion* r = robj.getRegionRef(comp);
+    if (r) {
+        bool skip = !(r == root_region && comp == root_region_comp) && regionCurrent(r);
+        if (skip) {
+            printd(QRO_LVL, "RSetHelper::checkNode() obj %p '%s' is in current closed region %p; not entering it\n",
+                &robj, robj.getName(), r);
+            // region_memo holds a reference to the region
+            region_edges.emplace_back(current, r);
+            RRegion::deref(r);
+            // the component holding the edge references a node outside it, so it is not closed
+            nodes[current].refs_skipped = true;
+            return false;
+        }
+        RRegion::deref(r);
+    }
     // Nothing in a closed recursive set references a node outside that set, so the set cannot become part of a
     // larger cycle and the scan does not enter it: the reference is recorded as leaving the scanned graph, which
     // keeps the component holding it from being closed itself.  The set that the scan started in is always
@@ -1195,7 +1296,11 @@ bool RSetHelper::checkNode(RObject& robj) {
     if (closed && closed != root_rset) {
         printd(QRO_LVL, "RSetHelper::checkNode() obj %p '%s' is in closed rset %p; not entering it\n", &robj,
             robj.getName(), closed);
-        nodes[current].open = true;
+        // the component is not closed, but can be part of a closed region as long as this object stays in a
+        // closed set; see RRegion::closed_deps
+        nodes[current].refs_skipped = true;
+        robj.tRef();
+        closed_edges.emplace_back(current, &robj);
         return false;
     }
     if (hold_edges && held.insert(&robj).second) {
@@ -1354,6 +1459,8 @@ bool RSetHelper::scan(RObject& root) {
     root_obj = &root;
     // the object's rsection is held, so its recursive set cannot be replaced while the scan runs
     root_rset = root.rset;
+    // referenced: a scan committing in shared mode can replace the root's region while this one runs
+    root_region = root.getRegionRef(root_region_comp);
     // before any edge is followed; see RSet::edgesUnchangedSinceScan()
     scan_epoch = RSet::untracked_edge_epoch.load(std::memory_order_seq_cst);
 
@@ -1480,7 +1587,7 @@ void RSetHelper::findClosedComponents() {
     // a node that references an object the scan did not enter, or whose values can change without a scan,
     // keeps its component open
     for (const ScanNode& n : nodes) {
-        if (n.open) {
+        if (n.open || n.refs_skipped) {
             component_closed[n.component] = 0;
         }
     }
@@ -1783,8 +1890,195 @@ RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink, const std::vector<con
 
 RSetHelper::~RSetHelper() {
     assert(!lcnt);
+    releaseRegionState();
     releaseHeld();
     recheckOrphans();
+}
+
+void RSetHelper::releaseRegionState() {
+    for (auto& i : region_memo) {
+        RRegion::deref(i.first);
+    }
+    region_memo.clear();
+    region_edges.clear();
+    for (auto& e : closed_edges) {
+        e.second->tDeref();
+    }
+    closed_edges.clear();
+    if (root_region) {
+        RRegion::deref(root_region);
+        root_region = nullptr;
+    }
+    root_region_comp = -1;
+}
+
+bool RSetHelper::regionCurrent(RRegion* r) {
+    auto mi = region_memo.find(r);
+    if (mi != region_memo.end()) {
+        return mi->second;
+    }
+    unsigned epoch = RSet::untracked_edge_epoch.load(std::memory_order_seq_cst);
+    // records a decision; the memo takes its own reference
+    auto decide = [&](RRegion* x, bool current) {
+        x->ref();
+        region_memo.emplace(x, current ? 1 : 0);
+        return current;
+    };
+    // decides the regions that need no traversal; -1 if the region's dependencies have to be checked
+    auto shallow = [&](RRegion* x) -> int {
+        auto i = region_memo.find(x);
+        if (i != region_memo.end()) {
+            return i->second;
+        }
+        if (x->invalid.load(std::memory_order_seq_cst) || x->epoch != epoch) {
+            return decide(x, false) ? 1 : 0;
+        }
+        // a closed set the region reaches that is no longer closed can now reach anything
+        for (RObject* o : x->closed_deps) {
+            if (!o->rclosed.load(std::memory_order_acquire)) {
+                return decide(x, false) ? 1 : 0;
+            }
+        }
+        if (x->deps.empty()) {
+            return decide(x, true) ? 1 : 0;
+        }
+        return -1;
+    };
+    int rc = shallow(r);
+    if (rc >= 0) {
+        return rc;
+    }
+    // an explicit stack, as a chain of regions depending on each other can be long; the dependencies form a DAG
+    struct Frame {
+        RRegion* x;
+        size_t next;
+    };
+    std::vector<Frame> frames;
+    frames.push_back(Frame{r, 0});
+    int child = -1;
+    while (!frames.empty()) {
+        Frame& f = frames.back();
+        if (child == 0) {
+            // a dependency is not current, so neither is this region
+            decide(f.x, false);
+            frames.pop_back();
+            continue;
+        }
+        child = -1;
+        if (f.next == f.x->deps.size()) {
+            decide(f.x, true);
+            frames.pop_back();
+            child = 1;
+            continue;
+        }
+        RRegion* d = f.x->deps[f.next++];
+        int drc = shallow(d);
+        if (drc < 0) {
+            frames.push_back(Frame{d, 0});
+        } else {
+            child = drc;
+        }
+    }
+    return region_memo[r];
+}
+
+void RSetHelper::assignRegions() {
+    size_t ncomp = component_size.size();
+    if (!ncomp) {
+        return;
+    }
+    // the root is the first node entered
+    assert(nodes[0].ptr == root_obj);
+    int root_comp = nodes[0].component;
+    // Tarjan's algorithm completes a component after every component it references, so each component's
+    // successors have lower numbers and are decided before it
+    std::vector<char> sealed(ncomp, 1);
+    sealed[root_comp] = 0;
+    for (const ScanNode& n : nodes) {
+        if (n.open || (n.kind == NodeKind::Object && !static_cast<RObject*>(n.ptr)->canBeInRegion())) {
+            sealed[n.component] = 0;
+        }
+    }
+    std::vector<std::pair<int, int>> links;
+    for (const ScanEdge& e : edges) {
+        int fc = nodes[e.from].component;
+        if (e.to < 0) {
+            // the target was not entered: an object being deleted or a node the scan could not lock
+            sealed[fc] = 0;
+            continue;
+        }
+        int tc = nodes[e.to].component;
+        if (tc != fc) {
+            assert(tc < fc);
+            links.emplace_back(fc, tc);
+        }
+    }
+    std::sort(links.begin(), links.end());
+    size_t li = 0;
+    bool any = false;
+    for (size_t c = 0; c < ncomp; ++c) {
+        while (li < links.size() && links[li].first == static_cast<int>(c)) {
+            if (!sealed[links[li].second]) {
+                sealed[c] = 0;
+            }
+            ++li;
+        }
+        if (sealed[c]) {
+            any = true;
+        }
+    }
+
+    RRegion* region = nullptr;
+    if (any) {
+        for (const ScanNode& n : nodes) {
+            if (n.kind == NodeKind::Object && sealed[n.component]) {
+                region = new RRegion(scan_epoch);
+                break;
+            }
+        }
+    }
+    if (region) {
+        // the regions and closed sets that edges from the sealed components enter, each once
+        std::unordered_set<RRegion*> deps;
+        for (auto& e : region_edges) {
+            if (sealed[nodes[e.first].component] && deps.insert(e.second).second) {
+                e.second->ref();
+                region->deps.push_back(e.second);
+            }
+        }
+        std::unordered_set<RObject*> closed_deps;
+        for (auto& e : closed_edges) {
+            if (sealed[nodes[e.first].component] && closed_deps.insert(e.second).second) {
+                e.second->tRef();
+                region->closed_deps.push_back(e.second);
+            }
+        }
+    }
+    for (const ScanNode& n : nodes) {
+        if (n.kind != NodeKind::Object) {
+            continue;
+        }
+        RObject* obj = static_cast<RObject*>(n.ptr);
+        if (region && sealed[n.component]) {
+            region->ref();
+            obj->setRegion(region, n.component);
+        } else if (obj->region_word.load(std::memory_order_relaxed)) {
+            obj->setRegion(nullptr, -1);
+        }
+    }
+    if (region) {
+        // An edge added to a sealed object after the scan read its generation may not have been seen: the region is
+        // then not current.  Checked after the region is assigned: edgesAdded() advances the generation before it
+        // reads the object's region, so one of the two sees the other.
+        for (const ScanNode& n : nodes) {
+            if (n.kind == NodeKind::Object && sealed[n.component]
+                && static_cast<RObject*>(n.ptr)->edge_gen.load(std::memory_order_seq_cst) != n.edge_gen) {
+                region->invalid.store(true, std::memory_order_seq_cst);
+                break;
+            }
+        }
+        RRegion::deref(region);
+    }
 }
 
 void RSetHelper::recheckOrphans() {
@@ -1835,6 +2129,9 @@ void RSetHelper::releaseHeld() {
 }
 
 void RSetHelper::commit() {
+    // with the rsection of every object entered still held
+    assignRegions();
+
     if (!changed) {
         // The scan found every recursive set it would have assigned already in place, so there is nothing to
         // invalidate, nothing to create and nothing to replace: confirm each object and release it.  Only the
@@ -2013,6 +2310,7 @@ void RSetHelper::rollback(bool yield) {
     current = -1;
     tr_out.clear();
     tr_invalidate.clear();
+    releaseRegionState();
     // the held values are released by the destructor, after the scan lock of the object that the scan started at
 
 #ifdef _POSIX_PRIORITY_SCHEDULING

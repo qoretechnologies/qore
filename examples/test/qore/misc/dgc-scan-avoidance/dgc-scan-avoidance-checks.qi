@@ -731,6 +731,126 @@ sub pinned_close_writes(reference<hash<string, int>> rv, Tally t, reference<*Cou
     release = new Counters();
 }
 
+#! builds a tree of nodes with \a fan children each, \a depth levels below the root, as a list in \c tmp
+/** With \a cyclic, each node is also in a 2-cycle with a peer, as a schema object is with its cached data type.
+*/
+Node sub make_tree(int depth, int fan, bool cyclic) {
+    Node n();
+    if (cyclic) {
+        make_cycle(n);
+    }
+    n.tmp = ();
+    if (depth > 0) {
+        for (int i = 0; i < fan; ++i) {
+            n.tmp += make_tree(depth - 1, fan, cyclic);
+        }
+    }
+    return n;
+}
+
+#! the number of nodes in a tree made by make_tree(DagDepth, DagFan, False)
+const DagNodes = 85;
+const DagDepth = 3;
+const DagFan = 4;
+
+#! new holders each store a reference to a large graph that is already scanned and unchanged
+/** Nothing in the graph refers to a holder, so no write can close a cycle through one; every write nevertheless
+    walked the whole graph reachable from the holder.
+*/
+sub dag_holder_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root = make_tree(DagDepth, DagFan, False);
+    list<Request> holders = ();
+    Counters c();
+    for (int i = 0; i < Writes; ++i) {
+        holders += new Request(root);
+    }
+    c.record(\rv, "dag-holder");
+    rv."dag-holder-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! as dag_holder_writes(), with each node of the graph in a 2-cycle with a peer
+sub dag_holder_cyclic_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root = make_tree(DagDepth, DagFan, True);
+    list<Request> holders = ();
+    Counters c();
+    for (int i = 0; i < Writes; ++i) {
+        holders += new Request(root);
+    }
+    c.record(\rv, "dag-holder-cyclic");
+    rv."dag-holder-cyclic-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! after the holders store the graph, an edge deep inside it is added back to a holder
+/** The edge closes a cycle through the holder, the root and every node on the way down: it must be found, and the
+    cycle collected once the holders are released.
+*/
+sub dag_back_edge_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root = make_tree(DagDepth, DagFan, False);
+    list<Request> holders = ();
+    for (int i = 0; i < Writes; ++i) {
+        holders += new Request(root);
+    }
+    Counters c();
+    # the deepest node on the first path refers back to the first holder
+    Node deep = root;
+    while (deep.tmp) {
+        deep = deep.tmp[0];
+    }
+    deep.x = holders[0];
+    remove deep;
+    c.record(\rv, "dag-back-edge");
+    rv."dag-back-edge-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! a region that depends on another: an edge added inside the one it depends on ends its currency too
+/** The tree is recorded as a region; a node outside it that refers to the tree's root is recorded as a second
+    region, which depends on the first.  An edge added deep inside the tree to a new holder of the second closes a
+    cycle through both: it must be found, and the cycle collected once released.
+*/
+sub dag_dependent_back_edge_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root = make_tree(DagDepth, DagFan, False);
+    # records the tree as a region
+    list<Request> holders = (new Request(root),);
+    Node outer();
+    outer.x = root;
+    # records the outer node as a region that depends on the tree's
+    holders += new Request(outer);
+    Counters c();
+    Node deep = root;
+    while (deep.tmp) {
+        deep = deep.tmp[0];
+    }
+    deep.x = new Request(outer);
+    remove deep;
+    remove outer;
+    c.record(\rv, "dag-dependent-back-edge");
+    rv."dag-dependent-back-edge-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
+#! a reference stored in a container whose values the scanner reports through private data ends every region
+/** The objects a reference refers to cannot be found without evaluating it (RSet::untracked_edge_epoch), so the
+    next scan enters the tree again and records it anew, and the one after skips it again.
+*/
+sub dag_epoch_writes(reference<hash<string, int>> rv, Tally t, reference<*Counters> release) {
+    Node root = make_tree(DagDepth, DagFan, False);
+    list<Request> holders = (new Request(root),);
+    Node other();
+    Queue q();
+    q.push(\other.x);
+    Counters c();
+    holders += new Request(root);
+    c.record(\rv, "dag-epoch-first");
+    Counters c2();
+    holders += new Request(root);
+    c2.record(\rv, "dag-epoch-second");
+    rv."dag-epoch-held-dtors" = Tally::cycleSince(t);
+    release = new Counters();
+}
+
 #! runs one check and records what releasing its set cost and destroyed
 sub run(reference<hash<string, int>> rv, string shape,
         code<nothing(reference<hash<string, int>>, Tally, reference<*Counters>)> check) {
@@ -843,6 +963,60 @@ sub concurrent_pinned_intern(reference<hash<string, int>> rv, Tally t, int threa
     rv."held-dtors" = Tally::cycleSince(t);
 }
 
+#! several threads store a shared, recorded tree in new holders while another adds and removes an edge inside it
+/** Returns the nodes of the tree destroyed while it was held (\c held-dtors) and once it was released
+    (\c dtors), and the holders released (\c leaf-dtors).
+*/
+public hash<string, int> sub concurrent_regions(int threads) {
+    hash<string, int> rv = {};
+    Tally t();
+    concurrent_regions_intern(\rv, t, threads);
+    rv.dtors = Tally::cycleSince(t);
+    rv."leaf-dtors" = Leaf::destroyed - t.leaf;
+    return rv;
+}
+
+#! the tree of concurrent_regions(); held here for the reason given for ConcurrentTarget
+class RegionTarget {
+    public {
+        static *Node root;
+        static *Node deep;
+    }
+}
+
+sub concurrent_regions_intern(reference<hash<string, int>> rv, Tally t, int threads) {
+    RegionTarget::root = make_tree(DagDepth, DagFan, False);
+    Node deep = RegionTarget::root;
+    while (deep.tmp) {
+        deep = deep.tmp[0];
+    }
+    RegionTarget::deep = deep;
+    remove deep;
+    Counter done(threads + 1);
+    for (int i = 0; i < threads; ++i) {
+        background sub () {
+            on_exit done.dec();
+            list<Request> holders = ();
+            for (int j = 0; j < Writes; ++j) {
+                holders += new Request(RegionTarget::root);
+            }
+            remove holders;
+        }();
+    }
+    # closes and opens a cycle through a new holder deep inside the tree while the other threads store it
+    background sub () {
+        on_exit done.dec();
+        for (int j = 0; j < Writes; ++j) {
+            RegionTarget::deep.x = new Request(RegionTarget::root);
+            remove RegionTarget::deep.x;
+        }
+    }();
+    done.waitForZero();
+    rv."held-dtors" = Tally::cycleSince(t);
+    remove RegionTarget::deep;
+    remove RegionTarget::root;
+}
+
 #! the cycle written by the threads of concurrent_writes()
 /** It is held here, and the threads only reach it through this class, so that a thread holds no reference to it of
     its own when it signals that it is done: a closure keeps what it captured until the thread's function has
@@ -900,6 +1074,11 @@ public hash<string, int> sub get_results() {
     if (have_scan_count()) {
         run(\rv, "cut-api", \cut_api_writes());
     }
+    run(\rv, "dag-holder", \dag_holder_writes());
+    run(\rv, "dag-holder-cyclic", \dag_holder_cyclic_writes());
+    run(\rv, "dag-back-edge", \dag_back_edge_writes());
+    run(\rv, "dag-dependent-back-edge", \dag_dependent_back_edge_writes());
+    run(\rv, "dag-epoch", \dag_epoch_writes());
     run(\rv, "closure-outlives", \closure_outlives_writes());
     run(\rv, "closure-thread", \closure_thread_writes());
     run(\rv, "closure-concurrent", \closure_concurrent_writes());

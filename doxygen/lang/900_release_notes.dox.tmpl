@@ -1017,6 +1017,9 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
     - fixed reference cycles closed only by values stored in a @ref Qore::Thread::Queue "Queue" or a
       @ref Qore::TreeMap "TreeMap" (for example a reference to an object's member pushed into a queue held by that
       object) being kept for the life of the process
+    - garbage collection no longer walks a graph that an earlier scan has already walked and that has not gained an
+      edge since: storing a reference to a large, unchanged object graph in a new object now costs the same whatever
+      the size of the graph, which speeds up loading schema-heavy modules
     - fixed objects in a reference cycle being destroyed while still referenced when the member that closed the
       cycle was replaced (for example <tt>root.peer.peer = value</tt> on a cycle between \c root and \c peer held
       by a list or a local variable): the value replaced was released before the cycle's reference counts were

@@ -315,7 +315,8 @@ What the numbers say:
 Objects walked by the scans the writes made, with the compiled tiers handing a dead assigned value over to the lvalue
 (Phase 0b), a closure-bound local's frame lending its object a real reference (Phase 2), and a set's verdict
 trusted unless an edge was added between its members since its scan (Phase 4, `design/dgc.md`, "Knowing that a set's
-counts are current"), and a deferred scan marking the set stale instead of discarding it (Phase 3b). Every shape also asserts collection: nothing destroyed while the set is held, everything
+counts are current"), a deferred scan marking the set stale instead of discarding it (Phase 3b), and scans not
+entering already-scanned subgraphs that have gained no edge (Phase C, `design/dgc.md`, "Closed regions"). Every shape also asserts collection: nothing destroyed while the set is held, everything
 destroyed once it is released. All execution modes and the AOT module now walk the same number of objects.
 
 | shape | ast | ir / jit / tiered | aot |
@@ -328,9 +329,11 @@ destroyed once it is released. All execution modes and the AOT module now walk t
 | registry growth, hub in a local | 0 | 0 | 0 |
 | registry growth, hub held only by its own cycle | 5,150 | 5,150 | 5,150 |
 | registry removal, same | 5,050 | 5,050 | 5,050 |
-| registry growth with `@=` | 200 | 200 | 200 |
-| confirming scan of an open cycle, holder in a list | 500 | 500 | 500 |
-| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 3,000 | 3,000 | 3,000 |
+| registry growth with `@=` | 101 | 101 | 101 |
+| confirming scan of an open cycle, holder in a list | 200 | 200 | 200 |
+| 100 new holders of an 85-node tree already scanned (closed regions, Phase C) | 0 | 101 | 101 |
+| the same with each node in a 2-cycle | 0 | 102 | 102 |
+| server controller in a set, one op registered and removed per request (qore's async HTTP server shape) | 1,005 | 1,000 | 1,000 |
 | 10 requests releasing their references to a set member from outside the set, after a scan made while they held it | 0 | 0 | 0 |
 
 The server shape rebuilds the controller's recursive set twice per request (200 sets for 100 requests): the

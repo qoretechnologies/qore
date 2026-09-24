@@ -417,6 +417,74 @@ Debug builds count the objects that scans have entered in the current thread
 `examples/test/qore/misc/dgc-closed-sets.qtest` uses it along with collection checks for each of the rules
 above.
 
+### Closed regions: already-scanned subgraphs a scan does not enter
+
+The closed-set rule above only covers a set with no edge leaving it. Real graphs are mostly directed acyclic graphs
+of small cycle sets and set-less objects - shared `$ref` schemas referenced from many parents, a schema object in a
+2-cycle with its cached data type, generic field and type objects - and storing a reference to one in a new holder
+walked the whole graph on every write, although nothing in it refers to the holder. Loading
+`AzureOpenAiDataProvider` walked 7.5M objects in 24,000 scans.
+
+A scan that commits has found the strongly connected components of everything reachable from its root. A component
+other than the root's cannot reach the root: if it could, it would be in the root's component. The commit
+(`RSetHelper::assignRegions()`) records as one **closed region** (`RRegion`) every component that is also *sealed*:
+
+1. it is not the root's component;
+2. none of its nodes is open (an object the scan could not enter, Pattern B private data -
+   `valuesCanChangeWithoutScan()` - or a closure-bound variable, which its frame can write without a scan:
+   `RObject::canBeInRegion()`), and
+3. every edge from it leads to a sealed component, to an object of a region the scan skipped because it was current
+   (recorded in the region's `deps`, each referenced), or to an object of a closed set the scan skipped (recorded in
+   `closed_deps`, each held with a weak reference: a closed set reaches nothing outside it for as long as it is
+   closed).
+
+Tarjan's algorithm completes a component after every component it references, so sealing is decided in one pass in
+that order. Every object of a sealed component gets the region, with its component number (`RObject::region_word`,
+`region_comp`); an object of a component that is not sealed gets none.
+
+**Current.** A region is current while its `invalid` flag is clear, the untracked-edge epoch is the one it recorded,
+every object in `closed_deps` is still in a closed set, and every region in `deps` is current. `RSetHelper::
+regionCurrent()` decides it lazily the first time a scan reaches an object of the region, with an explicit stack and
+a memo for the rest of the scan: the cost is the regions reached, not the objects in them. The flag is set by:
+
+- `RObject::edgesAdded()` - the scanning writers before their scan, and `qore_dgc_value_stored()` for values a
+  Pattern B container stores (see "Knowing that a set's counts are current") - an **added** edge ends the region of
+  the object that holds it;
+- `RObject::setRegion()` when a later commit takes an object out of the region: the region's other objects can
+  still reach it, and it no longer tracks its edges.
+
+A **removed** edge never ends currency: it cannot make a node reach a root it could not reach before. An object that
+is destroyed releases its reference to the region without ending it.
+
+**Skipping.** `RSetHelper::checkNode(RObject&)` does not enter an object whose region is current, unless the object
+is in the root's own component of the root's region: the root's region can be current when the scan is a rescan
+rather than a write, and the root's component has to be walked to find its cycles. An object of another component was
+reached from the root and is not in its component, so it cannot reach the root. The skipped edge makes the referring
+component not closed (`ScanNode::refs_skipped`), as a skipped closed set does, but lets it be sealed in turn.
+
+**Locking.** `edgesAdded()` is called without the object's other locks - Pattern B containers call it under their
+own - so the region pointer is guarded by bit 0 of `region_word`, a spin lock held for a few instructions with
+nothing acquired inside it. `rlck` cannot be used: a commit holds r-sections, and a dereference can hold `rlck` while
+waiting for `rref_wait`, which a deferral releases only after taking the object's write lock. The scan holds a
+reference to the root's region for the pointer comparison, as a commit in shared mode can replace it meanwhile.
+
+**Races.** An edge added to a sealed object after the scan read its generation (`edge_gen`, Phase 4) may not have
+been seen: the commit assigns the region first and then compares each sealed object's generation with the one the
+scan read, and marks the region invalid if one moved. `edgesAdded()` advances the generation before it reads the
+region, and both use sequentially consistent operations, so one of the two sees the other.
+
+**Lifetime.** A region is referenced by each of its objects and by each region that depends on it. A region only
+depends on regions that existed before it, so the references cannot form a cycle, and a chain of them is released
+iteratively (`RRegion::deref()`).
+
+`examples/test/qore/misc/dgc-scan-avoidance` has the shapes, in each execution mode and from a compiled module:
+`dag-holder` (a tree stored in 100 new holders: 8,600 objects walked in the compiled tiers before, 101 now),
+`dag-holder-cyclic` (each node in a 2-cycle: 4,300 before, 102 now), `dag-back-edge` and `dag-dependent-back-edge`
+(an edge added deep inside a region, and inside a region another depends on: the cycles are found and collected),
+`dag-epoch` (a reference stored in a Queue ends every region), and `concurrent region writes`.
+`examples/test/qore/misc/dgc-unchanged-sets.qtest` checks that a scan skips a current region and that a set is still
+confirmed in place once the region has ended.
+
 ### A scan that finds the set already in place leaves it alone
 
 A scan that cannot skip a recursive set still usually finds exactly the set that is already there. Replacing it

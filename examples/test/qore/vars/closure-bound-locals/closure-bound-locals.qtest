@@ -33,12 +33,14 @@ class ClosureBoundLocalsTest inherits QUnit::Test {
 
         #! the number of objects that the scans of each operation entered (debug builds only)
         /** A write to a variable that its frame still holds scans nothing; the scan is made once when the frame
-            releases the variable, and enters the variable and the 100 nodes of the chain its value reaches.
+            releases the variable.  It does not enter the chain its value reaches beyond what is not already in a
+            closed region: the scans before recorded the chain as one, and nothing in it has changed since (see
+            RRegion), so two objects are entered instead of the variable and all 100 nodes.
         */
         const ExpectedScanObjectCounts = {
             "objects-write-through-reference": 0,
             "objects-write-captured": 0,
-            "objects-deferred-scan-at-frame-exit": 101,
+            "objects-deferred-scan-at-frame-exit": 2,
         };
 
         #! the number of nodes collected by each cycle check

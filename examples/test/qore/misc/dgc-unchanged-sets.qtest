@@ -15,6 +15,9 @@
 class Tag {
     public {
         string name = "tag";
+        #! written to add an edge outside the cycle, which takes the closed region the cycle is in out of the
+        #! current state without changing the cycle's recursive set
+        auto extra;
     }
 }
 
@@ -75,6 +78,7 @@ class DgcUnchangedSetsTest inherits QUnit::Test {
         addTestCase("A set left in place is still collected", \unchangedSetIsCollected());
         addTestCase("A set left in place keeps its node watch", \unchangedSetKeepsItsNodeWatch());
         addTestCase("Assigning a cycle member does not rebuild its set", \assigningACycleMemberKeepsTheSet());
+        addTestCase("A scan does not enter a current closed region", \scanSkipsACurrentRegion());
         set_return_value(main());
     }
 
@@ -90,6 +94,10 @@ class DgcUnchangedSetsTest inherits QUnit::Test {
         # longer match, which makes RSet::canDelete() invalidate the set and ask for a rescan
         c.holder.value = c.head;
         c.holder.other = new Tag();
+        # the scans above recorded the cycle, and the object outside it, as a closed region, which the next scan
+        # would not enter; an edge added to the object outside the cycle ends the region without changing the
+        # cycle's recursive set
+        c.tag.extra = new Tag();
 
         int sets = rsetCreateCount();
         int entered = scanObjectCount();
@@ -162,6 +170,8 @@ class DgcUnchangedSetsTest inherits QUnit::Test {
         # dereference.  That asks for a rescan, which must confirm the set rather than build an identical one:
         # rebuilding left the same temporary-reference trail behind and asked for the same rescan again.
         c.holder.value = c.head;
+        # as in scanKeepsAnUnchangedSet(): the next scan must walk the cycle, not skip its closed region
+        c.tag.extra = new Tag();
 
         int sets = rsetCreateCount();
         int entered = scanObjectCount();
@@ -177,6 +187,31 @@ class DgcUnchangedSetsTest inherits QUnit::Test {
         # more than once; what must not happen is that each of those walks throws the set away and builds an
         # identical one
         assertGt(CycleSize, walked, "the scan still enters the cycle");
+    }
+
+    #! A scan of an unchanged graph does not enter the closed region an earlier scan recorded for it
+    /** The first scan from the holder records the cycle and the object outside it as a closed region: they cannot
+        reach the holder.  The next scan from the holder only enters the holder and what it adds.
+    */
+    scanSkipsACurrentRegion() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("scan counts require a debug build");
+        }
+        OpenNode::destroyed = 0;
+        hash<string, auto> c = makeOpenCycle(CycleSize);
+        c.holder = new ValueHolder();
+        c.holder.value = c.head;
+        c.holder.other = new Tag();
+
+        int sets = rsetCreateCount();
+        int entered = scanObjectCount();
+        c.holder.other = new Tag();
+        int walked = scanObjectCount() - entered;
+        assertLt(CycleSize, walked, "the scan does not enter the cycle's region");
+        assertEq(0, rsetCreateCount() - sets, "the cycle's recursive set is left in place");
+        assertEq(0, OpenNode::destroyed, "nothing is collected while the graph is held");
+        remove c;
+        assertEq(CycleSize, OpenNode::destroyed, "the cycle is collected once the graph is released");
     }
 
     #! Returns a hash holding a cycle of \a n objects that also reference one object outside the cycle
