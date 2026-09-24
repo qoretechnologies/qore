@@ -1,0 +1,412 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDeferredClassImpliedConstructorTest
+
+# Regression test: an implied constructor call (`Cls var(args)`) naming a class declared in another file of the
+# same build group must construct the object in every execution mode.
+#
+# A per-file `qcc -c` compile with a source-symbol manifest defers such a class: it is not in the parse, so the
+# declaration is parsed as a dynamic object construction whose class is resolved by name when the object is made.
+# The IR lowering only emitted a native NewObject instruction for a class bound at parse time, so the dynamic
+# construction fell through to the VrnConstruct path with no operands.  The .qo artifact then serialized the
+# construction expression as a new-object expression, and with a debugger attached - which runs the artifact's IR
+# in the interpreter - the construction failed:
+#
+#   IR-AST-FALLBACK-ERROR: AST expression fallback is disabled: kind='invoke' ... invoke_opcode=VrnConstruct
+#
+# in a block with exception edges, and was silently evaluated as an AST expression otherwise, which also bypassed
+# the Program's sandboxing restrictions.
+#
+# The construction is exercised in a block with an on_exit handler and nested locals (an invoke with an exception
+# edge), in a plain block, and inside a try block, with constructor args evaluated from locals, directly (native
+# code) and through call_static_method() (the artifact's IR, with the debugger attached), in every execution mode.
+# A class in a functional domain the executing Program excludes must raise CREATE-OBJECT-ERROR in all of them.
+class AOTDeferredClassImpliedConstructorTest inherits QUnit::Test {
+    public {
+        #! the class constructed through the deferred implied constructor call
+        const RestorCode = "%modern
+class Restor {
+    public { string id; }
+    constructor(string n_id, int n) { id = sprintf(\"%s-%d\", n_id, n); }
+}
+";
+
+        #! a class in the THREAD_CLASS functional domain, which PO_NO_THREAD_CLASSES excludes
+        const GuardedCode = "%modern
+class Guarded inherits Qore::Thread::Counter {
+    public { string id; }
+    constructor(string n_id) { id = n_id; }
+}
+";
+
+        #! the consumer: every construction below names a class this file does not declare
+        const EngineCode = "%modern
+%allow-debugger
+
+class Rec inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rtn) {}
+    onDetach(ProgramControl pgm, reference rs, reference rtn) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bpid, reference flow, reference rs, reference rtn) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rtn) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+    onException(ProgramControl pgm, int sid, hash ex, reference dismiss, reference rs, reference rtn) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+}
+
+class Eng {
+    # the on_exit handler and the nested loop locals give the construction an exception edge
+    static string invokePath(bool b, list<int> l) {
+        if (!b) {
+            return \"skip\";
+        }
+        bool done = False;
+        string pfx = \"inv\";
+        int n = l.size();
+        Restor r(pfx, n);
+        on_exit {
+            if (!done) {
+                done = True;
+            }
+        }
+        foreach int i in (l) {
+            int j = i + 1;
+            if (j > 10) {
+                break;
+            }
+        }
+        return r.id;
+    }
+
+    static string plainPath(string pfx, int n) {
+        string p2 = pfx + \"!\";
+        Restor r(p2, n * 2);
+        return r.id;
+    }
+
+    static string tryPath(bool b) {
+        try {
+            if (!b) {
+                return \"skip\";
+            }
+            string pfx = \"try\";
+            int n = 3;
+            Restor r(pfx, n);
+            return r.id;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    }
+
+    static string guardedPlain(string pfx) {
+        string id = pfx + \"g\";
+        Guarded g(id);
+        return g.id;
+    }
+
+    static string guardedInvoke(string pfx, list<int> l) {
+        bool done = False;
+        string id = pfx + \"g\";
+        Guarded g(id);
+        on_exit {
+            if (!done) {
+                done = True;
+            }
+        }
+        foreach int i in (l) {
+            int j = i + 1;
+            if (j > 10) {
+                break;
+            }
+        }
+        return g.id;
+    }
+}
+
+string sub attempt(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+string sub runShapes(string label) {
+    string rv = sprintf(\"%s direct: %s %s %s\\n\", label,
+        attempt(string sub () { return Eng::invokePath(True, (1, 2)); }),
+        attempt(string sub () { return Eng::plainPath(\"pl\", 4); }),
+        attempt(string sub () { return Eng::tryPath(True); }));
+    rv += sprintf(\"%s dynamic: %s %s %s\\n\", label,
+        attempt(string sub () { return call_static_method(\"Eng\", \"invokePath\", True, (1, 2, 3)); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"plainPath\", \"dy\", 5); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"tryPath\", True); }));
+    rv += sprintf(\"%s guarded: %s | %s | %s | %s\\n\", label,
+        attempt(string sub () { return Eng::guardedPlain(\"p\"); }),
+        attempt(string sub () { return Eng::guardedInvoke(\"i\", (1, 2)); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"guardedPlain\", \"dp\"); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"guardedInvoke\", \"di\", (1,)); }));
+    return rv;
+}
+
+#! runs the shapes repeatedly so that a tier promoting hot code runs them in its compiled form too
+string sub runRepeated(string label) {
+    string first = runShapes(label);
+    for (int i = 0; i < 3; ++i) {
+        string again = runShapes(label);
+        if (again != first) {
+            return first + sprintf(\"%s unstable in pass %d:\\n%s\", label, i + 2, again);
+        }
+    }
+    return first;
+}
+
+int sub main() {
+    print(runRepeated(\"native\"));
+    Rec rec();
+    rec.addProgram(ProgramControl::getProgram());
+    on_exit rec.removeProgram(ProgramControl::getProgram());
+    print(runRepeated(\"debug\"));
+    return 0;
+}
+";
+
+        #! the output of every unrestricted run
+        const Expected = "native direct: inv-2 pl!-8 try-3
+native dynamic: inv-3 dy!-10 try-3
+native guarded: pg | ig | dpg | dig
+debug direct: inv-2 pl!-8 try-3
+debug dynamic: inv-3 dy!-10 try-3
+debug guarded: pg | ig | dpg | dig
+";
+
+        const SandboxError = "CREATE-OBJECT-ERROR: current Program sandboxing restrictions do not allow access to "
+            "the 'Guarded' class";
+
+        #! a C++ host that registers the objects in a Program with the requested restrictions and execution mode
+        const HostCode = "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+#include <string.h>
+
+extern \"C\" {
+    void qore_restor_restor_script_register(QoreProgram*);
+    void qore_guarded_guarded_script_register(QoreProgram*);
+    void qore_eng_eng_script_register(QoreProgram*);
+}
+
+int main(int argc, char** argv) {
+    if (argc != 3) {
+        fprintf(stderr, \"usage: %s ast|ir|jit|tiered sandbox|open\\n\", argv[0]);
+        return 2;
+    }
+    qore_exec_mode_t mode;
+    if (!strcmp(argv[1], \"ast\")) {
+        mode = QEM_AST;
+    } else if (!strcmp(argv[1], \"ir\")) {
+        mode = QEM_IR;
+    } else if (!strcmp(argv[1], \"jit\")) {
+        mode = QEM_JIT;
+    } else if (!strcmp(argv[1], \"tiered\")) {
+        mode = QEM_TIERED;
+    } else {
+        fprintf(stderr, \"unknown execution mode '%s'\\n\", argv[1]);
+        return 2;
+    }
+    bool sandbox = !strcmp(argv[2], \"sandbox\");
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS
+        | (sandbox ? PO_NO_THREAD_CLASSES : 0));
+    if (!pgm) {
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    qore_restor_restor_script_register(pgm);
+    qore_guarded_guarded_script_register(pgm);
+    qore_eng_eng_script_register(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (!rc) {
+        pgm->setExecMode(mode, true);
+        rc = qore_run_callable(pgm, \"main\", NULL);
+    }
+    if (rc) {
+        fprintf(stderr, \"%s\\n\", qore_last_error(pgm));
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc;
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : QUnit::Test("AOTDeferredClassImpliedConstructorTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(dirname(get_script_path()) + "/../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("the constructions agree in every source execution mode", \testSourceModes());
+        addTestCase("a deferred class is constructed in a qcc-linked executable", \testLinkedExecutable());
+        addTestCase("a deferred class is constructed in every execution mode", \testEveryExecMode());
+        addTestCase("a sandboxed Program refuses a deferred class in every execution mode", \testSandbox());
+
+        set_return_value(main());
+    }
+
+    #! The output of every run in a Program that excludes the THREAD_CLASS domain
+    private static string sandboxExpected() {
+        string guarded = (SandboxError, SandboxError, SandboxError, SandboxError).join(" | ");
+        return sprintf("native direct: inv-2 pl!-8 try-3
+native dynamic: inv-3 dy!-10 try-3
+native guarded: %s
+debug direct: inv-2 pl!-8 try-3
+debug dynamic: inv-3 dy!-10 try-3
+debug guarded: %s
+", guarded, guarded);
+    }
+
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
+    #! Returns the command's combined output
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! Returns the command's combined output with its exit status appended
+    private string runStatus(string cmd) {
+        return backquote(sprintf("%s 2>&1; echo \"exit=$?\"", cmd));
+    }
+
+    private static write(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Compiles each source to its own .qo, deferring the classes the consumer does not declare
+    /** @return the directory holding the objects
+    */
+    private string compileObjects(string root) {
+        string restor = root + "/restor.qr";
+        string guarded = root + "/guarded.qr";
+        string eng = root + "/eng.qr";
+        write(restor, RestorCode);
+        write(guarded, GuardedCode);
+        write(eng, EngineCode);
+        string manifest = root + "/source-symbols.manifest";
+        write(manifest, sprintf("format=1\nclass\tRestor\t%s\nclass\tGuarded\t%s\n", restor, guarded));
+
+        string qo_dir = root + "/qo";
+        mkdir(qo_dir);
+        foreach string src in ((restor, guarded)) {
+            string out = run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+                "--source-symbol-manifest=%s --output-dir=%s %s", env, qcc_bin, manifest, qo_dir, src));
+            assertTrue(out.find("script-context .qo") != -1, "compiled " + basename(src) + ": " + out);
+        }
+        # the consumer is compiled against the providers' objects, and defers both classes
+        string out = run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER --source-symbol-manifest=%s "
+            "-L %s --output-dir=%s %s", env, qcc_bin, manifest, qo_dir, qo_dir, eng));
+        assertTrue(out.find("script-context .qo") != -1, "compiled the deferring consumer: " + out);
+        return qo_dir;
+    }
+
+    #! Builds the C++ host that runs the objects in a Program with a given execution mode and restrictions
+    private *string buildHost(string root, string qo_dir) {
+        string host = root + "/host.cpp";
+        write(host, HostCode);
+        string exe = root + "/deferred-class-host";
+        string cxx = ENV.CXX ?? "g++";
+        string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s/restor.qo %s/guarded.qo %s/eng.qo -L%s "
+            "-Wl,-rpath,%s -lqore -o %s %s", cxx, source_root + "/include", libqore_dir + "/include", host, qo_dir,
+            qo_dir, qo_dir, libqore_dir, libqore_dir, exe, libqoreTargetFlags().join(" ")));
+        if (!is_file(exe)) {
+            if (out =~ /not found/) {
+                testSkip("no C++ compiler to build the host: " + out);
+            }
+            assertTrue(False, "linked the C++ host: " + out);
+            return;
+        }
+        return exe;
+    }
+
+    testSourceModes() {
+        TmpDir tmp("qore-aot-deferred-class-vrn-src-");
+        # one file: the classes are bound at parse time; this is the behavior the deferred compile must match
+        string runner = tmp.path + "/runner.q";
+        write(runner, RestorCode + "\n" + GuardedCode + "\n" + EngineCode + "\nmain();\n");
+        foreach string mode in (Modes) {
+            string out = runStatus(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, runner));
+            assertEq(Expected + "exit=0\n", out, mode + " source mode");
+        }
+    }
+
+    testLinkedExecutable() {
+        TmpDir tmp("qore-aot-deferred-class-vrn-exe-");
+        string qo_dir = compileObjects(tmp.path);
+        string exe = tmp.path + "/deferred-class";
+        string link_out = run(sprintf("%s %s -o %s %s/*.qo", env, qcc_bin, exe, qo_dir));
+        assertTrue(is_file(exe), "linked the executable: " + link_out);
+
+        string out = runStatus(sprintf("%s %s", env, exe));
+        assertEq(-1, out.find("IR-AST-FALLBACK-ERROR"), "no AST fallback: " + out);
+        assertEq(Expected + "exit=0\n", out, "linked executable");
+    }
+
+    testEveryExecMode() {
+        TmpDir tmp("qore-aot-deferred-class-vrn-modes-");
+        string qo_dir = compileObjects(tmp.path);
+        *string exe = buildHost(tmp.path, qo_dir);
+        if (!exe) {
+            return;
+        }
+        foreach string mode in (Modes) {
+            string out = runStatus(sprintf("%s %s %s open", env, exe, mode));
+            assertEq(-1, out.find("IR-AST-FALLBACK-ERROR"), mode + " mode has no AST fallback: " + out);
+            assertEq(Expected + "exit=0\n", out, mode + " mode");
+        }
+    }
+
+    testSandbox() {
+        TmpDir tmp("qore-aot-deferred-class-vrn-sandbox-");
+        string qo_dir = compileObjects(tmp.path);
+        *string exe = buildHost(tmp.path, qo_dir);
+        if (!exe) {
+            return;
+        }
+        foreach string mode in (Modes) {
+            # the class is refused because of the restriction, not because the host cannot construct it
+            string out = runStatus(sprintf("%s %s %s open", env, exe, mode));
+            assertEq(Expected + "exit=0\n", out, mode + " mode without restrictions");
+
+            out = runStatus(sprintf("%s %s %s sandbox", env, exe, mode));
+            # the AST fallback raised INVALID-FUNCTION-ACCESS from the base class constructor instead
+            assertEq(-1, out.find("INVALID-FUNCTION-ACCESS"), mode + " mode checks the class, not its base: " + out);
+            assertEq(sandboxExpected() + "exit=0\n", out, mode + " mode in a sandboxed Program");
+        }
+    }
+}

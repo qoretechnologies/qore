@@ -599,6 +599,11 @@ private:
     // register's last use is reached, enabling early release of DotEval base
     // cleanup allocas.
     std::unordered_map<uint32_t, int> operand_remaining_uses;
+    //! the block defining each value, for decisions that are only safe when a value is used in the block defining it
+    /** The use counts above are static: a value defined before a loop and used once in its body counts one use,
+        but that use runs on every iteration.
+    */
+    std::unordered_map<uint32_t, const QoreIRBasicBlock*> value_def_block;
 
     // Single-use or nonescaping stored closure values consumed directly by
     // CallClosureDirect. Their creation can be fused into the call without

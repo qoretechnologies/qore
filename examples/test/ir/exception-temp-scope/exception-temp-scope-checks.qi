@@ -1,0 +1,182 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file exception-temp-scope-checks.qi checks for the temporaries released before an exception handler runs
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/** When a statement raises an exception that a handler in the same function catches, the temporaries of that
+    statement are released before the handler runs, as the AST interpreter releases them when the statement's
+    evaluation unwinds; the temporaries of the statements enclosing it are not.  Each check reports the number of
+    tracked objects destroyed when its handler runs.
+
+    The checks are included in the main program of the worker that runs them in each execution mode, and in
+    ExceptionTempScopeChecks.qm for the compiled (AOT) run.
+*/
+public namespace ExceptionTempScopeChecks {
+#! An object whose destruction is counted
+public class Tracked {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Tracked::destroyed;
+    }
+
+    #! returns a string, which cannot be stored in an integer
+    auto text() {
+        return "text";
+    }
+
+    #! raises an exception
+    string fail() {
+        throw "CHECK-ERROR";
+    }
+}
+
+#! Returns the result of each check
+public hash<string, int> sub get_results() {
+    hash<string, int> rv = {};
+
+    # a typed local variable rejects the value
+    int start = Tracked::destroyed;
+    try {
+        int i = (new Tracked()).text();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."local-store" = Tracked::destroyed - start;
+    }
+
+    # a typed hash key rejects the value
+    hash<string, int> h = {};
+    start = Tracked::destroyed;
+    try {
+        h.k = (new Tracked()).text();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."hash-store" = Tracked::destroyed - start;
+    }
+
+    # a typed list element rejects the value
+    list<int> l = (1,);
+    start = Tracked::destroyed;
+    try {
+        l[0] = (new Tracked()).text();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."list-store" = Tracked::destroyed - start;
+    }
+
+    # a nested lvalue path rejects the value
+    hash<string, hash<string, int>> hh = {"a": {}};
+    start = Tracked::destroyed;
+    try {
+        hh.a.b = (new Tracked()).text();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."path-store" = Tracked::destroyed - start;
+    }
+
+    # the value is stored by a second statement
+    start = Tracked::destroyed;
+    try {
+        auto s = (new Tracked()).text();
+        int j = s;
+    } catch (hash<ExceptionInfo> ex) {
+        rv."second-statement" = Tracked::destroyed - start;
+    }
+
+    # the statement throws
+    start = Tracked::destroyed;
+    try {
+        throw (new Tracked()).text();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."throw" = Tracked::destroyed - start;
+    }
+
+    # a call made by the statement throws
+    start = Tracked::destroyed;
+    try {
+        string s = (new Tracked()).fail();
+    } catch (hash<ExceptionInfo> ex) {
+        rv."call-throws" = Tracked::destroyed - start;
+    }
+
+    # the store fails in a loop body
+    start = Tracked::destroyed;
+    try {
+        foreach int i in (1, 2) {
+            int x = (new Tracked()).text() + i;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        rv."in-loop" = Tracked::destroyed - start;
+    }
+
+    # negative: the handler is in the body of a loop over a temporary list, whose objects stay alive in the handler
+    # and for the rest of the loop
+    start = Tracked::destroyed;
+    int alive_in_handler = -1;
+    int iterations = 0;
+    foreach Tracked t in ((new Tracked(), new Tracked()) + ()) {
+        ++iterations;
+        try {
+            hh.a.b = (new Tracked()).text();
+        } catch (hash<ExceptionInfo> ex) {
+            if (alive_in_handler < 0) {
+                # the statement's own temporary is gone; neither element of the list is
+                alive_in_handler = Tracked::destroyed - start;
+            }
+        }
+    }
+    rv."enclosing-in-handler" = alive_in_handler;
+    rv."enclosing-iterations" = iterations;
+
+    # a failing lvalue path store caught in the body of a typed loop, which re-reads its list on every iteration: a
+    # drain of more than the raising statement's temporaries would release the list
+    int caught = 0;
+    foreach string str in (("x", "y", "z") + ()) {
+        try {
+            auto v = str;
+            hh.a.b = v;
+        } catch (hash<ExceptionInfo> ex) {
+            ++caught;
+        }
+    }
+    rv."typed-loop-caught" = caught;
+
+    # the same with local variables in the try body: the exception reaches the handler through the block's local
+    # variable cleanup, whose check records the scope of the try, which runs on after the handler - its mark must
+    # stay for its own end, or that end releases the loop's list instead
+    int caught_lvars = 0;
+    int released_lvars = -1;
+    foreach string str in (("x", "y", "z") + ()) {
+        start = Tracked::destroyed;
+        try {
+            hash<auto> local_h = {"k": str};
+            int bad = (new Tracked()).text() + local_h.k;
+        } catch (hash<ExceptionInfo> ex) {
+            ++caught_lvars;
+            if (released_lvars < 0) {
+                released_lvars = Tracked::destroyed - start;
+            }
+        }
+    }
+    rv."typed-lvars-caught" = caught_lvars;
+    rv."typed-lvars-released" = released_lvars;
+    return rv;
+}
+}

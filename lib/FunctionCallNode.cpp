@@ -1495,12 +1495,7 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
             return QoreValue();
         }
         QoreProgram* sandbox_pgm = getProgram() ? getProgram() : lookup_pgm;
-        if (sandbox_pgm && (sandbox_pgm->getParseOptions() & qc->getDomain())) {
-            xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
-                "access to the '%s' class", qc->getName());
-            return QoreValue();
-        }
-        if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+        if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, sandbox_pgm, xsink)) {
             return QoreValue();
         }
         const QoreTypeInfo* oti = qore_substitute_type_params_if_needed(object_type_info);

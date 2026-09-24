@@ -12,15 +12,31 @@ class RequestEncodingHandler inherits HttpServer::AbstractHttpRequestHandler {
         Queue requests();
     }
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        requests.push({"body": body, "context_encoding": cx.char_encoding,
+        requests.push({"body": body, "context_encoding": cx.char_encoding, "content_type": hdr."_qore_orig_content_type",
             "body_encoding": body.typeCode() == NT_STRING ? get_encoding(cast<string>(body)) : NOTHING});
         return <HttpResponseInfo>{"code": 200, "body": "ok"};
     }
 }
 
+#! Returns a body in the charset and with the Content-Type given in the request's X-Enc and X-Ct headers
+class ResponseCharsetHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # a binary body is sent as-is, so the server adds no charset of its own
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": binary(convert_encoding(ResponseValue, hdr."x-enc")),
+            "hdr": {"Content-Type": hdr."x-ct"},
+        };
+    }
+}
+
+const ResponseValue = "é\r\n \t";
+
 class HttpServerRequestEncodingTest inherits QUnit::Test {
     constructor() : Test("HttpServer request encoding", "1.0") {
         addTestCase("Buffered request strings retain the declared character encoding", \encoding());
+        addTestCase("A request charset is parsed per RFC 9110", \requestCharsetSyntax());
+        addTestCase("A response charset is parsed per RFC 9110", \responseCharsetSyntax());
         addTestCase("HTTP protocol fields do not inherit a previous body charset", \headers());
         addTestCase("Binary request bodies retain their original bytes", \binaryBodies());
         addTestCase("Multipart request bodies keep every part's bytes", \multipartBodies());
@@ -43,6 +59,65 @@ class HttpServerRequestEncodingTest inherits QUnit::Test {
             assertEq(value, received.body);
         }
     }
+    #! quoted-string values, whitespace, parameter-name case, and a ';' or "charset=" in another parameter
+    /** The encoding name itself is asserted: glibc's iconv ignores the quotes of a quoted name, so a conversion
+        alone would hide a mistagged string there, while musl fails it.
+    */
+    private requestCharsetSyntax() {
+        HttpServer server();
+        on_exit server.stop();
+        RequestEncodingHandler handler();
+        server.setDefaultHandler("encoding", handler);
+        int port = server.addListener(0).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
+        string value = "é\r\n \t";
+        foreach hash<auto> i in (
+                {"ct": 'text/xml;charset="UTF-8"', "enc": "UTF-8"},
+                {"ct": 'text/xml; charset = "iso-8859-1"', "enc": "ISO-8859-1"},
+                {"ct": 'text/xml; Charset="UTF-16LE"; action="urn:a;b"', "enc": "UTF-16LE"},
+                {"ct": 'text/xml; action="charset=UTF-16LE"; charset=UTF-16BE', "enc": "UTF-16BE"},
+            ) {
+            assertEq("ok", client.post("/", binary(convert_encoding(value, i.enc)), {"Content-Type": i.ct}));
+            hash<auto> received = handler.requests.pop(30000);
+            # the client adds no second charset to a Content-Type that already declares one
+            assertEq(i.ct, received.content_type, i.ct);
+            assertEq(i.enc, received.context_encoding, i.ct);
+            assertEq(i.enc, received.body_encoding, i.ct);
+            assertEq(value, received.body, i.ct);
+        }
+    }
+
+    #! the same syntax in a response, read by the synchronous and the poll client APIs
+    private responseCharsetSyntax() {
+        HttpServer server();
+        on_exit server.stop();
+        server.setDefaultHandler("charset", new ResponseCharsetHandler());
+        int port = server.addListener(0).port;
+        HTTPClient client({"url": sprintf("http://127.0.0.1:%d/", port), "timeout": 30000});
+        foreach hash<auto> i in (
+                {"ct": 'text/plain;charset="ISO-8859-1"', "enc": "ISO-8859-1", "bct": "text/plain"},
+                {"ct": 'text/plain; Charset = "UTF-16LE"; x="a;b"', "enc": "UTF-16LE", "bct": "text/plain"},
+                {"ct": 'text/plain; x="charset=UTF-8"; charset=UTF-16BE', "enc": "UTF-16BE", "bct": "text/plain"},
+            ) {
+            hash<auto> req_hdr = {"X-Enc": i.enc, "X-Ct": i.ct};
+
+            hash<auto> info;
+            string body = client.get("/", req_hdr, \info);
+            assertEq(i.enc, body.encoding(), i.ct);
+            assertEq(ResponseValue, body, i.ct);
+            assertEq(i.enc, info.charset, i.ct);
+            assertEq(i.bct, info."body-content-type", i.ct);
+
+            AbstractPollOperation op = client.startPollSendRecv("GET", "/", NOTHING, req_hdr);
+            while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+                Socket::poll((pi,), 30s);
+            }
+            hash<auto> out = op.getOutput();
+            assertEq(i.enc, out."response-body".encoding(), i.ct + " (poll)");
+            assertEq(ResponseValue, out."response-body", i.ct + " (poll)");
+        }
+    }
+
     private headers() {
         Socket listener();
         listener.bind("127.0.0.1:0");

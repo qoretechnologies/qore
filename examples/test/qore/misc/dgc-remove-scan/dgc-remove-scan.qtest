@@ -1,5 +1,6 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
 %no-child-restrictions
@@ -55,8 +56,12 @@ class DgcRemoveScanTest inherits QUnit::Test {
             "remove-list-range-with-object": 1,
             "remove-shared-list-scalar-element": 1,
             "remove-shared-list-scalar-element-original": 4,
-            "remove-object-slice-with-object": 1,
-            "remove-object-object-member": 1,
+            # the check at the holder is deferred by the real reference that the frame of the closure-bound
+            # variable lends it, as for a plain local variable; the second scan is the removed member's release
+            # rescanning its recursive set (RSet::canDelete(), scan_refs)
+            "remove-object-slice-with-object": 2,
+            # as for remove-object-slice-with-object
+            "remove-object-object-member": 2,
             "api-remove-hash-scalar-key-value": 1,
             "api-remove-hash-scalar-key": 0,
             "api-remove-hash-missing-key": 0,
@@ -65,7 +70,8 @@ class DgcRemoveScanTest inherits QUnit::Test {
             "api-set-unique-remove-hash-scalar-key": 1,
             "api-set-unique-remove-hash-scalar-key-added": 1,
             "api-remove-hash-object-key": 1,
-            "api-remove-object-object-member": 1,
+            # as for remove-object-slice-with-object
+            "api-remove-object-object-member": 2,
             "delete-hash-object-key": 1,
             "delete-hash-object-key-destroyed": 1,
         };

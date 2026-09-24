@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-opaque-references
+# the Programs created here are given the option by this one
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class DgcOpaqueRegistryConcurrencyTest
+
+#! A target of opaque references; counts its destructions
+class Target {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Target::destroyed;
+    }
+}
+
+#! The targets copied by the threads of the concurrent copy check
+/** They are held here, and the threads only reach them through this class, so that no thread holds a reference to
+    them of its own once it has signalled that it is done: a closure keeps what it captured until the thread's
+    function has returned, which is after its on_exit code has signalled.
+*/
+class SharedTargets {
+    public {
+        static *hash<string, auto> holder;
+    }
+}
+
+#! Tests the registry of opaque reference targets under concurrent copies and releases
+/** Every copy and every release of an opaque value registers or deregisters a reference to its target with the
+    target's Program, so the registry is written on the hot path of any code that passes opaque values around, from
+    every thread at once.  The counts must stay exact: a lost registration lets Program teardown miss a cycle it has
+    to break (a leak), and a lost release keeps a target registered after its last opaque reference is gone, which
+    teardown would then delete while it is still used.
+*/
+class DgcOpaqueRegistryConcurrencyTest inherits QUnit::Test {
+    public {
+        const Threads = 8;
+        const Copies = 2000;
+        const Targets = 64;
+    }
+
+    constructor() : QUnit::Test("DgcOpaqueRegistryConcurrencyTest", "1.0") {
+        addTestCase("concurrent copies and releases keep exact counts", \concurrentCopies());
+        addTestCase("teardown breaks every cycle after concurrent copies", \teardownAfterConcurrentCopies());
+        addTestCase("teardown races releases made by another Program's threads", \teardownRacesReleases());
+        set_return_value(main());
+    }
+
+    #! threads copy opaque references to shared targets and release them; the targets are released exactly once
+    concurrentCopies() {
+        int d0 = Target::destroyed;
+        SharedTargets::holder = {};
+        for (int i = 0; i < Targets; ++i) {
+            SharedTargets::holder{"t" + i} @= new Target();
+        }
+        Counter done(Threads);
+        for (int t = 0; t < Threads; ++t) {
+            background sub () {
+                on_exit done.dec();
+                for (int i = 0; i < Copies; ++i) {
+                    # each copy of the hash copies every opaque value in it, and each release releases them
+                    hash<string, auto> copy = SharedTargets::holder;
+                    copy{"t" + (i % Targets)} = NOTHING;
+                    # released here rather than at the end of the thread, after it has signalled
+                    remove copy;
+                }
+            }();
+        }
+        done.waitForZero();
+        assertEq(0, Target::destroyed - d0, "no target released while an opaque reference holds it");
+        remove SharedTargets::holder;
+        assertEq(Targets, Target::destroyed - d0, "every target released with its last opaque reference");
+    }
+
+    #! a Program copies opaque references to targets in cycles through them from several threads, then is deleted
+    teardownAfterConcurrentCopies() {
+        int destroyed = 0;
+        Mutex m();
+        code<nothing()> report = sub () { m.lock(); on_exit m.unlock(); ++destroyed; };
+
+        Program p(new ParseOptions("allow-opaque-references"));
+        p.parse(sprintf("%%new-style
+our code report;
+class T { public { auto back; } destructor() { report(); } }
+our hash<string, auto> holder = {};
+sub setup() {
+    for (int i = 0; i < %d; ++i) {
+        # a cycle through an opaque edge, which cycle detection cannot see: t -@-> x -> t
+        T t();
+        T x();
+        t.back @= x;
+        x.back = t;
+        holder{\"t\" + i} @= t;
+    }
+}
+sub churn(int n) {
+    for (int i = 0; i < n; ++i) {
+        hash<string, auto> copy = holder;
+        copy{\"t\" + (i %% %d)} = NOTHING;
+    }
+}
+sub drop() { holder = {}; }
+", Targets, Targets), "teardown");
+        p.setGlobalVarValue("report", report);
+        p.callFunction("setup");
+        Counter done(Threads);
+        for (int t = 0; t < Threads; ++t) {
+            background sub () {
+                on_exit done.dec();
+                p.callFunction("churn", Copies);
+            }();
+        }
+        done.waitForZero();
+        # the cycles outlive the holder: only teardown can break them
+        p.callFunction("drop");
+        assertEq(0, destroyed, "cycles through opaque edges are not collected while the Program exists");
+        delete p;
+        assertEq(2 * Targets, destroyed, "teardown breaks every cycle, however the counts were reached");
+    }
+
+    #! another Program's threads keep releasing opaque references to this Program's targets while it is deleted
+    teardownRacesReleases() {
+        int destroyed = 0;
+        Mutex m();
+        code<nothing()> report = sub () { m.lock(); on_exit m.unlock(); ++destroyed; };
+
+        Program owner(new ParseOptions("allow-opaque-references"));
+        owner.parse("%new-style
+our code report;
+class O { destructor() { report(); } }
+hash<string, auto> sub make(int n) {
+    hash<string, auto> h = {};
+    for (int i = 0; i < n; ++i) {
+        h{\"o\" + i} @= new O();
+    }
+    return h;
+}
+", "owner");
+        owner.setGlobalVarValue("report", report);
+        hash<string, auto> shared = owner.callFunction("make", Targets);
+        Counter started(Threads);
+        Counter done(Threads);
+        for (int t = 0; t < Threads; ++t) {
+            background sub () {
+                on_exit done.dec();
+                hash<string, auto> mine = shared;
+                started.dec();
+                for (int i = 0; i < Copies; ++i) {
+                    hash<string, auto> copy = mine;
+                    copy{"o" + (i % Targets)} = NOTHING;
+                }
+            }();
+        }
+        started.waitForZero();
+        # teardown deletes the owner's targets while the threads above still copy and release opaque references
+        # to them: a release whose entry teardown already took finds nothing to deregister
+        delete owner;
+        assertEq(Targets, destroyed, "teardown deleted every target of the Program");
+        done.waitForZero();
+        remove shared;
+        assertEq(Targets, destroyed, "no target destroyed twice");
+    }
+}

@@ -129,6 +129,78 @@ void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pa
     }
 }
 
+static bool qore_http_is_ows(char c) {
+    return c == ' ' || c == '\t';
+}
+
+bool qore_find_http_media_type_param(const char* content_type, const char* name,
+        qore_http_media_type_param& param) {
+    if (!content_type) {
+        return false;
+    }
+    assert(name && *name);
+    size_t name_len = strlen(name);
+    // the type and subtype contain no ';', so the first one begins the first parameter
+    const char* p = strchr(content_type, ';');
+    while (p) {
+        const char* begin = p++;
+        while (qore_http_is_ows(*p)) {
+            ++p;
+        }
+        const char* pname = p;
+        while (*p && *p != '=' && *p != ';' && !qore_http_is_ows(*p)) {
+            ++p;
+        }
+        size_t pname_len = p - pname;
+        while (qore_http_is_ows(*p)) {
+            ++p;
+        }
+        std::string value;
+        if (*p == '=') {
+            ++p;
+            while (qore_http_is_ows(*p)) {
+                ++p;
+            }
+            if (*p == '"') {
+                // quoted-string: a ';' inside it is part of the value
+                ++p;
+                while (*p && *p != '"') {
+                    if (*p == '\\' && p[1]) {
+                        ++p;
+                    }
+                    value += *p++;
+                }
+                if (*p == '"') {
+                    ++p;
+                }
+            } else {
+                const char* v = p;
+                while (*p && *p != ';' && !qore_http_is_ows(*p)) {
+                    ++p;
+                }
+                value.assign(v, p - v);
+                if (value.size() >= 2 && value.front() == '\'' && value.back() == '\'') {
+                    value = value.substr(1, value.size() - 2);
+                }
+            }
+        }
+        // anything else before the next ';' is not part of the value
+        while (*p && *p != ';') {
+            ++p;
+        }
+        if (pname_len == name_len && !strncasecmp(pname, name, name_len)) {
+            param.value = std::move(value);
+            param.begin = begin - content_type;
+            param.end = p - content_type;
+            return true;
+        }
+        if (!*p) {
+            break;
+        }
+    }
+    return false;
+}
+
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_EVENTNOTIFIER;
 
@@ -18098,32 +18170,10 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
         if (is_text && !has_content_encoding) {
             const QoreEncoding* enc = QCS_UTF8;
             if (!force_utf8) {
-                // Extract charset from full content-type header (case-insensitive search)
-                std::string full_ct_lower = ct_it->second.back();
-                std::transform(full_ct_lower.begin(), full_ct_lower.end(),
-                    full_ct_lower.begin(),
-                    [](unsigned char c) { return std::tolower(c); });
-                size_t charset_pos = full_ct_lower.find("charset=");
-                if (charset_pos != std::string::npos) {
-                    // Extract value from original (non-lowercased) string
-                    std::string charset_val = ct_it->second.back().substr(charset_pos + 8);
-                    // Trim trailing whitespace, semicolons, quotes
-                    while (!charset_val.empty()
-                            && (isspace(static_cast<unsigned char>(charset_val.back()))
-                                || charset_val.back() == ';'
-                                || charset_val.back() == '"')) {
-                        charset_val.pop_back();
-                    }
-                    // Trim leading quotes
-                    if (!charset_val.empty() && charset_val.front() == '"') {
-                        charset_val.erase(0, 1);
-                    }
-                    if (!charset_val.empty()) {
-                        const QoreEncoding* found = QEM.findCreate(charset_val.c_str());
-                        if (found) {
-                            enc = found;
-                        }
-                    }
+                qore_http_media_type_param charset;
+                if (qore_find_http_media_type_param(ct_it->second.back().c_str(), "charset", charset)
+                        && !charset.value.empty()) {
+                    enc = QEM.findCreate(charset.value.c_str());
                 }
             }
             QoreStringNode* body_str = new QoreStringNode(

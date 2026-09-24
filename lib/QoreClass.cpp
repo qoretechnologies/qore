@@ -3365,6 +3365,17 @@ int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
     return priv->runtimeCheckInstantiateClass(xsink);
 }
 
+int qore_class_private::runtimeCheckInstantiateClassByName(const QoreClass& qc, const QoreProgram* pgm,
+        ExceptionSink* xsink) {
+    assert(xsink);
+    if (pgm && (pgm->getParseOptions() & qc.getDomain())) {
+        xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow access "
+            "to the '%s' class", qc.getName());
+        return -1;
+    }
+    return qc.priv->runtimeCheckInstantiateClass(xsink);
+}
+
 void qore_class_private::addBaseClass(QoreClass* qc, bool virt) {
     assert(qc);
     //printd(5, "adding %s as base class to %s (virt: %d)\n", qc->priv->name.c_str(), priv->name.c_str(), virt);

@@ -1,0 +1,224 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class DgcScanAccountingTest
+
+#! the root of the scan that waits in the scan wait check
+class WaitRoot {
+    public {
+        auto x;
+        auto peer;
+    }
+}
+
+#! the object whose lock the waiting scan needs
+class WaitPeer {
+    public {
+        auto peer;
+    }
+}
+
+#! Tests the runtime accounting of recursive-reference scans and the report of scans waiting for another thread
+/** Accounting is enabled by QORE_SCAN_STATS when a process starts, so it is checked in a worker process with and
+    without the variable; the worker runs in the AST interpreter, where the number of scans each write makes is
+    fixed.  Scan waits are always reported; a wait is made deterministic with debug-build hooks that hold an
+    object's lock in one thread and report the moment a scan starts waiting for it.
+*/
+class DgcScanAccountingTest inherits QUnit::Test {
+    public {
+        #! the accounting the worker's scans must produce, by scan root
+        const ExpectedAccounting = {
+            # 100 writes and the write that closes the cycle, rooted at the list's object, are all made; so is
+            # the write rooted at the peer; one scan restarts to take the locks exclusively
+            "AcctListRoot": {
+                "scans": 102,
+                "deferred": 0,
+                "already": 0,
+                "restarts": 0,
+                "exclusive": 1,
+                "nodes": 409,
+            },
+            # the writes rooted at an object held by a local variable are deferred; the one made at the peer and
+            # the one deferred scan replayed when the local releases the object run
+            "AcctLocalRoot": {
+                "scans": 2,
+                "deferred": 101,
+                "already": 0,
+                "restarts": 0,
+                "exclusive": 0,
+                "nodes": 7,
+            },
+        };
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("DgcScanAccountingTest", "1.0") {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("accounting when enabled", \enabled());
+        addTestCase("accounting is written to one file per process", \filePerProcess());
+        addTestCase("no accounting when not enabled", \disabled());
+        addTestCase("roots beyond the table's rows are counted together", \overflow());
+        addTestCase("a scan waiting for another thread is reported", \scanWait());
+        set_return_value(main());
+    }
+
+    enabled() {
+        TmpDir tmp("qore-scan-accounting-");
+        string base = tmp.path + DirSep + "stats";
+        hash<auto> rv = runWorker(base);
+        assertEq(ExpectedAccounting, rv.accounting, "accounting read in the process");
+
+        # the table written at exit holds the same numbers
+        string file = sprintf("%s.%d", base, rv.pid);
+        assertTrue(is_file(file), "accounting written to " + file);
+        hash<string, hash<string, int>> written = parseFile(file);
+        foreach hash<auto> i in (ExpectedAccounting.pairIterator()) {
+            assertEq(i.value, written{i.key}, "written accounting for " + i.key);
+        }
+    }
+
+    filePerProcess() {
+        TmpDir tmp("qore-scan-accounting-");
+        string base = tmp.path + DirSep + "stats";
+        int pid1 = runWorker(base).pid;
+        int pid2 = runWorker(base).pid;
+        assertNeq(pid1, pid2);
+        assertTrue(is_file(sprintf("%s.%d", base, pid1)), "first process's file");
+        assertTrue(is_file(sprintf("%s.%d", base, pid2)), "second process's file");
+    }
+
+    disabled() {
+        TmpDir tmp("qore-scan-accounting-");
+        hash<auto> rv = runWorker();
+        assertEq({}, rv.accounting, "no accounting without QORE_SCAN_STATS");
+        assertEq(NOTHING, glob(tmp.path + DirSep + "*"), "no file written");
+    }
+
+    #! more distinct scan roots than the table has rows: every scan is still counted, the excess under "<other>"
+    overflow() {
+        TmpDir tmp("qore-scan-accounting-");
+        hash<auto> rv = runWorker(tmp.path + DirSep + "stats", "many-roots 1100");
+        hash<string, int> rows = rv.accounting.AcctManyRoots;
+        assertEq(1023, rows.named, "a row for each root until the table is full");
+        assertEq(1024, rows.total, "the table's rows, including the one for all other roots");
+        assertEq(1100, rows.named_scans + rows.other_scans, "every scan counted");
+        assertEq(1100 - 1023, rows.other_scans, "the roots without a row of their own");
+    }
+
+    #! one thread holds an object's lock; a scan in another thread that needs it waits and is reported
+    scanWait() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("the hooks that make the wait deterministic are only in debug builds");
+        }
+        assertEq((), get_scan_waits(), "no scan waiting before the check");
+
+        # a cycle held only by a list, so a write to its root is scanned and the scan reaches the peer
+        list<WaitRoot> l = (new WaitRoot(),);
+        WaitPeer peer();
+        l[0].peer = peer;
+        peer.peer = l[0];
+        remove peer;
+
+        Counter held(1);
+        Counter release(1);
+        Counter waiting(1);
+        Counter done(2);
+        int holder_tid;
+        int scanner_tid;
+
+        background sub () {
+            on_exit done.dec();
+            holder_tid = gettid();
+            call_function("dbg_hold_object_lock", l[0].peer, held, release);
+        }();
+        held.waitForZero();
+
+        call_function("dbg_scan_wait_notify", waiting);
+        background sub () {
+            on_exit done.dec();
+            scanner_tid = gettid();
+            # the scan of the root needs the peer's lock, which the other thread holds
+            l[0].x = new WaitPeer();
+        }();
+        waiting.waitForZero();
+
+        list<hash<ScanWaitInfo>> waits = get_scan_waits();
+        assertEq(1, waits.size(), "one scan waiting");
+        assertEq(scanner_tid, waits[0].tid, "the waiting thread");
+        assertEq("WaitRoot", waits[0].root, "the waiting scan's root");
+        assertEq("WaitPeer", waits[0].wait_on, "the object it waits for");
+        assertEq(holder_tid, waits[0].owner_tid, "the thread holding it");
+        assertTrue(waits[0].waiting_ms >= 0.0, "a wait time");
+
+        release.dec();
+        done.waitForZero();
+        assertEq((), get_scan_waits(), "no scan waiting once the lock is released");
+    }
+
+    #! runs the worker in the AST interpreter, with accounting written to \a stats_path when given
+    private hash<auto> runWorker(*string stats_path, string args = "") {
+        string worker = get_script_dir() + DirSep + "dgc-scan-accounting-worker.q";
+        # without a path the variable is removed, so that a QORE_SCAN_STATS set for the test run does not leak in
+        string env = stats_path ? sprintf("env QORE_SCAN_STATS=%s", stats_path) : "env -u QORE_SCAN_STATS";
+        string out = backquote(sprintf("%s LD_LIBRARY_PATH=%s %s -b --exec-mode=ast %s %s 2>&1", env, libqore_dir,
+            qore_bin, worker, args));
+        hash<auto!> rv = {"accounting": {}};
+        foreach string line in (out.split("\n")) {
+            if (!line.val()) {
+                continue;
+            }
+            *list<*string> pid = (line =~ x/^pid ([0-9]+)$/);
+            if (pid) {
+                rv.pid = pid[0].toInt();
+                continue;
+            }
+            *list<*string> row = (line =~ x/^(Acct[A-Za-z]+) (.*)$/);
+            if (!row) {
+                fail(sprintf("unexpected worker output: %y", out));
+                continue;
+            }
+            hash<string, int> counts = {};
+            foreach string kv in (row[1].split(" ")) {
+                list<string> p = kv.split("=");
+                counts{p[0]} = p[1].toInt();
+            }
+            rv.accounting{row[0]} = counts;
+        }
+        assertTrue(exists rv.pid, "worker ran: " + out);
+        return rv;
+    }
+
+    #! parses the rows of an accounting file written at exit for the worker's scan roots
+    private hash<string, hash<string, int>> parseFile(string path) {
+        hash<string, hash<string, int>> rv = {};
+        list<string> lines = File::readTextFile(path).split("\n");
+        assertRegex("^scan_root +scans +deferred +already +restarts +exclusive +nodes ", lines[0], "header");
+        foreach string line in (lines) {
+            *list<*string> f = (line =~ x/^(Acct[A-Za-z]+) +([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+) +([0-9]+) /);
+            if (f) {
+                rv{f[0]} = {
+                    "scans": f[1].toInt(),
+                    "deferred": f[2].toInt(),
+                    "already": f[3].toInt(),
+                    "restarts": f[4].toInt(),
+                    "exclusive": f[5].toInt(),
+                    "nodes": f[6].toInt(),
+                };
+            }
+        }
+        return rv;
+    }
+}

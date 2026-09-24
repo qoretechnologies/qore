@@ -68,6 +68,34 @@ DLLLOCAL inline const std::string* qore_find_http_header(const qore_http_header_
     return nullptr;
 }
 
+//! A media-type parameter found in a \c Content-Type value
+struct qore_http_media_type_param {
+    //! the parameter value, with any quoted-string unquoted
+    std::string value;
+    //! the offset of the \c ';' that begins the parameter
+    size_t begin = 0;
+    //! the offset of the \c ';' that ends the parameter, or the length of the field value for the last parameter
+    size_t end = 0;
+};
+
+//! Finds a media-type parameter in a \c Content-Type value (RFC 9110 sections 5.6.6 and 8.3.1)
+/** Parameters follow the type and subtype, each after a \c ';'; parameter names are compared case-insensitively
+    and only whole names match, so \c "xcharset" is not \c "charset".  A quoted-string value is unquoted, with
+    quoted-pairs (\c "\\x") decoded, and a \c ';' inside it does not end the parameter.
+
+    Whitespace around the \c '=' is accepted although RFC 9110 does not allow it, and a token value enclosed in
+    single quotes is unwrapped, since some senders quote that way and a single quote is never part of a charset
+    name.
+
+    @param content_type the \c Content-Type field value; may be nullptr
+    @param name the parameter name to find
+    @param param the parameter found; set only if the return value is true
+
+    @return true if the parameter was found; the first one is returned if the name occurs more than once
+*/
+DLLLOCAL bool qore_find_http_media_type_param(const char* content_type, const char* name,
+        qore_http_media_type_param& param);
+
 //! Returns the media type of a \c Content-Type value: the type and subtype, lower case, without parameters
 DLLLOCAL inline std::string qore_http_media_type(const char* content_type) {
     if (!content_type) {

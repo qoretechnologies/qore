@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -36,5 +36,7 @@
 DLLLOCAL void init_lib_functions(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ExceptionInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_NetIfInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ScanStatsInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ScanWaitInfo(QoreNamespace& ns);
 
 #endif

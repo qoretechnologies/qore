@@ -168,6 +168,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("HTTP header string test", \httpHeaderStringTest());
         addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
         addTestCase("HTTP response header test", \httpResponseHeaderTest());
+        addTestCase("HTTP content-type charset test", \httpContentTypeCharsetTest());
         addTestCase("SSE read test", \serverSentEventReadTest());
         addTestCase("SSE parse line terminator test", \sseParseLineTerminatorTest());
         addTestCase("SSE encoded stream test", \sseEncodedStreamTest());
@@ -468,6 +469,75 @@ class SocketTest inherits QUnit::Test {
         release_client.push(True);
         cnt.waitForZero(5s);
         assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\n", header);
+    }
+
+    # the charset parameter of a request's Content-Type is parsed per RFC 9110 sections 5.6.6 and 8.3.1; the
+    # encoding name itself is asserted, since glibc's iconv ignores quotes in a name and would hide a quoted one
+    httpContentTypeCharsetTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> server_info = server.getSocketInfo(False);
+
+        # "ct": the Content-Type sent; "charset": the charset expected in the info hash, or NOTHING if the
+        # parameter must not be taken as the charset; "bct": the body content type expected; "enc": the socket
+        # encoding expected after the header is read
+        list<hash<auto>> cases = (
+            {"ct": 'text/xml;charset="UTF-8"', "charset": "UTF-8", "bct": "text/xml", "enc": "UTF-8"},
+            {"ct": 'text/xml; charset = "utf-8"', "charset": "utf-8", "bct": "text/xml", "enc": "UTF-8"},
+            {"ct": 'text/xml; Charset=ISO-8859-2; x=y', "charset": "ISO-8859-2", "bct": "text/xml; x=y",
+                "enc": "ISO-8859-2"},
+            {"ct": 'text/xml ;charset="ISO-8859-2" ;x=y', "charset": "ISO-8859-2", "bct": "text/xml;x=y",
+                "enc": "ISO-8859-2"},
+            {"ct": "text/plain; charset='UTF-8'", "charset": "UTF-8", "bct": "text/plain", "enc": "UTF-8"},
+            # a ';' in a quoted-string is part of the value and does not end the parameter
+            {"ct": 'text/xml; charset="x;y"; a=b', "charset": "x;y", "bct": "text/xml; a=b", "enc": "x;y"},
+            # a quoted-pair is decoded
+            {"ct": 'text/xml; charset="UTF\-8"', "charset": "UTF-8", "bct": "text/xml", "enc": "UTF-8"},
+            # only a whole parameter name matches
+            {"ct": "text/xml; xcharset=ISO-8859-2", "bct": "text/xml; xcharset=ISO-8859-2"},
+            {"ct": "text/xml; x=\"charset=ISO-8859-2\"", "bct": "text/xml; x=\"charset=ISO-8859-2\""},
+            # an empty value is no charset
+            {"ct": 'text/xml; charset=""', "bct": 'text/xml; charset=""'},
+        );
+
+        foreach bool async in ((False, True)) {
+            foreach hash<auto> i in (cases) {
+                string label = sprintf("%s (%s)", i.ct, async ? "async" : "sync");
+                Socket client();
+                client.connectINET(server_info.address, server_info.port, 10s, server_info.family);
+                Socket conn = server.accept(5s);
+                # set an encoding that no case expects, so the assertions show that the header set it
+                conn.setEncoding("ISO-8859-5");
+                client.send(sprintf("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Type: %s\r\n"
+                    "Content-Length: 3\r\n\r\nabc", i.ct));
+                hash<auto> hdr;
+                hash<auto> info;
+                if (async) {
+                    AbstractPollOperation op = conn.startPollReadHttpHeader();
+                    while (*hash<SocketPollInfo> pi = op.continuePoll()) {
+                        Socket::poll((pi,), 5s);
+                    }
+                    hash<auto> output = op.getOutput();
+                    hdr = output.hdr;
+                    info = output.info;
+                } else {
+                    hdr = conn.readHTTPHeader(5s, \info);
+                }
+                assertEq(i.ct, hdr."content-type", label);
+                assertEq(i.bct, info."body-content-type", label);
+                if (i.charset) {
+                    assertEq(i.charset, info.charset, label);
+                    assertEq(i.enc, conn.getEncoding(), label);
+                    assertEq(i.enc, conn.recv(3, 5s).encoding(), label);
+                } else {
+                    # the socket falls back to the default HTTP encoding
+                    assertNeq("ISO-8859-2", info.charset, label);
+                    assertNeq("ISO-8859-5", conn.getEncoding(), label);
+                    assertEq(conn.getEncoding(), conn.recv(3, 5s).encoding(), label);
+                }
+            }
+        }
     }
 
     httpResponseHeaderTest() {

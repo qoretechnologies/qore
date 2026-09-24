@@ -79,6 +79,9 @@ private:
     //! Releases the reference held by an entry that was just popped
     DLLLOCAL static void releaseEntry(ClosureStackEntry& entry, ExceptionSink* xsink) {
         if (entry.owner) {
+            // the object the variable holds loses the real reference the frame lent it before the frame gives up the
+            // variable: afterwards the variable's reference to it can be part of a cycle
+            entry.cvv->revokeFrameReference(xsink);
             // must be visible before the reference is released: frameExclusive() reads the count first
             entry.cvv->frame_owned.store(false, std::memory_order_relaxed);
         }
@@ -139,6 +142,9 @@ public:
         // cycle through the variable can be collected, and a scan started at the variable is deferred to the
         // frame's release (RObject::checkDeferScan()).  See design/closure-bound-locals.md.
         cvar->rrefs.store(1, std::memory_order_relaxed);
+        // For the same reason the object the variable holds is marked with a real reference while the frame holds the
+        // variable, as a plain local variable's value is: a scan started at the object is deferred as well.
+        cvar->lendFrameReference();
         instantiateIntern(cvar, order, true);
         return cvar;
     }
@@ -276,29 +282,6 @@ public:
         }
         // to avoid a warning on most compilers - note that this generates a warning on aCC!
         return nullptr;
-    }
-
-    DLLLOCAL cvv_vec_t* getAll() const {
-        cvv_vec_t* cv = 0;
-        Block* w = curr;
-        while (w) {
-            int p = w->pos;
-            while (p) {
-                --p;
-                ClosureVarValue* cvv = w->var[p].cvv;
-                // skip frame boundaries
-                if (!cvv) {
-                    continue;
-                }
-                if (!cv) {
-                    cv = new cvv_vec_t;
-                }
-                cv->push_back(cvv->refSelf());
-            }
-            w = w->prev;
-        }
-        //printd(5, "ThreadClosureVariableStack::getAll() this: %p cv: %p size: %d\n", this, cv, cv ? cv->size() : 0);
-        return cv;
     }
 
     DLLLOCAL void pushFrameBoundary() {

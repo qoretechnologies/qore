@@ -18,6 +18,7 @@ class ForEachTest inherits QUnit::Test {
         addTestCase("weak reference tests", \weakReferenceTests());
         addTestCase("basic operator tests", \basicTests());
         addTestCase("implicit element tests", \implicitElementTests());
+        addTestCase("reference write-back when leaving early", \referenceEarlyExitTests());
         set_return_value(main());
     }
 
@@ -224,5 +225,93 @@ class ForEachTest inherits QUnit::Test {
             }
             assertEq(0, indices.size(), "$# with empty list");
         }
+    }
+    referenceEarlyExitTests() {
+        # return from inside the loop keeps the unvisited elements
+        list<int> l = (1, 2, 3, 4);
+        assertEq(2, returnAt(\l, 2));
+        assertEq((10, 20, 3, 4), l, "return keeps the elements after the current one");
+        l = (1, 2, 3, 4);
+        assertEq(1, returnAt(\l, 1));
+        assertEq((10, 2, 3, 4), l, "return at the first element");
+        l = (1, 2, 3, 4);
+        assertEq(4, returnAt(\l, 4));
+        assertEq((10, 20, 30, 40), l, "return at the last element");
+        l = (1, 2, 3, 4);
+        assertEq(-1, returnAt(\l, 5));
+        assertEq((10, 20, 30, 40), l, "no early exit");
+
+        # break keeps the unvisited elements
+        l = (1, 2, 3, 4);
+        foreach int i in (\l) {
+            if (i == 2) {
+                i = 20;
+                break;
+            }
+        }
+        assertEq((1, 20, 3, 4), l);
+
+        # continue still writes the current element back
+        l = (1, 2, 3);
+        foreach int i in (\l) {
+            i *= 10;
+            if (i == 20) {
+                continue;
+            }
+        }
+        assertEq((10, 20, 30), l);
+
+        # an exception leaves the list unchanged
+        l = (1, 2, 3, 4);
+        try {
+            foreach int i in (\l) {
+                i = 0;
+                if ($# == 1) {
+                    throw "X";
+                }
+            }
+        } catch () {
+        }
+        assertEq((1, 2, 3, 4), l);
+
+        # return from a nested loop keeps both lists whole
+        list<list<int>> nested = ((1, 2), (3, 4), (5, 6));
+        assertEq(3, returnNested(\nested));
+        assertEq(((1, 2), (30, 4), (5, 6)), nested);
+
+        # return with a single non-list value writes that value back
+        auto single = 5;
+        assertEq(5, returnSingle(\single));
+        assertEq(50, single);
+    }
+
+    private static int returnAt(reference<list<int>> l, int value) {
+        foreach int i in (\l) {
+            i *= 10;
+            if (i == value * 10) {
+                return value;
+            }
+        }
+        return -1;
+    }
+
+    private static int returnNested(reference<list<list<int>>> l) {
+        foreach list<int> inner in (\l) {
+            foreach int i in (\inner) {
+                if (i == 3) {
+                    i = 30;
+                    return 3;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static int returnSingle(reference<auto> v) {
+        foreach auto i in (\v) {
+            i *= 10;
+            return 5;
+        }
+        return -1;
     }
 }

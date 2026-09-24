@@ -54,6 +54,7 @@
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/NegotiatingConnectionPollOp.h"
 #include "qore/intern/RSection.h"
+#include "qore/intern/RSet.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/QoreSandboxManager.h>
@@ -4945,6 +4946,45 @@ static QoreValue f_dbg_ref_remove_key(const QoreListNode* params, RuntimeConfig&
     return rv.release();
 }
 
+//! sets a member of an object with the public C++ API QoreObject::setValue()
+/** The object is <tt>holder[0].member</tt>; neither it nor \c holder[0] is referenced for the call, so that their
+    reference counts are the ones the recursive sets see.  The value the member held before is released only after
+    the recursive-reference scan that the change makes; see qore_object_private::setValueIntern().
+
+    @param holder a list whose first element is an object
+    @param member the member of that object that holds the object to change
+    @param key the member to set
+    @param val the value to set
+*/
+static QoreValue f_dbg_object_set_value(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreListNode* holder = get_param_value(params, 0).get<const QoreListNode>();
+    QoreStringNodeValueHelper member(get_param_value(params, 1));
+    QoreStringNodeValueHelper key(get_param_value(params, 2));
+    QoreValue first = holder->retrieveEntry(0);
+    if (first.getType() != NT_OBJECT) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_object_set_value() requires a list whose first element "
+            "is an object");
+        return QoreValue();
+    }
+    // the object holds the value, and the caller's list holds the object, for the duration of the call
+    QoreObject* target;
+    {
+        ValueHolder mv(first.get<QoreObject>()->getReferencedMemberNoMethod(member->c_str(), xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (mv->getType() != NT_OBJECT) {
+            xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_object_set_value() member \"%s\" does not hold an "
+                "object", member->c_str());
+            return QoreValue();
+        }
+        target = mv->get<QoreObject>();
+    }
+    // setValue() takes over the reference
+    target->setValue(key->c_str(), get_param_value(params, 3).refSelf(), xsink);
+    return QoreValue();
+}
+
 //! sets a key in the referenced hash in place and then removes another key with the same helper
 /** QoreTypeSafeReferenceHelper::getUnique() lets the caller change the hash without the helper knowing, so the
     removal that follows must not skip the recursive-reference scan even if it removes a scalar.
@@ -4988,6 +5028,142 @@ static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, Run
 //! returns True if the argument is stored in inline short string storage
 static QoreValue f_dbg_is_short_string(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return get_param_value(params, 0).isShortString();
+}
+
+//! loads a user module from source text into the calling Program with ModuleManager::registerUserModuleFromSource()
+/** This loader is otherwise only reachable from the C++ API; tests use it to check what the module inherits from
+    the Program loading it.
+
+    @param name the module's name
+    @param src the module's source
+*/
+static QoreValue f_dbg_register_user_module_from_source(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper name(get_param_value(params, 0));
+    QoreStringNodeValueHelper src(get_param_value(params, 1));
+    MM.registerUserModuleFromSource(name->c_str(), src->c_str(), getProgram(), xsink);
+    return QoreValue();
+}
+
+//! returns the private data of a Counter argument, or raises an exception
+static Counter* get_counter_arg(const QoreListNode* params, size_t i, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, i).get<QoreObject>();
+    return static_cast<Counter*>(obj->getReferencedPrivateData(CID_COUNTER, xsink));
+}
+
+//! decrements the Counter once, when the next recursive-reference scan starts waiting for another thread
+/** Tests use this to know, without polling, that a scan is waiting.
+
+    @param c the Counter to decrement
+*/
+static QoreValue f_dbg_scan_wait_notify(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    ReferenceHolder<Counter> c(get_counter_arg(params, 0, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    q_set_scan_wait_notify(*c);
+    return QoreValue();
+}
+
+//! holds an object's write lock until a Counter reaches zero
+/** A recursive-reference scan that reaches the object meanwhile cannot take its rsection, so it waits for this
+    thread; tests use this to create such a wait deterministically.
+
+    @param obj the object to lock
+    @param held decremented once the lock is held
+    @param release the lock is released when this Counter reaches zero
+*/
+static QoreValue f_dbg_hold_object_lock(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreObject* obj = get_param_value(params, 0).get<QoreObject>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    QoreAutoVarRWWriteLocker al(qore_object_private::get(*obj)->rml);
+    held->dec(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    release->waitForZero(xsink);
+    return QoreValue();
+}
+
+namespace {
+//! the armed hold of dbg_hold_constant_store(); one at a time
+struct ConstantStoreHold {
+    std::mutex m;
+    std::string name;
+    Counter* held = nullptr;
+    Counter* release = nullptr;
+};
+
+ConstantStoreHold constant_store_hold;
+
+//! runs in the thread storing the constant's value; disarms itself, so it holds that thread once
+void dbg_hold_constant_store_hook(const char* name) {
+    ConstantStoreHold& h = constant_store_hold;
+    ExceptionSink xsink;
+    ReferenceHolder<Counter> held(&xsink);
+    ReferenceHolder<Counter> release(&xsink);
+    {
+        std::lock_guard<std::mutex> l(h.m);
+        if (!h.held || h.name != name) {
+            return;
+        }
+        held = h.held;
+        release = h.release;
+        h.held = nullptr;
+        h.release = nullptr;
+        qore_dbg_constant_store_hook.store(nullptr);
+    }
+    held->dec(&xsink);
+    if (!xsink) {
+        release->waitForZero(&xsink);
+    }
+    // the thread is initializing a constant; a Counter deleted meanwhile is the test's error, not the store's
+    if (xsink) {
+        printd(0, "dbg_hold_constant_store(): %s\n", xsink.getExceptionErr().getTypeName());
+        xsink.clear();
+    }
+}
+}
+
+//! holds the next thread that stores a runtime value in a constant of the given name
+/** The hold is taken once, in ConstantEntry::setRuntimeValue(), at the point where another thread copying the
+    entry - an import of the module whose Program holds it - can run concurrently with the store; tests use it to
+    make such a copy deterministically.
+
+    @param name the name of the constant, without its namespace
+    @param held decremented once the storing thread is held
+    @param release the storing thread continues when this Counter reaches zero
+
+    @throw DBG-ARGUMENT-ERROR a hold is already armed
+*/
+static QoreValue f_dbg_hold_constant_store(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    const QoreStringNode* name = get_param_value(params, 0).get<const QoreStringNode>();
+    ReferenceHolder<Counter> held(get_counter_arg(params, 1, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<Counter> release(get_counter_arg(params, 2, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ConstantStoreHold& h = constant_store_hold;
+    std::lock_guard<std::mutex> l(h.m);
+    if (h.held) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "a hold is already armed for constant '%s'", h.name.c_str());
+        return QoreValue();
+    }
+    h.name = name->c_str();
+    h.held = held.release();
+    h.release = release.release();
+    qore_dbg_constant_store_hook.store(dbg_hold_constant_store_hook);
+    return QoreValue();
 }
 #endif
 
@@ -5037,8 +5213,23 @@ void init_debug_functions(QoreNamespace& qns) {
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_get_deref_locked_count", f_dbg_get_deref_locked_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_scan_wait_notify", f_dbg_scan_wait_notify, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 1, QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "c");
+    qns.addBuiltinVariant("dbg_hold_object_lock", f_dbg_hold_object_lock, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 3, objectTypeInfo, QORE_PARAM_NO_ARG, "obj", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "release");
+    qns.addBuiltinVariant("dbg_hold_constant_store", f_dbg_hold_constant_store,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG, "held", QC_COUNTER->getTypeInfo(), QORE_PARAM_NO_ARG,
+        "release");
+    qns.addBuiltinVariant("dbg_register_user_module_from_source", f_dbg_register_user_module_from_source,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 2, stringTypeInfo, QORE_PARAM_NO_ARG, "name",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "src");
     qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
+    qns.addBuiltinVariant("dbg_object_set_value", f_dbg_object_set_value, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        nothingTypeInfo, 4, listTypeInfo, QORE_PARAM_NO_ARG, "holder", stringTypeInfo, QORE_PARAM_NO_ARG, "member",
+        stringTypeInfo, QORE_PARAM_NO_ARG, "key", autoTypeInfo, QORE_PARAM_NO_ARG, "val");
     qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,
         QORE_PARAM_NO_ARG, "set_key", autoTypeInfo, QORE_PARAM_NO_ARG, "val", stringTypeInfo, QORE_PARAM_NO_ARG,

@@ -1162,9 +1162,9 @@ void qore_program_private_base::setParent(QoreProgram* p_pgm, const QoreParseOpt
         // turn on all restrictions in the child that are set in the parent
         pwo.parse_options |= p_pgm->priv->pwo.parse_options;
         // make sure all options that give more freedom and are off in the parent program are turned off in the child;
-        // use the full 128-bit complement so extended (bits 64+) options explicitly set on the child are not masked
-        // out (PO_POSITIVE_OPTIONS is a legacy int64 whose ~ would zero-extend the high word and drop them)
-        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions(PO_POSITIVE_OPTIONS));
+        // the mask must be the full-width one: the legacy PO_POSITIVE_OPTIONS cannot hold extended (bits 64+)
+        // positive options, which would then pass to the child unchecked
+        pwo.parse_options &= (p_pgm->priv->pwo.parse_options | ~QoreParseOptions::POSITIVE_OPTIONS);
     } else {
         pwo.parse_options = n_parse_options;
         po_locked = !(n_parse_options & PO_NO_CHILD_PO_RESTRICTIONS);
@@ -2177,19 +2177,19 @@ void qore_program_private::exportGlobalVariable(ExceptionSink* xsink, const char
         readonly, import_as);
 }
 
-QoreThreadLock qore_program_private_base::opaque_lock;
-qore_program_private_base::opaque_target_map_t qore_program_private_base::opaque_targets;
+qore_program_private_base::OpaqueTargetShard qore_program_private_base::opaque_shards[1u << OpaqueTargetShardBits];
 
 void qore_program_private_base::clearOpaqueTargets(ExceptionSink* xsink) {
     // take this Program's entries out of the registry under the lock, then do all the work outside
     // it: deleting an object runs its destructor, which is user code
     std::vector<AbstractQoreNode*> roots;
-    {
-        AutoLocker al(opaque_lock);
-        for (auto i = opaque_targets.begin(), e = opaque_targets.end(); i != e;) {
+    for (OpaqueTargetShard& shard : opaque_shards) {
+        // one shard lock at a time: each is a leaf lock
+        AutoLocker al(shard.lock);
+        for (auto i = shard.targets.begin(), e = shard.targets.end(); i != e;) {
             if (i->second.pgm == pgm) {
                 roots.push_back(i->first);
-                i = opaque_targets.erase(i);
+                i = shard.targets.erase(i);
             } else {
                 ++i;
             }

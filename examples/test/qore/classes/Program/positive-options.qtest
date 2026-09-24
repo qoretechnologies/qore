@@ -1,0 +1,155 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the parents made by this test are locked Programs with exactly the options each check gives them, which needs
+# this Program to have no child restrictions
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class PositiveOptionsTest
+
+#! Tests that a Program whose parse options are locked cannot grant itself an option that gives more freedom
+/** Options that allow more freedom instead of less ("positive" options) may only be inherited from the parent: a
+    locked child can add restrictions, but must be refused a positive option by the Program constructor,
+    Program::setParseOptions() and the parse directive alike.  Extended options (bits 64 and up) cannot be expressed
+    in the legacy integer mask \c PO_POSITIVE_OPTIONS, so \c allow-opaque-references escaped that check and a child
+    could grant itself the opaque reference operator that its parent was refused.
+*/
+class PositiveOptionsTest inherits QUnit::Test {
+    public {
+        #! every positive option, with its parse directive and code that parses only when the option is set
+        const PositiveOptions = {
+            "no-child-restrictions": {"directive": "%no-child-restrictions"},
+            "allow-injection": {"directive": "%allow-injection"},
+            "allow-weak-references": {
+                "directive": "%allow-weak-references",
+                "use": "sub f() { hash<auto> h; Mutex m(); h.x := m; }",
+            },
+            "allow-debugger": {},
+            "enable-debug": {},
+            "allow-reparse": {},
+            "allow-opaque-references": {
+                "directive": "%allow-opaque-references",
+                "use": "sub f() { hash<auto> h; hash<auto> i = {}; h.x @= i; }",
+            },
+        };
+
+        #! runs in a locked parent: tries each way of giving a new child Program the option
+        const Probe = "%modern
+hash<string, auto> sub probe(string name, *string directive, *string use) {
+    hash<string, auto> rv = {};
+    Program granted(new ParseOptions(name));
+    rv.ctor = granted.getFullParseOptions().hasAll(name);
+
+    Program set();
+    try {
+        set.setParseOptions(new ParseOptions(name));
+        rv.set = \"allowed\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv.set = ex.err;
+    }
+    rv.\"set-has\" = set.getFullParseOptions().hasAll(name);
+
+    Program plain();
+    rv.inherited = plain.getFullParseOptions().hasAll(name);
+
+    if (directive) {
+        Program d();
+        try {
+            d.parse(directive + \"\\n\", \"directive\");
+            rv.directive = \"parsed\";
+        } catch (hash<ExceptionInfo> ex) {
+            rv.directive = ex.err;
+        }
+        rv.\"directive-has\" = d.getFullParseOptions().hasAll(name);
+    }
+
+    if (use) {
+        Program u();
+        try {
+            u.parse(use, \"use\");
+            rv.use = \"parsed\";
+        } catch (hash<ExceptionInfo> ex) {
+            rv.use = ex.err;
+        }
+    }
+    return rv;
+}
+";
+    }
+
+    constructor() : QUnit::Test("PositiveOptionsTest", "1.0") {
+        addTestCase("a locked child is refused a positive option its parent lacks", \refusedWithoutParent());
+        addTestCase("a locked child inherits a positive option its parent has", \inheritedFromParent());
+        addTestCase("the opaque reference option is enforced like the weak reference option",
+            \opaqueMatchesWeak());
+        addTestCase("a locked child may still add a restriction", \restrictionsStillAllowed());
+        set_return_value(main());
+    }
+
+    refusedWithoutParent() {
+        foreach hash<auto> i in (PositiveOptions.pairIterator()) {
+            hash<string, auto> rv = probeFrom(new Program(PO_DEFAULT), i.key, i.value);
+            assertFalse(rv.ctor, i.key + ": constructor grant dropped");
+            assertEq("OPTIONS-LOCKED", rv.set, i.key + ": setParseOptions() refused");
+            assertFalse(rv."set-has", i.key + ": setParseOptions() left it unset");
+            assertFalse(rv.inherited, i.key + ": not inherited");
+            if (i.value.directive) {
+                assertEq("PARSE-EXCEPTION", rv.directive, i.key + ": directive refused");
+                assertFalse(rv."directive-has", i.key + ": directive left it unset");
+            }
+            if (i.value.use) {
+                assertEq("PARSE-EXCEPTION", rv.use, i.key + ": code needing it does not parse");
+            }
+        }
+    }
+
+    inheritedFromParent() {
+        foreach hash<auto> i in (PositiveOptions.pairIterator()) {
+            # a parent with this option does not lock its children, so the lock is not tested with it
+            if (i.key == "no-child-restrictions") {
+                continue;
+            }
+            hash<string, auto> rv = probeFrom(new Program(new ParseOptions(i.key)), i.key, i.value);
+            assertTrue(rv.inherited, i.key + ": inherited");
+            assertTrue(rv.ctor, i.key + ": kept when also requested");
+            if (i.value.use) {
+                assertEq("parsed", rv.use, i.key + ": code needing it parses");
+            }
+        }
+    }
+
+    opaqueMatchesWeak() {
+        foreach bool parent_has in (False, True) {
+            hash<string, auto> weak = probeWith(parent_has, "allow-weak-references");
+            hash<string, auto> opaque = probeWith(parent_has, "allow-opaque-references");
+            assertEq(weak - "use", opaque - "use", sprintf("parent has the option: %y", parent_has));
+            assertEq(weak.use, opaque.use, sprintf("usage, parent has the option: %y", parent_has));
+        }
+    }
+
+    #! restrictions, including extended ones, can still be added by a locked child
+    restrictionsStillAllowed() {
+        foreach string name in ("no-network", "no-class-defs", "no-module-path-directives", "no-new") {
+            hash<string, auto> rv = probeFrom(new Program(PO_DEFAULT), name, {});
+            assertTrue(rv.ctor, name + ": constructor grant kept");
+            assertEq("allowed", rv.set, name + ": setParseOptions() allowed");
+            assertTrue(rv."set-has", name + ": setParseOptions() set it");
+        }
+    }
+
+    private hash<string, auto> probeWith(bool parent_has, string name) {
+        Program parent(parent_has ? new ParseOptions(name) : new ParseOptions());
+        return probeFrom(parent, name, PositiveOptions{name});
+    }
+
+    #! runs the probe for the option in \a parent, a locked Program
+    private hash<string, auto> probeFrom(Program parent, string name, hash<auto> info) {
+        parent.parse(Probe, "probe");
+        return parent.callFunction("probe", name, info.directive, info.use);
+    }
+}

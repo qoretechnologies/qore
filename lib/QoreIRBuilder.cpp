@@ -310,6 +310,10 @@ static void qore_ir_populate_new_object_target(QoreIRNewObjectInstruction* inst)
     if (inst->variant_sig.empty()) {
         inst->variant_sig = qore_ir_new_object_variant_signature(variant);
     }
+    // a build-group class deferred at parse time is resolved by name, and checked, each time the object is made
+    if (!inst->qc && !dynamic_class_path.empty() && inst->class_path == dynamic_class_path) {
+        inst->dynamic_class = true;
+    }
 }
 
 QoreIRSwitchRegexMatchInstruction::~QoreIRSwitchRegexMatchInstruction() {
@@ -358,7 +362,7 @@ QoreIRBasicBlock* QoreIRBuilder::createBlock(const std::string& name) {
 }
 
 QoreIRConstInstruction* QoreIRBuilder::createConstInt(int64_t value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstInt;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -372,7 +376,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstInt(int64_t value, const QoreP
 }
 
 QoreIRConstInstruction* QoreIRBuilder::createConstFloat(double value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstFloat;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -383,7 +387,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstFloat(double value, const Qore
 }
 
 QoreIRConstInstruction* QoreIRBuilder::createConstBool(bool value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstBool;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -394,7 +398,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstBool(bool value, const QorePro
 }
 
 QoreIRConstInstruction* QoreIRBuilder::createConstChar(unsigned value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstChar;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -411,7 +415,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstChar(unsigned value, const Qor
 }
 
 QoreIRConstInstruction* QoreIRBuilder::createConstNothing(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstNothing;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -426,7 +430,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNothing(const QoreProgramLocat
 }
 
 QoreIRConstInstruction* QoreIRBuilder::createConstNull(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstNull;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -443,7 +447,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstNull(const QoreProgramLocation
 
 QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& value,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstString;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -461,7 +465,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstString(const std::string& valu
 
 QoreIRConstInstruction* QoreIRBuilder::createConstDate(int64_t microseconds, bool is_relative,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstDate;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -473,7 +477,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstDate(int64_t microseconds, boo
 
 QoreIRConstInstruction* QoreIRBuilder::createConstEnum(const QoreEnumMember* member,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRConstInstruction>();
+    auto inst = append<QoreIRConstInstruction>();
     inst->opcode = QoreIROpcode::ConstEnum;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -484,7 +488,7 @@ QoreIRConstInstruction* QoreIRBuilder::createConstEnum(const QoreEnumMember* mem
 
 QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo) {
-    auto inst = block->appendInstruction<QoreIRMakeListInstruction>();
+    auto inst = append<QoreIRMakeListInstruction>();
     inst->loc = loc;
     inst->typeInfo = typeInfo;
     inst->result = func->createValue();
@@ -515,7 +519,7 @@ QoreIRInstruction* QoreIRBuilder::createMakeList(const std::vector<QoreIRValue>&
 
 QoreIRInstruction* QoreIRBuilder::createMakeHash(const std::vector<QoreIRValue>& values,
         const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo) {
-    auto inst = block->appendInstruction<QoreIRMakeHashInstruction>();
+    auto inst = append<QoreIRMakeHashInstruction>();
     inst->loc = loc;
     inst->typeInfo = typeInfo;
     inst->result = func->createValue();
@@ -531,7 +535,7 @@ QoreIRInstruction* QoreIRBuilder::createSizedHash(QoreIRValue capacity,
 QoreIRInstruction* QoreIRBuilder::createMakeHashConstKeys(std::vector<std::string>&& keys,
         const std::vector<QoreIRValue>& values, const QoreProgramLocation* loc,
         const QoreTypeInfo* typeInfo) {
-    auto inst = block->appendInstruction<QoreIRMakeHashConstKeysInstruction>(std::move(keys));
+    auto inst = append<QoreIRMakeHashConstKeysInstruction>(std::move(keys));
     inst->loc = loc;
     inst->typeInfo = typeInfo;
     inst->result = func->createValue();
@@ -541,7 +545,7 @@ QoreIRInstruction* QoreIRBuilder::createMakeHashConstKeys(std::vector<std::strin
 
 QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc,
         const QoreTypeInfo* element_type) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateEmptyList);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CreateEmptyList);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->element_type = element_type;
@@ -550,7 +554,7 @@ QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc
 
 QoreIRInstruction* QoreIRBuilder::createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc,
         const QoreTypeInfo* element_type) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateSizedList);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CreateSizedList);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(capacity);
@@ -560,7 +564,7 @@ QoreIRInstruction* QoreIRBuilder::createSizedList(QoreIRValue capacity, const Qo
 
 QoreIRInstruction* QoreIRBuilder::createListAppend(QoreIRValue list, QoreIRValue value,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListAppend);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListAppend);
     inst->loc = loc;
     inst->operands.push_back(list);
     inst->operands.push_back(value);
@@ -569,7 +573,7 @@ QoreIRInstruction* QoreIRBuilder::createListAppend(QoreIRValue list, QoreIRValue
 
 QoreIRInstruction* QoreIRBuilder::createListSetLength(QoreIRValue list, QoreIRValue length,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetLength);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetLength);
     inst->loc = loc;
     inst->operands.push_back(list);
     inst->operands.push_back(length);
@@ -577,7 +581,7 @@ QoreIRInstruction* QoreIRBuilder::createListSetLength(QoreIRValue list, QoreIRVa
 }
 
 QoreIRInstruction* QoreIRBuilder::createListSize(QoreIRValue list, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSize);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSize);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(list);
@@ -586,7 +590,7 @@ QoreIRInstruction* QoreIRBuilder::createListSize(QoreIRValue list, const QorePro
 
 QoreIRInstruction* QoreIRBuilder::createListGetInt(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetInt);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListGetInt);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(list);
@@ -596,7 +600,7 @@ QoreIRInstruction* QoreIRBuilder::createListGetInt(QoreIRValue list, QoreIRValue
 
 QoreIRInstruction* QoreIRBuilder::createListGetFloat(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetFloat);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListGetFloat);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(list);
@@ -606,7 +610,7 @@ QoreIRInstruction* QoreIRBuilder::createListGetFloat(QoreIRValue list, QoreIRVal
 
 QoreIRInstruction* QoreIRBuilder::createListGetValue(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetValue);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListGetValue);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(list);
@@ -616,7 +620,7 @@ QoreIRInstruction* QoreIRBuilder::createListGetValue(QoreIRValue list, QoreIRVal
 
 QoreIRInstruction* QoreIRBuilder::createListGetValueNoRef(QoreIRValue list, QoreIRValue index,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListGetValueNoRef);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListGetValueNoRef);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(list);
@@ -626,7 +630,7 @@ QoreIRInstruction* QoreIRBuilder::createListGetValueNoRef(QoreIRValue list, Qore
 
 QoreIRInstruction* QoreIRBuilder::createListSetInt(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetInt);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetInt);
     inst->loc = loc;
     inst->operands.push_back(list);
     inst->operands.push_back(index);
@@ -636,7 +640,7 @@ QoreIRInstruction* QoreIRBuilder::createListSetInt(QoreIRValue list, QoreIRValue
 
 QoreIRInstruction* QoreIRBuilder::createListSetFloat(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetFloat);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetFloat);
     inst->loc = loc;
     inst->operands.push_back(list);
     inst->operands.push_back(index);
@@ -646,7 +650,7 @@ QoreIRInstruction* QoreIRBuilder::createListSetFloat(QoreIRValue list, QoreIRVal
 
 QoreIRInstruction* QoreIRBuilder::createListSetValue(QoreIRValue list, QoreIRValue index, QoreIRValue value,
         const QoreProgramLocation* loc, const QoreTypeInfo* element_type) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ListSetValue);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ListSetValue);
     inst->loc = loc;
     inst->element_type = element_type;
     inst->operands.push_back(list);
@@ -656,7 +660,7 @@ QoreIRInstruction* QoreIRBuilder::createListSetValue(QoreIRValue list, QoreIRVal
 }
 
 QoreIRInstruction* QoreIRBuilder::createGetObjectClass(QoreIRValue obj, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::GetObjectClass);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::GetObjectClass);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(obj);
@@ -670,7 +674,7 @@ QoreIRInstruction* QoreIRBuilder::createListPush(QoreIRValue list, QoreIRValue v
 
 QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lhs, QoreIRValue rhs,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(op);
+    auto inst = append<QoreIRInstruction>(op);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(lhs);
@@ -682,7 +686,7 @@ QoreIRInstruction* QoreIRBuilder::createBinaryOp(QoreIROpcode op, QoreIRValue lh
 
 QoreIRInstruction* QoreIRBuilder::createTernaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second,
         QoreIRValue third, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(op);
+    auto inst = append<QoreIRInstruction>(op);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(first);
@@ -693,7 +697,7 @@ QoreIRInstruction* QoreIRBuilder::createTernaryOp(QoreIROpcode op, QoreIRValue f
 
 QoreIRInstruction* QoreIRBuilder::createQuaternaryOp(QoreIROpcode op, QoreIRValue first, QoreIRValue second,
         QoreIRValue third, QoreIRValue fourth, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(op);
+    auto inst = append<QoreIRInstruction>(op);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(first);
@@ -705,7 +709,7 @@ QoreIRInstruction* QoreIRBuilder::createQuaternaryOp(QoreIROpcode op, QoreIRValu
 
 QoreIRInstruction* QoreIRBuilder::createUnaryOp(QoreIROpcode op, QoreIRValue value,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(op);
+    auto inst = append<QoreIRInstruction>(op);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(value);
@@ -715,7 +719,7 @@ QoreIRInstruction* QoreIRBuilder::createUnaryOp(QoreIROpcode op, QoreIRValue val
 
 QoreIRPluginInstruction* QoreIRBuilder::createPluginOp(QoreIROpcode op, QoreIRPluginOperationRef operation,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRPluginInstruction>(op, std::move(operation));
+    auto inst = append<QoreIRPluginInstruction>(op, std::move(operation));
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
@@ -723,7 +727,7 @@ QoreIRPluginInstruction* QoreIRBuilder::createPluginOp(QoreIROpcode op, QoreIRPl
 }
 
 QoreIRLocalInstruction* QoreIRBuilder::createLoadLocal(LocalVar* local, const QoreProgramLocation* loc, bool auto_ref) {
-    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::LoadLocal, local, auto_ref);
+    auto inst = append<QoreIRLocalInstruction>(QoreIROpcode::LoadLocal, local, auto_ref);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -731,7 +735,7 @@ QoreIRLocalInstruction* QoreIRBuilder::createLoadLocal(LocalVar* local, const Qo
 
 QoreIRLocalInstruction* QoreIRBuilder::createStoreLocal(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc, AssignmentMode mode) {
-    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::StoreLocal, local);
+    auto inst = append<QoreIRLocalInstruction>(QoreIROpcode::StoreLocal, local);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->mode = mode;
@@ -739,19 +743,19 @@ QoreIRLocalInstruction* QoreIRBuilder::createStoreLocal(LocalVar* local, QoreIRV
 }
 
 QoreIRLocalInstruction* QoreIRBuilder::createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::UninstantiateLocal, local);
+    auto inst = append<QoreIRLocalInstruction>(QoreIROpcode::UninstantiateLocal, local);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRLocalInstruction* QoreIRBuilder::createInstantiateLocal(LocalVar* local, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::InstantiateLocal, local);
+    auto inst = append<QoreIRLocalInstruction>(QoreIROpcode::InstantiateLocal, local);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRLocalInstruction* QoreIRBuilder::createLoadClosure(LocalVar* local, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::LoadClosure, local);
+    auto inst = append<QoreIRLocalInstruction>(QoreIROpcode::LoadClosure, local);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -759,7 +763,7 @@ QoreIRLocalInstruction* QoreIRBuilder::createLoadClosure(LocalVar* local, const 
 
 QoreIRLocalInstruction* QoreIRBuilder::createStoreClosure(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc, AssignmentMode mode) {
-    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::StoreClosure, local);
+    auto inst = append<QoreIRLocalInstruction>(QoreIROpcode::StoreClosure, local);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->mode = mode;
@@ -767,7 +771,7 @@ QoreIRLocalInstruction* QoreIRBuilder::createStoreClosure(LocalVar* local, QoreI
 }
 
 QoreIRVarInstruction* QoreIRBuilder::createLoadGlobal(Var* var, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRVarInstruction>(QoreIROpcode::LoadGlobal, var);
+    auto inst = append<QoreIRVarInstruction>(QoreIROpcode::LoadGlobal, var);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -775,7 +779,7 @@ QoreIRVarInstruction* QoreIRBuilder::createLoadGlobal(Var* var, const QoreProgra
 
 QoreIRVarInstruction* QoreIRBuilder::createStoreGlobal(Var* var, QoreIRValue value,
         const QoreProgramLocation* loc, AssignmentMode mode) {
-    auto inst = block->appendInstruction<QoreIRVarInstruction>(QoreIROpcode::StoreGlobal, var);
+    auto inst = append<QoreIRVarInstruction>(QoreIROpcode::StoreGlobal, var);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->mode = mode;
@@ -783,7 +787,7 @@ QoreIRVarInstruction* QoreIRBuilder::createStoreGlobal(Var* var, QoreIRValue val
 }
 
 QoreIRVarInstruction* QoreIRBuilder::createLoadThreadLocal(Var* var, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRVarInstruction>(QoreIROpcode::LoadThreadLocal, var);
+    auto inst = append<QoreIRVarInstruction>(QoreIROpcode::LoadThreadLocal, var);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -791,7 +795,7 @@ QoreIRVarInstruction* QoreIRBuilder::createLoadThreadLocal(Var* var, const QoreP
 
 QoreIRVarInstruction* QoreIRBuilder::createStoreThreadLocal(Var* var, QoreIRValue value,
         const QoreProgramLocation* loc, AssignmentMode mode) {
-    auto inst = block->appendInstruction<QoreIRVarInstruction>(QoreIROpcode::StoreThreadLocal, var);
+    auto inst = append<QoreIRVarInstruction>(QoreIROpcode::StoreThreadLocal, var);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->mode = mode;
@@ -800,7 +804,7 @@ QoreIRVarInstruction* QoreIRBuilder::createStoreThreadLocal(Var* var, QoreIRValu
 
 QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccess(const char* key_name,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name);
+    auto inst = append<QoreIRHashKeyAccessInstruction>(key_name);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -808,7 +812,7 @@ QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccess(const char* k
 
 QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccessInt(const char* key_name,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name,
+    auto inst = append<QoreIRHashKeyAccessInstruction>(key_name,
         QoreIROpcode::HashKeyAccessInt);
     inst->loc = loc;
     inst->result = func->createValue();
@@ -817,7 +821,7 @@ QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccessInt(const char
 
 QoreIRHashKeyAccessInstruction* QoreIRBuilder::createHashKeyAccessHash(const char* key_name,
         bool guarded, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRHashKeyAccessInstruction>(key_name,
+    auto inst = append<QoreIRHashKeyAccessInstruction>(key_name,
         guarded ? QoreIROpcode::HashKeyAccessHashGuarded : QoreIROpcode::HashKeyAccessHash);
     inst->loc = loc;
     inst->result = func->createValue();
@@ -828,19 +832,18 @@ QoreIRInvokeInstruction* QoreIRBuilder::createInvokeHashKeyAccess(const char* ke
         const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInvokeInstruction>(expr, normal_target, exception_target);
+    auto inst = append<QoreIRInvokeInstruction>(expr, normal_target, exception_target);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
     inst->invoke_opcode = QoreIROpcode::HashKeyAccess;
     inst->invoke_key_name = key_name;
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRMapHashKeyInstruction* QoreIRBuilder::createMapHashKey(QoreIROpcode op, const char* key1,
         const char* key2, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRMapHashKeyInstruction>(op, key1, key2);
+    auto inst = append<QoreIRMapHashKeyInstruction>(op, key1, key2);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -848,7 +851,7 @@ QoreIRMapHashKeyInstruction* QoreIRBuilder::createMapHashKey(QoreIROpcode op, co
 
 QoreIRSelfMemberInstruction* QoreIRBuilder::createLoadSelfMember(const char* member_name,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRSelfMemberInstruction>(member_name);
+    auto inst = append<QoreIRSelfMemberInstruction>(member_name);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -856,7 +859,7 @@ QoreIRSelfMemberInstruction* QoreIRBuilder::createLoadSelfMember(const char* mem
 
 QoreIRStaticVarInstruction* QoreIRBuilder::createLoadStaticVar(QoreVarInfo* vi, const char* var_name,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRStaticVarInstruction>(vi, var_name, expr);
+    auto inst = append<QoreIRStaticVarInstruction>(vi, var_name, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -868,7 +871,7 @@ QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
         const QoreValue& expr,
         const QoreTypeInfo* object_type_info,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewObjectInstruction>(qc, variant, expr, object_type_info);
+    auto inst = append<QoreIRNewObjectInstruction>(qc, variant, expr, object_type_info);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
@@ -878,7 +881,7 @@ QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
 
 QoreIRLoadConstantInstruction* QoreIRBuilder::createLoadConstant(const RuntimeConstantRefNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLoadConstantInstruction>(node, expr);
+    auto inst = append<QoreIRLoadConstantInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -887,7 +890,7 @@ QoreIRLoadConstantInstruction* QoreIRBuilder::createLoadConstant(const RuntimeCo
 QoreIRCreateClosureInstruction* QoreIRBuilder::createCreateClosure(
         const QoreClosureParseNode* closure_node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCreateClosureInstruction>(closure_node, expr);
+    auto inst = append<QoreIRCreateClosureInstruction>(closure_node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -895,7 +898,7 @@ QoreIRCreateClosureInstruction* QoreIRBuilder::createCreateClosure(
 
 QoreIRCreateCallRefInstruction* QoreIRBuilder::createCreateCallRef(const QoreValue& expr,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCreateCallRefInstruction>(expr);
+    auto inst = append<QoreIRCreateCallRefInstruction>(expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -903,7 +906,7 @@ QoreIRCreateCallRefInstruction* QoreIRBuilder::createCreateCallRef(const QoreVal
 
 QoreIRCreateMethodRefInstruction* QoreIRBuilder::createCreateMethodRef(const QoreValue& expr,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCreateMethodRefInstruction>(expr);
+    auto inst = append<QoreIRCreateMethodRefInstruction>(expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -911,7 +914,7 @@ QoreIRCreateMethodRefInstruction* QoreIRBuilder::createCreateMethodRef(const Qor
 
 QoreIRCreateParseRefInstruction* QoreIRBuilder::createCreateParseRef(const ParseReferenceNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCreateParseRefInstruction>(node, expr);
+    auto inst = append<QoreIRCreateParseRefInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -919,7 +922,7 @@ QoreIRCreateParseRefInstruction* QoreIRBuilder::createCreateParseRef(const Parse
 
 QoreIRNewHashDeclInstruction* QoreIRBuilder::createNewHashDecl(const NewHashDeclNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewHashDeclInstruction>(node, expr);
+    auto inst = append<QoreIRNewHashDeclInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -927,7 +930,7 @@ QoreIRNewHashDeclInstruction* QoreIRBuilder::createNewHashDecl(const NewHashDecl
 
 QoreIRNewComplexHashInstruction* QoreIRBuilder::createNewComplexHash(const NewComplexHashNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewComplexHashInstruction>(node, expr);
+    auto inst = append<QoreIRNewComplexHashInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -935,7 +938,7 @@ QoreIRNewComplexHashInstruction* QoreIRBuilder::createNewComplexHash(const NewCo
 
 QoreIRNewComplexListInstruction* QoreIRBuilder::createNewComplexList(const NewComplexListNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewComplexListInstruction>(node, expr);
+    auto inst = append<QoreIRNewComplexListInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -943,7 +946,7 @@ QoreIRNewComplexListInstruction* QoreIRBuilder::createNewComplexList(const NewCo
 
 QoreIRNewComplexBufferInstruction* QoreIRBuilder::createNewComplexBuffer(const NewComplexBufferNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewComplexBufferInstruction>(node, expr);
+    auto inst = append<QoreIRNewComplexBufferInstruction>(node, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -951,7 +954,7 @@ QoreIRNewComplexBufferInstruction* QoreIRBuilder::createNewComplexBuffer(const N
 
 QoreIRVrnConstructInstruction* QoreIRBuilder::createVrnConstruct(const VarRefNewObjectNode* vrn,
         const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRVrnConstructInstruction>(vrn, expr);
+    auto inst = append<QoreIRVrnConstructInstruction>(vrn, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -959,7 +962,7 @@ QoreIRVrnConstructInstruction* QoreIRBuilder::createVrnConstruct(const VarRefNew
 
 QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(const TypedHashDecl* hd,
         bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewHashDeclFromHashInstruction>(hd, runtime_check);
+    auto inst = append<QoreIRNewHashDeclFromHashInstruction>(hd, runtime_check);
     inst->loc = loc;
     inst->operands.push_back(hash_val);
     inst->result = func->createValue();
@@ -968,7 +971,7 @@ QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(c
 
 QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(const char* hd_path,
         const TypedHashDecl* hd, bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewHashDeclFromHashInstruction>(hd_path, hd, runtime_check);
+    auto inst = append<QoreIRNewHashDeclFromHashInstruction>(hd_path, hd, runtime_check);
     inst->loc = loc;
     inst->operands.push_back(hash_val);
     inst->result = func->createValue();
@@ -977,7 +980,7 @@ QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(c
 
 QoreIRInstruction* QoreIRBuilder::createHashSetKeyValue(QoreIRValue hash, QoreIRValue key,
         QoreIRValue value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::HashSetKeyValue);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::HashSetKeyValue);
     inst->loc = loc;
     inst->operands.push_back(hash);
     inst->operands.push_back(key);
@@ -987,7 +990,7 @@ QoreIRInstruction* QoreIRBuilder::createHashSetKeyValue(QoreIRValue hash, QoreIR
 
 QoreIRInstruction* QoreIRBuilder::createIteratorCreateReverse(QoreIRValue iterable,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::IteratorCreateReverse);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::IteratorCreateReverse);
     inst->loc = loc;
     inst->operands.push_back(iterable);
     inst->result = func->createValue();
@@ -995,28 +998,28 @@ QoreIRInstruction* QoreIRBuilder::createIteratorCreateReverse(QoreIRValue iterab
 }
 
 QoreIRInstruction* QoreIRBuilder::createLoadImplicitArg(int offset, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRImplicitArgInstruction>(offset);
+    auto inst = append<QoreIRImplicitArgInstruction>(offset);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createLoadImplicitArgv(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::LoadImplicitArgv);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::LoadImplicitArgv);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createLoadImplicitElement(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::LoadImplicitElement);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::LoadImplicitElement);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createPushImplicitArg(QoreIRValue value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PushImplicitArg);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->result = func->createValue();  // Result is old context for later restoration
@@ -1024,7 +1027,7 @@ QoreIRInstruction* QoreIRBuilder::createPushImplicitArg(QoreIRValue value, const
 }
 
 QoreIRInstruction* QoreIRBuilder::createSetImplicitArgv(QoreIRValue argv_list, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::SetImplicitArgv);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::SetImplicitArgv);
     inst->loc = loc;
     inst->operands.push_back(argv_list);
     inst->result = func->createValue();  // Result is old context for later restoration
@@ -1032,7 +1035,7 @@ QoreIRInstruction* QoreIRBuilder::createSetImplicitArgv(QoreIRValue argv_list, c
 }
 
 QoreIRInstruction* QoreIRBuilder::createPopImplicitArg(QoreIRValue old_context, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PopImplicitArg);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PopImplicitArg);
     inst->loc = loc;
     inst->operands.push_back(old_context);
     // No result - this is just a context restoration
@@ -1040,7 +1043,7 @@ QoreIRInstruction* QoreIRBuilder::createPopImplicitArg(QoreIRValue old_context, 
 }
 
 QoreIRInstruction* QoreIRBuilder::createPushImplicitElement(QoreIRValue index, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PushImplicitElement);
     inst->loc = loc;
     inst->operands.push_back(index);
     inst->result = func->createValue();  // Result is old element for later restoration
@@ -1048,7 +1051,7 @@ QoreIRInstruction* QoreIRBuilder::createPushImplicitElement(QoreIRValue index, c
 }
 
 QoreIRInstruction* QoreIRBuilder::createPopImplicitElement(QoreIRValue old_element, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PopImplicitElement);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PopImplicitElement);
     inst->loc = loc;
     inst->operands.push_back(old_element);
     // No result - this is just a context restoration
@@ -1056,7 +1059,7 @@ QoreIRInstruction* QoreIRBuilder::createPopImplicitElement(QoreIRValue old_eleme
 }
 
 QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
+    auto inst = append<QoreIRLValueInstruction>(QoreIROpcode::LoadLValue, lvalue);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1064,7 +1067,7 @@ QoreIRLValueInstruction* QoreIRBuilder::createLoadLValue(const QoreValue& lvalue
 
 QoreIRLValueInstruction* QoreIRBuilder::createStoreLValue(const QoreValue& lvalue, QoreIRValue value,
         const QoreProgramLocation* loc, AssignmentMode mode) {
-    auto inst = block->appendInstruction<QoreIRLValueInstruction>(QoreIROpcode::StoreLValue, lvalue, mode);
+    auto inst = append<QoreIRLValueInstruction>(QoreIROpcode::StoreLValue, lvalue, mode);
     inst->loc = loc;
     inst->operands.push_back(value);
     return inst;
@@ -1072,7 +1075,7 @@ QoreIRLValueInstruction* QoreIRBuilder::createStoreLValue(const QoreValue& lvalu
 
 QoreIRLValueInstruction* QoreIRBuilder::createLValueUnaryOp(QoreIROpcode op, const QoreValue& lvalue,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLValueInstruction>(op, lvalue);
+    auto inst = append<QoreIRLValueInstruction>(op, lvalue);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1080,7 +1083,7 @@ QoreIRLValueInstruction* QoreIRBuilder::createLValueUnaryOp(QoreIROpcode op, con
 
 QoreIRLValueInstruction* QoreIRBuilder::createLValueBinaryOp(QoreIROpcode op, const QoreValue& lvalue,
         QoreIRValue rhs, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLValueInstruction>(op, lvalue);
+    auto inst = append<QoreIRLValueInstruction>(op, lvalue);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(rhs);
@@ -1089,7 +1092,7 @@ QoreIRLValueInstruction* QoreIRBuilder::createLValueBinaryOp(QoreIROpcode op, co
 
 QoreIRLValueInstruction* QoreIRBuilder::createLValueTernaryOp(QoreIROpcode op, const QoreValue& lvalue,
         QoreIRValue first, QoreIRValue second, QoreIRValue third, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLValueInstruction>(op, lvalue);
+    auto inst = append<QoreIRLValueInstruction>(op, lvalue);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(first);
@@ -1100,7 +1103,7 @@ QoreIRLValueInstruction* QoreIRBuilder::createLValueTernaryOp(QoreIROpcode op, c
 
 QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreValue& expr,
         const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRExprInstruction>(op, expr);
+    auto inst = append<QoreIRExprInstruction>(op, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
@@ -1111,7 +1114,7 @@ QoreIRExprInstruction* QoreIRBuilder::createExprOp(QoreIROpcode op, const QoreVa
 QoreIRBackgroundInstruction* QoreIRBuilder::createBackground(QoreIRBackgroundKind kind,
         const std::string& name, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRBackgroundInstruction>(kind, name, expr);
+    auto inst = append<QoreIRBackgroundInstruction>(kind, name, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
@@ -1142,7 +1145,7 @@ static bool checkRefArgs(const AbstractQoreFunctionVariant* variant) {
 QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction* qf,
         const AbstractQoreFunctionVariant* variant, QoreProgram* pgm, const QoreValue& expr,
         const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCallDirectInstruction>(qf, variant, pgm, expr);
+    auto inst = append<QoreIRCallDirectInstruction>(qf, variant, pgm, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
@@ -1161,7 +1164,7 @@ QoreIRCallDirectInstruction* QoreIRBuilder::createCallDirect(const QoreFunction*
 QoreIRCallMethodDirectInstruction* QoreIRBuilder::createCallMethodDirect(const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         const std::vector<QoreIRValue>& args, const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCallMethodDirectInstruction>(method, qc, variant, expr);
+    auto inst = append<QoreIRCallMethodDirectInstruction>(method, qc, variant, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
@@ -1175,7 +1178,7 @@ QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(con
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         const std::vector<QoreIRValue>& args, QoreIRBasicBlock* normal_target,
         QoreIRBasicBlock* exception_target, const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInvokeMethodDirectInstruction>(
+    auto inst = append<QoreIRInvokeMethodDirectInstruction>(
             method, qc, variant, normal_target, exception_target, expr);
     inst->loc = loc;
     inst->result = func->createValue();
@@ -1183,14 +1186,13 @@ QoreIRInvokeMethodDirectInstruction* QoreIRBuilder::createInvokeMethodDirect(con
     setCallResultOwnership(inst->result, variant);
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRCallStaticDirectInstruction* QoreIRBuilder::createCallStaticDirect(const QoreMethod* method,
         const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         const std::vector<QoreIRValue>& args, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCallStaticDirectInstruction>(method, variant, expr);
+    auto inst = append<QoreIRCallStaticDirectInstruction>(method, variant, expr);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = args;
@@ -1203,7 +1205,7 @@ QoreIRCallStaticDirectInstruction* QoreIRBuilder::createCallStaticDirect(const Q
 QoreIRDotEvalMethodDirectInstruction* QoreIRBuilder::createDotEvalMethodDirect(const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant, const QoreValue& expr,
         bool pseudo, const std::vector<QoreIRValue>& operands, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRDotEvalMethodDirectInstruction>(method, qc, variant, expr, pseudo);
+    auto inst = append<QoreIRDotEvalMethodDirectInstruction>(method, qc, variant, expr, pseudo);
     inst->loc = loc;
     inst->intrinsic = pseudo ? qore_ir_resolve_pseudo_intrinsic(method, qc) : QoreIRIntrinsic::None;
     inst->result = func->createValue();
@@ -1218,7 +1220,7 @@ QoreIRInvokeDotEvalMethodDirectInstruction* QoreIRBuilder::createInvokeDotEvalMe
         const QoreValue& expr, bool pseudo, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInvokeDotEvalMethodDirectInstruction>(
+    auto inst = append<QoreIRInvokeDotEvalMethodDirectInstruction>(
             method, qc, variant, expr, pseudo, normal_target, exception_target);
     inst->loc = loc;
     inst->intrinsic = pseudo ? qore_ir_resolve_pseudo_intrinsic(method, qc) : QoreIRIntrinsic::None;
@@ -1226,23 +1228,21 @@ QoreIRInvokeDotEvalMethodDirectInstruction* QoreIRBuilder::createInvokeDotEvalMe
     inst->operands = operands;
     // Check if any argument is a reference type (may be modified by callee)
     inst->has_ref_args = checkRefArgs(variant);
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRInvokeInstruction* QoreIRBuilder::createInvoke(const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         QoreIRBasicBlock* normal_target, QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInvokeInstruction>(expr, normal_target, exception_target);
+    auto inst = append<QoreIRInvokeInstruction>(expr, normal_target, exception_target);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncoming>& incoming,
         const QoreProgramLocation* loc, QoreIRPhiValueKind value_kind) {
-    auto inst = block->appendInstruction<QoreIRPhiInstruction>();
+    auto inst = append<QoreIRPhiInstruction>();
     inst->loc = loc;
     inst->result = func->createValue();
     inst->value_kind = value_kind;
@@ -1329,7 +1329,7 @@ QoreIRPhiInstruction* QoreIRBuilder::createPhi(const std::vector<QoreIRPhiIncomi
 
 QoreIRBranchInstruction* QoreIRBuilder::createBranch(QoreIRBasicBlock* target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRBranchInstruction>();
+    auto inst = append<QoreIRBranchInstruction>();
     inst->loc = loc;
     inst->target = target;
     return inst;
@@ -1337,7 +1337,7 @@ QoreIRBranchInstruction* QoreIRBuilder::createBranch(QoreIRBasicBlock* target,
 
 QoreIRBranchIfInstruction* QoreIRBuilder::createBranchIf(QoreIRValue cond, QoreIRBasicBlock* true_target,
         QoreIRBasicBlock* false_target, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRBranchIfInstruction>();
+    auto inst = append<QoreIRBranchIfInstruction>();
     inst->loc = loc;
     inst->condition = cond;
     inst->true_target = true_target;
@@ -1347,7 +1347,7 @@ QoreIRBranchIfInstruction* QoreIRBuilder::createBranchIf(QoreIRValue cond, QoreI
 
 QoreIRAddAssignLocalIntInstruction* QoreIRBuilder::createAddAssignLocalInt(LocalVar* target, LocalVar* source,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRAddAssignLocalIntInstruction>(target, source);
+    auto inst = append<QoreIRAddAssignLocalIntInstruction>(target, source);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1355,7 +1355,7 @@ QoreIRAddAssignLocalIntInstruction* QoreIRBuilder::createAddAssignLocalInt(Local
 
 QoreIRIncrementLocalIntInstruction* QoreIRBuilder::createIncrementLocalInt(LocalVar* local, int64_t delta,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRIncrementLocalIntInstruction>(local, delta);
+    auto inst = append<QoreIRIncrementLocalIntInstruction>(local, delta);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1363,14 +1363,14 @@ QoreIRIncrementLocalIntInstruction* QoreIRBuilder::createIncrementLocalInt(Local
 
 QoreIRBranchIfLtLocalIntInstruction* QoreIRBuilder::createBranchIfLtLocalInt(LocalVar* lhs, LocalVar* rhs,
         QoreIRBasicBlock* true_target, QoreIRBasicBlock* false_target, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRBranchIfLtLocalIntInstruction>(lhs, rhs, true_target, false_target);
+    auto inst = append<QoreIRBranchIfLtLocalIntInstruction>(lhs, rhs, true_target, false_target);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRSwitchIntInstruction* QoreIRBuilder::createSwitchInt(QoreIRValue switch_val, QoreIRBasicBlock* default_target,
         const std::vector<QoreIRSwitchCase>& cases, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRSwitchIntInstruction>();
+    auto inst = append<QoreIRSwitchIntInstruction>();
     inst->loc = loc;
     inst->switch_val = switch_val;
     inst->default_target = default_target;
@@ -1381,7 +1381,7 @@ QoreIRSwitchIntInstruction* QoreIRBuilder::createSwitchInt(QoreIRValue switch_va
 QoreIRSwitchStringInstruction* QoreIRBuilder::createSwitchString(QoreIRValue switch_val,
         QoreIRBasicBlock* default_target, const std::vector<QoreIRSwitchStringCase>& cases,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRSwitchStringInstruction>();
+    auto inst = append<QoreIRSwitchStringInstruction>();
     inst->loc = loc;
     inst->switch_val = switch_val;
     inst->default_target = default_target;
@@ -1390,7 +1390,7 @@ QoreIRSwitchStringInstruction* QoreIRBuilder::createSwitchString(QoreIRValue swi
 }
 
 QoreIRReturnInstruction* QoreIRBuilder::createReturn(QoreIRValue value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRReturnInstruction>();
+    auto inst = append<QoreIRReturnInstruction>();
     inst->opcode = QoreIROpcode::Return;
     inst->loc = loc;
     inst->has_value = true;
@@ -1399,7 +1399,7 @@ QoreIRReturnInstruction* QoreIRBuilder::createReturn(QoreIRValue value, const Qo
 }
 
 QoreIRReturnInstruction* QoreIRBuilder::createReturnNothing(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRReturnInstruction>();
+    auto inst = append<QoreIRReturnInstruction>();
     inst->opcode = QoreIROpcode::ReturnNothing;
     inst->loc = loc;
     return inst;
@@ -1407,7 +1407,7 @@ QoreIRReturnInstruction* QoreIRBuilder::createReturnNothing(const QoreProgramLoc
 
 QoreIRThrowInstruction* QoreIRBuilder::createThrow(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRThrowInstruction>();
+    auto inst = append<QoreIRThrowInstruction>();
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->exception_target = exception_target;
@@ -1416,48 +1416,46 @@ QoreIRThrowInstruction* QoreIRBuilder::createThrow(QoreIRValue value, QoreIRBasi
     // would destroy enclosing-scope temps that must survive the handler - most importantly a
     // typed foreach's list slot, which is read again on the loop back edge.
     // See design/ir-exception-branch-temp-scope.md.
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRThrowInstruction* QoreIRBuilder::createRethrow(QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRThrowInstruction>(QoreIROpcode::Rethrow);
+    auto inst = append<QoreIRThrowInstruction>(QoreIROpcode::Rethrow);
     inst->exception_target = exception_target;
     inst->loc = loc;
     // See createThrow(): a scoped drain preserves enclosing-scope temps across the handler.
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createThreadExit(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ThreadExit);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ThreadExit);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRLandingPadInstruction* QoreIRBuilder::createLandingPad(size_t scope_depth, uint32_t try_scope_id,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRLandingPadInstruction>(scope_depth, try_scope_id);
+    auto inst = append<QoreIRLandingPadInstruction>(scope_depth, try_scope_id);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createCatchException(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CatchException);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CatchException);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createCatchCleanup(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CatchCleanup);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CatchCleanup);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefSelf);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::RefSelf);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->result = func->createValue();
@@ -1472,15 +1470,17 @@ QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QorePro
 }
 
 QoreIRInstruction* QoreIRBuilder::createDecref(QoreIRValue value, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::Decref);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::Decref);
     inst->loc = loc;
     inst->operands.push_back(value);
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
     inst->loc = loc;
+    // the scope is the matching mark's, not the one append() recorded; 0 without one
+    inst->temp_scope_id = 0;
     // Pair with the innermost open PushTempMark via the nesting stack.  The
     // lowering brackets push/discard symmetrically, so the stack top is always
     // this discard's matching mark.
@@ -1496,7 +1496,7 @@ QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* 
 }
 
 QoreIRInstruction* QoreIRBuilder::createPushTempMark(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::PushTempMark);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::PushTempMark);
     inst->loc = loc;
     inst->temp_scope_id = next_temp_scope_id++;
     temp_scope_id_stack.push_back(inst->temp_scope_id);
@@ -1524,20 +1524,20 @@ void QoreIRBuilder::abandonTempScope() {
 }
 
 QoreIRInstruction* QoreIRBuilder::createDebugBlock(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::DebugBlock);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::DebugBlock);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createCheckException(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CheckException);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::CheckException);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
         const std::string& helper_name, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRCallAOTHelperInstruction>(helper_name);
+    auto inst = append<QoreIRCallAOTHelperInstruction>(helper_name);
     inst->loc = loc;
     inst->result = getFunction()->createValue();
     return inst;
@@ -1545,7 +1545,7 @@ QoreIRCallAOTHelperInstruction* QoreIRBuilder::createCallAOTHelper(
 
 QoreIRGuardInstruction* QoreIRBuilder::createGuardInt(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardInt);
+    auto inst = append<QoreIRGuardInstruction>(QoreIROpcode::GuardInt);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->deopt_target = exception_target;
@@ -1555,7 +1555,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardInt(QoreIRValue value, QoreIRB
 
 QoreIRGuardInstruction* QoreIRBuilder::createGuardFloat(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardFloat);
+    auto inst = append<QoreIRGuardInstruction>(QoreIROpcode::GuardFloat);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->deopt_target = exception_target;
@@ -1565,7 +1565,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardFloat(QoreIRValue value, QoreI
 
 QoreIRGuardInstruction* QoreIRBuilder::createGuardType(QoreIRValue value, const QoreTypeInfo* type,
         QoreIRBasicBlock* exception_target, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardType);
+    auto inst = append<QoreIRGuardInstruction>(QoreIROpcode::GuardType);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->type_info = type;
@@ -1576,7 +1576,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardType(QoreIRValue value, const 
 
 QoreIRGuardInstruction* QoreIRBuilder::createGuardNotNothing(QoreIRValue value, QoreIRBasicBlock* exception_target,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRGuardInstruction>(QoreIROpcode::GuardNotNothing);
+    auto inst = append<QoreIRGuardInstruction>(QoreIROpcode::GuardNotNothing);
     inst->loc = loc;
     inst->operands.push_back(value);
     inst->deopt_target = exception_target;
@@ -1586,7 +1586,7 @@ QoreIRGuardInstruction* QoreIRBuilder::createGuardNotNothing(QoreIRValue value, 
 
 QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreate(QoreIRValue iterable,
         FunctionalOperator* iterator_func, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable, iterator_func);
+    auto inst = append<QoreIRIteratorCreateInstruction>(iterable, iterator_func);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1594,7 +1594,7 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreate(QoreIRValue
 
 QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(QoreIRValue iterable,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRIteratorCreateInstruction>(iterable);
+    auto inst = append<QoreIRIteratorCreateInstruction>(iterable);
     inst->opcode = QoreIROpcode::IteratorCreateIterate;
     inst->loc = loc;
     inst->result = func->createValue();
@@ -1603,7 +1603,7 @@ QoreIRIteratorCreateInstruction* QoreIRBuilder::createIteratorCreateIterate(Qore
 
 QoreIRIteratorNextInstruction* QoreIRBuilder::createIteratorNext(QoreIRValue iterator, QoreIRBasicBlock* done_target,
         QoreIRBasicBlock* continue_target, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(iterator, done_target, continue_target);
+    auto inst = append<QoreIRIteratorNextInstruction>(iterator, done_target, continue_target);
     inst->loc = loc;
     inst->result = func->createValue();
     return inst;
@@ -1619,7 +1619,7 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createTypedForeachNext(QoreIRValue
             ? QoreIROpcode::TypedForeachNextBool
             : element_type == stringTypeInfo
                 ? QoreIROpcode::TypedForeachNextString : QoreIROpcode::TypedForeachNextInt;
-    auto inst = block->appendInstruction<QoreIRIteratorNextInstruction>(
+    auto inst = append<QoreIRIteratorNextInstruction>(
         opcode, list, index, limit, done_target, continue_target);
     inst->loc = loc;
     inst->result = func->createValue();
@@ -1639,16 +1639,15 @@ QoreIRIteratorNextInstruction* QoreIRBuilder::createTypedForeachNext(QoreIRValue
 
 QoreIRRefForeachInitInstruction* QoreIRBuilder::createRefForeachInit(const QoreValue& parse_ref_expr,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRRefForeachInitInstruction>(parse_ref_expr);
+    auto inst = append<QoreIRRefForeachInitInstruction>(parse_ref_expr);
     inst->loc = loc;
     inst->result = func->createValue();
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createRefForeachSize(QoreIRValue state, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachSize);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::RefForeachSize);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(state);
@@ -1657,19 +1656,18 @@ QoreIRInstruction* QoreIRBuilder::createRefForeachSize(QoreIRValue state, const 
 
 QoreIRInstruction* QoreIRBuilder::createRefForeachGetEntry(QoreIRValue state, QoreIRValue index,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachGetEntry);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::RefForeachGetEntry);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(state);
     inst->operands.push_back(index);
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createRefForeachRecord(QoreIRValue state, QoreIRValue value,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachRecord);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::RefForeachRecord);
     inst->loc = loc;
     inst->operands.push_back(state);
     inst->operands.push_back(value);
@@ -1678,7 +1676,7 @@ QoreIRInstruction* QoreIRBuilder::createRefForeachRecord(QoreIRValue state, Qore
 
 QoreIRInstruction* QoreIRBuilder::createRefForeachFinalize(QoreIRValue state, QoreIRValue fill_remaining,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachFinalize);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::RefForeachFinalize);
     inst->loc = loc;
     inst->operands.push_back(state);
     inst->operands.push_back(fill_remaining);
@@ -1686,7 +1684,7 @@ QoreIRInstruction* QoreIRBuilder::createRefForeachFinalize(QoreIRValue state, Qo
 }
 
 QoreIRInstruction* QoreIRBuilder::createRefForeachCleanup(QoreIRValue state, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefForeachCleanup);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::RefForeachCleanup);
     inst->loc = loc;
     inst->operands.push_back(state);
     return inst;
@@ -1694,20 +1692,20 @@ QoreIRInstruction* QoreIRBuilder::createRefForeachCleanup(QoreIRValue state, con
 
 QoreIROnBlockExitInstruction* QoreIRBuilder::createOnBlockExit(const OnBlockExitStatement* stmt,
         uint32_t owner_scope_id, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIROnBlockExitInstruction>(stmt, owner_scope_id);
+    auto inst = append<QoreIROnBlockExitInstruction>(stmt, owner_scope_id);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRScopeEnterInstruction* QoreIRBuilder::createScopeEnter(uint32_t scope_id, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRScopeEnterInstruction>(scope_id);
+    auto inst = append<QoreIRScopeEnterInstruction>(scope_id);
     inst->loc = loc;
     return inst;
 }
 
 QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bool is_error,
         const QoreProgramLocation* loc, bool inline_lowered) {
-    auto inst = block->appendInstruction<QoreIRScopeExitInstruction>(scope_id, is_error, inline_lowered);
+    auto inst = append<QoreIRScopeExitInstruction>(scope_id, is_error, inline_lowered);
     inst->loc = loc;
     return inst;
 }
@@ -1715,17 +1713,16 @@ QoreIRScopeExitInstruction* QoreIRBuilder::createScopeExit(uint32_t scope_id, bo
 QoreIRContextInstruction* QoreIRBuilder::createContext(const std::string& name, const QoreValue& exp,
         const QoreValue& where_exp, const QoreValue& sort_exp, int sort_type,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRContextInstruction>(name, exp, where_exp, sort_exp,
+    auto inst = append<QoreIRContextInstruction>(name, exp, where_exp, sort_exp,
         sort_type);
     inst->result = func->createValue();
     inst->loc = loc;
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createContextMaxPos(QoreIRValue state, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextMaxPos);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ContextMaxPos);
     inst->operands.push_back(state);
     inst->result = func->createValue();
     inst->loc = loc;
@@ -1735,7 +1732,7 @@ QoreIRInstruction* QoreIRBuilder::createContextMaxPos(QoreIRValue state, const Q
 QoreIRInstruction* QoreIRBuilder::createContextSetPos(QoreIRValue state, QoreIRValue index,
         const QoreProgramLocation* loc) {
     // Void — no result SSA assigned (OPCODE_REGISTRY marks produces_result=false).
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextSetPos);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ContextSetPos);
     inst->operands.push_back(state);
     inst->operands.push_back(index);
     inst->loc = loc;
@@ -1744,7 +1741,7 @@ QoreIRInstruction* QoreIRBuilder::createContextSetPos(QoreIRValue state, QoreIRV
 
 QoreIRInstruction* QoreIRBuilder::createContextDestroy(QoreIRValue state, const QoreProgramLocation* loc) {
     // Void — no result SSA assigned.
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextDestroy);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ContextDestroy);
     inst->operands.push_back(state);
     inst->loc = loc;
     return inst;
@@ -1752,47 +1749,43 @@ QoreIRInstruction* QoreIRBuilder::createContextDestroy(QoreIRValue state, const 
 
 QoreIRBackquoteInstruction* QoreIRBuilder::createBackquote(const char* command,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRBackquoteInstruction>(command ? command : "");
+    auto inst = append<QoreIRBackquoteInstruction>(command ? command : "");
     inst->loc = loc;
     inst->result = func->createValue();
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRContextRefInstruction* QoreIRBuilder::createContextRef(const char* key, int32_t stack_offset,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRContextRefInstruction>(key ? key : "", stack_offset);
+    auto inst = append<QoreIRContextRefInstruction>(key ? key : "", stack_offset);
     inst->loc = loc;
     inst->result = func->createValue();
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRInstruction* QoreIRBuilder::createContextRow(const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextRow);
+    auto inst = append<QoreIRInstruction>(QoreIROpcode::ContextRow);
     inst->loc = loc;
     inst->result = func->createValue();
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRFindInstruction* QoreIRBuilder::createFind(const QoreValue& exp,
         const QoreValue& find_exp, const QoreValue& where, int32_t mode,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRFindInstruction>(exp, find_exp, where, mode);
+    auto inst = append<QoreIRFindInstruction>(exp, find_exp, where, mode);
     inst->loc = loc;
     inst->result = func->createValue();
     // scoped drain on an in-frame exception branch; see design/ir-exception-branch-temp-scope.md
-    inst->temp_scope_id = exception_temp_scope_id;
     return inst;
 }
 
 QoreIRSummarizeInstruction* QoreIRBuilder::createSummarize(const SummarizeStatement* stmt,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRSummarizeInstruction>(stmt);
+    auto inst = append<QoreIRSummarizeInstruction>(stmt);
     inst->loc = loc;
     return inst;
 }
@@ -1816,7 +1809,7 @@ QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const C
         ? new CaseNodeNegRegex(loc ? loc : &loc_builtin, cloned_re, nullptr)
         : new CaseNodeRegex(loc ? loc : &loc_builtin, cloned_re, nullptr);
 
-    auto inst = block->appendInstruction<QoreIRSwitchRegexMatchInstruction>(cloned_case);
+    auto inst = append<QoreIRSwitchRegexMatchInstruction>(cloned_case);
     inst->owns_regex_case = true;
     inst->operands.push_back(switch_val);
     inst->loc = loc;
@@ -1826,7 +1819,7 @@ QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const C
 
 QoreIRSwitchCaseMatchInstruction* QoreIRBuilder::createSwitchCaseMatch(const CaseNode* case_node,
         QoreIRValue switch_val, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRSwitchCaseMatchInstruction>(case_node);
+    auto inst = append<QoreIRSwitchCaseMatchInstruction>(case_node);
     inst->operands.push_back(switch_val);
     inst->loc = loc;
     inst->result = func->createValue();

@@ -711,9 +711,15 @@ LValueHelper::~LValueHelper() {
         static_var_lvalue_value = QoreValue();
     }
 
-    // now delete temporary values (if any)
-    for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); i != e; ++i) {
-        discard(*i, vl.xsink);
+    // Whether the write removed no value that a recursive set can count: then its scan can be handed to a member
+    // of the root's set that has real references (RObject::deferScanToPinnedMember()).  Decided before the removed
+    // values are released: a value that needs a scan qualifies only if it is an object in no recursive set.
+    bool insertion_only = removal_objects.empty();
+    for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); insertion_only && i != e; ++i) {
+        if (needs_scan(*i) && ((*i)->getType() != NT_OBJECT
+            || qore_object_private::get(*static_cast<QoreObject*>(*i))->rset.load(std::memory_order_acquire))) {
+            insertion_only = false;
+        }
     }
 
     delete lvid_set;
@@ -726,8 +732,16 @@ LValueHelper::~LValueHelper() {
 #endif
             bool deferred;
             {
-                RSetHelper rsh(*robj, vl.xsink);
-                deferred = rsh.deferred();
+                // the root's set does not count an edge this write added until a scan has followed its edges
+                // again; see RObject::edgesAdded()
+                robj->edgesAdded();
+                if (insertion_only && robj->deferScanToPinnedMember()) {
+                    // no value was removed, so there are no other objects to scan either
+                    deferred = false;
+                } else {
+                    RSetHelper rsh(*robj, vl.xsink);
+                    deferred = rsh.deferred();
+                }
             }
             // the scan of the root would have repaired the sets of the objects that values were removed from; a
             // deferred scan is made too late for them, so they are scanned now; see objectRemoved()
@@ -744,6 +758,17 @@ LValueHelper::~LValueHelper() {
             robj->tDeref();
         }
     }
+
+    // Release the values the write replaced or removed only now, after the scan: the recursive sets they were in
+    // still count the edges that pointed at them until that scan has repaired them, so releasing one before it
+    // would compare what is left of its references - from outside the set - with those counts, find them equal,
+    // and collect objects that are still referenced (a cycle's back edge replaced while the root is held by a
+    // local variable or a list).  A removed value that the scan did not reach keeps the reference held here, which
+    // only makes it look held from outside while the scan runs.
+    for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); i != e; ++i) {
+        discard(*i, vl.xsink);
+    }
+
     for (RObject* o : removal_objects) {
         o->tDeref();
     }
@@ -3380,6 +3405,19 @@ const void* ClosureVarValue::getLValueId() const {
     return this;
 }
 
+void ClosureVarValue::revokeFrameReference(ExceptionSink* xsink) {
+    QoreObject* obj;
+    {
+        QoreSafeVarRWWriteLocker sl(rml);
+        obj = val.revokeRealReference();
+    }
+    if (obj) {
+        // after the variable's lock is released; see QoreLValue::revokeRealReference()
+        qore_object_private::get(*obj)->unsetRealReference();
+        obj->deref(xsink);
+    }
+}
+
 int ClosureVarValue::getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
     if (read_only && !initial_assignment) {
         lvh.vl.xsink->raiseException("RUNTIME-READONLY-VIOLATION",
@@ -3494,6 +3532,8 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
         // for this dereference, but a set can have been released since.  See design/dgc.md, "A dereference that
         // has nothing to decide takes no lock", and design/closure-bound-locals.md.
         else if (rset.load(std::memory_order_acquire) || qodh.hasDeferredScan()) {
+            // set once this dereference has rescanned; see RSet::keepNeedsRescan()
+            bool rescanned = false;
             while (true) {
                 {
                     QoreRSectionLocker al(rml);
@@ -3508,7 +3548,7 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                             assert(!rcount);
                             break;
                         }
-                        int rc = rs->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
+                        int rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
                         if (rc == 1) {
                             printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p found recursive "
                                 "reference; deleting value\n", this);
@@ -3527,6 +3567,10 @@ void ClosureVarValue::deref(ExceptionSink* xsink, bool real) {
                 // need to recalculate references: a scan deferred while the frame held the variable is made here,
                 // after which the loop decides collection with the set it found
                 RSetHelper rsh(*this, xsink);
+                // a scan another thread made instead can predate an edge the set is marked for
+                if (!rsh.skipped()) {
+                    rescanned = true;
+                }
 #ifdef DEBUG
                 {
                     ClosureVarValue::dbg_after_rescan_t hook = dbg_after_rescan.load();

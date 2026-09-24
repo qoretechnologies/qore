@@ -38,6 +38,7 @@
 #include "qore/vector_map"
 
 #include <atomic>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -116,11 +117,24 @@ public:
     */
     std::atomic_bool scan_wrote{true};
 
-    //! "references" as observed when rcount was assigned; -1 = never scanned
-    /** Atomic because scans holding the rsection in shared mode can confirm the same set at the same time,
-        and because RSet::canDelete() reads it without the rsection.
+    //! Advanced every time an edge from this object may have been added without a scan of it following
+    /** The object's recursive set records the references between its members when a scan assigns or confirms it.
+        An edge added between members afterwards is missing from those counts, so the set reads the reference it
+        makes as one from outside the set, and keeps a verdict of "cannot delete" that is no longer true.  An edge
+        that a scan of the object follows is counted by that scan; edgesAdded() is called for every other one, and
+        by RSetHelper for the object a scan starts at, and RSet::edgesUnchangedSinceScan() compares the count with
+        scan_edge_gen.  See design/dgc.md, "Knowing that a set's counts are current".
+
+        Removing an edge needs no mark: it only lowers the number of references from inside the set, so it cannot
+        make a verdict of "cannot delete" wrong.
     */
-    std::atomic_int scan_refs{-1};
+    std::atomic<unsigned> edge_gen{0};
+
+    //! edge_gen as read by the scan that last assigned or confirmed the object's recursive set
+    /** Read before the scan follows the object's edges, so an edge added while the scan runs leaves the two
+        different.  Atomic because RSet::canDelete() reads it with no lock of the object.
+    */
+    std::atomic<unsigned> scan_edge_gen{0};
 
     // The scan generation: incremented every time a committed scan assigns this object's recursive set,
     // so a thread that sampled an older value knows that another thread has scanned this object since.
@@ -255,7 +269,24 @@ public:
         return references;
     }
 
-    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed);
+    //! Assigns the object's recursive set
+    /** @param rs the new set, or nullptr if the object is in none
+        @param rcnt the number of references to the object from members of the set
+        @param closed whether the set is closed
+        @param seen_edge_gen edge_gen as read by the scan before it followed the object's edges
+    */
+    DLLLOCAL void setRSet(RSet* rs, int rcnt, bool closed, unsigned seen_edge_gen);
+
+    //! Records that an edge from this object may have been added without a scan of it following
+    DLLLOCAL void edgesAdded() {
+        // sequentially consistent, so that a scan that reads edge_gen after this cannot miss the new edge
+        edge_gen.fetch_add(1, std::memory_order_seq_cst);
+    }
+
+    //! Returns true if no edge from this object was added since the scan that assigned or confirmed its set
+    DLLLOCAL bool edgesUnchangedSinceScan() const {
+        return edge_gen.load(std::memory_order_seq_cst) == scan_edge_gen.load(std::memory_order_relaxed);
+    }
 
     //! Records that a scan found the recursive set that is already in place, without changing it
     /** @param advance_generation whether to advance the scan generation as a committed scan does
@@ -271,19 +302,17 @@ public:
         other scan, so paying a contended write on every object of a shared graph, in every scan, would buy
         only the odd avoided rescan.
 
-        The reference-count snapshot is refreshed either way, and only when it has actually moved.
-        RSet::canDelete() compares a member's live reference count with the count observed when its rcount was
-        assigned, to tell a stale verdict from a genuine reference from outside the set; a snapshot left behind
-        by an earlier scan makes that test read the wrong graph and can leave a set that has become
-        collectable stranded.
+        The edge generation the scan read is recorded either way, and only when it has actually moved:
+        RSet::canDelete() trusts the set's counts only while every member's generation is the recorded one; see
+        RObject::edgesAdded().
     */
-    DLLLOCAL void confirmRSet(bool advance_generation) {
+    DLLLOCAL void confirmRSet(bool advance_generation, unsigned seen_edge_gen) {
         // a scan that changes nothing holds the rsection in shared mode
         assert(rml.checkRSectionHeld());
         if (rset.load(std::memory_order_relaxed)) {
-            int refs = references.load(std::memory_order_relaxed);
-            if (scan_refs.load(std::memory_order_relaxed) != refs) {
-                scan_refs.store(refs, std::memory_order_relaxed);
+            // the scan counted every edge that existed when it read the generation
+            if (scan_edge_gen.load(std::memory_order_relaxed) != seen_edge_gen) {
+                scan_edge_gen.store(seen_edge_gen, std::memory_order_relaxed);
             }
         }
         if (advance_generation) {
@@ -296,6 +325,23 @@ public:
     DLLLOCAL int checkDeferScan();
 
     DLLLOCAL void removeInvalidateRSet();
+
+    //! Marks the object's recursive set stale, and not closed, instead of invalidating it; see RSet::markStale()
+    DLLLOCAL void markRSetStale();
+
+    //! Hands the scan of a write at this object to a member of its recursive set that has real references
+    /** Called instead of a scan after a write that removed no value counted by a recursive set.  While a member
+        of the set has real references, every member is live: the member reaches all of them.  Its scan is deferred
+        to the release of its last real reference, and that scan starts inside the set and reaches this object and
+        whatever the write added to it, as the write removed no edge between members.  The set is marked stale
+        until then (checkDeferScan()).
+
+        @return true if the scan was handed over; false if the object is in no set, has real references itself
+        (its own scan is deferred), or no member of its set has real references, and the caller scans as usual
+
+        See design/dgc.md, "A write inside a set that a real reference holds".
+    */
+    DLLLOCAL bool deferScanToPinnedMember();
     DLLLOCAL void removeInvalidateRSetIntern();
 
     //! Takes this object's recursive set out of the closed state, so that scans enter it again
@@ -460,7 +506,66 @@ public:
         0: cannot delete
         1: the rset has been invalidated already, the object can be deleted
     */
-    DLLLOCAL int canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator, RSetDerefHelper& cleanup);
+    /** @param ref_copy the reference count of the object being dereferenced
+        @param rcount the object's count of references from members of the set
+        @param rescanned true if this dereference has already rescanned the set; see keepNeedsRescan()
+        @param initiator the object being dereferenced
+        @param cleanup collects the members to release if the set is collected
+    */
+    DLLLOCAL int canDelete(int ref_copy, int rcount, bool rescanned, RObject& initiator, RSetDerefHelper& cleanup);
+
+    //! Returns true if a verdict of "cannot delete" must be checked by a rescan
+    /** Called with rwl held.  A reference from outside the set keeps it, unless the set has gained an edge between
+        its members since it was scanned (edgesUnchangedSinceScan()): the counts do not include that edge, so the
+        reference it makes looks like one from outside.  A dereference that has already rescanned the set once
+        trusts it.
+    */
+    DLLLOCAL bool keepNeedsRescan(bool rescanned) const;
+
+    //! Returns true if the references between the members are the ones counted when the set was last scanned
+    /** Called with rwl held.  True when no member has had an edge added since the scan that assigned or confirmed
+        the set (RObject::edgesUnchangedSinceScan()), and no edge whose target could not be marked has been added
+        anywhere since then (untracked_edge_epoch).  Removed edges are not considered: they cannot make a verdict
+        of "cannot delete" wrong.
+    */
+    DLLLOCAL bool edgesUnchangedSinceScan() const;
+
+    //! Records the untracked edge epoch that a scan read before it followed any edge
+    DLLLOCAL void setScanEpoch(unsigned epoch) {
+        scan_epoch.store(epoch, std::memory_order_relaxed);
+    }
+
+    //! Marks the set as describing the graph before a change whose scan was deferred
+    /** Called by RObject::checkDeferScan() with the deferring object's write lock held.  A stale set is kept by
+        every dereference (canDelete() returns 0) until the deferred scan is made, when the object's last real
+        reference is released: that scan confirms the set in place or replaces it, and either clears the mark.
+        Replacing the set on every deferral instead cost a new set, and the exclusive r-section of the whole graph,
+        each time.
+    */
+    DLLLOCAL void markStale() {
+        stale.store(true, std::memory_order_release);
+    }
+
+    //! Clears the stale mark; called by a scan that has confirmed the set against the live graph
+    DLLLOCAL void clearStale() {
+        if (stale.load(std::memory_order_relaxed)) {
+            stale.store(false, std::memory_order_release);
+        }
+    }
+
+    //! Returns true if the set is stale; see markStale()
+    DLLLOCAL bool isStale() const {
+        return stale.load(std::memory_order_acquire);
+    }
+
+    //! Returns a member other than \a exclude that has real references, with a weak reference, or nullptr
+    /** Returns nullptr also when a member's values can change without a scan (Pattern B private data): a write at
+        such a set is always scanned.  See RObject::deferScanToPinnedMember().
+    */
+    DLLLOCAL RObject* findPinnedMember(RObject* exclude);
+
+    //! Advanced when an edge is added whose target objects cannot be found to mark them; see edgesUnchangedSinceScan()
+    DLLLOCAL static std::atomic<unsigned> untracked_edge_epoch;
 
 #ifdef DEBUG
     DLLLOCAL void dbg();
@@ -542,6 +647,15 @@ protected:
         taking rwl, while invalidateIntern() writes it under rwl's write lock.
     */
     std::atomic_bool valid;
+    //! untracked_edge_epoch as read by the scan that last assigned or confirmed the set
+    std::atomic<unsigned> scan_epoch{0};
+    //! true while a scan of one of the members is deferred; see markStale()
+    std::atomic_bool stale{false};
+    //! the member last found with real references; see findPinnedMember().  The members of a set do not change,
+    //! and the set holds a weak reference to each of them
+    std::atomic<RObject*> pinned{nullptr};
+    //! whether a write inside the set may be handed to a member (-1: not checked yet); see findPinnedMember()
+    std::atomic<int8_t> pin_eligible{-1};
 
     // called with the write lock held
     DLLLOCAL void invalidateIntern() {
@@ -587,6 +701,17 @@ DLLLOCAL void qore_dgc_node_dereferenced(AbstractQoreNode* n, ExceptionSink* xsi
     in its rsection until the scan is committed; a lock that another thread holds ends the attempt, which is retried
     after that thread releases it. See design/dgc.md.
 */
+//! Records that a value was stored in an object without a scan of the object following
+/** Called by containers whose values the object scanner reports through private data (Pattern B in design/dgc.md)
+    when they store a value that needs a scan: the holder has a new edge, and so does every object that the value
+    reaches directly, which marks both the holder's recursive set and the sets of those objects as needing a rescan
+    before a verdict of "cannot delete" is trusted; see RObject::edgesAdded().
+
+    @param holder the object that stored the value
+    @param v the value stored
+*/
+DLLLOCAL void qore_dgc_value_stored(RObject& holder, const QoreValue& v);
+
 class RSetHelper {
     friend class RSetHeldEdgeHelper;
 public:
@@ -605,6 +730,14 @@ public:
     */
     DLLLOCAL bool deferred() const {
         return scan_deferred;
+    }
+
+    //! Returns true if the scan was skipped because another thread scanned the object while this one waited
+    /** That scan can have started before a change this thread made, so it does not show that the object's set
+        counts the change.
+    */
+    DLLLOCAL bool skipped() const {
+        return scan_skipped;
     }
 
     //! Reports a value referenced by the node being scanned; always returns false
@@ -643,6 +776,8 @@ private:
         int component = -1;
         // the number of references from nodes in the same component, if the component has a cycle
         int internal = 0;
+        // for an object, RObject::edge_gen as read before the scan followed its edges
+        unsigned edge_gen = 0;
 
         DLLLOCAL ScanNode(void* ptr, NodeKind kind) : ptr(ptr), kind(kind) {
         }
@@ -682,6 +817,8 @@ private:
     RObject* root_obj = nullptr;
     // the recursive set of the object the scan started at, which the scan always enters
     RSet* root_rset = nullptr;
+    // RSet::untracked_edge_epoch as read before the current pass followed any edge
+    unsigned scan_epoch = 0;
     // true when the scan takes the rsection of every object it enters to itself, which it has to do to
     // change a recursive set; set from the root object's last outcome (RObject::scan_wrote)
     bool exclusive = false;
@@ -691,6 +828,8 @@ private:
     bool changed = false;
     // set when the scan was not made because the object has real references; see deferred()
     bool scan_deferred = false;
+    // true if another thread scanned the object while this one waited; see skipped()
+    bool scan_skipped = false;
     //! Set when this pass registered a notification with the owner of a lock it could not take
     /** A scan that gives up asks the constructor to roll back and retry, and the retry only makes progress
         because notifier.wait() blocks until the owner of the lock releases it.  Every path that abandons a
@@ -724,6 +863,16 @@ private:
     RNotifier notifier;
 
     ExceptionSink* xsink;
+
+    //! true if this scan is accounted; see qore_scan_accounting_enabled()
+    bool acct = false;
+    //! the graph nodes this scan entered, when accounted
+    uint64_t acct_nodes = 0;
+    //! the name of the object whose rsection the last abandoned pass could not take
+    /** Copied when the pass abandons, while the edge that reached the object still keeps it alive: the object can
+        be freed while this scan waits for its rsection.
+    */
+    std::string wait_on;
 
 #ifdef DEBUG
     int lcnt = 0;
@@ -885,5 +1034,61 @@ public:
         del = true;
     }
 };
+
+//! runtime scan accounting and scan waits; see design/dgc.md "Diagnosing scan contention"
+/** Accounting is enabled for the life of the process when the \c QORE_SCAN_STATS environment variable is set at
+    startup; its value is the path the table is written to at exit, with the process id appended.
+*/
+DLLLOCAL bool qore_scan_accounting_enabled();
+
+//! scan accounting for one scan root, as returned by qore_scan_accounting_snapshot()
+struct QoreScanAccountingRecord {
+    //! the name of the scan root: an object's class name or a closure-bound variable's name
+    std::string root;
+    //! scans started at the root that ran
+    uint64_t scans = 0;
+    //! scans started at the root that were deferred because it had real references
+    uint64_t deferred = 0;
+    //! scans skipped because another thread had just scanned the root
+    uint64_t already = 0;
+    //! passes abandoned because another thread held an rsection the scan needed
+    uint64_t restarts = 0;
+    //! passes restarted to take the rsections exclusively
+    uint64_t exclusive = 0;
+    //! graph nodes entered
+    uint64_t nodes = 0;
+    //! time spent in the scans, in nanoseconds
+    uint64_t total_ns = 0;
+    //! time spent waiting for other threads' rsections, in nanoseconds
+    uint64_t wait_ns = 0;
+    //! the longest single scan, in nanoseconds
+    uint64_t max_ns = 0;
+};
+
+//! returns the accounting table; empty when accounting is not enabled
+DLLLOCAL std::vector<QoreScanAccountingRecord> qore_scan_accounting_snapshot();
+
+//! a thread waiting in a scan for another thread's rsection, as returned by qore_scan_wait_snapshot()
+struct QoreScanWaitRecord {
+    //! the waiting thread
+    int tid;
+    //! the name of the waiting scan's root
+    std::string root;
+    //! the name of the object whose rsection the scan waits for
+    std::string wait_on;
+    //! the thread holding it, or -1 if it is held by scans in shared mode
+    int owner_tid;
+    //! when the wait started (monotonic clock, microseconds)
+    int64_t since_us;
+};
+
+//! returns the threads currently waiting in a scan for another thread's rsection
+DLLLOCAL std::vector<QoreScanWaitRecord> qore_scan_wait_snapshot();
+
+#ifdef DEBUG
+class Counter;
+//! debug builds: sets a Counter to be decremented (once) when the next scan starts waiting for another thread
+DLLLOCAL void q_set_scan_wait_notify(Counter* c);
+#endif
 
 #endif

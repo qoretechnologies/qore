@@ -1,0 +1,151 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+# the parents made here are locked Programs with exactly the options each check gives them
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class ModuleOptionInheritanceTest
+
+#! Tests that a user module inherits the parse options of the Program loading it, extended options included
+/** A user module is parsed with the restrictions and permissions of the Program that loads it, except the options
+    that only select language behavior ("free" options), which a module must not inherit because they would change
+    what its own code means.  Extended options (bits 64 and up) were dropped entirely: the mask that excludes the
+    free options was a legacy integer, whose complement has an empty high word, so a Program with, for example,
+    \c no-new or \c no-module-path-directives loaded modules that were not restricted at all.  Each module loader
+    is checked: from a path, a separated module, and a module registered from source text.
+*/
+class ModuleOptionInheritanceTest inherits QUnit::Test {
+    public {
+        #! options that a module must inherit: every extended restriction and positive option, and a legacy one
+        const Inherited = (
+            "no-class-defs",
+            "no-constant-defs",
+            "no-namespace-defs",
+            "no-new",
+            "no-summarize",
+            "no-module-path-directives",
+            "allow-opaque-references",
+            "no-network",
+        );
+
+        #! options that only select language behavior and must not be inherited, extended and legacy
+        const NotInherited = (
+            "broken-auto-cast",
+            "fp-fast-math",
+            "no-char-type",
+            "broken-sprintf",
+        );
+    }
+
+    private {
+        int seq = 0;
+    }
+
+    constructor() : QUnit::Test("ModuleOptionInheritanceTest", "1.0") {
+        addTestCase("a module loaded from a path inherits the options", \fromPath());
+        addTestCase("a separated module inherits the options", \separated());
+        addTestCase("a module loaded from source text inherits the options", \fromSource());
+        addTestCase("an inherited extended restriction is enforced in the module", \restrictionEnforced());
+        set_return_value(main());
+    }
+
+    fromPath() {
+        TmpDir tmp("qore-module-options-");
+        string name = uniqueName("PathOpts");
+        string path = tmp.path + DirSep + name + ".qm";
+        writeFile(path, moduleHeader(name) + optionsFunction(name));
+        checkOptions("from path", loadInto(sprintf("%%requires %s\n", path)), name);
+    }
+
+    separated() {
+        TmpDir tmp("qore-module-options-");
+        string name = uniqueName("SepOpts");
+        string dir = tmp.path + DirSep + name;
+        mkdir(dir);
+        writeFile(dir + DirSep + name + ".qm", moduleHeader(name));
+        writeFile(dir + DirSep + "Options.qc", optionsFunction(name));
+        checkOptions("separated", loadInto(sprintf("%%requires %s\n", dir)), name);
+    }
+
+    fromSource() {
+        if (!Option::HAVE_LIBRARY_DEBUGGING) {
+            testSkip("loading a module from source text is only reachable from Qore in debug builds");
+        }
+        string name = uniqueName("SrcOpts");
+        Program p = makeParent();
+        p.parse("sub load(string name, string src) {\n"
+            "    call_function(\"dbg_register_user_module_from_source\", name, src);\n"
+            "}\n"
+            "list<string> sub options(string fn) {\n"
+            "    return call_function(fn).toStringList();\n"
+            "}\n", "parent");
+        p.callFunction("load", name, moduleHeader(name) + optionsFunction(name));
+        checkOptions("from source", p, name);
+    }
+
+    #! the module does not load when it uses what an inherited extended restriction forbids
+    restrictionEnforced() {
+        TmpDir tmp("qore-module-options-");
+        string name = uniqueName("NoNewOpts");
+        string path = tmp.path + DirSep + name + ".qm";
+        writeFile(path, moduleHeader(name) + "public hash<auto> sub make() {\n    return {\"x\": new Mutex()};\n}\n");
+        Program p(new ParseOptions(("new-style", "no-new")));
+        assertThrows("PARSE-EXCEPTION", "new", \p.parse(), (sprintf("%%requires %s\n", path), "parent"));
+    }
+
+    #! returns a parent Program with every option under test, which has already loaded the given module source
+    private Program loadInto(string requires) {
+        Program p = makeParent();
+        p.parse(requires + "list<string> sub options(string fn) {\n    return call_function(fn).toStringList();\n}\n",
+            "parent");
+        return p;
+    }
+
+    #! a locked Program with every option under test
+    private Program makeParent() {
+        return new Program(new ParseOptions(("new-style",) + Inherited + NotInherited));
+    }
+
+    private checkOptions(string label, Program p, string name) {
+        list<string> opts = p.callFunction("options", name + "_options");
+        foreach string opt in (Inherited) {
+            assertTrue(inlist(opt, opts), sprintf("%s: %s inherited; module options: %y", label, opt, opts));
+        }
+        foreach string opt in (NotInherited) {
+            assertFalse(inlist(opt, opts), sprintf("%s: %s not inherited", label, opt));
+        }
+    }
+
+    private string uniqueName(string prefix) {
+        return sprintf("%s%d_%d", prefix, getpid(), ++seq);
+    }
+
+    private static string moduleHeader(string name) {
+        return sprintf("module %s {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"parse option inheritance test\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n", name);
+    }
+
+    #! a function reporting the module's own parse options; declared at the top level, since the parent may forbid
+    #! namespace definitions
+    private static string optionsFunction(string name) {
+        return sprintf("public ParseOptions sub %s_options() {\n"
+            "    return Program::getFullParseOptions();\n"
+            "}\n", name);
+    }
+
+    private static writeFile(string path, string text) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(text);
+    }
+}

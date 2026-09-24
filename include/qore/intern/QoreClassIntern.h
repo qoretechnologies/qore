@@ -3857,6 +3857,24 @@ public:
         return qc.priv->runtimeCheckInstantiateClass(xsink);
     }
 
+    //! Checks that a class resolved by name when an object is constructed may be instantiated
+    /** A class named in source code is checked against the Program's sandboxing restrictions and for abstract
+        methods when the construction is parsed.  A class that is only resolved by name when the object is
+        constructed - an AOT build-group class deferred at parse time, or a class named by a string - misses both
+        parse-time checks, so every construction that resolves its class by name must make them here instead, in
+        every execution mode.
+
+        @param qc the class resolved by name
+        @param pgm the Program whose sandboxing restrictions apply; if nullptr, only the abstract-class check is
+        made
+        @param xsink raises \c CREATE-OBJECT-ERROR if the Program's parse options exclude the class's functional
+        domain, or \c ABSTRACT-CLASS-ERROR if the class still has abstract methods
+
+        @return 0 if the class may be instantiated, -1 if an exception was raised
+    */
+    DLLLOCAL static int runtimeCheckInstantiateClassByName(const QoreClass& qc, const QoreProgram* pgm,
+            ExceptionSink* xsink);
+
     DLLLOCAL static int parseInitPartial(QoreClass& qc) {
         return qc.priv->parseInitPartial();
     }

@@ -796,7 +796,6 @@ DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosure
 DLLLOCAL bool thread_has_runtime_closure_env();
 
 typedef std::vector<ClosureVarValue*> cvv_vec_t;
-DLLLOCAL cvv_vec_t* thread_get_all_closure_vars();
 DLLLOCAL cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist);
 
 DLLLOCAL void thread_push_frame_boundary();

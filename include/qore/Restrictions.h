@@ -165,13 +165,17 @@
     |PO_NO_SUMMARIZE)
 
 //! mask of all options allowing for more freedom (instead of less)
+/** @note This macro includes only the 64-bit options; the extended option
+    QoreParseOptions::ALLOW_OPAQUE_REFERENCES is also a positive option.  Code that enforces the rule must use
+    QoreParseOptions::POSITIVE_OPTIONS, which includes it.
+*/
 #define PO_POSITIVE_OPTIONS           (PO_NO_CHILD_PO_RESTRICTIONS|PO_ALLOW_INJECTION|PO_ALLOW_WEAK_REFERENCES \
     |PO_ALLOW_DEBUGGER|PO_ENABLE_DEBUG|PO_ALLOW_REPARSE)
 
 //! mask of options that have no effect on code access or code safety
-/** @note This macro includes only the 64-bit options; the extended option
-    QoreParseOptions::BROKEN_SOFT_TYPES is also considered a "free option" but
-    is not included in this macro due to its extended-bit nature
+/** @note This macro includes only the 64-bit options; extended options with no effect on code access or code
+    safety, such as QoreParseOptions::BROKEN_SOFT_TYPES, are also "free options".  Code that enforces the rule must
+    use QoreParseOptions::FREE_OPTIONS, which includes them.
 */
 #define PO_FREE_OPTIONS               (PO_ALLOW_BARE_REFS|PO_ASSUME_LOCAL|PO_STRICT_BOOLEAN_EVAL \
     |PO_BROKEN_LIST_PARSING|PO_BROKEN_LOGIC_PRECEDENCE|PO_BROKEN_INT_ASSIGNMENTS|PO_BROKEN_OPERATORS \

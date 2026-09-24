@@ -205,6 +205,18 @@ class SoapHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that returns a body in the charset and with the Content-Type given in the X-Enc and X-Ct headers
+class CharsetHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # a binary body is sent as-is, so the server adds no charset of its own
+        return <HttpResponseInfo>{
+            "code": 200,
+            "body": binary(convert_encoding("é-ok", hdr."x-enc")),
+            "hdr": {"Content-Type": hdr."x-ct"},
+        };
+    }
+}
+
 #! Handler that returns gzip-compressed text
 class GzipHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -405,6 +417,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("HTTP/2 sendWithRecvCallback error response",
             \testHttp2SendWithRecvCallbackErrorResponse());
         addTestCase("HTTP/2 SOAP content-type body", \testSoapContentTypeHttp2());
+        addTestCase("HTTP/2 charset parameter syntax", \testCharsetParamHttp2());
         addTestCase("HTTP/2 gzip decoded body", \testGzipContentTypeHttp2());
         addTestCase("HTTP/2 bounded RestClient response", \testBoundedRestClientResponseHttp2());
         addTestCase("HTTP/2 gzip passthru body", \testGzipPassthruHttp2());
@@ -460,6 +473,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         mServer.setHandler("status", "/status", NOTHING, new StatusCodeHandler());
         mServer.setHandler("soap", "/soap", NOTHING, new SoapHandler());
+        mServer.setHandler("charset", "/charset", NOTHING, new CharsetHandler());
         mServer.setHandler("gzip", "/gzip-plain", NOTHING, new GzipHandler());
         mServer.setHandler("gzip-stream", "/gzip-stream", NOTHING, new GzipStreamHandler());
         mServer.setHandler("gzip-multi", "/gzip-multi", NOTHING, new GzipMultiHandler());
@@ -778,6 +792,31 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         assertEq(200, resp.status_code, "SOAP HTTP/2 GET should return 200");
         assertTrue(resp.body.typeCode() == NT_STRING, "SOAP body should be a string");
         assertEq(xml, resp.body, "SOAP body should match");
+    }
+
+    #! a quoted-string charset, parameter-name case, and a ';' or "charset=" in another parameter (RFC 9110)
+    testCharsetParamHttp2() {
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        foreach hash<auto> i in (
+                {"ct": 'text/plain;charset="ISO-8859-1"', "enc": "ISO-8859-1"},
+                {"ct": 'text/plain; Charset = "UTF-16LE"; x="a;b"', "enc": "UTF-16LE"},
+                {"ct": 'text/plain; x="charset=UTF-8"; charset=UTF-16BE', "enc": "UTF-16BE"},
+            ) {
+            hash<auto> info;
+            hash<auto> resp = hc.send(NOTHING, "GET", "/charset", {"X-Enc": i.enc, "X-Ct": i.ct}, False, \info);
+            assertEq("2", resp.http_version, i.ct);
+            assertEq(NT_STRING, resp.body.typeCode(), i.ct);
+            # the encoding name itself: glibc's iconv would hide a quoted name in a conversion
+            assertEq(i.enc, resp.body.encoding(), i.ct);
+            assertEq("é-ok", resp.body, i.ct);
+            assertEq(i.enc, info.charset, i.ct);
+        }
     }
 
     testGzipContentTypeHttp2() {

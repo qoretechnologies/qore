@@ -1433,10 +1433,6 @@ const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* cur
     return rv;
 }
 
-cvv_vec_t* thread_get_all_closure_vars() {
-    return thread_data.get()->tlpd->cvstack.getAll();
-}
-
 cvv_vec_t* thread_get_closure_vars_for_vlist(const LVarSet* vlist) {
     if (!vlist || vlist->empty()) {
         return nullptr;

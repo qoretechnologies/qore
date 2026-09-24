@@ -39,6 +39,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/HttpClientEventSink.h"
+#include "qore/intern/QoreHttpHeaderPairs.h"
 
 // Forward declarations for QPP type references
 extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
@@ -2429,23 +2430,9 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
         || strcasestr(ct, "/yaml") || strcasestr(ct, "+json");
 
     if (!force_utf8) {
-        // Parse charset from Content-Type
-        const char* cs = strcasestr(ct, "charset=");
-        if (cs) {
-            cs += 8;
-            // Skip optional quotes
-            if (*cs == '"' || *cs == '\'') {
-                ++cs;
-            }
-            // Find end of charset value
-            const char* end = cs;
-            while (*end && *end != ';' && *end != ' ' && *end != '"' && *end != '\'') {
-                ++end;
-            }
-            if (end > cs) {
-                std::string charset(cs, end - cs);
-                enc = QEM.findCreate(charset.c_str());
-            }
+        qore_http_media_type_param charset;
+        if (qore_find_http_media_type_param(ct, "charset", charset) && !charset.value.empty()) {
+            enc = QEM.findCreate(charset.value.c_str());
         }
     }
 

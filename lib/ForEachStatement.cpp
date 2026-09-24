@@ -237,21 +237,21 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
             ln = nv.takeReferencedValue();
         }
 
-        if (rc == RC_BREAK) {
-            // assign remaining values to list unchanged
+        if (rc == RC_BREAK || rc == RC_RETURN) {
+            // leaving the loop early: assign remaining values to list unchanged
             if (l_tlist) {
                 while (++i < l_tlist->size()) {
                     ln->get<QoreListNode>()->push(l_tlist->getReferencedEntry(i), nullptr);
                 }
             }
 
-            rc = 0;
+            if (rc == RC_BREAK) {
+                rc = 0;
+            }
             break;
         }
 
-        if (rc == RC_RETURN) {
-            break;
-        } else if (rc == RC_CONTINUE) {
+        if (rc == RC_CONTINUE) {
             rc = 0;
         }
         ++i;
@@ -260,6 +260,11 @@ int ForEachStatement::execRef(QoreValue& return_value, ExceptionSink* xsink) {
         if (!l_tlist || i == l_tlist->size()) {
             break;
         }
+    }
+
+    // an exception (e.g. cancellation) leaves the list unchanged, as when the body throws
+    if (*xsink) {
+        return 0;
     }
 
     // write the value back to the lvalue
@@ -351,21 +356,21 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
             ln = nv.takeReferencedValue();
         }
 
-        if (rc_state == RC_BREAK) {
-            // assign remaining values to list unchanged
+        if (rc_state == RC_BREAK || rc_state == RC_RETURN) {
+            // leaving the loop early: assign remaining values to list unchanged
             if (l_tlist) {
                 while (++i < l_tlist->size()) {
                     ln->get<QoreListNode>()->push(l_tlist->getReferencedEntry(i), nullptr);
                 }
             }
 
-            rc_state = 0;
+            if (rc_state == RC_BREAK) {
+                rc_state = 0;
+            }
             break;
         }
 
-        if (rc_state == RC_RETURN) {
-            break;
-        } else if (rc_state == RC_CONTINUE) {
+        if (rc_state == RC_CONTINUE) {
             rc_state = 0;
         }
         ++i;
@@ -381,6 +386,11 @@ int ForEachStatement::execRef(RuntimeConfig& rc, QoreValue& return_value, Except
         if (!ln) {
             ln = new QoreListNode(autoTypeInfo);
         }
+    }
+
+    // an exception (e.g. cancellation) leaves the list unchanged, as when the body throws
+    if (*xsink) {
+        return 0;
     }
 
     // write the value back to the lvalue

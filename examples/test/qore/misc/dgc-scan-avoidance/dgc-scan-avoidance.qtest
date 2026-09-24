@@ -1,0 +1,465 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%allow-opaque-references
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%include dgc-scan-avoidance-checks.qi
+
+%exec-class DgcScanAvoidanceTest
+
+#! Tests what the scans made by member writes cost, and that the sets they maintain are still collected
+/** A write to a member of an object in a recursive set starts a scan unless the scan can be shown to find nothing
+    to collect.  The checks in dgc-scan-avoidance-checks.qi hold a set in each of the ways real code holds one, write to
+    it many times, and report the scans started, the objects they entered and the sets they created, along with the
+    objects destroyed while the set was held (which must be none) and once it was released (which must be all of
+    them).  The counts are the ones the collector makes today: a change that lowers one must update it here, and a
+    change that raises one is a regression.
+
+    The scan counters are checked in each execution mode and from a compiled module, since each engine has its own
+    lvalue code (see CompiledScanCounts for where they still differ).  The collection checks also run in this
+    program.
+*/
+class DgcScanAvoidanceTest inherits QUnit::Test {
+    public {
+        #! scan counters for each check in the AST interpreter; only available in debug builds
+        /** TierScanCounts lists what differs in the other execution modes.
+        */
+        const ExpectedScanCounts = {
+            # a plain local variable holds a real reference, so the scans are deferred to its release; the deferral
+            # keeps the set, marked stale, and the deferred scan confirms it in place (no new set)
+            "local-scans": 100,
+            "local-walked": 0,
+            "local-sets": 0,
+            "local-release-scans": 1,
+            "local-release-walked": 3,
+            "local-release-sets": 0,
+
+            # a method call holds a real reference to self; the scan deferred by the writes is made when the
+            # call returns
+            "method-scans": 100,
+            "method-walked": 3,
+            "method-sets": 0,
+            "method-release-scans": 1,
+            "method-release-walked": 0,
+            "method-release-sets": 0,
+
+            # a closure-bound local variable: while its frame holds it, the frame lends the object it holds a real
+            # reference, as a plain local variable does, so the scans are deferred to the release
+            "closure-scans": 100,
+            "closure-walked": 0,
+            "closure-sets": 0,
+            "closure-release-scans": 1,
+            "closure-release-walked": 3,
+            "closure-release-sets": 0,
+
+            # the closure outlives the frame of the variable holding the cycle: the frame's release ends the lent
+            # reference, and the scan deferred by the writes is made then, while the closure keeps the set
+            "closure-outlives-scans": 102,
+            "closure-outlives-walked": 5,
+            "closure-outlives-sets": 1,
+            "closure-outlives-release-scans": 1,
+            "closure-outlives-release-walked": 0,
+            "closure-outlives-release-sets": 0,
+
+            # another thread replaces the variable's value through a closure: the old cycle is collected by the
+            # scan made when it is released, and the writes to the new one are deferred like the frame's own
+            "closure-thread-scans": 100,
+            "closure-thread-walked": 0,
+            "closure-thread-sets": 0,
+            "closure-thread-release-scans": 1,
+            "closure-thread-release-walked": 3,
+            "closure-thread-release-sets": 0,
+
+            # several threads write through a closure while the frame holds the variable: every write is deferred,
+            # whichever thread makes it (the counts are summed over the threads)
+            "closure-concurrent-scans": 100,
+            "closure-concurrent-walked": 0,
+            "closure-concurrent-sets": 0,
+            "closure-concurrent-release-scans": 1,
+            "closure-concurrent-release-walked": 3,
+            "closure-concurrent-release-sets": 0,
+
+            # an exception unwinds the frame: the lent reference ends and the cycle is collected
+            "closure-exception-scans": 102,
+            "closure-exception-walked": 5,
+            "closure-exception-sets": 1,
+            "closure-exception-release-scans": 1,
+            "closure-exception-release-walked": 0,
+            "closure-exception-release-sets": 0,
+
+            # a variable passed by reference is closure-bound; writes through the reference are deferred too
+            "closure-ref-arg-scans": 100,
+            "closure-ref-arg-walked": 0,
+            "closure-ref-arg-sets": 0,
+            "closure-ref-arg-release-scans": 1,
+            "closure-ref-arg-release-walked": 3,
+            "closure-ref-arg-release-sets": 0,
+
+            # the variable is removed while its frame holds it: the value leaves with its real reference, which is
+            # removed when the value is released, and the scan deferred by the writes collects the cycle then
+            "closure-remove-scans": 100,
+            "closure-remove-walked": 3,
+            "closure-remove-sets": 0,
+            "closure-remove-release-scans": 1,
+            "closure-remove-release-walked": 0,
+            "closure-remove-release-sets": 0,
+
+            # a write to a member other than the root: the member has no real reference, but the root, in the same
+            # set, has one from the local variable, so the scan is handed to the root and made when it is released
+            "member-scans": 100,
+            "member-walked": 0,
+            "member-sets": 0,
+            "member-release-scans": 1,
+            "member-release-walked": 3,
+            "member-release-sets": 0,
+
+            # a set held only by a list: every write walks the set
+            "list-scans": 100,
+            "list-walked": 300,
+            "list-sets": 1,
+            "list-release-scans": 1,
+            "list-release-walked": 0,
+            "list-release-sets": 0,
+
+            # a registry held by a local variable: the growth is scanned once, at the release
+            "registry-local-scans": 200,
+            "registry-local-walked": 0,
+            "registry-local-sets": 0,
+            "registry-local-release-scans": 1,
+            "registry-local-release-walked": 201,
+            "registry-local-release-sets": 1,
+
+            # a registry held only through its entries: growth and removal each walk the whole registry once
+            "registry-cycle-scans": 200,
+            "registry-cycle-walked": 5150,
+            "registry-cycle-sets": 100,
+            "registry-cycle-unregister-scans": 100,
+            "registry-cycle-unregister-walked": 5050,
+            "registry-cycle-unregister-sets": 99,
+            "registry-cycle-release-scans": 1,
+            "registry-cycle-release-walked": 0,
+            "registry-cycle-release-sets": 0,
+
+            # the same registry holding its entries with opaque references: no scan follows them
+            "registry-opaque-scans": 100,
+            "registry-opaque-walked": 200,
+            "registry-opaque-sets": 0,
+            "registry-opaque-unregister-scans": 0,
+            "registry-opaque-unregister-walked": 0,
+            "registry-opaque-unregister-sets": 0,
+            "registry-opaque-release-scans": 1,
+            "registry-opaque-release-walked": 0,
+            "registry-opaque-release-sets": 0,
+
+            # a long-lived holder of an open cycle: each write confirms the sets in place and creates none
+            "confirm-scans": 100,
+            "confirm-walked": 500,
+            "confirm-sets": 0,
+            "confirm-release-scans": 1,
+            "confirm-release-walked": 0,
+            "confirm-release-sets": 0,
+
+            # a server controller in a recursive set, reached only through a list, that registers and removes an
+            # operation per request inside its own methods: each deferral marks the controller's set stale, and the
+            # scan made when the method returns replaces it, as the operation joins or leaves the controller's
+            # component - two sets per request
+            "server-scans": 300,
+            "server-walked": 3000,
+            "server-sets": 200,
+            "server-release-scans": 1,
+            "server-release-walked": 3,
+            "server-release-sets": 0,
+
+            # requests releasing their references to a member of a recursive set from outside it: no edge between
+            # the set's members has been added since it was scanned, so the set's verdict stands and no release
+            # rescans it (RSet::keepNeedsRescan())
+            "release-scans": 0,
+            "release-walked": 0,
+            "release-sets": 0,
+            "release-release-scans": 1,
+            "release-release-walked": 0,
+            "release-release-sets": 0,
+
+            # the same, with an edge added between the set's members by a TreeMap and no scan: the set is marked,
+            # the first dereference to find it so rescans it once (one new set, with the TreeMap in it), and the
+            # releases after that rescan nothing
+            "marked-scans": 0,
+            "marked-walked": 4,
+            "marked-sets": 1,
+            "marked-release-scans": 1,
+            "marked-release-walked": 1,
+            "marked-release-sets": 0,
+
+            # cycles closed only by values pushed into Queues: each push marks the sets it changes, and the
+            # dereferences that find them marked rescan them
+            "queue-cycle-scans": 0,
+            "queue-cycle-walked": 19,
+            "queue-cycle-sets": 3,
+            "queue-cycle-release-scans": 1,
+            "queue-cycle-release-walked": 2,
+            "queue-cycle-release-sets": 1,
+
+            # the same with references pushed: the objects a reference refers to cannot be marked, so every set
+            # rescans before trusting its counts again
+            "queue-ref-scans": 0,
+            "queue-ref-walked": 28,
+            "queue-ref-sets": 3,
+            "queue-ref-release-scans": 1,
+            "queue-ref-release-walked": 9,
+            "queue-ref-release-sets": 1,
+
+            # a write that replaces an edge between two members of the set is never handed to a member with real
+            # references: it is scanned (the first write cuts the cycle, so there is no set to hand the later ones to)
+            "pinned-cut-scans": 100,
+            "pinned-cut-walked": 200,
+            "pinned-cut-sets": 0,
+            "pinned-cut-release-scans": 1,
+            "pinned-cut-release-walked": 0,
+            "pinned-cut-release-sets": 0,
+
+            # writes that close new cycles back to the root are handed to the root, whose scan when released finds
+            # the last one
+            "pinned-close-scans": 200,
+            "pinned-close-walked": 0,
+            "pinned-close-sets": 0,
+            "pinned-close-release-scans": 1,
+            "pinned-close-release-walked": 3,
+            "pinned-close-release-sets": 1,
+
+            # the edge that closes the cycle is replaced while a list holds the root
+            "cut-list-scans": 2,
+            "cut-list-walked": 8,
+            "cut-list-sets": 0,
+            "cut-list-release-scans": 1,
+            "cut-list-release-walked": 0,
+            "cut-list-release-sets": 0,
+
+            # the same through the public C++ API (debug builds only: dbg_object_set_value())
+            "cut-api-scans": 1,
+            "cut-api-walked": 8,
+            "cut-api-sets": 0,
+            "cut-api-release-scans": 1,
+            "cut-api-release-walked": 0,
+            "cut-api-release-sets": 0,
+            "cut-api-held-dtors": 0,
+            "cut-api-dtors": 2,
+            "cut-api-leaf-dtors": 2,
+        };
+
+        #! the scan counters of the compiled tiers that differ from the AST interpreter's (ExpectedScanCounts)
+        /** A compiled assignment hands a value it does not use again over to the lvalue, as the AST interpreter does,
+            so the scan a new object's constructor deferred is not made when the object is linked in; and the
+            temporary references the compiled code takes to objects on the lvalue path are released without a
+            rescan, as the set they belong to has gained no edge (see the "release" shape).
+        */
+        const CompiledScanCounts = {
+            # removing a closure-bound variable writes it through an lvalue helper, whose scan the frame's real
+            # reference to the variable defers
+            "closure-remove-scans": 101,
+        };
+
+        #! the scan counters of each execution mode that differ from ExpectedScanCounts
+        const TierScanCounts = {
+            "ir": CompiledScanCounts,
+            "jit": CompiledScanCounts,
+            "tiered": CompiledScanCounts,
+            # the compiled module
+            "aot": CompiledScanCounts,
+        };
+
+        #! destructions for each check, and other checks made in every build
+        const ExpectedCycleResults = {
+            "local-held-dtors": 0,
+            "local-dtors": 2,
+            "local-leaf-dtors": 100,
+            "method-held-dtors": 0,
+            "method-dtors": 2,
+            "method-leaf-dtors": 100,
+            "closure-held-dtors": 0,
+            "closure-read": 1,
+            "closure-dtors": 2,
+            "closure-leaf-dtors": 100,
+            "closure-outlives-held-dtors": 0,
+            "closure-outlives-dtors": 2,
+            "closure-outlives-leaf-dtors": 100,
+            "closure-thread-held-dtors": 2,
+            "closure-thread-dtors": 4,
+            "closure-thread-leaf-dtors": 100,
+            "closure-concurrent-held-dtors": 0,
+            "closure-concurrent-dtors": 2,
+            "closure-concurrent-leaf-dtors": 100,
+            "closure-exception-caught": 1,
+            "closure-exception-unwound-dtors": 2,
+            "closure-exception-dtors": 2,
+            "closure-exception-leaf-dtors": 100,
+            "closure-ref-arg-held-dtors": 0,
+            "closure-ref-arg-dtors": 2,
+            "closure-ref-arg-leaf-dtors": 100,
+            "closure-remove-held-dtors": 2,
+            "closure-remove-dtors": 2,
+            "closure-remove-leaf-dtors": 100,
+            "member-held-dtors": 0,
+            "member-dtors": 2,
+            "member-leaf-dtors": 100,
+            "list-held-dtors": 0,
+            "list-dtors": 2,
+            "list-leaf-dtors": 100,
+            "registry-local-held-dtors": 0,
+            "registry-local-dtors": 101,
+            "registry-local-leaf-dtors": 0,
+            "registry-cycle-held-dtors": 0,
+            "registry-cycle-unregister-dtors": 100,
+            "registry-cycle-dtors": 102,
+            "registry-cycle-leaf-dtors": 0,
+            "registry-opaque-held-dtors": 0,
+            "registry-opaque-unregister-dtors": 100,
+            "registry-opaque-dtors": 102,
+            "registry-opaque-leaf-dtors": 0,
+            "confirm-held-dtors": 0,
+            "confirm-dtors": 4,
+            "confirm-leaf-dtors": 100,
+            "server-held-dtors": 0,
+            "server-op-dtors": 100,
+            "server-dtors": 9,
+            "server-leaf-dtors": 100,
+            "release-held-dtors": 0,
+            "release-dtors": 2,
+            "release-leaf-dtors": 11,
+            "marked-held-dtors": 0,
+            "marked-dtors": 2,
+            "marked-leaf-dtors": 11,
+            "queue-cycle-held-dtors": 0,
+            "queue-cycle-dtors": 2,
+            "queue-cycle-leaf-dtors": 0,
+            "queue-ref-held-dtors": 0,
+            "queue-ref-dtors": 2,
+            "queue-ref-leaf-dtors": 0,
+            "pinned-cut-held-dtors": 0,
+            "pinned-cut-dtors": 2,
+            "pinned-cut-leaf-dtors": 100,
+            "pinned-close-held-dtors": 0,
+            "pinned-close-dtors": 2,
+            "pinned-close-leaf-dtors": 100,
+            # nothing is collected while the list holds the root; both are once it is released
+            "cut-list-held-dtors": 0,
+            "cut-list-dtors": 2,
+            "cut-list-leaf-dtors": 2,
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit", "tiered");
+
+        #! the threads writing one set at the same time in the concurrency check
+        const Threads = 8;
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("DgcScanAvoidanceTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("checks in this program", \testInProgram());
+        addTestCase("concurrent writes", \testConcurrentWrites());
+        addTestCase("concurrent marks", \testConcurrentMarks());
+        addTestCase("concurrent pinned writes", \testConcurrentPinned());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    #! the collection checks in this program; its execution mode depends on how the test is run, so the scan
+    #! counters are only compared by the workers, which set it
+    testInProgram() {
+        hash<string, int> results = DgcScanAvoidanceChecks::get_results();
+        checkExpected("in-program", ExpectedCycleResults, results{keys ExpectedCycleResults});
+    }
+
+    #! several threads write one set held only by a list: nothing is collected while it is held, all of it after
+    testConcurrentWrites() {
+        hash<string, int> rv = DgcScanAvoidanceChecks::concurrent_writes(Threads);
+        assertEq(0, rv."held-dtors", "no object collected while the set is held");
+        assertEq(2 + Threads, rv."dtors", "every object of the set collected once it is released");
+        assertEq(Threads * DgcScanAvoidanceChecks::Writes, rv."leaf-dtors", "every value written released");
+    }
+
+    #! several threads add members to a set through a Queue in it while the others release their references to it
+    testConcurrentMarks() {
+        hash<string, int> rv = DgcScanAvoidanceChecks::concurrent_marks(Threads);
+        assertEq(0, rv."held-dtors", "no object collected while the set is held");
+        assertEq(2 + Threads * DgcScanAvoidanceChecks::Writes, rv."dtors",
+            "every object of the set, including every member added by a push, collected once it is released");
+    }
+
+    #! several threads write inside a set that a local variable of the frame holds
+    testConcurrentPinned() {
+        hash<string, int> rv = DgcScanAvoidanceChecks::concurrent_pinned(Threads);
+        assertEq(0, rv."held-dtors", "no object collected while the set is held");
+        assertEq(2, rv."dtors", "every object of the set collected once it is released");
+        assertEq(Threads * DgcScanAvoidanceChecks::Writes, rv."leaf-dtors", "every value written released");
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            checkWorkerOutput(mode, runWorker("dgc-scan-avoidance-worker.q", get_script_dir(), "--exec-mode=" + mode));
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-dgc-scan-avoidance-");
+        string qmod_path = tmp.path + DirSep + "DgcScanAvoidanceChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "DgcScanAvoidanceChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker("dgc-scan-avoidance-module-worker.q", tmp.path));
+    }
+
+    #! runs a worker with the given module directory and options and returns its output
+    private string runWorker(string worker_name, string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + worker_name;
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir,
+            module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and compares them with the expected results
+    private checkWorkerOutput(string label, string out) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        hash<string, int> expected = ExpectedCycleResults;
+        if (DgcScanAvoidanceChecks::have_scan_count()) {
+            expected += ExpectedScanCounts + (TierScanCounts{label} ?? {});
+        }
+        checkExpected(label, expected, results);
+    }
+
+    #! compares results with the expected ones
+    private checkExpected(string label, hash<string, int> expected, hash<string, int> results) {
+        assertEq(sort(keys expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}

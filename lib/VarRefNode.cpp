@@ -3,7 +3,7 @@
 
     Qore programming language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -611,8 +611,13 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                 } else if (qore_aot_source_parse_active()
                         && !(dynamic_hashdecl_name = qore_var_ref_aot_deferred_hashdecl_type_path(typeInfo))
                             .empty()) {
-                    setReceiverTypeInfo(typeInfo);
-                    err = parseArgsVariant(loc, parse_context, nullptr, nullptr);
+                    // the initializer is parsed as for a hashdecl bound at parse time, so it stays in parse_args
+                    // for every consumer; its keys cannot be checked against the deferred hashdecl here, so they
+                    // are checked when the hash is constructed
+                    parse_context.typeInfo = nullptr;
+                    QoreValue arg{};
+                    qore_hash_private::parseInitHashInitialization(loc, parse_context, parse_args, arg, err);
+                    runtime_check = true;
                     vrn_type = VRN_DYNAMIC_HASHDECL;
                     if (!err && is_local_type && ref.id) {
                         ref.id->parseAssigned();
@@ -691,12 +696,7 @@ QoreValue VarRefNewObjectNode::constructValue(ExceptionSink* xsink) const {
                 raiseUnresolvedDynamicClass(dynamic_class_name, xsink);
                 return QoreValue();
             }
-            if (getProgram()->getParseOptions() & qc->getDomain()) {
-                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
-                    "access to the '%s' class", qc->getName());
-                return QoreValue();
-            }
-            if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+            if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, getProgram(), xsink)) {
                 return QoreValue();
             }
             return qc->execConstructor(args, xsink);
@@ -765,12 +765,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
                 raiseUnresolvedDynamicClass(dynamic_class_name, xsink);
                 return QoreValue();
             }
-            if (getProgram()->getParseOptions() & qc->getDomain()) {
-                xsink->raiseException("CREATE-OBJECT-ERROR", "current Program sandboxing restrictions do not allow "
-                    "access to the '%s' class", qc->getName());
-                return QoreValue();
-            }
-            if (qore_class_private::runtimeCheckInstantiateClass(*qc, xsink)) {
+            if (qore_class_private::runtimeCheckInstantiateClassByName(*qc, getProgram(), xsink)) {
                 return QoreValue();
             }
             value = qc->execConstructor(args, xsink);

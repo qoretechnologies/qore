@@ -607,17 +607,35 @@ public:
     // assignments (see QoreValue::opaqueRegister()).  A registered target is always alive, because
     // a non-zero count means at least one opaque value still holds a strong reference to it.
     //
-    // opaque_lock is a LEAF lock: nothing else may be acquired while it is held and no user code
-    // runs under it; clearOpaqueTargets() copies what it needs and releases the lock before
-    // deleting anything.  Opaque assignment is a rare, deliberate operation, so one global plain
-    // lock is sufficient.
+    // Every copy and every release of an opaque value updates its target's entry, from any thread, so
+    // the registry is striped: a target's entry lives in the shard its address selects, and each shard
+    // has its own lock.  An entry is only ever in the shard of its target, so the count of one target is
+    // always updated under one lock, and threads working on different targets rarely share a shard.
+    //
+    // Each shard's lock is a LEAF lock: nothing else may be acquired while it is held (including another
+    // shard's lock) and no user code runs under it; clearOpaqueTargets() takes this Program's entries
+    // out of each shard in turn and deletes nothing until it has released the last lock.
     struct OpaqueTargetInfo {
         QoreProgram* pgm;
         unsigned count;
     };
-    typedef std::map<AbstractQoreNode*, OpaqueTargetInfo> opaque_target_map_t;
-    DLLLOCAL static QoreThreadLock opaque_lock;
-    DLLLOCAL static opaque_target_map_t opaque_targets;
+    typedef std::unordered_map<AbstractQoreNode*, OpaqueTargetInfo> opaque_target_map_t;
+    //! one stripe of the registry, on its own cache line
+    struct alignas(64) OpaqueTargetShard {
+        QoreThreadLock lock;
+        opaque_target_map_t targets;
+    };
+    //! the number of stripes; a power of two
+    static constexpr unsigned OpaqueTargetShardBits = 6;
+    DLLLOCAL static OpaqueTargetShard opaque_shards[1u << OpaqueTargetShardBits];
+
+    //! returns the stripe holding the entry of \a n
+    DLLLOCAL static OpaqueTargetShard& getOpaqueTargetShard(const AbstractQoreNode* n) {
+        // Fibonacci hashing: the high bits of the product depend on every bit of the address, including
+        // the low ones that allocator alignment leaves constant
+        uint64_t h = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(n)) * 0x9E3779B97F4A7C15ull;
+        return opaque_shards[h >> (64 - OpaqueTargetShardBits)];
+    }
 
     struct PluginFallbackSiteInfo {
         std::string file;
@@ -660,10 +678,11 @@ public:
     DLLLOCAL static void registerOpaqueTarget(AbstractQoreNode* n, QoreProgram* pgm) {
         assert(n);
         assert(pgm);
-        AutoLocker al(opaque_lock);
-        auto i = opaque_targets.find(n);
-        if (i == opaque_targets.end()) {
-            opaque_targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
+        OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+        AutoLocker al(shard.lock);
+        auto i = shard.targets.find(n);
+        if (i == shard.targets.end()) {
+            shard.targets.insert(opaque_target_map_t::value_type(n, OpaqueTargetInfo{pgm, 1}));
         } else {
             ++i->second.count;
         }
@@ -674,14 +693,15 @@ public:
     */
     DLLLOCAL static void deregisterOpaqueTarget(AbstractQoreNode* n) {
         assert(n);
-        AutoLocker al(opaque_lock);
-        auto i = opaque_targets.find(n);
-        if (i == opaque_targets.end()) {
+        OpaqueTargetShard& shard = getOpaqueTargetShard(n);
+        AutoLocker al(shard.lock);
+        auto i = shard.targets.find(n);
+        if (i == shard.targets.end()) {
             // the owning Program was torn down first and already dropped its entries
             return;
         }
         if (!--i->second.count) {
-            opaque_targets.erase(i);
+            shard.targets.erase(i);
         }
     }
 
@@ -898,14 +918,6 @@ public:
 
     DLLLOCAL void startThread(ExceptionSink& xsink);
 
-    // returns significant parse options to drop
-    DLLLOCAL QoreParseOptions checkDeserializeParseOptions(const QoreParseOptions& po) {
-        if (pwo.parse_options & PO_NO_CHILD_PO_RESTRICTIONS) {
-            return 0;
-        }
-        return pwo.parse_options & ~po & ~PO_FREE_STYLE_OPTIONS;
-    }
-
     // apply parse-option bit implications that cannot be encoded in the int64 PO_* macros
     DLLLOCAL void applyParseOptionImplications() {
         if ((pwo.parse_options & PO_MODERN) == PO_MODERN) {
@@ -981,7 +993,8 @@ public:
     DLLLOCAL bool checkSetParseOptions(const QoreParseOptions& po) {
         // only return an error if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
-        return (((po & PO_FREE_OPTIONS) != po) && po_locked && (!po_allow_restrict || (po & PO_POSITIVE_OPTIONS)));
+        return (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
+            && (!po_allow_restrict || (po & QoreParseOptions::POSITIVE_OPTIONS)));
     }
 
     DLLLOCAL void setParseOptionsIntern(const QoreParseOptions& po) {
@@ -2209,7 +2222,7 @@ public:
         assert(xsink);
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
-        if (((po & PO_FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
+        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
             xsink->raiseException("OPTIONS-LOCKED", "parse options have been locked on this program object");
             return -1;
         }
@@ -2233,7 +2246,8 @@ public:
     DLLLOCAL int parseSetParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
         // only raise the exception if parse options are locked and the option is not a "free option"
         // also check if options may be made more restrictive and the option also does so
-        if (((po & PO_FREE_OPTIONS) != po) && po_locked && (!po_allow_restrict || (po & PO_POSITIVE_OPTIONS))) {
+        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked
+            && (!po_allow_restrict || (po & QoreParseOptions::POSITIVE_OPTIONS))) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
@@ -2245,7 +2259,7 @@ public:
     DLLLOCAL int parseDisableParseOptions(const QoreProgramLocation* loc, const QoreParseOptions& po) {
         // only raise the exception if parse options are locked and the option is not a "free option"
         // note: disabling PO_POSITIVE_OPTION is more restrictive so let's allow to disable
-        if (((po & PO_FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
+        if (((po & QoreParseOptions::FREE_OPTIONS) != po) && po_locked && !po_allow_restrict) {
             parse_error(*loc, "parse options have been locked on this program object");
             return -1;
         }
@@ -2571,20 +2585,20 @@ public:
 
     // returns the mask of domain options not met in the current program
     DLLLOCAL QoreParseOptions parseAddDomain(const QoreParseOptions& n_dom) {
-        assert(!(n_dom & PO_FREE_OPTIONS));
+        assert(!(n_dom & QoreParseOptions::FREE_OPTIONS));
         QoreParseOptions rv;
 
         // handle negative and positive options separately / differently
-        QoreParseOptions pos = (n_dom & PO_POSITIVE_OPTIONS);
+        QoreParseOptions pos = (n_dom & QoreParseOptions::POSITIVE_OPTIONS);
         if (pos) {
-            QoreParseOptions p_tmp = pwo.parse_options & PO_POSITIVE_OPTIONS;
+            QoreParseOptions p_tmp = pwo.parse_options & QoreParseOptions::POSITIVE_OPTIONS;
             // make sure all positive arguments are set
             if ((pos & p_tmp) != pos) {
                 rv = ((pos & p_tmp) ^ pos);
                 pend_dom |= pos;
             }
         }
-        QoreParseOptions neg = (n_dom & ~QoreParseOptions(PO_POSITIVE_OPTIONS));
+        QoreParseOptions neg = (n_dom & ~QoreParseOptions::POSITIVE_OPTIONS);
         if (neg && (neg & pwo.parse_options)) {
             rv |= (neg & pwo.parse_options);
             pend_dom |= neg;

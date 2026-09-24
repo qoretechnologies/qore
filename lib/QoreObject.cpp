@@ -601,6 +601,8 @@ void qore_object_private::merge(qore_object_private& o, AutoVLock& vl, SafeDeref
     }
 
     if (check_recursive) {
+        // see RObject::edgesAdded()
+        edgesAdded();
         RSetHelper orsh(*this, xsink);
     }
 }
@@ -626,6 +628,8 @@ void qore_object_private::merge(const QoreHashNode* h, AutoVLock& vl, SafeDerefH
     }
 
     if (check_recursive) {
+        // see RObject::edgesAdded()
+        edgesAdded();
         RSetHelper orsh(*this, xsink);
     }
 }
@@ -1134,12 +1138,16 @@ void qore_object_private::setValueIntern(const qore_class_private* class_ctx, co
             before = false;
     }
 
-    old_value.discard(xsink);
-
     // scan object if necessary
     if (before || after) {
+        // the set does not count an edge added here until the scan has followed the object's edges; see
+        // RObject::edgesAdded()
+        edgesAdded();
         RSetHelper rsh(*this, xsink);
     }
+
+    // released after the scan has repaired the sets that counted the edge to it; see ~LValueHelper
+    old_value.discard(xsink);
 }
 
 QoreValue qore_object_private::evalBuiltinMethodWithPrivateData(const QoreMethod& method,
@@ -1344,6 +1352,8 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         // in other cases, the references value could change in another thread
 
         bool rrf = false;
+        // set once this dereference has rescanned; see RSet::keepNeedsRescan()
+        bool rescanned = false;
         if (ref_copy) {
             // Fast path: a dereference of an object that is in no recursive set has nothing to decide, and
             // deciding that takes no lock at all.
@@ -1393,7 +1403,15 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                         RSet::isValid(rs), rcount, ref_copy, references.load(), rrefs.load(), deferred_scan.load(),
                         qodh.doScan());
 
-                    if (!rs) {
+                    if (rs && rs->isStale() && qodh.deferredScan()) {
+                        // this dereference released the last real reference of an object whose scan was deferred,
+                        // and no scan has confirmed or replaced its set since (RSet::markStale()): the deferred
+                        // scan is made before collection is decided.  A set that a scan started elsewhere has
+                        // recorded since the deferral describes the graph after the change, and is used as is.
+                        printd(QRO_LVL, "qore_object_private::customDeref() this: %p '%s' deferred scan with a set; "
+                            "rescanning\n", this, getClassName());
+                        rc = -1;
+                    } else if (!rs) {
                         // an object in no recursive set has no recursive references either; the fast path
                         // above relies on this to skip the comparison without reading rcount
                         assert(!rcount);
@@ -1414,7 +1432,7 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                             }
                         }
                     } else {
-                        rc = rs->canDelete(ref_copy, rcount, scan_refs, *this, cycle_cleanup);
+                        rc = rs->canDelete(ref_copy, rcount, rescanned, *this, cycle_cleanup);
                     }
 
                     if (!rc) {
@@ -1432,6 +1450,10 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
                         // recalculate rset immediately
                         {
                             RSetHelper rsh(*this, xsink);
+                            // a scan another thread made instead can predate an edge the set is marked for
+                            if (!rsh.skipped()) {
+                                rescanned = true;
+                            }
                         }
                         continue;
                     } else {

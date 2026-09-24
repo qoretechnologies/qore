@@ -363,6 +363,8 @@ DLLEXPORT extern const TypedHashDecl* hashdeclKeyValueInfo;
 
 //! NetIfInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclNetIfInfo;
+DLLEXPORT extern const TypedHashDecl* hashdeclScanStatsInfo;
+DLLEXPORT extern const TypedHashDecl* hashdeclScanWaitInfo;
 
 //! SourceLocationInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclSourceLocationInfo;

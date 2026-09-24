@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -275,6 +275,9 @@ void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue 
             if (scan_count == 1) {
                 inc_obj = true;
             }
+            // no scan follows the new edge (Pattern B in design/dgc.md); marked under the lock, as another thread
+            // can take the value and release it as soon as the lock is released
+            qore_dgc_value_stored(*qore_object_private::get(*self), n);
         }
     }
 
@@ -311,6 +314,9 @@ void qore_queue_private::insert(ExceptionSink* xsink, QoreObject* self, QoreValu
             if (scan_count == 1) {
                 inc_obj = true;
             }
+            // no scan follows the new edge (Pattern B in design/dgc.md); marked under the lock, as another thread
+            // can take the value and release it as soon as the lock is released
+            qore_dgc_value_stored(*qore_object_private::get(*self), n);
         }
     }
 

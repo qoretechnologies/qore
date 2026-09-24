@@ -51,32 +51,44 @@ temps between the raising statement and the `try` — is released by the
 (`try.merge`), or, if the exception leaves the frame after all, by the full drain
 in `returnAfterUnhandledException()`.
 
-## Opcodes that follow the rule
+## Every in-frame branch follows the rule
 
-Three shapes exist among the opcodes that can raise:
+`QoreIRBuilder::append()` records the builder's `exception_temp_scope_id` - the innermost open mark, or 0 for a
+statement that creates no node temps and has no mark - on every instruction it creates, and the lowering creates
+its own instructions (hash key and list index stores, lvalue paths) through it too. `PushTempMark` and
+`DiscardTemps` then set their own scope. Every place where the interpreter branches to an in-frame
+`exception_target` drains that scope first, whatever the opcode:
 
-- **Raise and branch.** `Invoke`, `InvokeMethodDirect`, `InvokeDotEvalMethodDirect`,
-  `InvokeHashKeyAccess`, `Throw`, `Rethrow`, `Context`, `ContextRef`, `ContextRow`,
-  `Backquote`, `Find`, `RefForeachInit` and `RefForeachGetEntry` branch to
-  `exception_target` themselves.  These are the ones that must drain by scope.
-- **Raise and fall through.** `StoreLocal`, `StoreGlobal`, `StoreThreadLocal`,
-  `StoreClosure`, `HashKeyStore`, `ListIndexStore`, `Sprintf` and the `LValuePath*`
-  family leave the exception on the sink and let a later `CheckException` do the
-  branch.  Their `exception_target` is null in practice.
-- **Branch only.** `CheckException` performs the branch with no drain at all; the
-  enclosing statement's `DiscardTemps` releases what is left.
+- opcodes that raise and branch themselves (`Invoke*`, `Throw`, `Rethrow`, `Context*`, `Backquote`, `Find`,
+  `RefForeach*`, `Summarize`, `TypedForeachNext*`, `ScopeExit`, `Decref`);
+- the stores that raise and branch (`StoreLocal`, `StoreClosure`, `StoreGlobal`, `StoreThreadLocal`,
+  `HashKeyStore*`, `ListIndexStore`, `ListSetValue`, the `Map*` / `Select*` hash operations, `CallClosureDirect`);
+- `CheckException`, which a block with local variables emits at its end and which is the in-frame branch for
+  anything raised while those variables are released;
+- the `LValuePath*` family and `Sprintf`, which drained the whole frame (`cleanupValues()`) before an in-frame
+  branch, and the cancellation check at loop headers, which did the same;
+- scope 0 drains nothing: the statement has no temps, and the innermost mark belongs to an enclosing statement
+  whose temps may still be needed.
 
-An opcode in the first group is only reachable as such when the lowering actually gives
-it `exception_target`.  `ContextRef` and `ContextRow` were created without one, so an
-unknown context key (`%nosuch`) took the frame-exit path instead: the interpreter
-returned from the frame and the exception escaped an enclosing `try` in the same
-function, which AST mode caught.  `lowerExpression()` now sets their target from
-`getCurrentExceptionTarget()`, as `Backquote`, `Find` and the `RefForeach*` opcodes
-already did.
+The drain keeps the mark itself (`cleanupToTempScope(..., keep_mark)`): it releases the temps registered after the
+mark's sentinel and removes only the marks above it. An instruction emitted at block level rather than inside a
+statement - the check at the end of a block with local variables, the one in its exception cleanup block,
+`ScopeExit`, `Decref` - records the scope of the statement that encloses the block, such as the `try` whose body it
+is, and that statement runs on after its handler has: its `DiscardTemps` at `try.merge` must still find its mark.
+When the mark had been removed, that `DiscardTemps` fell back to the nearest mark - the enclosing typed `foreach` -
+and released the list the loop re-reads on every iteration, which crashed. A mark kept for a statement that the
+exception did end is removed, with its sentinel, by the `DiscardTemps` of the statement enclosing it.
 
-Most runtime errors reach a handler through one of the last two shapes, which is why
-the defect was only ever visible for a literal `throw` / `rethrow`, a `context`
-initializer, a context row reference or a `find` written directly in a loop body.
+Before, only the first group drained by scope. A statement that failed in a store or at a block-end check kept its
+temps until the enclosing statement ended - after its handler had run, where the AST interpreter had already
+released them - and the `LValuePath*` family released the temps of the enclosing statements as well.
+`examples/test/ir/exception-temp-scope/exception-temp-scope.qtest` counts the objects destroyed when each handler
+runs for every kind of failing statement, including the negative case of a handler inside a loop over a temporary
+list, in each execution mode and from a compiled module.
+
+`ContextRef` and `ContextRow` were created without an `exception_target`, so an unknown context key (`%nosuch`)
+took the frame-exit path: the interpreter returned from the frame and the exception escaped an enclosing `try` in
+the same function, which AST mode caught. `lowerExpression()` sets their target from `getCurrentExceptionTarget()`.
 
 ## Why it matters: typed foreach
 
@@ -106,10 +118,9 @@ written directly in the loop body did not.
 
 ## LLVM / AOT
 
-`QoreIRToLLVM` reads `temp_scope_id` only for `PushTempMark` and `DiscardTemps`;
-its `Throw` and `Rethrow` lowering simply branches to the landing pad and never
-had the full-drain behaviour.  Setting `temp_scope_id` on those instructions is
-inert for the JIT and AOT tiers, exactly as it already was for `Invoke`.
+`QoreIRToLLVM` reads `temp_scope_id` only for `PushTempMark` and `DiscardTemps`, so recording it on every
+instruction is inert for the JIT and AOT tiers. Compiled code already released a failing statement's temps before
+its handler ran; the compiled-module run of `exception-temp-scope.qtest` checks it.
 
 ## Coverage
 

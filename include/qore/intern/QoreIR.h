@@ -1643,6 +1643,10 @@ enum class LVTernaryOp : uint8_t {
 //! expression tree, enabling compact AOT serialization (no EXPR_TREE blob).
 //! At runtime, LValueHelper::navigatePath() walks the steps to acquire locks,
 //! handle COW, and set up the lvalue target using the same protocol as doLValue().
+//! flag for the consuming lvalue assignment helpers (qore_rt_lv_path_assign_consume() and
+//! qore_rt_self_member_assign_consume()): the caller does not use the result of the assignment
+#define QORE_RT_ASSIGN_RESULT_UNUSED 1
+
 class QoreIRLValuePathInstruction : public QoreIRInstruction {
 public:
     QoreIRLValuePathInstruction(QoreIROpcode op)
@@ -1907,6 +1911,12 @@ public:
     // deserialization must not discard the serialized constructor target.
     std::string class_path;
     std::string variant_sig;
+    //! True if the class is a build-group class deferred at parse time
+    /** Such a class is resolved by \c class_path every time the instruction runs, and the construction was never
+        checked against the Program's sandboxing restrictions when parsed, so it is checked then instead; \c qc and
+        \c variant are never set for it.
+    */
+    bool dynamic_class = false;
     // Compile-time-only metadata: the original AST node (NewObjectCallNode,
     // ScopedObjectCallNode, or VarRefNewObjectNode).  Used ONLY by the AOT
     // compiler to serialize class_path/variant_sig as slot metadata so the
@@ -2878,7 +2888,13 @@ public:
     QoreValue expr;
     QoreIROpcode invoke_opcode = QoreIROpcode::Invoke;
     QoreIRBasicBlock* normal_target = nullptr;
-    std::string invoke_key_name;  //!< Key name for HashKeyAccess invoke path
+    //! Key name for the HashKeyAccess invoke path
+    /** For a NewObject invoke, the path of a build-group class deferred at parse time: the class is resolved by
+        this name every time the instruction runs, and the construction is checked against the Program's
+        sandboxing restrictions then, because it was not checked when parsed.  Empty for a class bound at parse
+        time.
+    */
+    std::string invoke_key_name;
     //! the representation the store uses in the StoreLValue invoke path
     AssignmentMode mode = AssignmentMode::Normal;
     bool has_ref_args = false;    //!< True if any operand can pass a reference modified by the callee

@@ -411,7 +411,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[407] = {
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , false, true , false, true  }, // 350
     { "ListIndexDynamic"              , false, false, false, OPCODE_MIN_OPERANDS(2), "ListIndexDynamic", false, true , "ParseNode", true , false, true , false, true  }, // 351
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 352
-    { "LValuePathAssign"              , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false, false }, // 353
+    { "LValuePathAssign"              , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathAssign", true , true , "AssignmentNode", true , true , false, false, false }, // 353
     { "LValuePathCompound"            , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathCompound", true , true , "ParseNode", true , false, false, false, false }, // 354
     { "LValuePathUnary"               , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathUnary", true , true , "ParseNode", true , true , false, false, false }, // 355
     { "LValuePathBinaryMut"           , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false, false }, // 356

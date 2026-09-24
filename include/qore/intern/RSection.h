@@ -43,6 +43,9 @@ class qore_rsection_priv;
 class RNotifier {
 public:
     bool setp = false;
+    //! the thread holding the lock this notification waits for, or -1 when only shared holders or a waiting
+    //! exclusive acquisition conflicted; written under the lock's own mutex when the notification is registered
+    int owner_tid = -1;
     QoreThreadLock m;
     QoreCondition c;
 
@@ -210,6 +213,7 @@ protected:
     DLLLOCAL void setNotificationIntern(RNotifier* rn) {
         assert(write_tid != -1 || rs_tid != -1 || rs_shared || rsection_waiting);
         list.push_back(rn);
+        rn->owner_tid = write_tid != -1 ? write_tid : rs_tid;
         rn->set();
         //printd(5, "qrp::sNI t: %p r: %p\n", this, rn);
     }

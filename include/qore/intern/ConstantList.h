@@ -43,7 +43,11 @@
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/qore_aot_deps.h"
 
+#include <atomic>
+#include <memory>
+#include <mutex>
 #include <string>
+#include <vector>
 
 class qore_ns_private;
 class qore_class_private;
@@ -298,9 +302,31 @@ public:
         return QoreTypeInfo::hasType(typeInfo) ? typeInfo : autoTypeInfo;
     }
 
-    //! Sets the runtime value (val + saved_val) for AOT init functions
+    //! Stores the value a deferred AOT initializer computed (val + saved_val)
+    /** The entry can be copied by another thread while the value is stored: every import of a module copies the
+        entries of the module's Program, and module code loading another module stores that module's values
+        there.  The store therefore holds the entry's value lock (see runtimeValueLock()), which the copy
+        constructor takes as well, and a value it replaces is retired rather than freed (see retireValue()).
+
+        @param result the value; ownership is taken
+        @param xsink not used: nothing is released here
+    */
     DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink);
+
+    //! Resolves the constant references inside a value stored with setRuntimeValue()
+    /** Resolving evaluates the constants referenced, which can run their deferred initializers, so no lock is
+        held while it runs; the result replaces the stored value under the value lock, and only if the stored value
+        is still the one that was resolved.
+    */
     DLLLOCAL void materializeRuntimeRefs(ExceptionSink* xsink);
+
+    //! Orders a read of saved_val after a read of saved_val_set
+    /** setRuntimeValue() writes the value before a release fence and the flags after it, so a thread that has
+        seen the flags and then passes this acquire fence also sees the value they describe.
+    */
+    DLLLOCAL static void acquireRuntimeValue() {
+        std::atomic_thread_fence(std::memory_order_acquire);
+    }
 
     // Follows a chain of RuntimeConstantRefNode indirections (const A = B;
     // const B = ...) to the terminal stored value while preserving unresolved
@@ -434,6 +460,9 @@ public:
     }
 
 protected:
+    //! values replaced after other threads could read them; released with the entry (see retireValue())
+    std::unique_ptr<std::vector<QoreValue>> rt_retired;
+
     QoreValue saved_val{};
     QoreValue aot_init_expr{};  //!< preserved init expression for AOT lowering
     //! compile-time value recorded by a preloaded `.qo` shell; see setAOTParseShellValue()
@@ -449,6 +478,7 @@ protected:
     QoreValue runtime_compiled_define{};
 
     DLLLOCAL ~ConstantEntry() {
+        assert(!rt_retired);
         assert(saved_val.isNothing());
         assert(aot_init_expr.isNothing());
         assert(aot_parse_shell_value.isNothing());
@@ -459,6 +489,20 @@ protected:
 
     DLLLOCAL void del(ExceptionSink* xsink);
     DLLLOCAL void del(QoreListNode& l);
+
+    //! The lock that orders runtime changes to this entry's value with copies of it; a leaf lock
+    /** Nothing else is acquired while it is held and no Qore code runs under it: a value it replaces is retired,
+        not released, so no destructor can run.  Entries share a fixed set of locks by address.
+    */
+    DLLLOCAL std::mutex& runtimeValueLock() const;
+
+    //! Keeps a value that other threads may be reading alive until the entry is deleted; the value lock is held
+    /** Readers that follow a constant reference to its stored value (resolveRtConstRef(), getValue(),
+        ConstantList::getInfo(), RuntimeConstantRefNode) take no lock and no reference of their own before they
+        read it, so a value they can see must not be freed while the entry exists.  A value is replaced at most
+        twice in an entry's life: once when it is stored and once when its references are resolved.
+    */
+    DLLLOCAL void retireValue(QoreValue& v);
 };
 
 class ConstantEntryInitHelper {
@@ -735,6 +779,8 @@ protected:
         // case so AOT init functions referencing builtin constants get the
         // correct value instead of NOTHING.
         if (ce->saved_val_set) {
+            // the value was written before the flag; see ConstantEntry::setRuntimeValue()
+            ConstantEntry::acquireRuntimeValue();
             // Genuine runtime constant-value cycle: this constant's value is currently being evaluated (in
             // ConstantEntry::parseCommitRuntimeInit) and its computation references itself, typically via a
             // function/method body that reads the constant.  The parse-time detector cannot see such indirect
@@ -835,6 +881,7 @@ public:
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
         if (ce->saved_val_set) {
+            ConstantEntry::acquireRuntimeValue();
             return ce->saved_val.getAsString(str, foff, xsink);
         }
         if (ce->hasAOTParseShellValue()) {
@@ -863,6 +910,7 @@ public:
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
         if (ce->saved_val_set) {
+            ConstantEntry::acquireRuntimeValue();
             return ce->saved_val.getAsString(del, foff, xsink);
         }
         if (ce->hasAOTParseShellValue()) {
@@ -894,6 +942,7 @@ public:
 
     DLLLOCAL virtual const char* getTypeName() const {
         if (ce->saved_val_set) {
+            ConstantEntry::acquireRuntimeValue();
             return ce->saved_val.getTypeName();
         }
         if (ce->external_stub || ce->aot_shell_pending || !ce->hasValue()) {

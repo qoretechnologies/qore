@@ -36,6 +36,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/ql_debug.h"
 #include "qore/intern/xxhash.h"
 
 #include <algorithm>
@@ -113,6 +114,41 @@ const char* ClassNs::getName() const {
 }
 #endif
 
+#ifdef DEBUG
+std::atomic<qore_dbg_constant_store_hook_t> qore_dbg_constant_store_hook{nullptr};
+#endif
+
+namespace {
+//! One lock per cache line, so that entries hashed to different locks do not share one
+struct alignas(64) ConstantValueLock {
+    std::mutex m;
+};
+
+//! The locks entries share for runtime changes to their values; see ConstantEntry::runtimeValueLock()
+/** A store or a copy holds one for a few pointer copies, so a small fixed set is enough; entries are spread over
+    them by address.
+*/
+constexpr size_t ConstantValueLockCount = 64;
+ConstantValueLock constant_value_locks[ConstantValueLockCount];
+}
+
+std::mutex& ConstantEntry::runtimeValueLock() const {
+    // the low bits only reflect the allocation granularity
+    return constant_value_locks[(reinterpret_cast<uintptr_t>(this) >> 6) % ConstantValueLockCount].m;
+}
+
+void ConstantEntry::retireValue(QoreValue& v) {
+    if (!v.hasNode()) {
+        v.clear();
+        return;
+    }
+    if (!rt_retired) {
+        rt_retired.reset(new std::vector<QoreValue>);
+    }
+    rt_retired->push_back(v);
+    v.clear();
+}
+
 //! Monotonic across the process: relative order is all that is read, and a Program never sees another's nodes.
 static std::atomic<uint64_t> qore_constant_init_seq_counter{0};
 
@@ -145,12 +181,12 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
 
 ConstantEntry::ConstantEntry(const ConstantEntry& old)
         : loc(old.loc), pwo(old.pwo), name(old.name),
-        typeInfo(old.typeInfo), val(old.val.refSelf()),
+        typeInfo(old.typeInfo),
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         explicit_type(old.explicit_type),
         has_init_expr(old.has_init_expr),
-        saved_val_set(old.saved_val_set),
-        aot_shell_pending(old.aot_shell_pending),
+        saved_val_set(false),
+        aot_shell_pending(false),
         external_stub(old.external_stub),
         external_stub_dependent(old.external_stub_dependent),
         rt_in_init(false),
@@ -158,14 +194,9 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         // resolves constant initializers the same way
         aot_parse_shell_value_set(old.aot_parse_shell_value_set),
         runtime_dependent(old.runtime_dependent),
-        // the copy keeps the original's sequence: importing a module must not reorder its constants relative
-        // to each other, or the AOT writer would pick a different owner for a shared value in the importing
-        // Program than the module was built with
-        init_seq(old.init_seq),
         // an unpopulated AOT shell keeps its deferred initializer in the copy, so the importing Program can run
         // it from its own entry
         aot_pending_init(old.aot_pending_init),
-        saved_val(old.saved_val.refSelf()),
         aot_parse_shell_value(old.aot_parse_shell_value.refSelf()),
         access(old.access), from_module(old.from_module), runtime_dependent_path(old.runtime_dependent_path),
         runtime_compiled_define(old.runtime_compiled_define.refSelf()) {
@@ -175,6 +206,19 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
     if (old.runtime_ref) {
         runtime_ref = new RuntimeConstantRefNode(loc, this);
     }
+    // Another thread can store the value while it is copied: importing a module copies the entries of the
+    // module's Program, and module code loading another module stores that module's values there.  The value
+    // and the flags describing it are taken at one point, or the copy can hold a value its flags say it does not
+    // have, which it then never releases.
+    std::lock_guard<std::mutex> value_lock(old.runtimeValueLock());
+    val = old.val.refSelf();
+    saved_val = old.saved_val.refSelf();
+    saved_val_set = old.saved_val_set;
+    aot_shell_pending = old.aot_shell_pending;
+    // the copy keeps the original's sequence: importing a module must not reorder its constants relative
+    // to each other, or the AOT writer would pick a different owner for a shared value in the importing
+    // Program than the module was built with
+    init_seq = old.init_seq;
     //printd(5, "ConstantEntry::ConstantEntry() this: %p copy '%s' ti: '%s' nti: '%s'\n", this, name.c_str(),
     //  QoreTypeInfo::getName(typeInfo), QoreTypeInfo::getName(val.getTypeInfo()));
 }
@@ -207,6 +251,12 @@ void ConstantEntry::del(QoreListNode& l) {
     delRuntimeRef();
     //printd(5, "ConstantEntry::del(l) this: %p '%s' node: %p (%d) %s %d (saved_val: %s)\n", this, name.c_str(),
     //  node, get_node_type(node), get_type_name(node), node->reference_count(), saved_val.getTypeName());
+    if (rt_retired) {
+        for (QoreValue& v : *rt_retired) {
+            l.push(v, nullptr);
+        }
+        rt_retired.reset();
+    }
     aot_init_expr.discard(nullptr);
     if (aot_parse_shell_value.hasNode()) {
         l.push(aot_parse_shell_value, nullptr);
@@ -240,6 +290,12 @@ void ConstantEntry::del(QoreListNode& l) {
 
 void ConstantEntry::del(ExceptionSink* xsink) {
     delRuntimeRef();
+    if (rt_retired) {
+        for (QoreValue& v : *rt_retired) {
+            v.discard(xsink);
+        }
+        rt_retired.reset();
+    }
     aot_init_expr.discard(xsink);
     aot_parse_shell_value.discard(xsink);
 #ifdef DEBUG
@@ -268,14 +324,25 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
     reapplyConstantType(typeInfo, result);
-    saved_val.discard(xsink);
+
+#ifdef DEBUG
+    // the last point where a thread copying the entry can run before the store; see dbg_hold_constant_store()
+    if (qore_dbg_constant_store_hook_t hook = qore_dbg_constant_store_hook.load()) {
+        hook(name.c_str());
+    }
+#endif
+
+    std::lock_guard<std::mutex> value_lock(runtimeValueLock());
+    retireValue(saved_val);
     if (val.getType() == NT_RTCONSTREF) {
         saved_val = result;
     } else {
-        val.discard(xsink);
+        retireValue(val);
         val = result;
         saved_val = result.refSelf();
     }
+    // a reader tests saved_val_set before it reads saved_val; see acquireRuntimeValue()
+    std::atomic_thread_fence(std::memory_order_release);
     saved_val_set = true;
     init = true;
     if (!init_seq) {
@@ -285,9 +352,20 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
 }
 
 void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
-    QoreValue& target = saved_val_set ? saved_val : val;
+    QoreValue stored;
+    {
+        std::lock_guard<std::mutex> value_lock(runtimeValueLock());
+        stored = (saved_val_set ? saved_val : val).refSelf();
+    }
+    // the node the stored value holds, which the replacement below requires to be unchanged
+    const AbstractQoreNode* stored_node = stored.getInternalNode();
+
+    // Resolving evaluates the constants the value refers to, which can run their deferred initializers, so it
+    // runs with no lock held.  The stored value cannot be freed meanwhile: a value that is replaced is retired.
     bool changed = false;
-    QoreValue resolved = resolveRtConstRefDeep(target, xsink, changed);
+    QoreValue resolved = resolveRtConstRefDeep(stored, xsink, changed);
+    // the entry holds another reference, so this cannot run a destructor
+    stored.discard(nullptr);
     if (xsink && *xsink) {
         resolved.discard(nullptr);
         return;
@@ -299,13 +377,23 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
 
     reapplyConstantType(typeInfo, resolved);
 
-    target.discard(xsink);
-    target = resolved;
-    if (!saved_val_set) {
-        saved_val.discard(xsink);
-        saved_val = target.refSelf();
-        saved_val_set = true;
+    {
+        std::lock_guard<std::mutex> value_lock(runtimeValueLock());
+        QoreValue& target = saved_val_set ? saved_val : val;
+        // another thread may have stored or resolved the value meanwhile; its value stands
+        if (target.getInternalNode() == stored_node) {
+            retireValue(target);
+            target = resolved;
+            resolved.clear();
+            if (!saved_val_set) {
+                saved_val = target.refSelf();
+                std::atomic_thread_fence(std::memory_order_release);
+                saved_val_set = true;
+            }
+        }
     }
+    // an unused result is this thread's copy, so releasing it runs no destructor of the constant's value
+    resolved.discard(xsink);
 }
 
 void ConstantEntry::materializeAOTParseShellValue(ExceptionSink* xsink) {

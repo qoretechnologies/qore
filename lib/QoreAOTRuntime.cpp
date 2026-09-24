@@ -1727,8 +1727,9 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             // Create a NewHashDeclNode with no args (args handled by native code)
+            // the parse's key check is not serialized, so the keys are always checked when the hash is made
             NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd,
-                static_cast<QoreParseListNode*>(nullptr), false);
+                static_cast<QoreParseListNode*>(nullptr), true);
             return toBitsNB(QoreValue(nhd));
         }
 
@@ -4661,7 +4662,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                             call_args->deref(nullptr);
                             call_args = nullptr;
                         }
-                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, false);
+                        // the parse's key check is not serialized, so the keys are always checked when the
+                        // hash is made
+                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, true);
                         ctx->exprs[i] = toBitsNB(QoreValue(nhd));
                     } else {
                         printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
@@ -10866,11 +10869,11 @@ static void transplantClassClosureValues(
             ExceptionSink txs;
             QoreValue fb_val = fb_ce->getReferencedValue();
             retargetFallbackValueTypes(fb_val, type_resolver, hashdecl_map);
+            // setRuntimeValue() also marks the entry initialized, under the lock that orders it with copies
             writable_ce->setRuntimeValue(fb_val, &txs);
             if (txs.isException()) {
                 txs.clear();
             }
-            writable_ce->init = true;
             printd(5, "AOT: transplanted constant '%s::%s' from fallback\n",
                 main_qc->getName(), main_ce->getName());
         }

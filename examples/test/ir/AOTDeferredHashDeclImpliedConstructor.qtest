@@ -1,0 +1,443 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDeferredHashDeclImpliedConstructorTest
+
+# Regression test: an implied typed-hash construction (`hash<Hd> var({...})`) naming a hashdecl declared in another
+# file of the same build group must construct the hash from its initializer in every execution mode.
+#
+# A per-file `qcc -c` compile with a source-symbol manifest defers such a hashdecl: it is not in the parse, so the
+# declaration is parsed as a dynamic hashdecl construction whose hashdecl is resolved by name when the hash is made.
+# The initializer was parsed as constructor-call arguments, which moved it out of the node's hashdecl initializer, so
+# every consumer that read the initializer saw none, and the IR lowering emitted a VrnConstruct instruction with no
+# operands.  With a debugger attached - which runs the artifact's IR in the interpreter - the construction then:
+#
+#   - silently returned the hashdecl's default values in a plain block, and
+#   - failed with IR-AST-FALLBACK-ERROR (invoke_opcode=VrnConstruct) in a block with exception edges.
+#
+# The initializer's keys also could not be checked against the deferred hashdecl at parse time and were never
+# checked at run time, so an unknown key was silently dropped.
+#
+# The construction is exercised in a block with an on_exit handler and nested locals (an invoke with an exception
+# edge), in a plain block, inside a try block, with the new operator, without an initializer, with an unknown key and
+# with an initializer that is not a hash, with values taken from locals, directly (native code) and through
+# call_static_method() (the artifact's IR, with the debugger attached), in every execution mode; the output must match
+# the same source parsed as one file, where the hashdecl is bound at parse time.
+class AOTDeferredHashDeclImpliedConstructorTest inherits QUnit::Test {
+    public {
+        #! the hashdecl constructed through the deferred implied construction
+        const HdCode = "%modern
+hashdecl Hd {
+    string a = \"def\";
+    int n = 0;
+}
+";
+
+        #! the consumer: every construction below names a hashdecl this file does not declare
+        const EngineCode = "%modern
+%allow-debugger
+
+class Rec inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference rs, reference rtn) {}
+    onDetach(ProgramControl pgm, reference rs, reference rtn) {}
+    onStep(ProgramControl pgm, int bsid, *int sid, *int bpid, reference flow, reference rs, reference rtn) {}
+    onFunctionEnter(ProgramControl pgm, int sid, reference rs, reference rtn) {}
+    onFunctionExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+    onException(ProgramControl pgm, int sid, hash ex, reference dismiss, reference rs, reference rtn) {}
+    onExit(ProgramControl pgm, int sid, reference rv, reference rs, reference rtn) {}
+}
+
+class Eng {
+    # the on_exit handler and the nested loop locals give the construction an exception edge
+    static string invokePath(string v, list<int> l) {
+        bool done = False;
+        hash<Hd> h({\"a\": v, \"n\": l.size()});
+        on_exit {
+            if (!done) {
+                done = True;
+            }
+        }
+        foreach int i in (l) {
+            int j = i + 1;
+            if (j > 10) {
+                break;
+            }
+        }
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    static string plainPath(string v, int n) {
+        string v2 = v + \"!\";
+        hash<Hd> h({\"a\": v2, \"n\": n * 2});
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    static string tryPath(bool b) {
+        try {
+            if (!b) {
+                return \"skip\";
+            }
+            string v = \"try\";
+            int n = 3;
+            hash<Hd> h({\"a\": v, \"n\": n});
+            return sprintf(\"%s/%d\", h.a, h.n);
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    }
+
+    static string newPath(string v) {
+        hash<Hd> h = new hash<Hd>({\"a\": v, \"n\": 7});
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    static string defaultPath() {
+        hash<Hd> h();
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    # the initializer's keys can only be checked when the hash is made
+    static string badKeyPlain(string v) {
+        hash init = {\"a\": v, \"bogus\": 1};
+        hash<Hd> h(init);
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    static string badKeyInvoke(string v, list<int> l) {
+        bool done = False;
+        hash init = {\"a\": v, \"bogus\": l.size()};
+        hash<Hd> h(init);
+        on_exit {
+            if (!done) {
+                done = True;
+            }
+        }
+        foreach int i in (l) {
+            int j = i + 1;
+            if (j > 10) {
+                break;
+            }
+        }
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    static string badKeyNew(string v) {
+        hash init = {\"a\": v, \"bogus\": 1};
+        hash<Hd> h = new hash<Hd>(init);
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+
+    static string notHash(auto init) {
+        hash<Hd> h(init);
+        return sprintf(\"%s/%d\", h.a, h.n);
+    }
+}
+
+string sub attempt(code c) {
+    try {
+        return c();
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+string sub runShapes(string label) {
+    string rv = sprintf(\"%s direct: %s %s %s %s %s\\n\", label,
+        attempt(string sub () { return Eng::invokePath(\"inv\", (1, 2)); }),
+        attempt(string sub () { return Eng::plainPath(\"pl\", 4); }),
+        attempt(string sub () { return Eng::tryPath(True); }),
+        attempt(string sub () { return Eng::newPath(\"nw\"); }),
+        attempt(string sub () { return Eng::defaultPath(); }));
+    rv += sprintf(\"%s dynamic: %s %s %s %s %s\\n\", label,
+        attempt(string sub () { return call_static_method(\"Eng\", \"invokePath\", \"dinv\", (1, 2, 3)); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"plainPath\", \"dy\", 5); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"tryPath\", True); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"newPath\", \"dnw\"); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"defaultPath\"); }));
+    rv += sprintf(\"%s checks: %s | %s | %s | %s\\n\", label,
+        attempt(string sub () { return Eng::badKeyPlain(\"k\"); }),
+        attempt(string sub () { return Eng::badKeyInvoke(\"k\", (1,)); }),
+        attempt(string sub () { return Eng::badKeyNew(\"k\"); }),
+        attempt(string sub () { return Eng::notHash(1); }));
+    rv += sprintf(\"%s dynamic checks: %s | %s | %s | %s\\n\", label,
+        attempt(string sub () { return call_static_method(\"Eng\", \"badKeyPlain\", \"k\"); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"badKeyInvoke\", \"k\", (1,)); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"badKeyNew\", \"k\"); }),
+        attempt(string sub () { return call_static_method(\"Eng\", \"notHash\", 1); }));
+    return rv;
+}
+
+#! runs the shapes repeatedly so that a tier promoting hot code runs them in its compiled form too
+string sub runRepeated(string label) {
+    string first = runShapes(label);
+    for (int i = 0; i < 3; ++i) {
+        string again = runShapes(label);
+        if (again != first) {
+            return first + sprintf(\"%s unstable in pass %d:\\n%s\", label, i + 2, again);
+        }
+    }
+    return first;
+}
+
+int sub main() {
+    print(runRepeated(\"native\"));
+    Rec rec();
+    rec.addProgram(ProgramControl::getProgram());
+    on_exit rec.removeProgram(ProgramControl::getProgram());
+    print(runRepeated(\"debug\"));
+    return 0;
+}
+";
+
+        #! a consumer whose deferred initializers are invalid whatever the hashdecl declares
+        const BadArgsCode = "%modern
+class Bad {
+    static twoArgs() {
+        hash<Hd> h({\"a\": \"x\"}, 1);
+    }
+    static intArg() {
+        hash<Hd> h(1);
+    }
+    static newIntArg() {
+        hash<Hd> h = new hash<Hd>(1);
+    }
+}
+";
+
+        const KeyError = "HASHDECL-INIT-ERROR: hashdecl 'Hd' hash initializer value contains unknown key 'bogus'";
+        const TypeError = "HASHDECL-INIT-ERROR: hashdecl 'Hd' hash initializer value must be a hash; got type "
+            "'integer' instead";
+
+        #! a C++ host that registers the objects in a Program with the requested execution mode
+        const HostCode = "#include <qore/Qore.h>
+#include <qore/QoreAOT.h>
+#include <stdio.h>
+#include <string.h>
+
+extern \"C\" {
+    void qore_hdprov_hdprov_script_register(QoreProgram*);
+    void qore_eng_eng_script_register(QoreProgram*);
+}
+
+int main(int argc, char** argv) {
+    if (argc != 2) {
+        fprintf(stderr, \"usage: %s ast|ir|jit|tiered\\n\", argv[0]);
+        return 2;
+    }
+    qore_exec_mode_t mode;
+    if (!strcmp(argv[1], \"ast\")) {
+        mode = QEM_AST;
+    } else if (!strcmp(argv[1], \"ir\")) {
+        mode = QEM_IR;
+    } else if (!strcmp(argv[1], \"jit\")) {
+        mode = QEM_JIT;
+    } else if (!strcmp(argv[1], \"tiered\")) {
+        mode = QEM_TIERED;
+    } else {
+        fprintf(stderr, \"unknown execution mode '%s'\\n\", argv[1]);
+        return 2;
+    }
+    qore_init(QL_GPL, \"UTF-8\", true);
+    QoreProgram* pgm = qore_create_program(PO_NEW_STYLE | PO_STRICT_ARGS);
+    if (!pgm) {
+        qore_cleanup();
+        return 1;
+    }
+    qore_aot_script_begin_batch(pgm);
+    qore_hdprov_hdprov_script_register(pgm);
+    qore_eng_eng_script_register(pgm);
+    int rc = qore_aot_script_end_batch(pgm);
+    if (!rc) {
+        pgm->setExecMode(mode, true);
+        rc = qore_run_callable(pgm, \"main\", NULL);
+    }
+    if (rc) {
+        fprintf(stderr, \"%s\\n\", qore_last_error(pgm));
+    }
+    qore_destroy_program(pgm);
+    qore_cleanup();
+    return rc;
+}
+";
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string source_root;
+        string env;
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : QUnit::Test("AOTDeferredHashDeclImpliedConstructorTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        source_root = realpath(dirname(get_script_path()) + "/../../..");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("the constructions agree in every source execution mode", \testSourceModes());
+        addTestCase("a deferred hashdecl is constructed in a qcc-linked executable", \testLinkedExecutable());
+        addTestCase("a deferred hashdecl is constructed in every execution mode", \testEveryExecMode());
+        addTestCase("a deferred hashdecl initializer is checked when parsed", \testParseChecks());
+
+        set_return_value(main());
+    }
+
+    #! The output of every run
+    private static string expected() {
+        string checks = sprintf("%s | %s | %s | %s", KeyError, KeyError, KeyError, TypeError);
+        string rv;
+        foreach string label in (("native", "debug")) {
+            rv += sprintf("%s direct: inv/2 pl!/8 try/3 nw/7 def/0
+%s dynamic: dinv/3 dy!/10 try/3 dnw/7 def/0
+%s checks: %s
+%s dynamic checks: %s
+", label, label, label, checks, label, checks);
+        }
+        return rv;
+    }
+
+    #! The macOS deployment target libqore was built for, as compiler flags, or an empty list
+    private static list<string> libqoreTargetFlags() {
+        *list<*string> m = (Qore::CFLAGS =~ x/(-mmacosx-version-min=\S+)/);
+        return m ? (m[0],) : ();
+    }
+
+    #! Returns the command's combined output
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! Returns the command's combined output with its exit status appended
+    private string runStatus(string cmd) {
+        return backquote(sprintf("%s 2>&1; echo \"exit=$?\"", cmd));
+    }
+
+    private static write(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Compiles the hashdecl to its own .qo and writes the manifest that defers it for every other source
+    /** @return the directory holding the objects
+    */
+    private string compileProvider(string root) {
+        string hd = root + "/hdprov.qr";
+        write(hd, HdCode);
+        write(root + "/source-symbols.manifest", sprintf("format=1\nhashdecl\tHd\t%s\n", hd));
+
+        string qo_dir = root + "/qo";
+        mkdir(qo_dir);
+        string out = run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+            "--source-symbol-manifest=%s/source-symbols.manifest --output-dir=%s %s", env, qcc_bin, root, qo_dir,
+            hd));
+        assertTrue(out.find("script-context .qo") != -1, "compiled the hashdecl: " + out);
+        return qo_dir;
+    }
+
+    #! Compiles a consumer against the provider's object, deferring the hashdecl
+    /** @return the compiler's output
+    */
+    private string compileConsumer(string root, string qo_dir, string name, string code) {
+        string src = sprintf("%s/%s.qr", root, name);
+        write(src, code);
+        return run(sprintf("%s %s -O3 -c --parse-option=PO_ALLOW_DEBUGGER "
+            "--source-symbol-manifest=%s/source-symbols.manifest -L %s --output-dir=%s %s", env, qcc_bin, root,
+            qo_dir, qo_dir, src));
+    }
+
+    #! Compiles each source to its own .qo, deferring the hashdecl the consumer does not declare
+    /** @return the directory holding the objects
+    */
+    private string compileObjects(string root) {
+        string qo_dir = compileProvider(root);
+        string out = compileConsumer(root, qo_dir, "eng", EngineCode);
+        assertTrue(out.find("script-context .qo") != -1, "compiled the deferring consumer: " + out);
+        return qo_dir;
+    }
+
+    #! Builds the C++ host that runs the objects in a Program with a given execution mode
+    private *string buildHost(string root, string qo_dir) {
+        string host = root + "/host.cpp";
+        write(host, HostCode);
+        string exe = root + "/deferred-hashdecl-host";
+        string cxx = ENV.CXX ?? "g++";
+        string out = run(sprintf("%s -std=c++17 -I%s -I%s %s %s/hdprov.qo %s/eng.qo -L%s -Wl,-rpath,%s -lqore "
+            "-o %s %s", cxx, source_root + "/include", libqore_dir + "/include", host, qo_dir, qo_dir, libqore_dir,
+            libqore_dir, exe, libqoreTargetFlags().join(" ")));
+        if (!is_file(exe)) {
+            if (out =~ /not found/) {
+                testSkip("no C++ compiler to build the host: " + out);
+            }
+            assertTrue(False, "linked the C++ host: " + out);
+            return;
+        }
+        return exe;
+    }
+
+    testSourceModes() {
+        TmpDir tmp("qore-aot-deferred-hashdecl-vrn-src-");
+        # one file: the hashdecl is bound at parse time; this is the behavior the deferred compile must match
+        string runner = tmp.path + "/runner.q";
+        write(runner, HdCode + "\n" + EngineCode + "\nmain();\n");
+        foreach string mode in (Modes) {
+            string out = runStatus(sprintf("%s %s -b --exec-mode=%s %s", env, qore_bin, mode, runner));
+            assertEq(expected() + "exit=0\n", out, mode + " source mode");
+        }
+    }
+
+    testLinkedExecutable() {
+        TmpDir tmp("qore-aot-deferred-hashdecl-vrn-exe-");
+        string qo_dir = compileObjects(tmp.path);
+        string exe = tmp.path + "/deferred-hashdecl";
+        string link_out = run(sprintf("%s %s -o %s %s/hdprov.qo %s/eng.qo", env, qcc_bin, exe, qo_dir, qo_dir));
+        assertTrue(is_file(exe), "linked the executable: " + link_out);
+
+        string out = runStatus(sprintf("%s %s", env, exe));
+        assertEq(-1, out.find("IR-AST-FALLBACK-ERROR"), "no AST fallback: " + out);
+        # the silent wrong result: the hashdecl's defaults instead of the initializer's values
+        assertEq(-1, out.find("def/0 def/0"), "no default-valued hashes: " + out);
+        assertEq(expected() + "exit=0\n", out, "linked executable");
+    }
+
+    testEveryExecMode() {
+        TmpDir tmp("qore-aot-deferred-hashdecl-vrn-modes-");
+        string qo_dir = compileObjects(tmp.path);
+        *string exe = buildHost(tmp.path, qo_dir);
+        if (!exe) {
+            return;
+        }
+        foreach string mode in (Modes) {
+            string out = runStatus(sprintf("%s %s %s", env, exe, mode));
+            assertEq(-1, out.find("IR-AST-FALLBACK-ERROR"), mode + " mode has no AST fallback: " + out);
+            assertEq(expected() + "exit=0\n", out, mode + " mode");
+        }
+    }
+
+    testParseChecks() {
+        TmpDir tmp("qore-aot-deferred-hashdecl-vrn-parse-");
+        string qo_dir = compileProvider(tmp.path);
+        string out = compileConsumer(tmp.path, qo_dir, "bad", BadArgsCode);
+        assertEq(-1, out.find("script-context .qo"), "the invalid consumer is not compiled: " + out);
+        assertNeq(-1, out.find("illegal arguments to typed hash initialization; a single hash argument is "
+            "expected; 2 arguments supplied instead"), "two initializers: " + out);
+        # the implied construction and the new operator both reject an initializer that cannot be a hash
+        string int_error = "illegal argument to typed hash initialization; a single hash argument is expected; "
+            "got type 'int' instead";
+        assertEq(2, out.split(int_error).size() - 1, "an int initializer: " + out);
+    }
+}

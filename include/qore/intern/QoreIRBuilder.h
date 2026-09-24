@@ -40,6 +40,20 @@ public:
 
     void setFunction(QoreIRFunction* func);
     void setBlock(QoreIRBasicBlock* block);
+
+    //! Appends an instruction to the current block, recording the temp scope of the statement being lowered
+    /** An instruction that raises an exception and branches to a handler in the same frame releases the temps of
+        this scope before branching (see design/ir-exception-branch-temp-scope.md); 0 means that the statement
+        creates no node temps, and nothing is released.  PushTempMark and DiscardTemps set their own scope
+        afterwards.
+    */
+    template <typename T, typename... Args>
+    T* append(Args&&... args) {
+        T* inst = block->template appendInstruction<T>(std::forward<Args>(args)...);
+        inst->temp_scope_id = exception_temp_scope_id;
+        return inst;
+    }
+
     QoreIRFunction* getFunction() const;
     QoreIRBasicBlock* getBlock() const;
     QoreIRBasicBlock* createBlock(const std::string& name);
