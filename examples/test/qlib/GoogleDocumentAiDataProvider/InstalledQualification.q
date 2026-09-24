@@ -94,7 +94,8 @@ hash<auto> mime = readback.actioninfomap{App}."process-document".options.mime_ty
 if (mime.allowed_values[0].value != "application/pdf" || mime.allowed_values[0].display_name != "PDF") {
     throw "INSTALL-QUALIFICATION-ERROR", "published choices changed wire values or labels";
 }
-AbstractDataProviderType labels = readback.actioninfomap{App}."process-document".options.labels.type;
+AbstractDataProviderType labels = AbstractDataProviderType::get(
+    readback.actioninfomap{App}."process-document".options.labels.type_info);
 if (labels.acceptsValue({"value": "literal"}) != {"value": "literal"}) {
     throw "INSTALL-QUALIFICATION-ERROR", "published map type changed an ordinary value member";
 }

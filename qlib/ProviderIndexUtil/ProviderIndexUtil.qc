@@ -28,7 +28,8 @@ public namespace ProviderIndexUtil {
 public const ProviderIndexEnvVar = "QORE_PROVIDER_INDEX_DIR";
 
 const RoutingIndexVersion = 2;
-const MetadataCacheVersion = 2;
+#! Version 3 compresses each app chunk with zlib
+const MetadataCacheVersion = 3;
 
 #! The mode used when creating the provider index directory
 /** @note the execute bit is required, otherwise the directory cannot be traversed, and no index files in it can be
@@ -54,26 +55,17 @@ public hashdecl DataProviderIndexInfo {
     *hash<string, hash<auto>> appinfomap;
 
     #! Maps apps to actions to action info hashes
-    /** @note Dynamic action callbacks and output types are omitted. Since ProviderIndex 1.2, option types are
-        stored in \c actiontypemap.  Readers also accept options with serialized types or primitive type names from
-        earlier indexes, and ignore any output types in them.
+    /** When read, values are \c DataProvider::DataProviderIndexedActionInfo hashes.
+
+        @note Dynamic action callbacks and output types are omitted.  Since ProviderIndex 1.2, each option's type
+        is described by plain data in \c type_info; readers convert primitive type names from earlier indexes.
     */
     *hash<string, hash<string, hash<auto>>> actioninfomap;
 
     #! Maps app actions to action info hashes
-    /** @note Dynamic action callbacks and output types are omitted. Since ProviderIndex 1.2, option types are
-        stored in \c actiontypemap.
+    /** When read, values are \c DataProvider::DataProviderIndexedActionInfo hashes.
     */
     *hash<string, hash<auto>> top_actioninfomap;
-
-    #! Maps apps to the serialized option types of their actions
-    /** Each value is one zlib-compressed native serialized hash of action names to option names to option types.
-        Types of one app commonly share objects, such as an %OpenAPI document, so one graph per app stores each
-        shared object once, and restoring it shares them again.
-
-        @since ProviderIndexUtil 1.2
-    */
-    *hash<string, binary> actiontypemap;
 }
 
 #! Index info
@@ -97,6 +89,9 @@ hashdecl MetadataDeserializeContext {
     TypedHash conn_opt_th;
     TypedHash action_info_th;
     TypedHash option_info_th;
+    TypedHash type_info_th;
+    TypedHash field_info_th;
+    TypedHash type_opt_info_th;
     TypedHash path_vars_th;
     TypedHash dp_info_th;
     TypedHash dp_opt_info_th;
@@ -169,7 +164,6 @@ public class ProviderIndexUtil {
         #! Serialized metadata retained until the corresponding app is requested
         static hash<string, hash<auto>> raw_appinfomap;
         static hash<string, hash<string, hash<auto>>> raw_actioninfomap;
-        static hash<string, binary> raw_actiontypemap;
 
         #! Shared metadata deserialization context
         static *hash<MetadataDeserializeContext> metadata_context;
@@ -262,89 +256,55 @@ public class ProviderIndexUtil {
         return index.appinfomap{app};
     }
 
-    #! Try to return any cached approximate app action list for the given app
-    /** @param app the app name
-
-        @return the app's indexed actions as @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo"
-        hashes with their option types restored; an action whose option types cannot be restored is logged and
-        omitted
-
-        @note restoring option types loads the provider modules that define them; use tryGetActionMetadataForApp()
-        when the types are not needed
-
-        @note output types are not indexed; \c output_type is never set
-    */
-    static *list<hash<auto>> tryGetApproximateActionsForApp(string app) {
-        checkActionMetadata(app);
-        return index.actioninfomap{app}.values();
-    }
-
-    #! Try to return any cached approximate app action for the given app and action
-    /** @param app the app name
-        @param action the action name
-
-        @return the action as a @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo" hash with its
-        option types restored; @ref nothing if the action is not indexed or its option types cannot be restored
-
-        @note restoring option types loads the provider modules that define the option types of all of the app's
-        actions; use tryGetActionMetadata() when the types are not needed
-
-        @note output types are not indexed; \c output_type is never set
-    */
-    static *hash<auto> tryGetApproximateAppAction(string app, string action) {
-        checkActionMetadata(app);
-        return index.actioninfomap{app}{action};
-    }
-
-    #! Returns the indexed metadata of the given app's actions without restoring their types
-    /** Restoring an action's option types requires the classes that produced them, so
-        tryGetApproximateActionsForApp() loads the app's provider modules and deserializes the app's type graph.
-        This method does neither, so it is the accessor to use when only plain descriptive fields are needed, such
-        as \c metadata or the names and descriptions of \c options.
+    #! Returns the indexed actions of the given app
+    /** Reading indexed actions never loads the provider modules that implement them: option types are described by
+        plain data in each option's \c type_info, and output types are not indexed.
 
         @param app the app name
 
-        @return the app's indexed actions as untyped hashes with the keys of
-        @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo", except that \c output_type is omitted
-        from each action and \c type is omitted from each of its \c options; @ref nothing if the app has no indexed
-        actions
+        @return the app's indexed actions as \c DataProvider::DataProviderIndexedActionInfo hashes; @ref nothing if
+        the app has no indexed actions
 
         @par Example:
         @code{.py}
 *list<hash<auto>> actions = ProviderIndexUtil::tryGetActionMetadataForApp("OpenSearch");
         @endcode
 
-        @note an action whose types cannot be restored, and which tryGetApproximateActionsForApp() therefore omits,
-        is still returned here
+        @note An action whose metadata cannot be read is logged and omitted
+
+        @note A type object can be created from an option's \c type_info with
+        \c DataProvider::AbstractDataProviderType::get(); it has the described structure and constraints but not
+        any custom behavior of the original type's class.  The exact types are available from the registered
+        action with \c DataProvider::DataProviderActionCatalog::getAppAction(), which loads the app's modules.
 
         @see tryGetActionMetadata()
 
         @since ProviderIndexUtil 1.2
     */
     static *list<hash<auto>> tryGetActionMetadataForApp(string app) {
-        *hash<string, hash<auto>> actions = getActionMetadata(app);
-        return actions ? actions.values() : NOTHING;
+        checkActionMetadata(app);
+        return index.actioninfomap{app} ? index.actioninfomap{app}.values() : NOTHING;
     }
 
-    #! Returns the indexed metadata of the given app action without restoring its types
+    #! Returns the given indexed action
     /** @param app the app name
         @param action the action name
 
-        @return the action as an untyped hash with the keys of
-        @ref DataProvider::DataProviderActionInfo "DataProviderActionInfo", except that \c output_type is omitted
-        and \c type is omitted from each of its \c options; @ref nothing if the action is not indexed
+        @return the action as a \c DataProvider::DataProviderIndexedActionInfo hash; @ref nothing if the action is
+        not indexed
 
         @par Example:
         @code{.py}
 *hash<auto> action = ProviderIndexUtil::tryGetActionMetadata("OpenSearch", "search-index");
         @endcode
 
-        @see tryGetActionMetadataForApp() for why this method does not load provider modules
+        @see tryGetActionMetadataForApp() for how option types are described
 
         @since ProviderIndexUtil 1.2
     */
     static *hash<auto> tryGetActionMetadata(string app, string action) {
-        return getActionMetadata(app){action};
+        checkActionMetadata(app);
+        return index.actioninfomap{app}{action};
     }
 
     #! Searches for cached application actions whose descriptions match a regular expression pattern
@@ -352,7 +312,8 @@ public class ProviderIndexUtil {
         @param regex_pattern A regular expression pattern to match in the \c short_desc and \c desc fields
         @param regex_options Regular expression options; a case-insensitive match is performed by default
 
-        @return All cached actions that match the regular expression pattern in the \c short_desc or \c desc fields
+        @return All cached actions that match the regular expression pattern in the \c short_desc or \c desc fields, as
+        \c DataProvider::DataProviderIndexedActionInfo hashes
 
         @note If the application is not cached, no results are returned
     */
@@ -368,7 +329,8 @@ public class ProviderIndexUtil {
         @param substr A substring to match in the \c short_desc and \c desc fields
         @param ignore_case Ignore case when searching
 
-        @return All actions that match the substring argument in the \c short_desc or \c desc fields
+        @return All actions that match the substring argument in the \c short_desc or \c desc fields, as
+        \c DataProvider::DataProviderIndexedActionInfo hashes
 
         @note If the application is not cached, no results are returned
     */
@@ -377,10 +339,10 @@ public class ProviderIndexUtil {
         if (ignore_case) {
             substr = substr.upr();
             return map $1, index.actioninfomap{app}.values(),
-                ($1.short_desc.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
+                (($1.short_desc ?? "").upr().find(substr) >= 0) || (($1.desc ?? "").upr().find(substr) >= 0);
         }
         return map $1, index.actioninfomap{app}.values(),
-            ($1.short_desc.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
+            (($1.short_desc ?? "").find(substr) >= 0) || (($1.desc ?? "").find(substr) >= 0);
     }
 
     #! Searches for cached actions whose descriptions match a regular expression pattern
@@ -407,14 +369,14 @@ public class ProviderIndexUtil {
         if (ignore_case) {
             substr = substr.upr();
             return map $1, index.top_actioninfomap.values(),
-                ($1.short_desc.upr().find(substr) >= 0) || ($1.desc.upr().find(substr) >= 0);
+                (($1.short_desc ?? "").upr().find(substr) >= 0) || (($1.desc ?? "").upr().find(substr) >= 0);
         }
         return map $1, index.top_actioninfomap.values(),
-            ($1.short_desc.find(substr) >= 0) || ($1.desc.find(substr) >= 0);
+            (($1.short_desc ?? "").find(substr) >= 0) || (($1.desc ?? "").find(substr) >= 0);
     }
 
     #! Returns all cached actions
-    /** @return all cached actions
+    /** @return all cached actions as \c DataProvider::DataProviderIndexedActionInfo hashes
     */
     static *list<hash<auto>> getAllCachedActions() {
         checkAllActionMetadata();
@@ -434,10 +396,18 @@ public class ProviderIndexUtil {
         app_metadata_initialized{app.name} = True;
     }
 
-    #! Adds the given app and actions to the cache
+    #! Adds the given action to the cache
+    /** @param action a registered action as a \c DataProvider::DataProviderActionInfo hash; it is cached as a
+        \c DataProvider::DataProviderIndexedActionInfo hash, like an indexed action
+    */
     static addActionToCache(hash<auto> action) {
         checkAppMetadata(action.app);
         checkActionMetadata(action.app);
+        if (!checkMetadataContext()) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("Cannot add action %y of app %y to the cache while the data "
+                "provider index is initializing", action.action, action.app);
+        }
+        action = getIndexedAction(action, metadata_context);
         m.lock();
         on_exit m.unlock();
         if (!index.appinfomap{action.app}) {
@@ -464,7 +434,6 @@ public class ProviderIndexUtil {
         }
         map remove index.top_actioninfomap{app + "/" + $1}, keys (remove index.actioninfomap{app});
         remove raw_actioninfomap{app};
-        remove raw_actiontypemap{app};
         return True;
     }
 
@@ -629,14 +598,11 @@ public class ProviderIndexUtil {
         on_exit m.unlock();
         raw_appinfomap = {};
         raw_actioninfomap = {};
-        raw_actiontypemap = {};
         if (new_index) {
             raw_appinfomap = new_index.appinfomap ?? {};
             raw_actioninfomap = new_index.actioninfomap ?? {};
-            raw_actiontypemap = new_index.actiontypemap ?? {};
             new_index.appinfomap = {};
             new_index.actioninfomap = {};
-            new_index.actiontypemap = {};
             # rebuilt from the typed action metadata when it is restored
             new_index.top_actioninfomap = {};
             index = new_index;
@@ -694,8 +660,6 @@ public class ProviderIndexUtil {
             # top_actioninfomap is rebuilt from the typed action metadata when it is restored; serialized
             # entries from the file are never published
             raw_actioninfomap += map {$1.key: $1.value}, result.index.actioninfomap.pairIterator(),
-                !raw_metadata_app_loaded{$1.key};
-            raw_actiontypemap += map {$1.key: $1.value}, result.index.actiontypemap.pairIterator(),
                 !raw_metadata_app_loaded{$1.key};
         }
         if (result.complete) {
@@ -806,7 +770,6 @@ public class ProviderIndexUtil {
         }
 
         hash<string, hash<auto>> raw_actions;
-        hash<string, binary> raw_types;
         {
             m.lock();
             on_exit m.unlock();
@@ -822,16 +785,12 @@ public class ProviderIndexUtil {
             }
             action_metadata_initializing{app} = gettid();
             raw_actions = raw_actioninfomap{app};
-            if (exists raw_actiontypemap{app}) {
-                raw_types{app} = raw_actiontypemap{app};
-            }
         }
 
         hash<auto> action_map;
         try {
-            action_map = deserializeActionsWithContext({app: raw_actions}, metadata_context, True, raw_types);
+            action_map = deserializeActionsWithContext({app: raw_actions}, metadata_context);
         } catch (hash<ExceptionInfo> ex) {
-            # the serialized entries must not be published in place of typed ones
             log(LoggerLevel::LevelError, "Ignoring error deserializing actions for app %y from the data provider "
                 "index: %s", app, get_exception_string(ex));
         }
@@ -842,66 +801,10 @@ public class ProviderIndexUtil {
         foreach hash<auto> action in (index.actioninfomap{app}.pairIterator()) {
             index.top_actioninfomap{app + "/" + action.key} = action.value;
         }
-        retainUnrestoredActions(app, raw_actions);
-        # restoration is attempted once; unrestored actions are only needed without their types
-        remove raw_actiontypemap{app};
+        remove raw_actioninfomap{app};
         action_metadata_initialized{app} = True;
         remove action_metadata_initializing{app};
         metadata_init_cond.broadcast();
-    }
-
-    #! Retains the serialized entries of the given app's actions whose typed metadata could not be restored
-    /** They are never published through the typed accessors, only by getActionMetadata(); must be called with the
-        lock held after the app's restored actions have been stored.
-
-        @param app the app name
-        @param raw_actions the app's serialized action entries that restoration was attempted for
-    */
-    static private retainUnrestoredActions(string app, hash<string, hash<auto>> raw_actions) {
-        hash<string, hash<auto>> unrestored = raw_actions - keys index.actioninfomap{app};
-        if (unrestored) {
-            raw_actioninfomap{app} = unrestored;
-        } else {
-            remove raw_actioninfomap{app};
-        }
-    }
-
-    #! Returns the given app's action metadata without restoring serialized types
-    /** The metadata is taken from the restored typed actions and from the serialized entries of the actions that
-        have not been restored, either because nothing has requested them yet or because restoring them failed;
-        both are reduced to the same untyped form.
-    */
-    static private *hash<string, hash<auto>> getActionMetadata(string app) {
-        checkRawMetadataIndex(app);
-        if (!initialized) {
-            return;
-        }
-
-        # restored actions and serialized entries not (yet) restored are disjoint
-        *hash<string, hash<auto>> actions;
-        *hash<string, hash<auto>> serialized;
-        {
-            m.lock();
-            on_exit m.unlock();
-            actions = index.actioninfomap{app};
-            serialized = raw_actioninfomap{app};
-        }
-        if (serialized && checkMetadataContext()) {
-            actions += deserializeActionsWithContext({app: serialized}, metadata_context, False){app};
-        }
-        if (!actions) {
-            return;
-        }
-        return map {$1.key: removeActionTypes($1.value)}, actions.pairIterator();
-    }
-
-    #! Returns an untyped copy of the given action without its output type and option types
-    static private hash<auto> removeActionTypes(hash<auto> action) {
-        hash<auto> rv = ({} + action) - "output_type";
-        if (rv.options) {
-            rv.options = map {$1.key: ({} + $1.value) - "type"}, rv.options.pairIterator();
-        }
-        return rv;
     }
 
     #! Ensures that all app metadata has been deserialized
@@ -961,7 +864,6 @@ public class ProviderIndexUtil {
         }
 
         hash<string, hash<string, hash<auto>>> raw_actions;
-        hash<string, binary> raw_types;
         list<string> apps;
         {
             m.lock();
@@ -974,7 +876,6 @@ public class ProviderIndexUtil {
                 }
                 metadata_init_cond.wait(m);
             }
-            # restored apps may retain the serialized entries of the actions that could not be restored
             apps = select keys raw_actioninfomap, !action_metadata_initialized{$1};
             if (!apps) {
                 return;
@@ -982,14 +883,12 @@ public class ProviderIndexUtil {
             int tid = gettid();
             map action_metadata_initializing{$1} = tid, apps.iterator();
             raw_actions = map {$1: raw_actioninfomap{$1}}, apps.iterator();
-            raw_types = map {$1: raw_actiontypemap{$1}}, apps.iterator(), exists raw_actiontypemap{$1};
         }
 
         hash<auto> action_map;
         try {
-            action_map = deserializeActionsWithContext(raw_actions, metadata_context, True, raw_types);
+            action_map = deserializeActionsWithContext(raw_actions, metadata_context);
         } catch (hash<ExceptionInfo> ex) {
-            # the serialized entries must not be published in place of typed ones
             log(LoggerLevel::LevelError, "Ignoring error deserializing actions from the data provider index: %s",
                 get_exception_string(ex));
             action_map = map {$1: {}}, apps.iterator();
@@ -1002,8 +901,7 @@ public class ProviderIndexUtil {
             map index.top_actioninfomap{app_actions.key + "/" + $1.key} = $1.value,
                 app_actions.value.pairIterator();
         }
-        map retainUnrestoredActions($1, raw_actions{$1}), apps.iterator();
-        map remove raw_actiontypemap{$1}, apps.iterator();
+        map remove raw_actioninfomap{$1}, apps.iterator();
         map action_metadata_initialized{$1} = True, apps.iterator();
         action_metadata_initializing = {};
         metadata_init_cond.broadcast();
@@ -1018,7 +916,6 @@ public class ProviderIndexUtil {
             "appinfomap": {},
             "actioninfomap": {},
             "top_actioninfomap": {},
-            "actiontypemap": {},
         };
     }
 
@@ -1065,7 +962,6 @@ public class ProviderIndexUtil {
 %else
         hash<string, bool> apps = map {$1: True}, keys (h.appinfomap ?? {});
         map apps{$1} = True, keys (h.actioninfomap ?? {});
-        map apps{$1} = True, keys (h.actiontypemap ?? {});
 
         hash<string, DataProviderMetadataCacheChunkInfo> chunks;
         foreach string app in (keys apps) {
@@ -1076,11 +972,9 @@ public class ProviderIndexUtil {
             if (exists h.actioninfomap{app}) {
                 app_index.actioninfomap{app} = h.actioninfomap{app};
             }
-            if (exists h.actiontypemap{app}) {
-                app_index.actiontypemap{app} = h.actiontypemap{app};
-            }
 
-            binary data = msgpack_pack(app_index, MSGPACK_QORE_MODE);
+            # type descriptions repeat many keys and values, so chunks compress by about 10 times
+            binary data = compress(msgpack_pack(app_index, MSGPACK_QORE_MODE));
             writeFileAtomic(getMetadataCacheChunkPath(app), data);
             chunks{app} = <DataProviderMetadataCacheChunkInfo>{
                 "size": data.size(),
@@ -1211,7 +1105,6 @@ public class ProviderIndexUtil {
                 "appinfomap": {},
                 "actioninfomap": {},
                 "top_actioninfomap": {},
-                "actiontypemap": {},
             };
         } catch (hash<ExceptionInfo> ex) {
             return;
@@ -1300,7 +1193,6 @@ public class ProviderIndexUtil {
             }
             rv.appinfomap += chunk.appinfomap ?? {};
             rv.actioninfomap += chunk.actioninfomap ?? {};
-            rv.actiontypemap += chunk.actiontypemap ?? {};
         }
         return rv;
 %endif
@@ -1347,7 +1239,8 @@ public class ProviderIndexUtil {
             if (data.size() != info.size || digest("sha256", data).toHex() != info.sha256) {
                 return;
             }
-            return cast<*hash<DataProviderIndexInfo>>(msgpack_unpack(data, MSGPACK_QORE_MODE));
+            return cast<*hash<DataProviderIndexInfo>>(msgpack_unpack(uncompress_to_binary(data),
+                MSGPACK_QORE_MODE));
         } catch (hash<ExceptionInfo> ex) {
             return;
         }
@@ -1375,7 +1268,7 @@ public class ProviderIndexUtil {
         rv.top_actioninfomap = {};
         if (rv.actioninfomap) {
             try {
-                rv.actioninfomap = deserializeActionsWithContext(rv.actioninfomap, ctx, True, rv.actiontypemap);
+                rv.actioninfomap = deserializeActionsWithContext(rv.actioninfomap, ctx);
             } catch (hash<ExceptionInfo> ex) {
                 # serialized entries must not be returned in place of typed ones
                 log(LoggerLevel::LevelError, "Ignoring error reading actions from the data provider index: %s",
@@ -1398,8 +1291,11 @@ public class ProviderIndexUtil {
         return <MetadataDeserializeContext>{
             "app_info_th": TypedHash::forName("DataProvider::DataProviderAppInfo"),
             "conn_opt_th": TypedHash::forName("ConnectionProvider::ConnectionOptionInfo"),
-            "action_info_th": TypedHash::forName("DataProvider::DataProviderActionInfo"),
-            "option_info_th": TypedHash::forName("DataProvider::ActionOptionInfo"),
+            "action_info_th": TypedHash::forName("DataProvider::DataProviderIndexedActionInfo"),
+            "option_info_th": TypedHash::forName("DataProvider::IndexedActionOptionInfo"),
+            "type_info_th": TypedHash::forName("DataProvider::DataTypeInfo"),
+            "field_info_th": TypedHash::forName("DataProvider::DataFieldInfo"),
+            "type_opt_info_th": TypedHash::forName("DataProvider::DataProviderTypeOptionInfo"),
             "path_vars_th": TypedHash::forName("DataProvider::DataProviderPathVarInfo"),
             "dp_info_th": TypedHash::forName("DataProvider::DataProviderInfo"),
             "dp_opt_info_th": TypedHash::forName("DataProvider::DataProviderOptionInfo"),
@@ -1435,81 +1331,24 @@ public class ProviderIndexUtil {
     }
 
     #! Reconstructs typed action metadata using a prepared context
-    /** @param actioninfomap serialized action metadata keyed by app and then by action
+    /** @param actioninfomap action metadata as stored in the index, keyed by app and then by action
         @param ctx the prepared deserialization context
-        @param restore_types if @ref False, types are not restored and each option's \c type is a placeholder, so
-        the caller must remove it before returning the metadata
-        @param actiontypemap the serialized option types of the apps' actions, keyed by app
 
-        @return the typed action metadata keyed by app and then by action; every app in @a actioninfomap is
-        present, but an action whose metadata cannot be reconstructed is logged and omitted
+        @return \c DataProvider::DataProviderIndexedActionInfo hashes keyed by app and then by action; every app in
+        @a actioninfomap is present, but an action whose metadata cannot be read is logged and omitted
     */
     static private hash<auto> deserializeActionsWithContext(
             hash<string, hash<string, hash<auto>>> actioninfomap,
-            hash<MetadataDeserializeContext> ctx, bool restore_types = True,
-            *hash<string, binary> actiontypemap) {
-        return deserializeActions(actioninfomap, ctx.action_info_th, ctx.option_info_th, ctx.path_vars_th,
-            ctx.dp_info_th, ctx.dp_opt_info_th, ctx.dp_exp_info_th, ctx.mapper_key_info_th,
-            ctx.dp_msg_info_th, ctx.dp_sig_info_th, ctx.dp_arg_info_th, ctx.type_map,
-            ctx.shape_map, ctx.ui_view_map, restore_types, actiontypemap);
-    }
-
-    #! Deserialize action options
-    static private hash<auto> deserializeActions(hash<string, hash<string, hash<auto>>> actioninfomap,
-            TypedHash action_info_th, TypedHash option_info_th, TypedHash path_vars_th, TypedHash dp_info_th,
-            TypedHash dp_opt_info_th, TypedHash dp_exp_info_th, TypedHash mapper_key_info_th,
-            TypedHash dp_msg_info_th, TypedHash dp_sig_info_th, TypedHash dp_arg_info_th, hash<auto> type_map,
-            hash<auto> shape_map, *hash<auto> ui_view_map, bool restore_types,
-            *hash<string, binary> actiontypemap) {
+            hash<MetadataDeserializeContext> ctx) {
         hash<auto> rv;
         foreach hash<auto> i in (actioninfomap.pairIterator()) {
-            # the app's option types are restored as one graph, so objects shared between them are shared again
-            *hash<auto> app_types;
-            if (restore_types && actiontypemap{i.key}) {
-                try {
-                    app_types = Serializable::deserialize(uncompress_to_binary(actiontypemap{i.key}));
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::LevelError, "Cannot restore the option types of the actions of app %y from the "
-                        "data provider index; its actions with options are omitted: %s: %s", i.key, ex.err,
-                        ex.desc);
-                }
-            }
             hash<auto> actions = {};
             foreach hash<auto> j in (i.value.pairIterator()) {
-                # an action that cannot be reconstructed is omitted rather than returned in serialized form,
-                # which would violate the DataProviderActionInfo type that callers are promised
                 try {
-                    actions{j.key} = action_info_th.doCastWithOverrides(j.value, {
-                        # output types are not indexed; any in earlier indexes are ignored rather than restored
-                        "output_type": NOTHING,
-                        "path_vars": (j.value.path_vars
-                            ? path_vars_th.doCastValues(j.value.path_vars)
-                            : NOTHING),
-                        "options": (exists j.value.options ? option_info_th.doCastValuesWithOverrides(
-                            j.value.options, map {
-                            $1.key: {
-                                "allowed_values": (exists $1.value.allowed_values
-                                    ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
-                                    : NOTHING),
-                                "element_allowed_values": (exists $1.value.element_allowed_values
-                                    ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
-                                    : NOTHING),
-                                "type": restore_types
-                                    ? restoreOptionType(i.key, j.key, $1.key, $1.value.type, app_types{j.key},
-                                        type_map)
-                                    : type_map."auto",
-                                "default_view": ui_view_map{$1.value.default_view},
-                            }
-                        }, j.value.options.pairIterator()) : NOTHING),
-                        "data_provider_info": (j.value.data_provider_info
-                            ? deserializeDataProviderInfo(j.value.data_provider_info, dp_info_th,
-                                dp_opt_info_th, dp_exp_info_th, mapper_key_info_th, dp_msg_info_th,
-                                dp_sig_info_th, dp_arg_info_th, type_map, shape_map)
-                            : NOTHING),
-                    });
+                    actions{j.key} = getIndexedAction(j.value, ctx, True);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::LevelError, "Omitting action %y of app %y from the data provider index "
-                        "metadata; it cannot be reconstructed: %s: %s", j.key, i.key, ex.err, ex.desc);
+                        "metadata; it cannot be read: %s: %s", j.key, i.key, ex.err, ex.desc);
                 }
             }
             rv{i.key} = actions;
@@ -1517,35 +1356,108 @@ public class ProviderIndexUtil {
         return rv;
     }
 
-    #! Returns the restored type of an action option
-    /** @param app the app name
-        @param action the action name
-        @param option the option name
-        @param indexed the type stored with the option by an earlier index, if any
-        @param action_types the restored option types of the action from \c actiontypemap, if any
-        @param type_map the map of primitive type names to types
+    #! Returns the given action as a DataProviderIndexedActionInfo hash
+    /** @param action the action as stored in the index, or a registered action
+        @param ctx the prepared deserialization context
+        @param indexed @ref True if @a action is stored in the index, in which case its nested data provider info
+        is in serialized form
 
-        @return the option's type
-
-        @throw PROVIDER-INDEX-ERROR the option's type is not available because the app's option types could not be
-        restored
+        @return a \c DataProvider::DataProviderIndexedActionInfo hash
     */
-    static private object restoreOptionType(string app, string action, string option, auto indexed,
-            *hash<auto> action_types, hash<auto> type_map) {
-        if (exists indexed) {
-            return deserializeActionType(indexed, type_map);
-        }
-        if (exists action_types{option}) {
-            return action_types{option};
-        }
-        throw "PROVIDER-INDEX-ERROR", sprintf("the type of option %y of action %y of app %y was not restored",
-            option, action, app);
+    static private hash<auto> getIndexedAction(hash<auto> action, hash<MetadataDeserializeContext> ctx,
+            *bool indexed) {
+        # dynamic callbacks and output types are not indexed; earlier indexes may contain output types
+        action -= ("output_type", "get_output_type", "get_dynamic_options");
+        return ctx.action_info_th.doCastWithOverrides(action, {
+            "path_vars": (action.path_vars
+                ? ctx.path_vars_th.doCastValues(action.path_vars)
+                : NOTHING),
+            "options": (exists action.options ? ctx.option_info_th.doCastValuesWithOverrides(
+                (map {$1.key: $1.value - "type"}, action.options.pairIterator()), map {
+                $1.key: {
+                    "allowed_values": (exists $1.value.allowed_values
+                        ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
+                        : NOTHING),
+                    "element_allowed_values": (exists $1.value.element_allowed_values
+                        ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
+                        : NOTHING),
+                    "type_info": getOptionTypeInfo(action, $1.key, $1.value, ctx),
+                    "default_view": indexed ? ctx.ui_view_map{$1.value.default_view} : $1.value.default_view,
+                }
+            }, action.options.pairIterator()) : NOTHING),
+            "data_provider_info": (action.data_provider_info && indexed
+                ? deserializeDataProviderInfo(action.data_provider_info, ctx.dp_info_th,
+                    ctx.dp_opt_info_th, ctx.dp_exp_info_th, ctx.mapper_key_info_th, ctx.dp_msg_info_th,
+                    ctx.dp_sig_info_th, ctx.dp_arg_info_th, ctx.type_map, ctx.shape_map)
+                : action.data_provider_info),
+        });
     }
 
-    #! Restores option types stored per option by earlier indexes, including legacy primitive type names
-    static private auto deserializeActionType(auto value, hash<auto> type_map) {
-        return value.typeCode() == NT_BINARY ? Serializable::deserialize(value)
-            : type_map{value} ?? type_map."auto";
+    #! Returns the type description of an action option
+    /** @param action the action
+        @param name the option name
+        @param option the option as stored in the index, or an option of a registered action
+        @param ctx the prepared deserialization context
+
+        @return a \c DataProvider::DataTypeInfo hash
+    */
+    static private hash<auto> getOptionTypeInfo(hash<auto> action, string name, hash<auto> option,
+            hash<MetadataDeserializeContext> ctx) {
+        # a registered action's option is a typed hash without this key
+        if (option.hasKey("type_info") && option.type_info) {
+            return castTypeInfo(option.type_info, ctx);
+        }
+        switch (option.type.typeCode()) {
+            case NT_OBJECT:
+                # a registered action's option
+                return option.type.getInfo();
+            case NT_STRING:
+                # a primitive type name from an index written before ProviderIndex 1.2
+                return (ctx.type_map{option.type} ?? ctx.type_map."auto").getInfo();
+        }
+        if (exists option.type) {
+            # types serialized by unreleased development versions of ProviderIndex 1.2 are not restored, since
+            # restoring them loads the provider modules that define them
+            log(LoggerLevel::LevelWarn, "The type of option %y of action %y of app %y in the data provider index "
+                "cannot be read; the index must be recreated", name, action.action, action.app);
+        }
+        return ctx.type_map."auto".getInfo();
+    }
+
+    #! Returns the given plain type description as a DataTypeInfo hash, including all nested descriptions
+    /** @param info the type description as stored in the index
+        @param ctx the prepared deserialization context
+
+        @return a \c DataProvider::DataTypeInfo hash
+    */
+    static private hash<auto> castTypeInfo(hash<auto> info, hash<MetadataDeserializeContext> ctx) {
+        return ctx.type_info_th.doCastWithOverrides(info, {
+            "supported_options": (exists info.supported_options
+                ? ctx.type_opt_info_th.doCastValues(info.supported_options)
+                : NOTHING),
+            "fields": (exists info.fields ? ctx.field_info_th.doCastValuesWithOverrides(info.fields, map {
+                $1.key: {
+                    "type": castTypeInfo($1.value.type, ctx),
+                    "allowed_values": (exists $1.value.allowed_values
+                        ? map cast<hash<AllowedValueInfo>>($1), $1.value.allowed_values
+                        : NOTHING),
+                    "element_allowed_values": (exists $1.value.element_allowed_values
+                        ? map cast<hash<AllowedValueInfo>>($1), $1.value.element_allowed_values
+                        : NOTHING),
+                },
+            }, info.fields.pairIterator()) : NOTHING),
+            "element_type": exists info.element_type ? castTypeInfo(info.element_type, ctx) : NOTHING,
+            "union_types": exists info.union_types ? (map castTypeInfo($1, ctx), info.union_types) : NOTHING,
+            "default_field_type_info": (exists info.default_field_type_info
+                ? castTypeInfo(info.default_field_type_info, ctx)
+                : NOTHING),
+            "allowed_values": (exists info.allowed_values
+                ? map cast<hash<AllowedValueInfo>>($1), info.allowed_values
+                : NOTHING),
+            "element_allowed_values": (exists info.element_allowed_values
+                ? map cast<hash<AllowedValueInfo>>($1), info.element_allowed_values
+                : NOTHING),
+        });
     }
 
     #! Deserialize data provider info

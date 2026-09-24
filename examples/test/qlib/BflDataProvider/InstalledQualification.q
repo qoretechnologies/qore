@@ -89,7 +89,8 @@ if (!published.summary.qualification.complete || published.summary.qualification
 }
 hash<auto> mode_choice = readback.actioninfomap{App}."start-video".options.mode;
 if (!inlist("t2v", map $1.value, mode_choice.allowed_values)
-        || readback.actioninfomap{App}."start-video".options.generate_audio.type.acceptsValue(False) !== False) {
+        || AbstractDataProviderType::get(
+            readback.actioninfomap{App}."start-video".options.generate_audio.type_info).acceptsValue(False) !== False) {
     throw "INSTALL-QUALIFICATION-ERROR", "published choices or boolean false were lost";
 }
 # output types are not indexed; check the registered type's serialization directly
@@ -100,7 +101,8 @@ hash<auto> ordinary = {"value": {"value": "literal"}, "enabled": False, "count":
 if (extras.acceptsValue(ordinary) != ordinary) {
     throw "INSTALL-QUALIFICATION-ERROR", "published object type interpreted an ordinary value member as a choice";
 }
-AbstractDataProviderType keyframes = readback.actioninfomap{App}."start-video".options.keyframes.type;
+AbstractDataProviderType keyframes = AbstractDataProviderType::get(
+    readback.actioninfomap{App}."start-video".options.keyframes.type_info);
 for (int cycle = 0; cycle < 3; ++cycle) { keyframes = Serializable::deserialize(keyframes.serialize()); }
 if (keyframes.acceptsValue((0.0, "https://example.org/image.png")) != (0.0, "https://example.org/image.png")) {
     throw "INSTALL-QUALIFICATION-ERROR", "published positional keyframes lost their structure";

@@ -76,7 +76,8 @@ if ((map $1.value, model_option.element_allowed_values) != ("universal-3-5-pro",
         || model_option.element_allowed_values[0].display_name != "Universal-3.5 Pro") {
     throw "INSTALL-QUALIFICATION-ERROR", "published structured choices changed wire values or labels";
 }
-AbstractDataProviderType format_type = readback.actioninfomap{App}."create-chat-completion".options.response_format.type;
+AbstractDataProviderType format_type = AbstractDataProviderType::get(
+    readback.actioninfomap{App}."create-chat-completion".options.response_format.type_info);
 foreach hash<auto> value in ({}, {"value": {"enum": (False, 0, "", {}, ())}}) {
     hash<auto> format = {"type": "json_schema", "json_schema": {"name": "fixture", "schema": value}};
     if (format_type.acceptsValue(format) != format) {

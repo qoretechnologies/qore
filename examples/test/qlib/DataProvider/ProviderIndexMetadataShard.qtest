@@ -182,7 +182,7 @@ public class ProviderIndexMetadataShardTest inherits QUnit::Test {
             ProviderIndexUtil::tryGetAppInfo(requested_app).presentation_source_locale,
             "the metadata shard preserves the app's presentation source locale");
         assertEq(requested_action,
-            ProviderIndexUtil::tryGetApproximateAppAction(requested_app, requested_action).action,
+            ProviderIndexUtil::tryGetActionMetadata(requested_app, requested_action).action,
             "requested action loads without reading an unrelated corrupt chunk");
     }
 }

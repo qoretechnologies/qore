@@ -3742,16 +3742,21 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         which populates the provider index app cache from all registered applications, so that a complete app
         catalog can be recovered when the data provider index cannot be read
         (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
+      - added @ref DataProvider::DataProviderIndexedActionInfo "DataProviderIndexedActionInfo" and
+        @ref DataProvider::IndexedActionOptionInfo "IndexedActionOptionInfo" for actions from the data provider
+        index, whose option types are described by plain data
+      - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
+        restores types from their descriptions more faithfully, including class-backed named types in unions,
+        hash types without fields, options of "or nothing" types, and union type descriptions
+      - generated example values respect the field's allowed values and the formats of the string format types,
+        so a field no longer publishes an example that it would reject
 
     - \c qdp and the @ref providerindexintro "ProviderIndex" and
       @ref providerindexutilintro "ProviderIndexUtil" modules
-      - preserve complete action option types in published indexes, including nested fields, structured
-        choices, and media/job results; unserializable types block qualified publication
-      - the option types of each app are stored as one compressed graph, so objects shared between types, such as
-        an %OpenAPI document, are stored and restored once per app instead of once per type; for the largest
-        %OpenAPI-based apps this reduces the index about 1000 times and restoring their types from minutes to
-        seconds
-      - action output types are not indexed, since no index consumer uses them
+      - the index describes each action option's type completely with plain data, including nested fields,
+        structured choices, and media/job results; reading the index never loads the provider modules that
+        implement an app, and output types, which no index consumer uses, are not indexed
+      - an option type whose description does not restore an equivalent type is reported in the index summary
       - fixed \c qdp never shutting down background data provider services; every \c qdp exit path called
         @ref Qore::exit() "exit()", which does not run @ref on_exit "on_exit" blocks, so the
         @ref DataProvider::DataProvider::shutdown() "DataProvider::shutdown()" call registered as a scope guard
@@ -3778,14 +3783,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         (<a href="https://github.com/qoretechnologies/qore/issues/5383">issue 5383</a>)
       - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
         and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()",
-        which return indexed action metadata without restoring action types; reading plain fields such as an
-        action's \c metadata or \c options no longer requires loading provider modules or deserializing type
-        graphs, which could take minutes for a large index
-      - an action whose types cannot be restored is logged and omitted from the typed action accessors; previously
-        the whole app's actions were returned with serialized \c binary values in place of type objects, causing
-        runtime type errors in callers
-      - fixed a complete load of a deferred index bringing back serialized metadata for apps that had already been
-        loaded, and fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
+        returning indexed actions as @ref DataProvider::DataProviderIndexedActionInfo "DataProviderIndexedActionInfo"
+        hashes; they replace \c tryGetApproximateActionsForApp() and \c tryGetApproximateAppAction(), which
+        restored action types from the index, which loaded the provider modules that define them and could take
+        minutes for a large index
+      - an action whose metadata cannot be read is logged and omitted; previously the whole app's actions were
+        returned with serialized \c binary values in place of type objects, causing runtime type errors in callers
+      - fixed a complete load of a deferred index bringing back metadata for apps that had already been loaded,
+        and fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
         leaving the removed app's actions available
 
     - @ref mysqlsqlutilintro "MysqlSqlUtil" module

@@ -1108,15 +1108,22 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         if (info.path) {
             return DataProvider::getTypeCache().lookupTypeFromPathEx(info.path);
         }
+        # class-backed named types (e.g. "file", "email") are identified by their name, even when their description
+        # also lists fields
+        if (*AbstractDataProviderType adt = NamedClassBackedTypeMap{info.name}) {
+            return adt;
+        }
         hash<auto> attr = info{"display_name", "short_desc", "desc"};
         if (info.union_types) {
             AbstractDataProviderType rv = new QoreUnionDataType((map AbstractDataProviderType::get($1),
-                info.union_types));
+                info.union_types), attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
             return info.mandatory ? rv.getMandatoryType() : rv.getOrNothingType();
         }
-        if (info.fields) {
+        # a hash type is restored by its name and description when the name is not a Qore type, even if it has no
+        # fields
+        if (info.fields || (info.base_type == "hash" && !AbstractDataProviderType::isQoreTypeName(info.name))) {
             HashDataType rv(info.mandatory ? AutoHashType : AutoHashOrNothingType, info.name,
-                AbstractDataProviderType::getDataFields(info.fields), info.options, info.tags, info.default_value,
+                AbstractDataProviderType::getDataFields(info.fields ?? {}), info.options, info.tags, info.default_value,
                 attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
             AbstractDataProviderType::setHashDataTypeInfo(rv, info);
             return rv;
@@ -1150,12 +1157,39 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             t = DataTypeMap{info.base_type};
         }
         if (t) {
+            # options apply to the mandatory type (an "or nothing" type supports none), so a type with options and
+            # its "or nothing" equivalent are created from the mandatory type, like the original
+            if (info.options && !info.mandatory && info.name =~ /^\*/
+                    && (*Type mandatory_type = DataTypeMap{info.name.substr(1)})) {
+                AbstractDataProviderType rv = AbstractDataProviderType::get(mandatory_type, info.options, info.tags,
+                    info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+                return AbstractDataProviderType::setDataTypeInfo(rv.getOrNothingType(), info);
+            }
             AbstractDataProviderType rv = AbstractDataProviderType::get(t, info.options, info.tags, info.default_value,
                 attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
             return AbstractDataProviderType::setDataTypeInfo(rv, info);
         }
 
         throw "TYPE-ERROR", sprintf("No match for type: %y", info);
+    }
+
+    #! Returns True if the given name is a Qore type name
+    /** @param name the name to check
+
+        @return @ref True if @a name is a Qore type name
+
+        @since DataProvider 3.8
+    */
+    private static bool isQoreTypeName(string name) {
+        if (DataTypeMap{name}) {
+            return True;
+        }
+        try {
+            Type t(name);
+            return True;
+        } catch (hash<ExceptionInfo> ex) {
+            return False;
+        }
     }
 
     #! Restores data fields from serialized field descriptions
@@ -1166,8 +1200,31 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         @since DataProvider 3.5.1
     */
     private static hash<string, AbstractDataField> getDataFields(hash<string, hash<DataFieldInfo>> fields) {
-        return map {$1.key: new QoreDataField($1.value + {"name": $1.value.name ?? $1.key})},
+        return map {$1.key: AbstractDataProviderType::getDataField($1.value + {"name": $1.value.name ?? $1.key})},
             fields.pairIterator();
+    }
+
+    #! Restores a data field from its serialized description
+    /** An example value is presentation metadata; one that the restored field does not accept, such as a
+        generated example in a description written by an earlier version, is dropped rather than failing the
+        restoration of the whole type
+
+        @param field the serialized field description
+
+        @return the restored data field
+
+        @since DataProvider 3.8
+    */
+    private static AbstractDataField getDataField(hash<auto> field) {
+        try {
+            return new QoreDataField(field);
+        } catch (hash<ExceptionInfo> ex) {
+            if (!exists field.example_value) {
+                rethrow;
+            }
+        }
+        remove field.example_value;
+        return new QoreDataField(field);
     }
 
     #! Applies common serialized data type metadata to a restored type

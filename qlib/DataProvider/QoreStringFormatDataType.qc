@@ -38,9 +38,29 @@ public namespace DataProvider {
     @since %DataProvider 3.6
 */
 public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
+    public {
+        #! Example values for the formats provided by this module, keyed by format name
+        /** A generic string example does not match a format's validation regex.
+
+            @since %DataProvider 3.8
+        */
+        const Examples = {
+            "email": "user@example.com",
+            "uri": "https://example.com/",
+            "uuid": "123e4567-e89b-12d3-a456-426614174000",
+            "hostname": "example.com",
+            "ipv4": "192.0.2.1",
+            "ipv6": "2001:db8::1",
+            "phone": "+1 555 0100",
+        };
+    }
+
     private {
         #! An optional regex used to validate string input
         *string format_regex;
+
+        #! An example value in the format, if known
+        *string example_value;
     }
 
     #! Creates the type
@@ -50,9 +70,11 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
         @param short_desc the type's short description
         @param format_regex an optional permissive regex used to validate string input
         @param options optional type options
+        @param example_value an example value in the format; defaults to the entry for \a type_name in
+        @ref Examples, if any
     */
     constructor(Type base_type, string type_name, string display_name, string short_desc,
-            *string format_regex, *hash<auto> options)
+            *string format_regex, *hash<auto> options, *string example_value)
             : QoreStringDataTypeBase(base_type, options,
                 {"qore.external_name": type_name} + (format_regex ? {"qore.validation_regex": format_regex} : {}),
                 NOTHING,
@@ -63,6 +85,24 @@ public class QoreStringFormatDataType inherits QoreStringDataTypeBase {
                     "desc": short_desc,
                 }) {
         self.format_regex = format_regex;
+        self.example_value = example_value ?? Examples{type_name};
+    }
+
+    #! Returns an example value in the format
+    /** @param emap a hash to ensure that examples are only produced once
+        @param fname any field context for the value
+
+        @return an example value in the format; if none is known and the format is validated, @ref nothing, since a
+        generic string example would not be accepted
+    */
+    private auto getExampleValueImpl(*hash<string, bool> emap, *string fname) {
+        if (example_value) {
+            return example_value;
+        }
+        if (format_regex.val()) {
+            return;
+        }
+        return QoreStringDataTypeBase::getExampleValueImpl(emap, fname);
     }
 
     #! Returns the value if it can be assigned to the type, validating any format regex

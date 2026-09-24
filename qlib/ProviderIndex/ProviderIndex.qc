@@ -188,6 +188,9 @@ public class ProviderIndex inherits ProviderIndexUtil {
             }
         }
 
+        # Option types whose descriptions do not restore an equivalent type; see checkTypeInfo()
+        list<hash<auto>> type_info_mismatches = ();
+
         # Dependencies are module identities; physical registration paths remain in the live catalog.
         foreach hash<DataProviderAppInfo> app in (apps) {
             *list<string> paths = DataProviderActionCatalog::getModulePathsForApp(app.name);
@@ -203,12 +206,9 @@ public class ProviderIndex inherits ProviderIndexUtil {
             # add to app info map
             index.appinfomap{app.name} = app;
             # add to app action info map (skip apps with no actions)
-            list<hash<DataProviderActionInfo>> app_actions = DataProviderActionCatalog::getActions(app.name, False);
-            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, app_actions, discovery)) {
+            if (*hash<string, hash<auto>> actions = getSerializableAppActions(app.name, discovery,
+                    \type_info_mismatches)) {
                 index.actioninfomap{app.name} = actions;
-            }
-            if (*binary types = serializeAppActionTypes(app.name, app_actions, discovery)) {
-                index.actiontypemap{app.name} = types;
             }
             if (!index.appmap{app.name}) {
                 map index.appmap{app.name}{$1} = True, dependencies;
@@ -262,6 +262,7 @@ public class ProviderIndex inherits ProviderIndexUtil {
                                 "apps": index.appmap.size(),
                                 "schemes": index.schememap.size(),
                                 "qualification": qualification_report,
+                                "type_info_mismatches": type_info_mismatches,
                             });
                     });
                 });
@@ -281,73 +282,26 @@ public class ProviderIndex inherits ProviderIndexUtil {
     }
 
     #! Get YAML-serializable hash of actions keyed by action name
-    /** Output types are not indexed, and option types are serialized separately by serializeAppActionTypes()
+    /** Option types are described by plain data, and output types are not indexed, so reading the index never
+        requires the provider modules that define the types
     */
     private static *hash<string, hash<auto>> getSerializableAppActions(string app,
-            list<hash<DataProviderActionInfo>> actions, DataProviderDiscoverySession discovery) {
+            DataProviderDiscoverySession discovery, reference<list<hash<auto>>> type_info_mismatches) {
         hash<string, hash<auto>> rv;
-        foreach hash<DataProviderActionInfo> action in (actions) {
+        foreach hash<DataProviderActionInfo> action in (DataProviderActionCatalog::getActions(app, False)) {
             try {
-                # dynamic callbacks cannot be serialized, and no index consumer uses output types
-                rv{action.action} = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
-                    "options": getSerializableActionOptions(action.options),
+                hash<auto> entry = (action - ("get_dynamic_options", "get_output_type", "output_type")) + {
+                    "options": getSerializableActionOptions(app, action, \type_info_mismatches),
                     "data_provider_info": getSerializableDataProviderInfo(action.data_provider_info),
                 };
+                checkPlainData(entry, "");
+                rv{action.action} = entry;
             } catch (hash<ExceptionInfo> ex) {
                 DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-metadata",
                     app + "/" + action.action, ex.err, ex.desc, ex.arg, app, action.action);
             }
         }
         return rv;
-    }
-
-    #! Serializes the option types of all of an app's actions as one graph
-    /** Types of one app commonly share objects, such as the %OpenAPI document that all schema-backed types of an
-        app refer to.  Serializing each type separately repeated every shared object in every type; a single graph
-        stores each shared object once, and restoring it shares them again.
-
-        Native serialization retains nested fields, unions, binary types, and choice values.  It never executes
-        dynamic type/default/example callbacks; unsupported state fails qualification.
-
-        @param app the app name
-        @param actions the app's actions
-        @param discovery the discovery session that receives any serialization failure
-
-        @return the zlib-compressed serialized hash of action names to option names to option types; @ref nothing
-        if no action has options or the types cannot be serialized
-    */
-    private static *binary serializeAppActionTypes(string app, list<hash<DataProviderActionInfo>> actions,
-            DataProviderDiscoverySession discovery) {
-        hash<auto> types;
-        foreach hash<DataProviderActionInfo> action in (actions) {
-            if (action.options) {
-                types{action.action} = map {$1.key: $1.value.type}, action.options.pairIterator();
-            }
-        }
-        if (!types) {
-            return;
-        }
-        try {
-            # serialized type graphs compress by more than 10x, and decompressing costs a small fraction of
-            # deserializing them
-            return compress(Serializable::serialize(types));
-        } catch (hash<ExceptionInfo> ex) {
-            # attribute the failure to the actions whose types cannot be serialized
-            bool reported;
-            foreach hash<auto> i in (types.pairIterator()) {
-                try {
-                    Serializable::serialize(i.value);
-                } catch (hash<ExceptionInfo> action_ex) {
-                    DataProviderActionCatalog::reportDiscoveryFailure(discovery, "action", "serialize-action-types",
-                        app + "/" + i.key, action_ex.err, action_ex.desc, action_ex.arg, app, i.key);
-                    reported = True;
-                }
-            }
-            if (!reported) {
-                DataProviderActionCatalog::reportDiscoveryFailure(discovery, "app", "serialize-action-types", app,
-                    ex.err, ex.desc, ex.arg, app);
-            }
-        }
     }
 
     #! Return apps to include in the index
@@ -368,9 +322,123 @@ public class ProviderIndex inherits ProviderIndexUtil {
     }
 
     #! Get YAML-serializable action options
-    private static *hash<auto> getSerializableActionOptions(*hash<auto> options) {
-        # option types are serialized per app by serializeAppActionTypes()
-        return map {$1.key: $1.value - "type"}, options.pairIterator();
+    private static *hash<auto> getSerializableActionOptions(string app, hash<DataProviderActionInfo> action,
+            reference<list<hash<auto>>> type_info_mismatches) {
+        hash<auto> rv;
+        foreach hash<auto> i in (action.options.pairIterator()) {
+            hash<DataTypeInfo> type_info = i.value.type.getInfo();
+            # unique keys identify objects by address, so they are replaced to make builds reproducible
+            hash<string, string> key_map;
+            type_info = replaceUniqueKeys(type_info, \key_map);
+            if (*hash<auto> mismatch = checkTypeInfo(type_info)) {
+                push type_info_mismatches, {"app": app, "action": action.action, "option": i.key} + mismatch;
+            }
+            rv{i.key} = (i.value - "type") + {
+                "type_info": type_info,
+            };
+        }
+        return rv;
+    }
+
+    #! Replaces the unique keys in a type description with keys that do not depend on the process
+    /** Unique keys are derived from object addresses; within one description they only need to identify the same
+        type or field consistently, which a recursive type description relies on to refer to an enclosing type.
+
+        @param value the description or part of it
+        @param key_map maps each original key to its replacement
+
+        @return the description with replaced unique keys
+    */
+    private static auto replaceUniqueKeys(auto value, reference<hash<string, string>> key_map) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                foreach string key in (keys value) {
+                    if (key == "unique_key" && value{key}.typeCode() == NT_STRING) {
+                        value{key} = key_map{value{key}}
+                            ?? (key_map{value{key}} = (key_map.size() + 1).toString());
+                    } else {
+                        value{key} = replaceUniqueKeys(value{key}, \key_map);
+                    }
+                }
+                return value;
+            case NT_LIST:
+                return map replaceUniqueKeys($1, \key_map), value;
+        }
+        return value;
+    }
+
+    #! Checks that the given value contains only plain data that can be written to the index
+    /** @param value the value to check
+        @param path the path of the value in the action's index entry
+
+        @throw PROVIDER-INDEX-ERROR the value contains an object or a call reference, such as a type option set to
+        a closure
+    */
+    private static checkPlainData(auto value, string path) {
+        switch (value.typeCode()) {
+            case NT_HASH:
+                map checkPlainData($1.value, path + "." + $1.key), value.pairIterator();
+                return;
+            case NT_LIST:
+                for (int i = 0; i < value.size(); ++i) {
+                    checkPlainData(value[i], sprintf("%s[%d]", path, i));
+                }
+                return;
+            case NT_OBJECT:
+                throw "PROVIDER-INDEX-ERROR", sprintf("%s: object of class %y cannot be indexed",
+                    path.val() ? path.substr(1) : "<root>", value.className());
+        }
+        if (value.callp()) {
+            throw "PROVIDER-INDEX-ERROR", sprintf("%s: a call reference cannot be indexed",
+                path.val() ? path.substr(1) : "<root>");
+        }
+    }
+
+    #! Checks that a type description restores an equivalent type
+    /** Index consumers that need a type object create it from the indexed description with
+        @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"; a
+        description that does not restore an equivalent type is recorded in the index summary so that the loss of
+        fidelity is visible rather than silent.
+
+        @param type_info the type description
+
+        @return @ref nothing if the restored type has the same description, otherwise a hash with a \c path key
+        giving the first differing key of the description, or an \c error key if the type cannot be restored
+    */
+    private static *hash<auto> checkTypeInfo(hash<DataTypeInfo> type_info) {
+        hash<DataTypeInfo> restored;
+        try {
+            restored = AbstractDataProviderType::get(type_info).getInfo();
+        } catch (hash<ExceptionInfo> ex) {
+            return {"error": sprintf("%s: %s", ex.err, ex.desc)};
+        }
+        if (*string path = getTypeInfoDifference(type_info, restored, "")) {
+            return {"path": path};
+        }
+    }
+
+    #! Returns the path of the first difference between two type descriptions, ignoring unique keys
+    private static *string getTypeInfoDifference(auto a, auto b, string path) {
+        if (a.typeCode() == NT_HASH && b.typeCode() == NT_HASH) {
+            foreach string key in (keys (a + b)) {
+                if (key == "unique_key") {
+                    continue;
+                }
+                if (*string rv = getTypeInfoDifference(a{key}, b{key}, path + "." + key)) {
+                    return rv;
+                }
+            }
+            return;
+        }
+        if (a.typeCode() == NT_LIST && b.typeCode() == NT_LIST && a.size() == b.size()) {
+            for (int i = 0; i < a.size(); ++i) {
+                if (*string rv = getTypeInfoDifference(a[i], b[i], sprintf("%s[%d]", path, i))) {
+                    return rv;
+                }
+            }
+            return;
+        }
+        return a === b ? NOTHING : (path.val() ? path.substr(1) : "<root>");
     }
 
     #! Get YAML-serializable data provider info

@@ -732,12 +732,24 @@ public class AbstractDataField inherits Qore::Serializable {
     /** @param emap a hash to ensure that examples are only produced once
         @param fname any field context for the value
 
-        @return if a default value exists, it is returned first, then the example value for the type, if any
+        @return if a default value exists, it is returned first, then the first allowed value, if any, then the
+        example value for the type, if any; an example value that the field does not accept is never returned
 
         @since DataProvider 3.0
     */
     auto getExampleValue(*hash<string, bool> emap, *string fname) {
-        return getDefaultValue() ?? getType().getExampleValue(emap, getDisplayName());
+        auto rv = getDefaultValue();
+        if (exists rv) {
+            return rv;
+        }
+        # a generated example ignores the field's allowed values, so it would not be accepted by the field
+        if (allowed_values) {
+            return allowed_values[0].value;
+        }
+        if (element_allowed_values && getType().isList()) {
+            return (element_allowed_values[0].value,);
+        }
+        return getType().getExampleValue(emap, getDisplayName());
     }
 
     #! Converts a long description into a short description

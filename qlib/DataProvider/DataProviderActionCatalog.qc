@@ -301,11 +301,14 @@ public const hash<string, bool> ActionsWithSearch = {
     DPAT_DELETE: True,
 };
 
-#! Data provider action option definition
-public hashdecl ActionOptionInfo inherits BaseOptionInfo {
-    #! Data type of the option
-    AbstractDataProviderType type;
+#! Data provider action option definition without its type
+/** @see
+    - @ref ActionOptionInfo for a registered action option with its type
+    - @ref IndexedActionOptionInfo for an action option from the data provider index with its type description
 
+    @since %DataProvider 3.8
+*/
+public hashdecl ActionOptionBaseInfo inherits BaseOptionInfo {
     #! The group names for the option, if any
     *softlist<string> groups;
 
@@ -371,6 +374,26 @@ public hashdecl ActionOptionInfo inherits BaseOptionInfo {
     *enum<UiOptionView> default_view;
 }
 
+#! Data provider action option definition
+public hashdecl ActionOptionInfo inherits ActionOptionBaseInfo {
+    #! Data type of the option
+    AbstractDataProviderType type;
+}
+
+#! Data provider action option definition from the data provider index
+/** The option's type is described by plain data, so reading it never requires the provider module that defines
+    the type.  A type object can be created from the description with
+    @ref AbstractDataProviderType::get() "AbstractDataProviderType::get()", which returns a type
+    with the described structure and constraints but not any custom behavior of the original type's class; the
+    exact type is available from the registered action.
+
+    @since %DataProvider 3.8
+*/
+public hashdecl IndexedActionOptionInfo inherits ActionOptionBaseInfo {
+    #! Description of the data type of the option
+    hash<DataTypeInfo> type_info;
+}
+
 #! DataProvider path var info
 public hashdecl DataProviderPathVarInfo inherits DisplayDescInfo {
     #! An optional example value for the option
@@ -416,8 +439,14 @@ public const string DPAD_PASS_THROUGH = "pass-through";
 public const string DPAD_MODIFIED_PASS_THROUGH = "modified-pass-through";
 #/@}
 
-#! DataProvider action definition
-public hashdecl DataProviderActionInfo {
+#! DataProvider action definition without its options and output type
+/** @see
+    - @ref DataProviderActionInfo for a registered action
+    - @ref DataProviderIndexedActionInfo for an action from the data provider index
+
+    @since %DataProvider 3.8
+*/
+public hashdecl DataProviderActionBaseInfo {
     #! Name of the application that provides the action
     string app;
 
@@ -530,23 +559,11 @@ public hashdecl DataProviderActionInfo {
     #! Values to add to any "set" argument for record-based actions
     *hash<auto> set_add;
 
-    #! Options that can be provided without a data provider
-    *hash<string, hash<ActionOptionInfo>> options;
-
     #! Do options depend on the data for the call?
     bool data_dependent_options = False;
 
-    #! Output type for the action
-    *AbstractDataProviderType output_type;
-
     #! Does the action support dynamic options?
     bool has_dynamic_options;
-
-    #! In case the output type is expensive to acquire or requires I/O, this closure can be used to set it
-    *code get_output_type;
-
-    #! For the case when options should be generated dynamically
-    *code get_dynamic_options;
 
     #! Data provider static info, useful for record-based data providers
     *hash<DataProviderInfo> data_provider_info;
@@ -580,6 +597,33 @@ public hashdecl DataProviderActionInfo {
     /** @since %DataProvider 3.3
     */
     int processor_capabilities = 0;
+}
+
+#! DataProvider action definition
+public hashdecl DataProviderActionInfo inherits DataProviderActionBaseInfo {
+    #! Options that can be provided without a data provider
+    *hash<string, hash<ActionOptionInfo>> options;
+
+    #! Output type for the action
+    *AbstractDataProviderType output_type;
+
+    #! In case the output type is expensive to acquire or requires I/O, this closure can be used to set it
+    *code get_output_type;
+
+    #! For the case when options should be generated dynamically
+    *code get_dynamic_options;
+}
+
+#! DataProvider action definition from the data provider index
+/** Option types are described by plain data, and output types are not indexed, so reading an indexed action never
+    requires the provider module that implements it; the registered action is available from
+    @ref DataProviderActionCatalog::getAppAction() "DataProviderActionCatalog::getAppAction()".
+
+    @since %DataProvider 3.8
+*/
+public hashdecl DataProviderIndexedActionInfo inherits DataProviderActionBaseInfo {
+    #! Options that can be provided without a data provider
+    *hash<string, hash<IndexedActionOptionInfo>> options;
 }
 
 /** @defgroup DataProviderFileReadModes Data Provider File API Read Modes

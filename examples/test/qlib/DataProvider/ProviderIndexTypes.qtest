@@ -18,8 +18,10 @@ class ProviderIndexTypesTest inherits QUnit::Test {
     constructor() : Test("Provider index type preservation", "1.0", \ARGV) {
         directory = make_tmp_dir("provider-index-types-");
         on_exit remove_tree(directory);
-        addTestCase("nested and media option types survive YAML and index readback", \roundTripTest());
-        addTestCase("unserializable type blocks publication with structured evidence", \failureTest());
+        addTestCase("nested and media option type descriptions survive YAML and index readback",
+            \roundTripTest());
+        addTestCase("a type description that is not plain data blocks publication with structured evidence",
+            \failureTest());
         set_return_value(main());
     }
     private checkYaml() {
@@ -56,23 +58,24 @@ class ProviderIndexTypesTest inherits QUnit::Test {
         DataProviderActionCatalog::registerAction(action);
         auto published = publish();
         assertTrue(published.summary.qualification.complete);
+        # every indexed description restores an equivalent type
+        assertEq((), published.summary.type_info_mismatches);
         for (int pass = 0; pass < 2; ++pass) {
             hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
-            auto restored = index.actioninfomap.IndexIdentityFixture.typed;
-            # output types are not indexed; option types are stored once per app
-            assertEq(NOTHING, restored.output_type);
-            assertTrue(exists index.actiontypemap.IndexIdentityFixture);
+            hash<DataProviderIndexedActionInfo> restored = cast<hash<DataProviderIndexedActionInfo>>(
+                index.actioninfomap.IndexIdentityFixture.typed);
+            # output types are not indexed; option types are described by plain data
+            assertFalse(restored.hasKey("output_type"));
+            assertEq(input.getInfo().fields.value.type.name, restored.options.object.type_info.fields.value.type.name);
+            AbstractDataProviderType object = AbstractDataProviderType::get(restored.options.object.type_info);
             auto value = {"value": "ordinary", "enabled": False};
-            assertEq(value, restored.options.object.type.acceptsValue(value));
-            assertThrows("MISSING-VALUE-ERROR", sub () { restored.options.object.type.acceptsValue({"enabled": False}); });
-            assertEq(False, restored.options.object.type.getFields().enabled.getAllowedValues()[0].value);
-            assertEq("Disabled", restored.options.object.type.getFields().enabled.getAllowedValues()[0].display_name);
+            assertEq(value, object.acceptsValue(value));
+            assertThrows("MISSING-VALUE-ERROR", sub () { object.acceptsValue({"enabled": False}); });
+            assertEq(False, object.getFields().enabled.getAllowedValues()[0].value);
+            assertEq("Disabled", object.getFields().enabled.getAllowedValues()[0].display_name);
+            AbstractDataProviderType media_type = AbstractDataProviderType::get(restored.options.media.type_info);
             auto media = {"data": <000102ff>, "seed": 0, "detail": value};
-            assertEq(media, restored.options.media.type.acceptsValue(media));
-            auto again = Serializable::deserialize(restored.options.media.type.serialize());
-            assertEq(media, again.acceptsValue(media));
-            # a type shared by the options of the app is restored once and shared again
-            assertTrue(restored.options.object.type == restored.options.media.type.getFields().detail.getType());
+            assertEq(media, media_type.acceptsValue(media));
         }
     }
     private failureTest() {
@@ -92,7 +95,7 @@ class ProviderIndexTypesTest inherits QUnit::Test {
             assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
             assertFalse(ex.arg.complete);
             assertEq(1, ex.arg.failures.size());
-            assertEq("serialize-action-types", ex.arg.failures[0].phase);
+            assertEq("serialize-action-metadata", ex.arg.failures[0].phase);
             assertEq("invalid", ex.arg.failures[0].action);
             rejected = True;
         }

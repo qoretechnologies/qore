@@ -19,14 +19,14 @@
 
 public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     private {
-        # every app is only ever restored by the test case that names it, since restoration is process-wide
-        const MetadataApp = "QoreTestMetadataApp";
-        const TypedApp = "QoreTestTypedApp";
+        # an index written by the current version
+        const CurrentApp = "QoreTestCurrentApp";
+        # an index written before ProviderIndex 1.2, with primitive type names
+        const LegacyApp = "QoreTestLegacyApp";
+        # an index written by an unreleased development version, with serialized types
+        const SerializedApp = "QoreTestSerializedApp";
         const RemovedApp = "QoreTestRemovedApp";
-        const AllApp = "QoreTestAllApp";
-        # apps whose option types are stored as one graph per app
-        const GraphApp = "QoreTestGraphApp";
-        const BrokenGraphApp = "QoreTestBrokenGraphApp";
+        const CachedApp = "QoreTestCachedApp";
 
         const ConnectionAlternative = {
             "connection_alternative": {
@@ -37,13 +37,12 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
     }
 
     constructor() : Test("ProviderIndex action metadata test", "1.0") {
-        addTestCase("metadata is available without restoring types", \metadataWithoutTypes());
-        addTestCase("unrestorable actions are omitted from typed metadata", \unrestorableActionsAreOmitted());
+        addTestCase("indexed actions describe option types with plain data", \currentFormat());
+        addTestCase("primitive type names from earlier indexes are described", \legacyFormat());
+        addTestCase("serialized types from development versions are not restored", \serializedFormat());
         addTestCase("a removed app has no actions", \removedAppHasNoActions());
-        addTestCase("restoring all apps keeps restored apps", \restoringAllAppsKeepsRestoredApps());
-        addTestCase("reading the index omits unrestorable actions", \readIndexOmitsUnrestorableActions());
-        addTestCase("an app's option types are restored as one graph", \appTypeGraph());
-        addTestCase("an unrestorable app type graph omits actions with options", \unrestorableAppTypeGraph());
+        addTestCase("a registered action is cached as an indexed action", \registeredActionIsIndexed());
+        addTestCase("reading the index returns indexed actions", \readIndex());
 
 %ifndef NoYaml
         string dir = make_tmp_dir();
@@ -73,67 +72,68 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
 %endif
     }
 
-    #! Writes an index in the earlier per-option format where every app has one restorable and one unrestorable
-    #! action, and apps with per-app type graphs
-    private writeIndex() {
-        # types are restored in the ProviderIndexUtil module's program, so only module classes can be restored
+    #! Returns the option type used by the test actions
+    private static HashDataType getOptionType() {
         HashDataType type("QoreTestIndexedType");
-        type.addQoreFields({"value": {"name": "value", "type": AbstractDataProviderTypeMap."string"}});
-        binary restorable = type.serialize();
-        # same-length rename, so the serialized form stays valid but names a class that does not exist
-        binary unrestorable = parse_hex_string(replace(restorable.toHex(), "HashDataType".toHex(),
-            "HashDataTypX".toHex()));
+        type.addQoreFields({
+            "value": {"name": "value", "type": AbstractDataProviderTypeMap."string"},
+            "count": {"name": "count", "type": AbstractDataProviderTypeMap."*int"},
+        });
+        return type;
+    }
 
-        hash<string, hash<auto>> appinfomap;
-        hash<string, hash<string, hash<auto>>> actioninfomap;
-        foreach string app in ((MetadataApp, TypedApp, RemovedApp, AllApp)) {
-            appinfomap{app} = {"name": app};
-            actioninfomap{app} = {
-                "restorable": {
-                    "app": app,
-                    "action": "restorable",
-                    "short_desc": "restorable action",
-                    # output types from earlier indexes are ignored, so this does not affect the action
-                    "output_type": unrestorable,
-                    "options": {
-                        "legacy": {
-                            "display_name": "Legacy",
-                            "short_desc": "legacy primitive type name",
-                            "type": "string",
-                        },
-                    },
-                },
-                "unrestorable": {
-                    "app": app,
-                    "action": "unrestorable",
-                    "short_desc": "unrestorable action",
+    #! Writes an index with apps in each format
+    private writeIndex() {
+        HashDataType type = getOptionType();
+
+        hash<string, hash<auto>> appinfomap = map {$1: {"name": $1}},
+            (CurrentApp, LegacyApp, SerializedApp, RemovedApp, CachedApp);
+        hash<string, hash<string, hash<auto>>> actioninfomap = {
+            CurrentApp: {
+                "send": {
+                    "app": CurrentApp,
+                    "action": "send",
+                    "short_desc": "send a message",
                     "options": {
                         "webhook": {
                             "display_name": "Webhook",
                             "short_desc": "webhook destination",
-                            "type": unrestorable,
+                            "type_info": type.getInfo(),
                         },
                     },
                     "metadata": ConnectionAlternative,
                 },
-            };
-        }
-
-        # both actions of each graph app refer to the same type, which the graph stores once
-        binary graph = Serializable::serialize({"first": {"x": type}, "second": {"y": type}});
-        hash<string, binary> actiontypemap = {
-            GraphApp: compress(graph),
-            BrokenGraphApp: compress(parse_hex_string(replace(graph.toHex(), "HashDataType".toHex(),
-                "HashDataTypX".toHex()))),
+            },
+            LegacyApp: {
+                "send": {
+                    "app": LegacyApp,
+                    "action": "send",
+                    "options": {
+                        "subject": {
+                            "display_name": "Subject",
+                            "type": "string",
+                        },
+                    },
+                },
+            },
+            SerializedApp: {
+                "send": {
+                    "app": SerializedApp,
+                    "action": "send",
+                    # output types from earlier indexes are ignored
+                    "output_type": type.serialize(),
+                    "options": {
+                        "webhook": {
+                            "display_name": "Webhook",
+                            "type": type.serialize(),
+                        },
+                    },
+                },
+            },
+            RemovedApp: {
+                "send": {"app": RemovedApp, "action": "send"},
+            },
         };
-        foreach string app in ((GraphApp, BrokenGraphApp)) {
-            appinfomap{app} = {"name": app};
-            actioninfomap{app} = {
-                "first": {"app": app, "action": "first", "options": {"x": {"display_name": "X"}}},
-                "second": {"app": app, "action": "second", "options": {"y": {"display_name": "Y"}}},
-                "plain": {"app": app, "action": "plain"},
-            };
-        }
 
         ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
             "factorymap": {},
@@ -142,113 +142,104 @@ public class ProviderIndexActionMetadataTest inherits QUnit::Test {
             "appinfomap": appinfomap,
             "actioninfomap": actioninfomap,
             "top_actioninfomap": {},
-            "actiontypemap": actiontypemap,
         }, 0s, {});
     }
 
-    #! Checks that the given action metadata has no types and is otherwise complete
-    private checkMetadata(*hash<auto> action, string app, string name) {
-        assertEq(app, action.app);
-        assertEq(name, action.action);
-        assertEq("hash<auto>", action.fullType());
-        assertFalse(action.hasKey("output_type"));
-        assertTrue(action.options.size() > 0);
-        map assertFalse($1.hasKey("type"), $1.display_name), action.options.iterator();
-    }
-
-    #! Returns the given actions keyed by action name
-    private *hash<string, hash<auto>> byName(*list<hash<auto>> actions) {
-        return map {$1.action: $1}, actions;
-    }
-
-    metadataWithoutTypes() {
+    currentFormat() {
         checkModules();
 
-        # an unrestorable type would be omitted if the metadata accessors tried to restore it
-        *hash<string, hash<auto>> before = byName(ProviderIndexUtil::tryGetActionMetadataForApp(MetadataApp));
-        assertEq(("restorable", "unrestorable"), keys before);
-        checkMetadata(before.restorable, MetadataApp, "restorable");
-        checkMetadata(before.unrestorable, MetadataApp, "unrestorable");
-        assertEq(ConnectionAlternative, before.unrestorable.metadata);
-        assertEq("webhook destination", before.unrestorable.options.webhook.short_desc);
-        assertEq(before.unrestorable, ProviderIndexUtil::tryGetActionMetadata(MetadataApp, "unrestorable"));
-        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadata(MetadataApp, "unknown"));
-        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestUnknownApp"));
-
-        # restoring the types changes neither the metadata nor which actions it includes
-        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(MetadataApp).size());
-        assertEq(before, byName(ProviderIndexUtil::tryGetActionMetadataForApp(MetadataApp)));
-    }
-
-    unrestorableActionsAreOmitted() {
-        checkModules();
-
-        *list<hash<auto>> actions = ProviderIndexUtil::tryGetApproximateActionsForApp(TypedApp);
+        *list<hash<auto>> actions = ProviderIndexUtil::tryGetActionMetadataForApp(CurrentApp);
         assertEq(1, actions.size());
-        hash<DataProviderActionInfo> action = cast<hash<DataProviderActionInfo>>(actions[0]);
-        assertEq("restorable", action.action);
-        assertEq(NOTHING, action.output_type);
-        assertEq("string", action.options.legacy.type.getName());
+        hash<auto> action = actions[0];
+        assertEq("hash<DataProviderIndexedActionInfo>", action.fullType());
+        assertEq(ConnectionAlternative, action.metadata);
+        assertEq("hash<IndexedActionOptionInfo>", action.options.webhook.fullType());
+        assertEq("webhook destination", action.options.webhook.short_desc);
 
-        assertEq(NOTHING, ProviderIndexUtil::tryGetApproximateAppAction(TypedApp, "unrestorable"));
-        assertEq(("restorable",),
-            (map $1.action, ProviderIndexUtil::searchCachedAppActionSubstr(TypedApp, "restorable")));
+        # the type description is typed at every level
+        hash<DataTypeInfo> type_info = action.options.webhook.type_info;
+        assertEq("hash<DataTypeInfo>", type_info.fullType());
+        assertEq("hash<DataFieldInfo>", type_info.fields.value.fullType());
+        assertEq("hash<DataTypeInfo>", type_info.fields.value.type.fullType());
+        assertEq(getOptionType().getInfo().fields.count.type.name, type_info.fields.count.type.name);
+
+        # a type object with the described structure can be created from the description
+        AbstractDataProviderType type = AbstractDataProviderType::get(type_info);
+        assertEq({"value": "x"}, type.acceptsValue({"value": "x"}));
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { type.acceptsValue({"value": "x", "count": "not a number"}); });
+
+        assertEq(action, ProviderIndexUtil::tryGetActionMetadata(CurrentApp, "send"));
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadata(CurrentApp, "unknown"));
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestUnknownApp"));
+    }
+
+    legacyFormat() {
+        checkModules();
+
+        hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(LegacyApp, "send");
+        assertEq("string", action.options.subject.type_info.name);
+        assertEq("hash<DataTypeInfo>", action.options.subject.type_info.fullType());
+    }
+
+    serializedFormat() {
+        checkModules();
+
+        hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(SerializedApp, "send");
+        assertFalse(action.hasKey("output_type"));
+        assertEq("auto", action.options.webhook.type_info.name);
     }
 
     removedAppHasNoActions() {
         checkModules();
 
-        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(RemovedApp).size());
+        assertEq(1, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp).size());
         assertTrue(ProviderIndexUtil::removeCachedApp(RemovedApp));
-        assertEq(0, ProviderIndexUtil::tryGetApproximateActionsForApp(RemovedApp).size());
+        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp));
+        # loading the complete index must not bring back a removed app
+        hash<string, bool> all = map {$1.app + "/" + $1.action: True}, ProviderIndexUtil::getAllCachedActions();
+        assertTrue(all{CurrentApp + "/send"});
+        assertEq(NOTHING, all{RemovedApp + "/send"});
         assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp));
     }
 
-    restoringAllAppsKeepsRestoredApps() {
+    registeredActionIsIndexed() {
         checkModules();
 
-        # the app retains the unrestorable action's serialized entry, which must not replace its restored actions
-        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(TypedApp).size());
-
-        hash<string, bool> all = map {$1.app + "/" + $1.action: True}, ProviderIndexUtil::getAllCachedActions();
-        assertTrue(all{TypedApp + "/restorable"});
-        assertTrue(all{AllApp + "/restorable"});
-        assertEq(0, (select keys all, $1 =~ /unrestorable/).size());
-        assertEq(1, ProviderIndexUtil::tryGetApproximateActionsForApp(TypedApp).size());
-        assertEq(("restorable", "unrestorable"),
-            keys byName(ProviderIndexUtil::tryGetActionMetadataForApp(AllApp)));
-        # loading the complete index must not bring back a removed app
-        assertEq(NOTHING, ProviderIndexUtil::tryGetActionMetadataForApp(RemovedApp));
+        HashDataType output("QoreTestOutput");
+        ProviderIndexUtil::addActionToCache(<DataProviderActionInfo>{
+            "app": CachedApp,
+            "action": "registered",
+            "path": "/registered",
+            "display_name": "Registered",
+            "short_desc": "a registered action",
+            "desc": "a registered action",
+            "action_code": DPAT_API,
+            "options": {
+                "webhook": <ActionOptionInfo>{
+                    "display_name": "Webhook",
+                    "short_desc": "webhook destination",
+                    "desc": "webhook destination",
+                    "type": getOptionType(),
+                },
+            },
+            "output_type": output,
+            "input_data_types": {},
+            "output_data_type": DPAD_NORMAL,
+        });
+        hash<auto> action = ProviderIndexUtil::tryGetActionMetadata(CachedApp, "registered");
+        assertEq("hash<DataProviderIndexedActionInfo>", action.fullType());
+        assertFalse(action.hasKey("output_type"));
+        assertEq("QoreTestIndexedType", action.options.webhook.type_info.name);
+        assertEq(action, ProviderIndexUtil::searchCachedActionSubstr("a registered action")[0]);
     }
 
-    readIndexOmitsUnrestorableActions() {
+    readIndex() {
         checkModules();
 
         hash<DataProviderIndexInfo> index = ProviderIndexUtil::readDataProviderIndex();
-        foreach string app in ((MetadataApp, TypedApp, RemovedApp, AllApp)) {
-            assertEq(("restorable",), keys index.actioninfomap{app}, app);
-            assertEq(NOTHING, index.actioninfomap{app}.restorable.output_type, app);
-        }
-        assertEq(0, (select keys index.top_actioninfomap, $1 =~ /unrestorable/).size());
-        assertEq(("first", "second", "plain"), keys index.actioninfomap{GraphApp});
-        assertEq(("plain",), keys index.actioninfomap{BrokenGraphApp});
-    }
-
-    appTypeGraph() {
-        checkModules();
-
-        hash<string, hash<auto>> actions = byName(ProviderIndexUtil::tryGetApproximateActionsForApp(GraphApp));
-        assertEq(("first", "second", "plain"), keys actions);
-        assertEq("QoreTestIndexedType", actions.first.options.x.type.getName());
-        # the type both actions refer to is restored once
-        assertTrue(actions.first.options.x.type == actions.second.options.y.type);
-    }
-
-    unrestorableAppTypeGraph() {
-        checkModules();
-
-        assertEq(("plain",), map $1.action, ProviderIndexUtil::tryGetApproximateActionsForApp(BrokenGraphApp));
-        assertEq(("first", "plain", "second"),
-            sort(keys byName(ProviderIndexUtil::tryGetActionMetadataForApp(BrokenGraphApp))));
+        assertEq("hash<DataProviderIndexedActionInfo>", index.actioninfomap{CurrentApp}.send.fullType());
+        assertEq("QoreTestIndexedType", index.actioninfomap{CurrentApp}.send.options.webhook.type_info.name);
+        assertEq("string", index.actioninfomap{LegacyApp}.send.options.subject.type_info.name);
+        assertEq(index.actioninfomap{CurrentApp}.send, index.top_actioninfomap{CurrentApp + "/send"});
     }
 }

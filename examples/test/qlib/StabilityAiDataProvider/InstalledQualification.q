@@ -87,10 +87,11 @@ if (!published.summary.qualification.complete || published.summary.qualification
 }
 hash<auto> background_choice = readback.actioninfomap{App}."start-background-relight".options.keep_original_background;
 if (!inlist(False, map $1.value, background_choice.allowed_values)
-        || background_choice.type.acceptsValue(False) !== False) {
+        || AbstractDataProviderType::get(background_choice.type_info).acceptsValue(False) !== False) {
     throw "INSTALL-QUALIFICATION-ERROR", "published choices lost boolean false";
 }
-AbstractDataProviderType extras = readback.actioninfomap{App}."legacy-text-to-image".options.extras.type;
+AbstractDataProviderType extras = AbstractDataProviderType::get(
+    readback.actioninfomap{App}."legacy-text-to-image".options.extras.type_info);
 hash<auto> ordinary = {"value": {"value": "literal"}, "enabled": False, "count": 0};
 if (extras.acceptsValue(ordinary) != ordinary) {
     throw "INSTALL-QUALIFICATION-ERROR", "published object type interpreted an ordinary value member as a choice";

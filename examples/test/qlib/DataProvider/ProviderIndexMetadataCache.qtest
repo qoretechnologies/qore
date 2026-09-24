@@ -89,7 +89,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertEq(indexed_app, ProviderIndexUtil::tryGetAppInfo(indexed_app).name,
             "cache digest failure falls back to canonical app metadata");
         assertEq(indexed_action,
-            ProviderIndexUtil::tryGetApproximateAppAction(indexed_app, indexed_action).action,
+            ProviderIndexUtil::tryGetActionMetadata(indexed_app, indexed_action).action,
             "cache digest failure falls back to canonical action metadata");
     }
 }

@@ -79,7 +79,8 @@ if ((map $1.value, features.element_allowed_values) !=
         ("ocrHighResolution", "languages", "barcodes", "formulas", "keyValuePairs", "styleFont", "queryFields")) {
     throw "INSTALL-QUALIFICATION-ERROR", "published structured choices changed wire values";
 }
-AbstractDataProviderType tags = readback.actioninfomap{App}."build-model".options.tags.type;
+AbstractDataProviderType tags = AbstractDataProviderType::get(
+    readback.actioninfomap{App}."build-model".options.tags.type_info);
 if (tags.acceptsValue({"value": ""}) != {"value": ""}) {
     throw "INSTALL-QUALIFICATION-ERROR", "published map type changed an ordinary value key";
 }

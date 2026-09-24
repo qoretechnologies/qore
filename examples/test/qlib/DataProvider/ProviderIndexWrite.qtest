@@ -240,7 +240,7 @@ public class ProviderIndexWriteTest inherits QUnit::Test {
         assertEq("cs-CZ",
             ProviderIndexUtil::tryGetAppInfo(app).presentation_source_locale,
             "the cached app preserves its explicit presentation source locale");
-        assertEq(action, ProviderIndexUtil::tryGetApproximateAppAction(app, action).action,
+        assertEq(action, ProviderIndexUtil::tryGetActionMetadata(app, action).action,
             "the registered action is visible in the cache");
     }
 }

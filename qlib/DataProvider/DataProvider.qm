@@ -1354,6 +1354,18 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_8 DataProvider v3.8
+    - added @ref DataProvider::DataProviderIndexedActionInfo "DataProviderIndexedActionInfo" and
+      @ref DataProvider::IndexedActionOptionInfo "IndexedActionOptionInfo" for actions from the data provider index,
+      whose option types are described by plain data; the fields shared with registered actions are in the new
+      @ref DataProvider::DataProviderActionBaseInfo "DataProviderActionBaseInfo" and
+      @ref DataProvider::ActionOptionBaseInfo "ActionOptionBaseInfo" hashdecls
+    - @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()"
+      restores types from their descriptions more faithfully: class-backed named types in unions, hash types
+      without fields, options of "or nothing" types, and the descriptions of union types are restored, and an
+      example value that the restored field does not accept is dropped instead of failing the restoration
+    - generated example values respect the field's allowed values and the formats of the string format types, so
+      a field no longer publishes an example that it would reject
+    - @ref DataProvider::QoreUnionDataType "QoreUnionDataType" accepts an explicit display name and descriptions
     - simulating a write to an empty table works: the table's example record falls back to data generated from its
       record type instead of failing with a runtime type error, so a simulated test step can create a record in a
       table that has no rows yet

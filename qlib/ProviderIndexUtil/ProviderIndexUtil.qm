@@ -62,17 +62,18 @@ module ProviderIndexUtil {
     @section providerindexutil_relnotes Release Notes
 
     @subsection providerindexutil_v1_2 ProviderIndexUtil v1.2
-    - restore complete option type graphs from ProviderIndex 1.2, one graph per app so that objects shared between
-      types are restored once and shared again, retaining support for legacy indexes; output types are not
-      indexed, and output types in earlier indexes are ignored rather than restored
+    - indexed actions are returned as \c DataProvider::DataProviderIndexedActionInfo hashes, in which each
+      option's type is described by plain data in \c type_info; reading them never loads the provider modules
+      that implement an app, and output types are not indexed
     - added @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadataForApp() "ProviderIndexUtil::tryGetActionMetadataForApp()"
-      and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()",
-      which return indexed action metadata without restoring action types, so callers that do not need the types
-      neither load provider modules nor pay for deserializing type graphs
-    - an action whose types cannot be restored is logged and omitted from the typed action accessors instead of
-      being returned with serialized types in place of the declared type objects
-    - fixed a complete load of a deferred index bringing back serialized metadata for apps that had already been
-      loaded, which restored their actions again and returned the actions of removed apps
+      and @ref ProviderIndexUtil::ProviderIndexUtil::tryGetActionMetadata() "ProviderIndexUtil::tryGetActionMetadata()";
+      they replace \c tryGetApproximateActionsForApp() and \c tryGetApproximateAppAction(), which returned
+      action types restored from the index and have been removed
+    - primitive option type names from earlier indexes are converted to type descriptions; types serialized by
+      development versions of this module are not restored, and such indexes must be recreated
+    - an action whose metadata cannot be read is logged and omitted instead of being returned in serialized form
+    - fixed a complete load of a deferred index bringing back metadata for apps that had already been loaded,
+      which returned the actions of removed apps
     - fixed @ref ProviderIndexUtil::ProviderIndexUtil::removeCachedApp() "ProviderIndexUtil::removeCachedApp()"
       leaving the removed app's actions available
 

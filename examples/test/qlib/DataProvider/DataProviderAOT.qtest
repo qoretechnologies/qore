@@ -100,7 +100,7 @@ public class DataProviderAOTTest inherits QUnit::Test {
                 try {
                     *hash<auto> app_info = ProviderIndexUtil::tryGetAppInfo(indexed_app);
                     *hash<auto> action_info =
-                        ProviderIndexUtil::tryGetApproximateAppAction(indexed_app, indexed_action);
+                        ProviderIndexUtil::tryGetActionMetadata(indexed_app, indexed_action);
                     if (app_info.name != indexed_app || action_info.action != indexed_action) {
                         throw "PROVIDER-INDEX-TEST-ERROR", sprintf("incomplete app/action metadata: %y / %y",
                             app_info, action_info);

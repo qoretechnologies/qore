@@ -32,6 +32,9 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
 
         #! Normalized type name
         string name;
+
+        #! Any explicit display name and descriptions; otherwise they are generated from the alternatives
+        *hash<NameDescInfo> name_desc;
     }
 
     #! creates the type
@@ -51,15 +54,19 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
 
     #! creates the type
     /** @param types list of data provider type alternatives, in matching order
+        @param name_desc the display name and descriptions of the type (since DataProvider 3.8); any not given are
+        generated from the alternatives; the \c name key is ignored, since the type name is always derived from the
+        alternatives
         @throw TYPE-ERROR fewer than two alternatives were provided
         @since DataProvider 3.5.1
     */
-    constructor(list<AbstractDataProviderType> types) {
+    constructor(list<AbstractDataProviderType> types, *hash<NameDescInfo> name_desc) {
         if (types.size() < 2) {
             throw "TYPE-ERROR", sprintf("union types require at least two alternatives; got %y", types);
         }
         self.types = types;
         name = (map $1.getName(), types).join("|");
+        self.name_desc = name_desc;
     }
 
     #! Returns the union alternatives
@@ -82,7 +89,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.7
     */
     QoreUnionDataType copyWithUnionTypes(list<AbstractDataProviderType> types) {
-        return new QoreUnionDataType(types);
+        return new QoreUnionDataType(types, name_desc);
     }
 
     #! Returns the type name
@@ -98,7 +105,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.5.1
     */
     string getDisplayName() {
-        return AbstractDataField::getDisplayName(getName());
+        return name_desc.display_name ?? AbstractDataField::getDisplayName(getName());
     }
 
     #! Returns the type's short description
@@ -106,7 +113,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.5.1
     */
     string getShortDescription() {
-        return sprintf("Accepts one of: %s", (map $1.getName(), types).join(", "));
+        return name_desc.short_desc ?? sprintf("Accepts one of: %s", (map $1.getName(), types).join(", "));
     }
 
     #! Returns the description
@@ -114,7 +121,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.5.1
     */
     string getDesc() {
-        return sprintf("Union data type accepting one of: %s", (map $1.getName(), types).join(", "));
+        return name_desc.desc ?? sprintf("Union data type accepting one of: %s", (map $1.getName(), types).join(", "));
     }
 
     #! Returns a description of the type as a hash
@@ -305,7 +312,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.5.1
     */
     AbstractDataProviderType getSoftType() {
-        return new QoreUnionDataType(AbstractDataProviderType::getSoftTypesShared(types));
+        return new QoreUnionDataType(AbstractDataProviderType::getSoftTypesShared(types), name_desc);
     }
 
     #! Returns an "or nothing" type equivalent to the current type
@@ -316,7 +323,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         if (isOrNothingType()) {
             return self;
         }
-        return new QoreUnionDataType(map $1.getOrNothingType(), types);
+        return new QoreUnionDataType((map $1.getOrNothingType(), types), name_desc);
     }
 
     #! Returns a mandatory (i.e. not "or nothing") type equivalent to the current type
@@ -327,7 +334,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         if (!isOrNothingType()) {
             return self;
         }
-        return new QoreUnionDataType(map $1.getMandatoryType(), types);
+        return new QoreUnionDataType((map $1.getMandatoryType(), types), name_desc);
     }
 }
 }
