@@ -354,6 +354,11 @@ public:
         @param end_stream If true, sends END_STREAM flag (closes the stream for sending)
         @param xsink Exception sink for error reporting
         @return 0 on success, -1 on error (exception set), 1 = buffer full (non-fatal, data not appended)
+
+        A stream that is closed without an error, for example a stream the peer closed with RST_STREAM(NO_ERROR)
+        after sending its complete response (RFC 9113 section 8.1), has nothing left to half-close: an empty send
+        with \a end_stream set is a no-op, and any other send raises \c HTTP2-STREAM-CLOSED.  A stream the peer
+        reset with an error code raises \c HTTP2-STREAM-RESET.
     */
     DLLLOCAL int sendStreamData(int32_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
@@ -942,6 +947,20 @@ private:
         Mirrors @ref QuicSession::peer_reset_streams_.
     */
     std::unordered_map<int32_t, uint32_t> peer_reset_streams;
+
+    //! Returns true if the stream ID was used on this connection and the stream is no longer open
+    /** Stream IDs are allocated in increasing order, so a stream that is not live and whose ID is not above the
+        highest ID used by its initiator was opened and has closed (RFC 9113 section 5.1.1); no per-stream record
+        is needed.  Must be called with \c m held and only for a stream that is no longer in \c streams.
+    */
+    DLLLOCAL bool isClosedStreamIdUnlocked(int32_t stream_id);
+
+    //! Handles a send on a stream that closed without an error; see sendStreamData()
+    /** Must be called with \c m held.
+
+        @return 0 for an empty half-close (a no-op), otherwise -1 with \c HTTP2-STREAM-CLOSED raised
+    */
+    DLLLOCAL int sendOnClosedStream(int32_t stream_id, size_t len, bool end_stream, ExceptionSink* xsink);
 
     //! Stream IDs reset by the peer, awaiting one-shot reporting to the H2 poll
     //! operation for persistent-session teardown.  Pushed in onStreamCloseCallback()

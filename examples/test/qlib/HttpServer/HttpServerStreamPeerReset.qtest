@@ -70,6 +70,29 @@ class RejectHandler inherits HttpServer::AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that answers a body-streaming request without reading its body.
+#! Once the response is sent, the HTTP/2 server closes the stream with
+#! RST_STREAM(NO_ERROR), because the client has not finished its request
+#! (RFC 9113 section 8.1).
+class EarlyHandler inherits HttpServer::AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return HttpServer::AbstractHttpRequestHandler::makeResponse(200, "early",
+            {"Content-Type": MimeTypeText});
+    }
+}
+
+#! Handler that answers a plain request.
+class OkHandler inherits HttpServer::AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return HttpServer::AbstractHttpRequestHandler::makeResponse(200, "ok",
+            {"Content-Type": MimeTypeText});
+    }
+}
+
 #! Handler that reads the body incrementally (sanity case).
 class DrainHandler inherits HttpServer::AbstractHttpRequestHandler {
     public {
@@ -191,6 +214,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("H3 readData(0) non-blocking drain",   \testH3DrainNonBlocking());
         addTestCase("H2 peer-reset raises typed exception",\testH2PeerResetTyped());
         addTestCase("H3 peer-reset raises typed exception",\testH3PeerResetTyped());
+        addTestCase("H2 send after RST_STREAM(NO_ERROR)",  \testH2SendAfterEarlyResponse());
         set_return_value(main());
     }
 
@@ -211,8 +235,12 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         DrainHandler drain();
         RejectHandler reject();
+        EarlyHandler early();
+        OkHandler ok();
         server.setHandler("drain", "/drain", NOTHING, drain);
         server.setHandler("reject", "/reject", NOTHING, reject);
+        server.setHandler("early", "/early", NOTHING, early);
+        server.setHandler("ok", "/ok", NOTHING, ok);
 
         int h2_port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -326,6 +354,88 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         assertEq(expected_err, err,
             sprintf("%s peer reset surfaces typed exception", proto));
+    }
+
+    #! The server answers a body-streaming request without reading the body
+    #! and then closes the stream with RST_STREAM(NO_ERROR).  A half-close by
+    #! the client after that is a no-op, sending data raises
+    #! HTTPCLIENT-STREAM-CLOSED, and the response is intact.
+    testH2SendAfterEarlyResponse() {
+        hash<auto> setup = makeServer();
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr("h2");
+        on_exit delete mgr;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(setup.h2_url);
+        int sid = stream.startStreaming("POST", "/early",
+            {"content-type": "application/octet-stream"}, True);
+
+        # END_STREAM always arrives as an event of its own on a streaming
+        # request, so the handle is not in a terminal state after this read;
+        # the first event carries the headers, and also the body when the
+        # whole response was processed in one poll cycle
+        auto first = stream.readData();
+        assertEq(NT_HASH, first.typeCode());
+        assertEq(200, first.status_code);
+        assertNothing(first.end_stream);
+        HttpClientIo::HttpClientStreamState open_state = stream.getState();
+        assertTrue(open_state == HttpClientIo::HttpClientStreamState::HeadersReceived
+            || open_state == HttpClientIo::HttpClientStreamState::ReceivingBody,
+            sprintf("state after the first event: %y", open_state));
+
+        # The server writes the complete response and the RST_STREAM(NO_ERROR)
+        # that follows it in one flush, which is before it can receive a
+        # later request on the same connection; frames on a connection are
+        # processed in order, so once a later request on the connection has
+        # completed, the client has processed the stream's close
+        HttpClientIo::HttpClientStreamHandle stream2 = mgr.acquireStream(setup.h2_url);
+        assertEq(stream.getConnection(), stream2.getConnection(), "second request uses the same connection");
+        hash<auto> resp2 = stream2.request("GET", "/ok");
+        assertEq(200, resp2.status_code, sprintf("%y", resp2.body));
+        # the handle has not seen END_STREAM yet, so its sends reach the session
+        assertEq(open_state, stream.getState());
+
+        # a half-close on a stream the server has closed is a no-op, as with
+        # any closed stream
+        stream.sendData(binary(), True);
+        stream.writesDone();
+
+        # sending data raises a classified error at both levels
+        assertThrows("HTTPCLIENT-STREAM-CLOSED", \stream.sendData(), binary("x"));
+        assertThrows("HTTPCLIENT-STREAM-CLOSED", \stream.sendData(), (binary("x"), True));
+        HttpClientIo::Http2ClientConnection conn = cast<HttpClientIo::Http2ClientConnection>(
+            stream.getConnection());
+        assertThrows("HTTP2-STREAM-CLOSED", \conn.sendStreamData(), (sid, binary("x")));
+        assertThrows("HTTP2-STREAM-CLOSED", \conn.sendStreamData(), (sid, binary(), False));
+        # the empty half-close is a no-op at the connection level too
+        conn.sendStreamData(sid, binary(), True);
+
+        # a stream ID that was never used is still an unknown stream
+        assertThrows("HTTP2-ERROR", "stream .* not found", \conn.sendStreamData(), (sid + 1000, binary(), True));
+
+        # the response is not discarded (RFC 9113 section 8.1)
+        binary body;
+        while (True) {
+            auto chunk = stream.readData();
+            if (chunk.typeCode() == NT_HASH) {
+                if (chunk.end_stream) {
+                    break;
+                }
+                assertNothing(chunk.error);
+                continue;
+            }
+            body += binary(chunk);
+        }
+        assertEq("early", body.toString());
+        assertEq(HttpClientIo::HttpClientStreamState::Complete, stream.getState());
+
+        # the connection is still usable
+        HttpClientIo::HttpClientStreamHandle stream3 = mgr.acquireStream(setup.h2_url);
+        hash<auto> resp3 = stream3.request("GET", "/ok");
+        assertEq(200, resp3.status_code);
+        assertEq("ok", resp3.body.typeCode() == NT_BINARY ? resp3.body.toString() : resp3.body);
     }
 
     testH2DrainNonBlocking() {

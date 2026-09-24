@@ -2090,6 +2090,11 @@ bool Http2ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS
     @param data the data to send (string or binary)
     @param end_stream if True, signals end of stream
 
+    @throw HTTP2-STREAM-CLOSED the stream is closed without an error, for example because the server closed it with
+    \c RST_STREAM(NO_ERROR) after its complete response, and \a data is not empty or \a end_stream is not set; an
+    empty send with \a end_stream set on such a stream is a no-op
+    @throw HTTP2-STREAM-RESET the server reset the stream with an error
+
     @note Safe from any thread, including a controller-owned \c continuePoll() worker
     delivering application events; see @ref Qore::Socket::sendHttp2StreamData().
 */

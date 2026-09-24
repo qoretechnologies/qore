@@ -7293,6 +7293,8 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 
     @throw HTTP2-ERROR if no HTTP/2 session is active
     @throw HTTP2-STREAM-RESET the peer reset the stream
+    @throw HTTP2-STREAM-CLOSED the stream is closed without an error and \a data is not empty or \a end_stream is
+    not set; an empty send with \a end_stream set on such a stream is a no-op
     @throw HTTP2-FLOW-CONTROL raised when the stream's send buffer is full; the
     caller should drain via @ref waitForHttp2StreamDrain() and retry
 

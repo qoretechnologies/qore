@@ -2540,10 +2540,21 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
                 "stream %d was reset by peer (error code %u)", stream_id, ec);
             return -1;
         }
+        // A stream that closed without an error was erased by onStreamCloseCallback(); this includes a stream the
+        // peer closed with RST_STREAM(NO_ERROR) after its complete response, before this side sent END_STREAM
+        // (RFC 9113 section 8.1)
+        if (isClosedStreamIdUnlocked(stream_id)) {
+            return sendOnClosedStream(stream_id, len, end_stream, xsink);
+        }
         printd(2, "sendStreamData() stream %d NOT FOUND: stream=%p has_provider=%d end_stream=%d\n",
             stream_id, stream, has_provider ? 1 : 0, end_stream ? 1 : 0);
         xsink->raiseException("HTTP2-ERROR", "stream %d not found", stream_id);
         return -1;
+    }
+
+    if (stream && stream->state == Http2StreamState::Closed && !stream->reset) {
+        // closed without an error, but still tracked (a dispatched or CONNECT stream)
+        return sendOnClosedStream(stream_id, len, end_stream, xsink);
     }
 
     // Check if the stream was closed by RST_STREAM from the peer
@@ -2611,6 +2622,30 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
     }
 
     return 0;
+}
+
+bool Http2Session::isClosedStreamIdUnlocked(int32_t stream_id) {
+    assert(!getStream(stream_id));
+    if (stream_id <= 0) {
+        return false;
+    }
+    // clients initiate odd-numbered streams, servers even-numbered ones (RFC 9113 section 5.1.1)
+    bool local = (stream_id % 2) == (is_server ? 0 : 1);
+    if (local) {
+        return stream_id < nghttp2_session_get_next_stream_id(session);
+    }
+    return stream_id <= nghttp2_session_get_last_proc_stream_id(session);
+}
+
+int Http2Session::sendOnClosedStream(int32_t stream_id, size_t len, bool end_stream, ExceptionSink* xsink) {
+    printd(2, "sendStreamData() stream %d CLOSED without error: len=%zu end_stream=%d\n", stream_id, len,
+        end_stream ? 1 : 0);
+    if (!len && end_stream) {
+        // the send side of a closed stream is already closed; a half-close has nothing to do
+        return 0;
+    }
+    xsink->raiseException("HTTP2-STREAM-CLOSED", "cannot send data on stream %d: the stream is closed", stream_id);
+    return -1;
 }
 
 int Http2Session::submitTrailers(int32_t stream_id,

@@ -397,6 +397,12 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         @throw HTTPCLIENT-STATE-ERROR if not in streaming mode, stream is
         closed, or stream is not yet established
+        @throw HTTPCLIENT-STREAM-CLOSED if the connection is closed, or if the
+        server has already closed the stream, for example with
+        \c RST_STREAM(NO_ERROR) after sending its complete response before the
+        request was complete (RFC 9113 section 8.1); the response can still be
+        read with @ref readData()
+        @throw HTTP2-STREAM-RESET if the server reset the stream with an error
     */
     sendData(data data, bool end_stream = False) {
         int sid;
@@ -444,7 +450,16 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
-        h2conn.sendStreamData(sid, data, end_stream);
+        try {
+            # a half-close on a stream the server has already closed is a no-op in sendStreamData()
+            h2conn.sendStreamData(sid, data, end_stream);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP2-STREAM-CLOSED") {
+                throw "HTTPCLIENT-STREAM-CLOSED", sprintf("cannot send data: stream %d was closed by the server",
+                    sid);
+            }
+            rethrow;
+        }
     }
 
     #! Returns trailers from the completed response

@@ -145,8 +145,11 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param data the data to send (can be string or binary)
         @param end_stream if True, signals end of stream
 
-        @throw HTTP2-STREAM-ERROR if the stream ID is not found
+        @throw HTTP2-ERROR if the stream ID is not found
         @throw HTTP2-STATE-ERROR if not in ready state
+        @throw HTTP2-STREAM-CLOSED if the stream closed without an error and \a data is not empty or
+        \a end_stream is not set; an empty send with \a end_stream set on such a stream is a no-op
+        @throw HTTP2-STREAM-RESET if the server reset the stream with an error
     */
     sendStreamData(int stream_id, data data, bool end_stream = False) {
         if (!self.isReady()) {
