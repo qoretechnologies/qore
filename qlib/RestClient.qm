@@ -145,6 +145,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
+      providers with a <a href="../../RestClientIo/html/index.html">RestClientIo</a> client and no longer connects
+      to the server to create them
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
       returns the options a client was created with, as \c getConstructorOptions() of
       <a href="../../RestClientIo/html/index.html">RestClientIo</a> does
@@ -4859,8 +4862,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         if (opts.validator || opts.swagger || opts.openapi3) {
-            # get a REST client object without connecting
-            RestClient rest = get(False);
+            # get an async REST client object without connecting
+            AbstractRestClient rest = getAsync(False);
             # get the validator and return the provider
             return rest.getValidator().getDataProvider(rest);
         }
@@ -4868,7 +4871,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         # to avoid circular dependencies, this object loads the RestClientDataProvider and creates the data provider
         # object dynamically
         load_module("RestClientDataProvider");
-        return create_object("RestClientDataProvider", get());
+        return create_object("RestClientDataProvider", getAsync());
     }
 
     #! returns @ref True, as this connection always returns a data provider with the \c getDataProvider() method

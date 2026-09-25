@@ -37,9 +37,9 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 1 | Streaming: sync SSE streams as wrappers, `restSseReader()` event limit, `OpenAiResponseStreamDataProvider` ending on a wait timeout, Perplexity dead sync branch | done |
-| 2 | Connections passing `get()` to providers that accept `AbstractRestClient` | pending |
+| 2 | Connections passing `get()` to providers: `RestConnection` (failed with `RUNTIME-OVERLOAD-ERROR` without a schema), AWS (same), Mews, ElasticSearch, OpenSearch | done |
 | 3 | Sync clients created inside async providers (SendCloud, CustomerIo, PdfCo, AWS STS, generic API discovery) | pending |
 | 4 | CDS, Discord, ServiceNow providers | pending |
 | 5 | 28 provider families typed to a sync `FooRestClient` | pending |
-| 6 | Direct `HTTPClient` users (Discord gateway discovery, `get_file_from_http()`, JSON-LD loader, A2A and ONE Record push notifications, `HttpClientDataProvider`, `FileLocationHandler`) | pending |
+| 6 | Direct `HTTPClient` users (Discord gateway discovery, `get_file_from_http()`, JSON-LD loader, A2A and ONE Record push notifications, `HttpClientDataProvider`, `FileLocationHandler`); `HttpConnection::getDataProvider()` loads a nonexistent `HttpDataProvider` module | pending |
 | 7 | New async clients: FHIR, EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` | pending |

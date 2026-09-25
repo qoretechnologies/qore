@@ -73,7 +73,7 @@ public class ElasticSearchRestConnection inherits RestClient::RestConnection {
         @return a data provider object for this connection; the data provider is @ref ElasticSearchDataProvider
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new ElasticSearchDataProvider({"restclient": get()});
+        return new ElasticSearchDataProvider({"restclient": getAsync()});
     }
 
     #! returns a @ref RestClient::RestClient "RestClient" object

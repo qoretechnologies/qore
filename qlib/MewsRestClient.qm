@@ -88,6 +88,8 @@ printf("%Y\n", ans.body);
     @section Mewsrestclientrelnotes Release Notes
 
     @subsection Mewsrestclientv1_0_1 MewsRestClient v1.0.1
+    - the data provider of a connection uses a @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo" and is
+      created without connecting to the server
     - the connection URL is no longer generated automatically; it depends on the Mews environment
       (ex: \c https://api.mews.com or \c https://api.mews-demo.com) and must be supplied by the user
 
@@ -402,7 +404,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the MewsDataProvider and creates the data provider
         # object dynamically
         load_module("MewsRestDataProvider");
-        return create_object("MewsRestDataProvider", get());
+        return create_object("MewsRestDataProvider", getAsync());
     }
 
     #! Called to start a non-blocking polling ping operation on the remote REST server

@@ -242,6 +242,8 @@ module ElasticSearchDataProvider {
     @section elasticsearchdataprovider_relnotes Release Notes
 
     @subsection elasticsearchdataprovider_v1_3 ElasticSearchDataProvider v1.3
+    - the data provider of an \c esrest connection uses an async
+      @ref RestClientIo::RestClientIo "RestClientIo" as well, and is created without connecting to the server
     - migrated the default REST transport from the sync
       @ref RestClient::RestClient "RestClient" (HTTP/1.x) to the multiplexed async
       @ref RestClientIo::RestClientIo "RestClientIo" (HTTP/1.1/2/3); the data provider
