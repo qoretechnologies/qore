@@ -97,6 +97,38 @@ class NA_Child inherits NA_Base {
     }
 }
 
+string sub na_auto_default(int a, auto b = NOTHING, int c = 3) {
+    return sprintf("%d:%y:%d", a, b, c);
+}
+
+string sub na_auto_value_default(int a, auto b = "x", int c = 3) {
+    return sprintf("%d:%y:%d", a, b, c);
+}
+
+string sub na_auto(int a, auto b, int c = 3) {
+    return sprintf("%d:%y:%d", a, b, c);
+}
+
+class NA_Auto {
+    string m(int a, auto b = NOTHING, int c = 3) {
+        return sprintf("m:%d:%y:%d", a, b, c);
+    }
+
+    string n(int a, auto b, auto d, int c = 3) {
+        return sprintf("n:%d:%y:%y:%d", a, b, d, c);
+    }
+}
+
+class NA_AutoHolder {
+    private {
+        *NA_Auto nx = new NA_Auto();
+    }
+
+    list<string> callMembers() {
+        return (nx.m(1, c: 9), nx.n(2, c: 8), nx.n(3, d: 4, c: 7), nx.m(c: 6, a: 5));
+    }
+}
+
 class NA_Nullable {
     string m(int a = 1, int b = 2, int c = 3) {
         return sprintf("%d:%d:%d", a, b, c);
@@ -211,6 +243,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
         addTestCase("nullable and dynamic receivers", \nullableAndDynamicReceivers(), NOTHING);
+        addTestCase("skipped auto and untyped parameters", \skippedAutoParameters(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -280,6 +313,78 @@ public class NamedArgumentsTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             p.parse("class G { auto methodGate(string m) { return m; } } G g = new G(); g.other(a: 1);",
                 "method-gate");
+        });
+    }
+
+    skippedAutoParameters() {
+        # a skipped auto parameter takes its default, or NOTHING without one
+        assertEq("1:null:9", na_auto_default(1, c: 9), "function: skipped auto with a NOTHING default");
+        assertEq("1:\"x\":9", na_auto_value_default(1, c: 9), "function: skipped auto with a value default");
+        assertEq("1:null:9", na_auto(1, c: 9), "function: skipped auto without a default");
+        assertEq("1:null:3", na_auto(a: 1), "function: every trailing parameter skipped");
+        assertEq("1:2:9", na_auto(1, b: 2, c: 9), "function: auto supplied by name");
+        assertEq("1:\"y\":9", na_auto(c: 9, b: "y", a: 1), "function: all arguments reordered by name");
+
+        # a method through a typed receiver
+        NA_Auto obj();
+        assertEq("m:1:null:9", obj.m(1, c: 9), "typed receiver: skipped auto with a default");
+        assertEq("n:1:null:null:9", obj.n(1, c: 9), "typed receiver: skipped auto without a default");
+        assertEq("n:1:null:4:9", obj.n(1, d: 4, c: 9), "typed receiver: one of two auto params skipped");
+
+        # a method through a *X receiver
+        NA_AutoHolder holder();
+        assertEq(("m:1:null:9", "n:2:null:null:8", "n:3:null:4:7", "m:5:null:6"),
+            holder.callMembers(), "nullable member receiver");
+        *NA_Auto local = new NA_Auto();
+        assertEq("m:1:null:9", local.m(1, c: 9), "nullable local receiver: skipped auto with a default");
+        assertEq("n:1:null:null:9", local.n(1, c: 9),
+            "nullable local receiver: skipped auto without a default");
+
+        # an argument whose type is only known at runtime binds by name with a single-variant target
+        auto av = 5;
+        *string sv = "s";
+        assertEq("1:\"s\":9", na_auto(1, c: 9, b: sv), "function: *string argument for an auto parameter");
+        assertEq("1:5:3", na_auto(b: av, a: 1), "function: auto argument for an auto parameter");
+        assertEq("5:2:9", na_required(av, c: 9, b: 2), "function: auto argument for an int parameter");
+        assertEq("n:1:5:\"s\":9", obj.n(1, d: sv, c: 9, b: av), "typed receiver: runtime-typed arguments");
+        assertEq("n:1:null:5:9", local.n(1, d: av, c: 9), "nullable receiver: runtime-typed argument");
+        # ... and is type-checked at runtime exactly as the same positional argument
+        auto bad = "str";
+        string positional_err;
+        try {
+            na_required(bad, 2);
+        } catch (hash<ExceptionInfo> ex) {
+            positional_err = ex.err;
+        }
+        assertEq("RUNTIME-OVERLOAD-ERROR", positional_err, "positional runtime type error");
+        assertThrows(positional_err, "no variant matching", sub () { na_required(b: 2, a: bad); });
+
+        # an overloaded target whose variant depends on runtime argument types is still rejected
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "overloaded target is ambiguous", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub o(int a, int c = 3) {} sub o(string a, int c = 3) {} auto x = 1; o(x, c: 9);",
+                "overloaded-runtime-typed");
+        });
+
+        # untyped parameters (only allowed without %require-types) are skipped the same way
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("string sub f(int a, b, int c = 3) { return sprintf(\"%d:%y:%y\", a, b, c); } "
+                "string sub t1() { return f(1, c: 9); } string sub t2() { return f(a: 1); }", "untyped-skip");
+            assertEq("1:null:9", p.callFunction("t1"), "untyped parameter skipped");
+            assertEq("1:null:3", p.callFunction("t2"), "untyped parameter skipped with a later default");
+        }
+
+        # the supplied arguments are still type-checked at parse time
+        assertThrows("PARSE-TYPE-ERROR", "argument 'c' to 'f\\(int a, auto b, int c = 3\\)' expects int", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a, auto b, int c = 3) {} f(1, c: \"str\");", "auto-skip-type-error");
+        });
+        # a skipped parameter that cannot be omitted is still an error
+        assertThrows("PARSE-TYPE-ERROR", "argument 'c' to 'f\\(int a, auto b, int c, int d = 3\\)' expects int, "
+                "but call supplies nothing", sub () {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a, auto b, int c, int d = 3) {} f(1, d: 9);", "auto-skip-required");
         });
     }
 

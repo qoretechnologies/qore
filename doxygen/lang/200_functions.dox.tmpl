@@ -169,6 +169,18 @@ resize(source: "in.png", target: "out.png", height: 480);
 resize("in.png", "thumb.png", keep_aspect: False, width: 128, height: 128);
     @endcode
 
+    This applies whatever the declared type of the omitted parameter: an omitted \c auto or untyped parameter
+    without a default receives @ref nothing, like an omitted or-nothing parameter. Omitting a parameter that neither
+    accepts @ref nothing nor has a default is a \c PARSE-TYPE-ERROR naming that parameter:
+
+    @code{.py}
+sub send(string target, auto payload, int timeout = 30) {
+    # ...
+}
+
+send("queue-1", timeout: 5);  # payload is NOTHING
+    @endcode
+
     Named arguments bind to fixed parameters only; they do not bind to varargs or the \c argv variable.
 
     @code{.py}
@@ -237,6 +249,12 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     resolution. A method call through a receiver declared with an or-nothing class type (<tt>*Class</tt>) binds the
     named arguments with the signature of the method in \c Class; the method is still dispatched at runtime. Builtin functions and methods accept named arguments only
     when their variant has opted in with the @ref NAMED_ARGS "NAMED_ARGS" code flag.
+
+    When the target has a single variant, an argument whose type is only known at runtime (for example an \c auto
+    value, or a <tt>*string</tt> value for an \c auto parameter) is bound by name at parse time and type-checked at
+    runtime exactly as the same positional argument would be. When the target is overloaded and the variant would
+    depend on such an argument's runtime type, the call is rejected with \c NAMED-CALL-NOT-SUPPORTED; use positional
+    arguments or give the argument an explicit type.
 
     @note Parameter names are part of the public calling interface for named callers. Renaming a public parameter can
     break callers that use named arguments even when positional callers are unaffected.

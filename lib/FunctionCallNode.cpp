@@ -687,8 +687,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                 if (!err) {
                     qore_program_private::makeParseException(parse_context.pgm, *loc, "NAMED-CALL-NOT-SUPPORTED",
                         new QoreStringNode("named arguments require a parse-time-resolved signature in this version; "
-                            "this call is ambiguous or depends on runtime argument types, so use positional arguments "
-                            "or make the target type explicit"));
+                            "this call to an overloaded target is ambiguous or depends on runtime argument types, so "
+                            "use positional arguments or give the arguments explicit types"));
                     err = -1;
                 }
             } else if (args) {

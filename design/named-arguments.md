@@ -161,10 +161,19 @@ parse list.
 6. Named arguments do not bind varargs / `argv`.
 7. Omitted parameters are defaultable missing slots: they are filled with
    `NOTHING`, and existing default-argument processing replaces `NOTHING`
-   with the declared default.
+   with the declared default. This holds whatever the parameter's declared
+   type, including `auto` and untyped parameters; a skipped parameter that
+   does not accept `NOTHING` and has no default is a `PARSE-TYPE-ERROR` that
+   names the parameter.
 8. Parameter names are case-sensitive (normal Qore identifiers).
 9. A named call to a target with no parse-time-resolved signature is rejected
-   (`NAMED-CALL-NOT-SUPPORTED`), including a method call through a receiver
+   (`NAMED-CALL-NOT-SUPPORTED`). A target with a single variant always has
+   one: an argument whose type is only known at runtime (an `auto` value, or
+   a type that only possibly matches the parameter, such as `*string` for
+   `auto`) is bound by name at parse time and type-checked at runtime exactly
+   as the same positional argument would be. Only an overloaded target whose
+   variant selection depends on runtime argument types is rejected, as is a
+   method call through a receiver
    without a declared class type (`auto`, `object`, a `methodGate()` class).
    A receiver declared `*Class` binds with the signature of `Class`'s method,
    but the method is not saved on the call node, so it is still dispatched at
@@ -238,6 +247,13 @@ the existing positional scorer.
   winning plan is persisted on the call node as
   `QoreNamedArgBinding { std::vector<size_t> source_to_param; size_t
   result_size; }` (`include/qore/intern/Function.h`).
+  The scorer treats a slot the call skips before looking at the parameter
+  type (default → ignored, otherwise matched against `NOTHING`), so `auto`
+  and untyped parameters, which `QoreTypeInfo::hasType()` reports as
+  untyped, are skipped like any other. For a single-variant target
+  (`ilist.size() == 1 && vlist.singular()`), a supplied argument that only
+  possibly matches does not force runtime variant resolution: the variant is
+  fixed and `CodeEvaluationHelper` type-checks the argument at runtime.
 
 ### Tie-breaking
 

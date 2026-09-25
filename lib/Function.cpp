@@ -2315,7 +2315,7 @@ static AbstractQoreFunctionVariant* doSingleVariantTypeException(const QoreProgr
     QoreStringNode* desc = new QoreStringNode("argument ");
     const name_vec_t& nv = sig->getParamNames();
     if (nv.size() > pi) {
-        desc->sprintf("'%s' to ", nv[pi].c_str());
+        desc->sprintf("'%s' to '", nv[pi].c_str());
     } else {
         desc->sprintf("%d to '", pi + 1);
     }
@@ -2816,20 +2816,22 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractQoreFunc
 
         qore_type_result_e rc = QTI_UNASSIGNED;
         qore_type_result_e max_rc = QTI_UNASSIGNED;
-        if (QoreTypeInfo::hasType(formal)) {
-            if (pos_supplied && sig->hasDefaultArg(pi)
+        // an omitted parameter takes its default or NOTHING whatever its declared type, including auto and
+        // untyped parameters
+        if (!pos_supplied) {
+            if (sig->hasDefaultArg(pi)) {
+                rc = max_rc = QTI_IGNORE;
+            } else {
+                actual = nothingTypeInfo;
+            }
+        } else if (QoreTypeInfo::hasType(formal)) {
+            if (sig->hasDefaultArg(pi)
                     && (QoreTypeInfo::isType(actual, NT_NOTHING)
                         || (QoreTypeInfo::isType(actual, NT_NULL)
                             && qore_is_non_optional_soft_type(formal)))) {
                 rc = max_rc = QTI_IDENT;
             } else if (!pos_has_arg) {
-                if (pos_supplied) {
-                    return false;
-                } else if (sig->hasDefaultArg(pi)) {
-                    rc = max_rc = QTI_IGNORE;
-                } else {
-                    actual = nothingTypeInfo;
-                }
+                return false;
             }
         }
 
@@ -3723,6 +3725,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             bool variant_soft_match = false;
             bool ok = true;
             bool needs_type_param_substitution = sig->needsTypeParameterSubstitution();
+            // with only one variant, binding by name cannot depend on the argument types: an argument whose type
+            // is only known at runtime is bound by name here and type-checked at runtime like a positional
+            // argument, so only multi-variant targets need a runtime-resolved variant
+            bool single_variant = ilist.size() == 1 && aqf->vlist.singular();
 
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                 const QoreTypeInfo* t = needs_type_param_substitution
@@ -3735,21 +3741,27 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
                 qore_type_result_e rc = QTI_UNASSIGNED;
                 qore_type_result_e max_rc = QTI_UNASSIGNED;
-                if (QoreTypeInfo::hasType(t)) {
-                    if (pos_supplied && sig->hasDefaultArg(pi)
+                // a parameter skipped by the call takes its default or NOTHING whatever its declared type,
+                // including auto and untyped parameters
+                if (!pos_supplied) {
+                    if (sig->hasDefaultArg(pi)) {
+                        rc = max_rc = QTI_IGNORE;
+                    } else {
+                        a = nothingTypeInfo;
+                    }
+                } else if (QoreTypeInfo::hasType(t)) {
+                    if (sig->hasDefaultArg(pi)
                             && (QoreTypeInfo::isType(a, NT_NOTHING)
                                 || (QoreTypeInfo::isType(a, NT_NULL)
                                     && qore_is_non_optional_soft_type(t)))) {
                         rc = max_rc = QTI_IDENT;
                     } else if (!pos_has_arg) {
-                        if (pos_supplied) {
-                            variant_runtime_match = true;
+                        variant_runtime_match = true;
+                        if (!single_variant) {
                             break;
-                        } else if (sig->hasDefaultArg(pi)) {
-                            rc = max_rc = QTI_IGNORE;
-                        } else {
-                            a = nothingTypeInfo;
                         }
+                        // the argument is type-checked at runtime
+                        rc = max_rc = QTI_AMBIGUOUS;
                     }
                 }
 
@@ -3787,7 +3799,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 }
             }
 
-            if (variant_runtime_match) {
+            if (variant_runtime_match && !single_variant) {
                 runtime_match = true;
                 variant = nullptr;
                 break;
