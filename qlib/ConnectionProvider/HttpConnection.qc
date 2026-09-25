@@ -517,8 +517,16 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     }
 
     #! Called to start the connection if the connection supports the polling API
-    /**
+    /** If the \c ping_method and \c ping_path options are set, an @ref HttpPingPollOperation is returned that sends
+        a ping request with non-blocking I/O using \c HttpClientIo (supporting HTTP/1.1, HTTP/2, and HTTP/3),
+        otherwise the operation returned by @ref Qore::HTTPClient::startPollConnect() "HTTPClient::startPollConnect()"
+        is returned, which establishes a connection to the server
+
+        @param logger an optional logger for the poll operation
+
         @return a socket poll operation object that will allow the connection goal to be reached with polling
+
+        @throw HTTP-NEGOTIATE-AUTH-ERROR the \c negotiate_auth option is set
 
         @see supportsPollingApi()
 
@@ -610,17 +618,50 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     */
     private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         checkRawHttpNegotiateUnsupported();
+        return HttpConnection::getAsyncConnectionManager(opts, logger);
+    }
 
+    #! Returns an async HTTP connection manager for the given HTTP connection options
+    /** HTTPClient options that have HttpClientIo equivalents are used, including protocol selection
+        (\c http_version), connect and request timeouts (\c connect_timeout and \c timeout), proxy and redirect
+        handling (\c proxy, \c max_redirects, and \c redirect_passthru), TLS verification (\c ssl_verify_cert),
+        mutual TLS credentials (\c ssl_cert_data, \c ssl_cert_path, \c ssl_key_data, \c ssl_key_path, and
+        \c ssl_key_password), and \c max_response_body_size; other options are ignored.
+
+        @param opts @ref HttpConnection options
+        @param logger an optional logger for the connection manager
+
+        @return a new @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"; connections are
+        established on demand
+
+        @throw HTTPCLIENT-OPTION-ERROR an invalid \c http_version value was given
+
+        @since ConnectionProvider 3.1
+    */
+    static HttpClientIo::HttpClientConnectionManager getAsyncConnectionManager(*hash<auto> opts,
+            *Logger::LoggerInterface logger) {
+        *string protocol = AsyncHttpVersionMap{opts.http_version ?? "auto"};
+        if (!protocol) {
+            throw "HTTPCLIENT-OPTION-ERROR", sprintf("invalid http_version %y; expecting one of: %y",
+                opts.http_version, keys AsyncHttpVersionMap);
+        }
         hash<HttpClientIo::HttpClientConnectionManagerOptions> async_opts =
             <HttpClientIo::HttpClientConnectionManagerOptions>{
-                "connect_timeout": opts.connect_timeout,
-                "request_timeout": opts.timeout,
-                "protocol": AsyncHttpVersionMap{opts.http_version ?? "auto"},
+                "protocol": protocol,
                 # HTTPClient's ssl_verify_cert defaults to False, whereas HttpClientIo verifies by default
                 "ssl_verify_mode": opts.ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE,
-                "redirect_passthru": opts.redirect_passthru,
+                "redirect_passthru": opts.redirect_passthru.toBool(),
                 "logger": logger,
             };
+        # timeout options may be given as relative dates or as integer numbers of milliseconds
+        if (opts.connect_timeout) {
+            timeout connect_timeout = opts.connect_timeout;
+            async_opts.connect_timeout = connect_timeout;
+        }
+        if (opts.timeout) {
+            timeout request_timeout = opts.timeout;
+            async_opts.request_timeout = request_timeout;
+        }
         if (exists opts.max_redirects) {
             async_opts.max_redirects = opts.max_redirects;
         }
@@ -631,11 +672,11 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
             async_opts.proxy_url = opts.proxy;
         }
 
-        *SSLCertificate cert = getAsyncSslCertificate();
+        *SSLCertificate cert = HttpConnection::getAsyncSslCertificate(opts);
         if (cert) {
             async_opts.client_cert = cert;
         }
-        *SSLPrivateKey key = getAsyncSslPrivateKey();
+        *SSLPrivateKey key = HttpConnection::getAsyncSslPrivateKey(opts);
         if (key) {
             async_opts.client_pk = key;
         }
@@ -644,19 +685,19 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     }
 
     #! Loads the configured client certificate for HttpClientIo
-    private *SSLCertificate getAsyncSslCertificate() {
+    private static *SSLCertificate getAsyncSslCertificate(*hash<auto> opts) {
         *data cert_data = opts.ssl_cert_data;
         if (!exists cert_data && opts.ssl_cert_path.val()) {
-            cert_data = getAsyncSslFileData(opts.ssl_cert_path);
+            cert_data = HttpConnection::getAsyncSslFileData(opts.ssl_cert_path);
         }
         return exists cert_data ? new SSLCertificate(cert_data) : NOTHING;
     }
 
     #! Loads the configured client private key for HttpClientIo
-    private *SSLPrivateKey getAsyncSslPrivateKey() {
+    private static *SSLPrivateKey getAsyncSslPrivateKey(*hash<auto> opts) {
         *data key_data = opts.ssl_key_data;
         if (!exists key_data && opts.ssl_key_path.val()) {
-            key_data = getAsyncSslFileData(opts.ssl_key_path);
+            key_data = HttpConnection::getAsyncSslFileData(opts.ssl_key_path);
         }
         return exists key_data ? new SSLPrivateKey(key_data, opts.ssl_key_password) : NOTHING;
     }

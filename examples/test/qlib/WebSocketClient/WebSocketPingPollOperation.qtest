@@ -1,0 +1,342 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires WebSocketUtil
+%requires WebSocketHandler
+%requires WebSocketClient
+%requires AsyncSocketIo
+
+%exec-class WebSocketPingPollOperationTest
+
+#! A WebSocket handler that records the headers of the handshake requests
+class RecordingWsHandler inherits WebSocketHandler {
+    public {
+        #! The headers of the handshake requests
+        Queue headers();
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        headers.push(hdr);
+        return new WebSocketConnection(self);
+    }
+}
+
+#! An HTTP handler that returns status codes and blocks requests to /block until released
+class StatusHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! Signaled when a request is blocked in the handler
+        Queue entered();
+    }
+
+    private {
+        #! Blocked requests wait on this queue
+        Queue gate();
+    }
+
+    #! Releases a blocked request
+    release() {
+        gate.push(True);
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/block") {
+            entered.push(True);
+            # bounded so that a failing test cannot leave the server thread blocked forever
+            gate.get(60s);
+        }
+        return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+}
+
+#! A server that answers a WebSocket handshake with a fixed response
+class RawHandshakeServer {
+    public {
+        #! The port of the server
+        int port;
+        #! The request headers received
+        Queue requests();
+    }
+
+    private:internal {
+        Socket sock();
+        string response;
+        Counter done(1);
+    }
+
+    constructor(string response) {
+        self.response = response;
+        if (sock.bind("127.0.0.1:0")) {
+            throw "BIND-ERROR", strerror();
+        }
+        if (sock.listen()) {
+            throw "LISTEN-ERROR", strerror();
+        }
+        port = sock.getSocketInfo().port;
+        background serve();
+    }
+
+    #! Waits for the connection to be handled and closes the listener
+    stop() {
+        done.waitForZero(30s);
+        sock.close();
+    }
+
+    private:internal serve() {
+        on_exit done.dec();
+        try {
+            *Socket conn = sock.accept(30s);
+            if (!conn) {
+                return;
+            }
+            requests.push(conn.readHTTPHeader(10s));
+            conn.send(response);
+            # wait for the client to close the connection
+            try {
+                conn.recv(-1, 10s);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client closed or reset the connection
+            }
+            conn.close();
+        } catch (hash<ExceptionInfo> ex) {
+            requests.push({"error": ex.err});
+        }
+    }
+}
+
+#! Polling connection monitor that reports results on a queue
+class ResultPollingConnectionMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue msgq();
+    }
+
+    constructor() : PollingConnectionMonitor() {
+        ping_timeout = 20s;
+    }
+
+    hash<auto> waitForResult() {
+        return msgq.get(30s);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        msgq.push({"name": name, "result": "OK"});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        msgq.push({"name": name, "result": "timeout"});
+    }
+}
+
+public class WebSocketPingPollOperationTest inherits QUnit::Test {
+    private {
+        HttpServer m_server;
+        RecordingWsHandler ws_handler();
+        StatusHandler status_handler();
+        int port;
+        int tls_port;
+        Logger logger;
+    }
+
+    constructor() : Test("WebSocketPingPollOperationTest", "1.0") {
+        addTestCase("ping success", \pingSuccessTest());
+        addTestCase("connection options", \connectionOptionsTest());
+        addTestCase("HTTP error status", \errorStatusTest());
+        addTestCase("invalid handshake response", \invalidHandshakeTest());
+        addTestCase("connection refused", \connectionRefusedTest());
+        addTestCase("timeout", \timeoutTest());
+        addTestCase("TLS and HTTP/2", \tlsTest());
+        addTestCase("connection monitor", \monitorTest());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        m_server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        });
+        m_server.setHandler("status", "/(status|block)", NOTHING, status_handler);
+        m_server.setHandler("ws-handler", "", NOTHING, ws_handler);
+        m_server.setDefaultHandler("ws-handler", ws_handler);
+        port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string cert_dir = get_script_dir() + "/../ConnectionProvider/";
+        tls_port = m_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(ReadOnlyFile::readTextFile(cert_dir + "mycert.pem")),
+            "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(cert_dir + "mykey.pem"), "password"),
+            "http_version": "auto",
+            "enable_h3": False,
+        }).port;
+
+        set_return_value(main());
+
+        m_server.stop();
+    }
+
+    #! Drives a poll operation to completion with a deadline
+    private auto drivePoll(AbstractPollOperation poller, timeout deadline = 30s) {
+        date start = now_us();
+        while (!poller.goalReached()) {
+            timeout elapsed = now_us() - start;
+            if (elapsed >= deadline) {
+                throw "TIMEOUT", sprintf("poll operation exceeded %d ms deadline", deadline);
+            }
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            if (info) {
+                timeout remaining = deadline - elapsed;
+                Socket::poll((info,), min(remaining, 1s));
+            }
+        }
+        return poller.getOutput();
+    }
+
+    pingSuccessTest() {
+        WebSocketPingPollOperation poller = WebSocketPingPollOperation::create("ws://127.0.0.1:" + port + "/ws");
+        assertEq("ws-ping", poller.getGoal());
+        assertEq("connecting", poller.getState());
+        hash<auto> output = drivePoll(poller);
+        assertEq("completed", poller.getState());
+        assertEq(101, output.code);
+        assertEq("h1", output.protocol);
+        assertEq(ws_get_response_key(poller.getWebSocketKey()), output.headers."sec-websocket-accept");
+        assertNothing(output."response-body");
+
+        hash<auto> hdr = ws_handler.headers.get(10s);
+        assertEq("websocket", hdr.upgrade);
+        assertEq(poller.getWebSocketKey(), hdr."sec-websocket-key");
+        assertEq("13", hdr."sec-websocket-version");
+    }
+
+    connectionOptionsTest() {
+        WebSocketConnectionObject conn("ws-opts", "test", "ws://127.0.0.1:" + port + "/opts", {"monitor": False}, {
+            "token": "tok",
+            "cookie": "a=b",
+            "headers": {"X-Test": "1"},
+        });
+        assertTrue(conn.supportsPollingApi());
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        assertTrue(poller instanceof WebSocketPingPollOperation);
+        assertEq(101, drivePoll(poller).code);
+        hash<auto> hdr = ws_handler.headers.get(10s);
+        assertEq("Bearer tok", hdr.authorization);
+        assertEq("a=b", hdr.cookie);
+        assertEq("1", hdr."x-test");
+
+        # HTTP basic authentication from the URL
+        poller = WebSocketPingPollOperation::create("ws://user:pass@127.0.0.1:" + port + "/auth");
+        assertEq(101, drivePoll(poller).code);
+        hdr = ws_handler.headers.get(10s);
+        assertEq("Basic dXNlcjpwYXNz", hdr.authorization);
+    }
+
+    errorStatusTest() {
+        WebSocketPingPollOperation poller = WebSocketPingPollOperation::create("ws://127.0.0.1:" + port
+            + "/status");
+        assertThrows("WEBSOCKET-PING-ERROR", "expected status 101, got 404", \drivePoll(), poller);
+        assertEq("aborted", poller.getState());
+        assertFalse(poller.goalReached());
+    }
+
+    invalidHandshakeTest() {
+        {
+            RawHandshakeServer server("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                "Connection: Upgrade\r\nSec-WebSocket-Accept: invalid\r\n\r\n");
+            on_exit server.stop();
+            WebSocketPingPollOperation poller = WebSocketPingPollOperation::create("ws://127.0.0.1:"
+                + server.port);
+            assertThrows("WEBSOCKET-PING-ERROR", "invalid Sec-WebSocket-Accept", \drivePoll(), poller);
+            hash<auto> req = server.requests.get(10s);
+            assertEq(poller.getWebSocketKey(), req."sec-websocket-key");
+        }
+        {
+            RawHandshakeServer server("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                "Connection: Upgrade\r\n\r\n");
+            on_exit server.stop();
+            WebSocketPingPollOperation poller = WebSocketPingPollOperation::create("ws://127.0.0.1:"
+                + server.port);
+            assertThrows("WEBSOCKET-PING-ERROR", "missing Sec-WebSocket-Accept", \drivePoll(), poller);
+        }
+        assertThrows("HTTP-CLIENT-URL-ERROR", sub () {
+            WebSocketPingPollOperation::create("ftp://127.0.0.1");
+        });
+    }
+
+    connectionRefusedTest() {
+        WebSocketConnectionObject conn("ws-refused", "test", "ws://127.0.0.1:1", {"monitor": False});
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), conn.startPollConnect(logger));
+    }
+
+    timeoutTest() {
+        WebSocketConnectionObject conn("ws-timeout", "test", "ws://127.0.0.1:" + port + "/block",
+            {"monitor": False}, {"timeout": 250ms});
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        on_exit status_handler.release();
+        # the handler never answers until released, so the operation must time out by itself
+        assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
+        assertTrue(status_handler.entered.get(10s));
+        assertEq("aborted", poller.getState());
+    }
+
+    tlsTest() {
+        # "auto" uses an HTTP/1.1 Upgrade handshake even though the server supports HTTP/2
+        WebSocketConnectionObject conn("ws-tls", "test", "wss://127.0.0.1:" + tls_port + "/tls",
+            {"monitor": False}, {"http_version": "auto"});
+        hash<auto> output = drivePoll(conn.startPollConnect(logger));
+        assertEq(101, output.code);
+        assertEq("h1", output.protocol);
+        ws_handler.headers.get(10s);
+
+        # HTTP/2: an extended CONNECT handshake (RFC 8441)
+        conn = new WebSocketConnectionObject("ws-h2", "test", "wss://127.0.0.1:" + tls_port + "/h2",
+            {"monitor": False}, {"http_version": "2.0"});
+        output = drivePoll(conn.startPollConnect(logger));
+        assertEq(200, output.code);
+        assertEq("h2", output.protocol);
+        hash<auto> hdr = ws_handler.headers.get(10s);
+        assertEq("websocket", hdr.":protocol" ?? hdr.upgrade);
+    }
+
+    monitorTest() {
+        ResultPollingConnectionMonitor pcm();
+        on_exit delete pcm;
+
+        pcm.add(new WebSocketConnectionObject("ws-mon-ok", "test", "ws://127.0.0.1:" + port + "/mon"));
+        hash<auto> result = pcm.waitForResult();
+        assertEq("ws-mon-ok", result.name);
+        assertEq("OK", result.result);
+        pcm.removeConnection("ws-mon-ok");
+        ws_handler.headers.get(10s);
+
+        pcm.add(new WebSocketConnectionObject("ws-mon-err", "test", "ws://127.0.0.1:" + port + "/status"));
+        result = pcm.waitForResult();
+        assertEq("ws-mon-err", result.name);
+        assertEq("error", result.result);
+        assertEq("WEBSOCKET-PING-ERROR", result.ex.err);
+        pcm.removeConnection("ws-mon-err");
+    }
+}

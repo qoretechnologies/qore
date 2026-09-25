@@ -44,6 +44,7 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 | 6a | Discord gateway discovery, `get_file_from_http()` (HttpClientIo loaded at run time: Util cannot require it), JSON-LD loader, A2A and ONE Record push notifications | done |
 | 6b | `HttpClientDataProvider`, `FileLocationHandler` (HttpClientIo / RestClientIo loaded at run time: static dependencies would be cycles); `HttpConnection::getDataProvider()` loaded a nonexistent `HttpDataProvider` module | done |
 | 7 | New async clients: FHIR, EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` with `ServerSentEventClientIo` | done |
+| 8 | Connection polling pings and requests (`HttpPingPollOperation`, `HttpRequestPollOperation`, SSE connect and ping, WebSocket ping) on HttpClientIo; the ServiceNow, Mews and Salesforce pings on `RestClientIoPingPollOperation` | done |
 
 ## Watch providers
 

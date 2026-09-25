@@ -1754,6 +1754,12 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         client (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref connectionproviderintro "ConnectionProvider" module
+      - polling pings and the asynchronous request API of HTTP and HTTP-based connections
+        (\c HttpPingPollOperation, \c HttpRequestPollOperation) use non-blocking @ref httpclientiointro "HttpClientIo"
+        I/O with HTTP/2 and HTTP/3 support instead of HTTP/1.1-only @ref Qore::HTTPClient "HTTPClient" poll
+        operations; added \c HttpClientIoPollOperation, \c HttpConnectPollOperation, and
+        \c HttpConnection::getAsyncConnectionManager()
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - fixed @ref ConnectionProvider::HttpConnection::getDataProvider() "HttpConnection::getDataProvider()", which
         loaded a nonexistent \c HttpDataProvider module and always failed; it returns an
         @ref httpclientdataproviderintro "HttpClientDataProvider" using the connection's asynchronous connection
@@ -2216,6 +2222,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         failing with \c RUNTIME-TYPE-ERROR
 
     - @ref serversenteventclientintro "ServerSentEventClient" module
+      - SSE connection pings and \c SseConnectPollOperation use non-blocking @ref httpclientiointro "HttpClientIo" I/O
+        with HTTP/2 and HTTP/3 support (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - @ref ServerSentEventClient::ServerSentEventClientDataProvider "ServerSentEventClientDataProvider" receives
         events with @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo", converts a
         synchronous client passed to it, and stops the stream when events are stopped;
@@ -2306,6 +2314,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c truncation, \c max_chunks_per_doc, and \c return_documents to Voyage
 
     - @ref websocketclientintro "WebSocketClient" module
+      - \c WebSocketPingPollOperation uses non-blocking @ref httpclientiointro "HttpClientIo" I/O, with an extended
+        CONNECT handshake for HTTP/2 and HTTP/3
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - added HTTP/3 WebSocket support (<a href="https://datatracker.ietf.org/doc/html/rfc9220">RFC 9220</a>) and the \c "3.0" \c http_version option
       - added WebSocket extension support with permessage-deflate compression
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
