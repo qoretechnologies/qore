@@ -92,6 +92,26 @@ public hashdecl ProviderIndexInfo {
     hash<auto> summary;
 }
 
+#! A published data provider index read from its routing index and metadata cache
+/** @since ProviderIndexUtil 1.2
+*/
+public hashdecl SerializedDataProviderIndexInfo {
+    #! The \c factorymap, \c appmap, \c schememap, \c appinfomap, and \c actioninfomap members of the index
+    /** App and action metadata is in the serialized form stored in the index, as in the canonical index file
+    */
+    *hash<auto> index;
+
+    #! The SHA-256 digest of the routing index
+    /** The routing index holds the index maps and records the digests of the metadata cache manifest, which
+        records the digest of each app's metadata, and of the canonical index file, so this digest identifies the
+        complete index
+    */
+    string sha256;
+
+    #! The total size in bytes of the files read
+    int size;
+}
+
 #! Internal context for reconstructing typed provider metadata
 hashdecl MetadataDeserializeContext {
     TypedHash app_info_th;
@@ -1352,6 +1372,130 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         }
     }
 
+    #! Reads a published index from its routing index and metadata cache, without the canonical index file
+    /** The canonical index file (\c qore-data-index.yaml) holds the same metadata as the metadata cache, but
+        uncompressed and as text, so it is many times larger; this reads the compact files instead and verifies
+        them: the routing index against its own checksum, the metadata cache manifest against the digest recorded
+        in the routing index, and each app's metadata against the size and digest recorded in the manifest.
+
+        @param dir the index directory
+
+        @return the index, or @ref nothing if the directory holds no routing index with a metadata cache, or if the
+        files are inconsistent (for example while an index is being published); the caller can then read the
+        canonical index file
+
+        @par Example:
+        @code{.py}
+*hash<SerializedDataProviderIndexInfo> info = ProviderIndexUtil::readSerializedDataProviderIndex(dir);
+if (info) {
+    printf("%d apps; index %s\n", info.index.appinfomap.size(), info.sha256);
+}
+        @endcode
+
+        @note The canonical index file is not read, so its content is not verified against the digest recorded in
+        the routing index
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<SerializedDataProviderIndexInfo> readSerializedDataProviderIndex(string dir) {
+        return readSerializedIndexIntern(dir, True);
+    }
+
+    #! Returns the digest and size of a published index from its routing index and metadata cache
+    /** Verifies the same files as @ref readSerializedDataProviderIndex() and returns the same digest and size, but
+        does not unpack any metadata, so it can cheaply check whether an index read before has changed.
+
+        @param dir the index directory
+
+        @return the digest and size of the index, with no \c index member, or @ref nothing if
+        @ref readSerializedDataProviderIndex() would return @ref nothing
+
+        @since ProviderIndexUtil 1.2
+    */
+    static *hash<SerializedDataProviderIndexInfo> getSerializedDataProviderIndexSource(string dir) {
+        return readSerializedIndexIntern(dir, False);
+    }
+
+    #! Reads and verifies a published index from its routing index and metadata cache
+    /** @param dir the index directory
+        @param unpack @ref True to unpack the metadata, @ref False to only verify it
+    */
+    static private *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack) {
+%ifdef NoYaml
+        return;
+%else
+%ifdef NoMsgPack
+        return;
+%else
+        string routing_path = getIndexPath("routing", dir);
+        if (!is_file(routing_path)) {
+            return;
+        }
+        try {
+            binary routing_data = ReadOnlyFile::readBinaryFile(routing_path);
+            *hash<DataProviderRoutingIndexInfo> routing =
+                cast<*hash<DataProviderRoutingIndexInfo>>(parse_yaml(routing_data.toString("UTF-8")));
+            if (!routing || routing.version != RoutingIndexVersion
+                    || routing.metadata_cache_version != MetadataCacheVersion || !routing.metadata_cache_sha256
+                    || routing.routing_sha256
+                        != digest("sha256", make_yaml(getRoutingIndexChecksumPayload(routing), BlockStyle)).toHex()) {
+                return;
+            }
+
+            binary manifest_data = ReadOnlyFile::readBinaryFile(getMetadataCachePath(dir));
+            if (digest("sha256", manifest_data).toHex() != routing.metadata_cache_sha256) {
+                return;
+            }
+            *hash<DataProviderMetadataCacheManifest> manifest =
+                cast<*hash<DataProviderMetadataCacheManifest>>(unpackIndexData(manifest_data));
+            if (!manifest || manifest.version != MetadataCacheVersion) {
+                return;
+            }
+
+            int size = routing_data.size() + manifest_data.size();
+            hash<auto> appinfomap = {};
+            hash<auto> actioninfomap = {};
+            foreach string app in (sort(keys manifest.apps)) {
+                hash<DataProviderMetadataCacheChunkInfo> chunk_info = manifest.apps{app};
+                binary data = ReadOnlyFile::readBinaryFile(getMetadataCacheChunkPath(app, dir));
+                if (data.size() != chunk_info.size || digest("sha256", data).toHex() != chunk_info.sha256) {
+                    return;
+                }
+                size += data.size();
+                if (unpack) {
+                    hash<DataProviderIndexInfo> chunk = unpackMetadataCacheChunk(data);
+                    if (exists chunk.appinfomap{app}) {
+                        appinfomap{app} = chunk.appinfomap{app};
+                    }
+                    if (exists chunk.actioninfomap{app}) {
+                        actioninfomap{app} = chunk.actioninfomap{app};
+                    }
+                }
+            }
+
+            hash<SerializedDataProviderIndexInfo> rv = <SerializedDataProviderIndexInfo>{
+                "sha256": digest("sha256", routing_data).toHex(),
+                "size": size,
+            };
+            if (unpack) {
+                rv.index = {
+                    "factorymap": routing.factorymap ?? {},
+                    "appmap": routing.appmap ?? {},
+                    "schememap": routing.schememap ?? {},
+                    "appinfomap": appinfomap,
+                    "actioninfomap": actioninfomap,
+                };
+            }
+            return rv;
+        } catch (hash<ExceptionInfo> ex) {
+            # a missing or unreadable file, as while an index is being published: the canonical index can be read
+            log(LoggerLevel::LevelDebug, "Cannot read the data provider metadata cache in %y: %s: %s", dir, ex.err,
+                ex.desc);
+        }
+%endif
+%endif
+    }
+
     #! Reads the data provider index from the configured directory
     static *hash<DataProviderIndexInfo> readDataProviderIndex() {
         return deserializeDataProviderIndex(readRawDataProviderIndex());
@@ -1941,18 +2085,18 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
     }
 
     #! Returns the index path for the given type
-    static string getIndexPath(string type) {
-        return sprintf("%s%sqore-%s-index.yaml", tryGetIndexDir(True), DirSep, type);
+    static string getIndexPath(string type, *string dir) {
+        return sprintf("%s%sqore-%s-index.yaml", dir ?? tryGetIndexDir(True), DirSep, type);
     }
 
     #! Returns the optional data provider metadata cache path
-    static private string getMetadataCachePath() {
-        return sprintf("%s%sqore-data-index.msgpack", tryGetIndexDir(True), DirSep);
+    static private string getMetadataCachePath(*string dir) {
+        return sprintf("%s%sqore-data-index.msgpack", dir ?? tryGetIndexDir(True), DirSep);
     }
 
     #! Returns the app-specific data provider metadata cache chunk path
-    static private string getMetadataCacheChunkPath(string app) {
-        return sprintf("%s%sqore-data-index-%s.msgpack", tryGetIndexDir(True), DirSep,
+    static private string getMetadataCacheChunkPath(string app, *string dir) {
+        return sprintf("%s%sqore-data-index-%s.msgpack", dir ?? tryGetIndexDir(True), DirSep,
             digest("sha256", app).toHex());
     }
 

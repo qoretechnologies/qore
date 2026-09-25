@@ -24,6 +24,7 @@
 public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
     constructor() : Test("ProviderIndex metadata cache test", "1.0") {
         addTestCase("corrupt cache falls back to canonical index", \corruptCacheFallsBackToCanonicalIndex());
+        addTestCase("a published index is read without the canonical index file", \serializedIndexTest());
 
         set_return_value(main());
     }
@@ -91,5 +92,71 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertEq(indexed_action,
             ProviderIndexUtil::tryGetActionMetadata(indexed_app, indexed_action).action,
             "cache digest failure falls back to canonical action metadata");
+    }
+
+    serializedIndexTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        assertNothing(ProviderIndexUtil::readSerializedDataProviderIndex(dir), "no index yet");
+
+        hash<auto> maps = {
+            "factorymap": {"qoretest": "QoreTestModule"},
+            "appmap": {"QoreTestApp": {"QoreTestModule": True}},
+            "schememap": {"qoretest": {"QoreTestModule": True}},
+            "appinfomap": {
+                "QoreTestApp": {"name": "QoreTestApp", "desc": "orders"},
+                "QoreTestEmptyApp": {"name": "QoreTestEmptyApp"},
+            },
+        };
+        hash<auto> actions = {
+            "QoreTestApp": {
+                "create-order": {"app": "QoreTestApp", "action": "create-order", "created": 2026-09-25T10:00:00Z},
+            },
+        };
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit if (had_env) {
+            ProviderIndexUtil::setEnvironmentVariable(old_env);
+        }
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndexByApp(maps, keys actions, *hash<auto> sub (string app) {
+            return actions{app};
+        }, 0s, {});
+
+        # the same index as the canonical index file
+        *hash<SerializedDataProviderIndexInfo> info = ProviderIndexUtil::readSerializedDataProviderIndex(dir);
+        assertEq(maps + {"actioninfomap": actions}, info.index);
+        assertEq(parse_yaml(ReadOnlyFile::readTextFile(dir + "/qore-data-index.yaml")), info.index);
+        assertEq(digest("sha256", ReadOnlyFile::readBinaryFile(dir + "/qore-routing-index.yaml")).toHex(),
+            info.sha256);
+
+        # the source has the same digest and size without the index
+        *hash<SerializedDataProviderIndexInfo> source = ProviderIndexUtil::getSerializedDataProviderIndexSource(dir);
+        assertEq(info.sha256, source.sha256);
+        assertEq(info.size, source.size);
+        assertNothing(source.index);
+
+        # the canonical index file is not needed
+        unlink(dir + "/qore-data-index.yaml");
+        assertEq(info, ProviderIndexUtil::readSerializedDataProviderIndex(dir));
+
+        # inconsistent files are not read: a changed app chunk, a changed manifest, and a changed routing index
+        string chunk = sprintf("%s/qore-data-index-%s.msgpack", dir, digest("sha256", "QoreTestApp").toHex());
+        foreach string path in ((chunk, dir + "/qore-data-index.msgpack", dir + "/qore-routing-index.yaml")) {
+            binary data = ReadOnlyFile::readBinaryFile(path);
+            {
+                File f();
+                f.open2(path, O_WRONLY | O_TRUNC);
+                f.write(data + <00>);
+            }
+            assertNothing(ProviderIndexUtil::readSerializedDataProviderIndex(dir), path);
+            assertNothing(ProviderIndexUtil::getSerializedDataProviderIndexSource(dir), path);
+            File f();
+            f.open2(path, O_WRONLY | O_TRUNC);
+            f.write(data);
+        }
+        assertEq(info, ProviderIndexUtil::readSerializedDataProviderIndex(dir), "restored files are read again");
     }
 }

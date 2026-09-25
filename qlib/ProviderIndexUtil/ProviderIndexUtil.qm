@@ -71,6 +71,10 @@ module ProviderIndexUtil {
       is written; added
       @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "ProviderIndexUtil::writeDataProviderIndexByApp()"
     - index files are written deterministically, with apps, actions, and map entries in sorted order
+    - added @ref ProviderIndexUtil::ProviderIndexUtil::readSerializedDataProviderIndex() "ProviderIndexUtil::readSerializedDataProviderIndex()"
+      and @ref ProviderIndexUtil::ProviderIndexUtil::getSerializedDataProviderIndexSource() "ProviderIndexUtil::getSerializedDataProviderIndexSource()",
+      which read and verify a published index from its compact routing index and metadata cache instead of the much
+      larger canonical index file, and identify it by the digest of its routing index
     - validating the routing index reads the canonical index as binary data, halving the memory used
     - indexed actions are returned as \c DataProvider::DataProviderIndexedActionInfo hashes, in which each
       option's type is described by plain data in \c type_info; reading them never loads the provider modules
