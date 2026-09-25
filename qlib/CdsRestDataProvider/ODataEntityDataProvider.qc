@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ODataEntityDataProvider class definition
 
-/** ODataEntityDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** ODataEntityDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -69,7 +69,7 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
         @param name the entity name
         @param meta metadata from $metadata endpoint
     */
-    constructor(CdsRestClient::CdsRestClient rest, string name, hash<auto> meta)
+    constructor(CdsRestClient::CdsRestClientIo rest, string name, hash<auto> meta)
             : AbstractODataEntityDataProvider(rest, name) {
         self.meta = meta;
     }
@@ -79,26 +79,32 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
         @param companyId the company ID
         @param name the entity name
     */
-    constructor(CdsRestClient::CdsRestClient rest, string companyId, string name)
+    constructor(CdsRestClient::CdsRestClientIo rest, string companyId, string name)
             : AbstractODataEntityDataProvider(rest, name) {
         self.companyId = companyId;
     }
 
     #! Returns the URI for an entity
+    /** @return the request path for the entity, with characters not valid in a request target percent-encoded
+    */
     private string getEntityUri(*string id) {
+        string uri;
         if (companyId) {
             # Business Central: company-scoped URI
             if (id) {
-                return sprintf("companies(%s)/%s(%s)", companyId, name, id);
+                uri = sprintf("companies(%s)/%s(%s)", companyId, name, id);
+            } else {
+                uri = sprintf("companies(%s)/%s", companyId, name);
             }
-            return sprintf("companies(%s)/%s", companyId, name);
         } else {
             # Dynamics CDS: direct entity URI
             if (id) {
-                return sprintf("%s(%s)", record_info.entity_name, id);
+                uri = sprintf("%s(%s)", record_info.entity_name, id);
+            } else {
+                uri = record_info.entity_name;
             }
-            return record_info.entity_name;
         }
+        return CdsRestDataProviderBase::encodeRequestPath(uri);
     }
 
     #! Creates a record iterator
@@ -139,7 +145,7 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     }
 
     #! Check if error is a duplicate record error
-    private bool isDuplicateError(hash<ExceptionInfo> ex, hash<auto> info) {
+    private bool isDuplicateError(hash<ExceptionInfo> ex) {
         if (companyId) {
             # Business Central
             return ex.err == "BadRequest" || ex.err =~ /duplicate/i;
@@ -149,16 +155,17 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     }
 
     #! Process create response to extract new record ID (CDS only)
-    private *hash<auto> processCreateResponse(hash<auto> rec, hash<auto> resp, hash<auto> info) {
+    private *hash<auto> processCreateResponse(hash<auto> rec, hash<RestClient::RestResponseInfo> resp) {
         if (companyId) {
             # Business Central - ID is in response body
             return resp.body;
         }
-        # Dynamics CDS - extract ID from OData-EntityId header
-        *string new_key = (info."response-headers"."odata-entityid" =~ x/\(([-0-9a-f]+)\)$/)[0];
+        # Dynamics CDS - extract ID from OData-EntityId header; response header names are in lower case
+        *string entity_id = RestClient::RestClient::getSingleHeaderValue(resp.headers."odata-entityid");
+        *string new_key = (entity_id =~ x/\(([-0-9a-f]+)\)$/)[0];
         if (!new_key) {
             throw "CDS_ENTITY-CREATE-ERROR", sprintf("failed to find new entity ID in OData-EntityId header: %y",
-                info."response-headers"."odata-entityid");
+                entity_id);
         }
         return rec + {record_info.key: new_key};
     }
@@ -188,7 +195,7 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     }
 
     #! Check if upsert resulted in insert or update
-    private string checkUpsertResult(hash<auto> resp, date now) {
+    private string checkUpsertResult(hash<RestClient::RestResponseInfo> resp, date now) {
         if (companyId) {
             # Business Central - check systemCreatedAt field
             if (resp.body.systemCreatedAt) {
@@ -210,13 +217,13 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
     #! Gets the ETag for a record (BC only)
     private *string getRecordEtag(string id) {
         string url = getEntityUri(id);
-        hash<auto> info;
         try {
-            hash<auto> resp = rest.get(url, NOTHING, \info);
+            hash<RestClient::RestResponseInfo> resp = rest.restGet(url);
             return resp.body."@odata.etag";
         } catch (hash<ExceptionInfo> ex) {
-            # If record doesn't exist, return nothing
-            if (info."response-code" == 404) {
+            # If record doesn't exist, return nothing; the exception argument of an error response includes the
+            # response
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.status_code == 404) {
                 return NOTHING;
             }
             rethrow;
@@ -300,10 +307,10 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
 
     #! Determine the entity set name for the entity (CDS only)
     private setEntitySetName() {
-        hash<auto> info;
         try {
-            string uri = sprintf("EntityDefinitions(LogicalName='%s')?$select=EntitySetName", name);
-            hash<auto> resp = rest.get(uri, NOTHING, \info);
+            string uri = CdsRestDataProviderBase::encodeRequestPath(
+                sprintf("EntityDefinitions(LogicalName='%s')?$select=EntitySetName", name));
+            hash<RestClient::RestResponseInfo> resp = rest.restGet(uri);
             *string entity_set_name;
             if (!(entity_set_name = resp.body.EntitySetName)) {
                 throw "CDS-ENTITY-SET-ERROR", sprintf("missing entity set name for %y in %y (query %y)", name, resp.body,
@@ -312,8 +319,9 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
             record_info.entity_name = entity_set_name;
             return;
         } catch (hash<ExceptionInfo> ex) {
-            if (info."response-headers".status_code != 403) {
-                rethrow ex.err, ex.desc, info{"request-uri", "response-uri"};
+            # the exception argument of an error response includes the response
+            if (ex.arg.typeCode() != NT_HASH || ex.arg.status_code != 403) {
+                rethrow;
             }
         }
         # if we get a 403 Unauthorized response, then we determine the entity set name with a heuristic
@@ -332,11 +340,11 @@ public class ODataEntityDataProvider inherits AbstractODataEntityDataProvider {
         record_info.entity_name = name;
 
         # Try to get schema from a sample record
-        hash<auto> info;
         try {
             # Try to get a single record to infer schema
-            string uri = sprintf("companies(%s)/%s?$top=1", companyId, name);
-            hash<auto> resp = rest.get(uri, NOTHING, \info);
+            string uri = CdsRestDataProviderBase::encodeRequestPath(sprintf("companies(%s)/%s?$top=1", companyId,
+                name));
+            hash<RestClient::RestResponseInfo> resp = rest.restGet(uri);
             if (resp.body.value && resp.body.value.size() > 0) {
                 inferRecordTypeFromSample(resp.body.value[0]);
                 return;

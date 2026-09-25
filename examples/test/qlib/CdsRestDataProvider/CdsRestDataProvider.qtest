@@ -1108,8 +1108,8 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 }
 
-#! Mock CdsRestClient for unit testing without actual API credentials
-class MockCdsRestClient inherits CdsRestClient {
+#! Mock CdsRestClientIo for unit testing without actual API credentials
+class MockCdsRestClient inherits CdsRestClientIo {
     private {
         #! Mock data for API responses
         hash<auto> mock_data;
@@ -1119,18 +1119,22 @@ class MockCdsRestClient inherits CdsRestClient {
     /** @param data hash with mock data:
         - companies: list of company hashes to return from GET companies
     */
-    constructor(hash<auto> data) : CdsRestClient({
+    constructor(hash<auto> data) : CdsRestClientIo({
         "url": "https://mock.example.com",
         "oauth2_client_id": "mock-client-id",
         "oauth2_client_secret": "mock-client-secret",
-    }, True) {  # do_not_connect = True
+        # a static token: the mock sends no requests and does not log in
+        "token": "mock-token",
+    }) {
         mock_data = data;
     }
 
-    #! Override get() to return mock data
-    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+    #! Override restGet() to return mock data
+    hash<RestResponseInfo> restGet(string path, *hash<auto> hdr) {
         if (path == "companies") {
-            return {
+            return <RestResponseInfo>{
+                "status_code": 200,
+                "headers": {},
                 "body": {
                     "value": mock_data.companies ?? (),
                 },
@@ -1140,29 +1144,30 @@ class MockCdsRestClient inherits CdsRestClient {
     }
 }
 
-#! Mock CdsRestClient that throws an error on any request
-class MockCdsRestClientWithError inherits CdsRestClient {
+#! Mock CdsRestClientIo that throws an error on any request
+class MockCdsRestClientWithError inherits CdsRestClientIo {
     private {
         string error_code;
         string error_desc;
     }
 
-    constructor(string err, string desc) : CdsRestClient({
+    constructor(string err, string desc) : CdsRestClientIo({
         "url": "https://mock.example.com",
         "oauth2_client_id": "mock-client-id",
         "oauth2_client_secret": "mock-client-secret",
-    }, True) {
+        # a static token: the mock sends no requests and does not log in
+        "token": "mock-token",
+    }) {
         error_code = err;
         error_desc = desc;
     }
 
-    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
-        # Populate info like the real client would before throwing
-        info = {
-            "request-uri": "https://mock.example.com/" + path,
-            "response-code": 500,
-            "response-body": "Mock error",
+    hash<RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        # the argument includes the response like the real client's error response exceptions
+        throw error_code, error_desc, <RestResponseInfo>{
+            "status_code": 500,
+            "headers": {},
+            "body": "Mock error",
         };
-        throw error_code, error_desc;
     }
 }

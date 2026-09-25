@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore CdsRestDataProvider module definition
 
-/** CdsRestDataProviderTables.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** CdsRestDataProviderTables.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,6 +53,18 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
+    /** @param rest the REST client for API calls
+
+        @since CdsRestDataProvider 2.2
+    */
+    constructor(CdsRestClient::CdsRestClientIo rest) : CdsRestDataProviderBase(rest) {
+    }
+
+    #! Creates the object from the arguments
+    /** @param rest a synchronous REST client; API calls are made with a
+        @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo" created with its options and connection path by
+        @ref CdsRestDataProviderBase::getAsyncClient()
+    */
     constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
     }
 
@@ -64,7 +76,11 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
-        rest = new CdsRestClient(getClientOptions(copts));
+        if (copts.cdsrestclient) {
+            rest = CdsRestDataProviderBase::getClientFromOption(copts.cdsrestclient);
+        } else {
+            rest = new CdsRestClientIo(getClientOptions(copts));
+        }
     }
 
     #! Returns the data provider name
@@ -111,15 +127,8 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
             return meta;
         }
 
-        hash<auto> resp;
-        hash<auto> info;
-        try {
-            resp = rest.get("$metadata?annotations=true", NOTHING, \info).body."edmx:Edmx"."edmx:DataServices".Schema;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response
+        hash<auto> resp = rest.restGet("$metadata?annotations=true").body."edmx:Edmx"."edmx:DataServices".Schema;
         #printf("%Y\n", resp.EntityType);
 
         meta = map {$1."^attributes^".Name: $1}, resp.EntityType, ($1.Property || ($1.Abstract == "true"));
@@ -131,10 +140,5 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
         return ProviderInfo;
     }
 
-    #! Returns options for the CdsRestClient
-    static private *hash<auto> getClientOptions(*hash<auto> copts) {
-        return copts - ("cdsrestclient_options", "cdsrestclient")
-            + copts.cdsrestclient_options;
-    }
 }
 }

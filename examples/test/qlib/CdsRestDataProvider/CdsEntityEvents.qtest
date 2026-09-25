@@ -22,7 +22,7 @@
     rest of this suite runs with no client at all - so that derivation was never exercised, and a defect in
     it went unnoticed until a live check found every event publishing an untyped payload.
 */
-class FakeCdsRestClient inherits CdsRestClient::CdsRestClient {
+class FakeCdsRestClientIo inherits CdsRestClient::CdsRestClientIo {
     public {
         #! One entity with two properties, in the shape Dataverse answers with
         const Metadata = {
@@ -45,24 +45,26 @@ class FakeCdsRestClient inherits CdsRestClient::CdsRestClient {
         };
     }
 
-    constructor() : CdsRestClient({
+    constructor() : CdsRestClientIo({
         "url": "https://fake.crm.dynamics.com/api/data/v9.2",
         "oauth2_client_id": "x",
         "oauth2_client_secret": "y",
         "tenant": "z",
-    }, True) {
+        # a static token: the fake sends no requests and does not log in
+        "token": "fake-token",
+    }) {
     }
 
-    hash<auto> get(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+    hash<RestResponseInfo> restGet(string path, *hash<auto> hdr) {
         if (path =~ /^\$metadata/) {
-            return {"body": Metadata};
+            return <RestResponseInfo>{"status_code": 200, "headers": {}, "body": Metadata};
         }
         if (path =~ /^EntityDefinitions/) {
-            return {"body": {"EntitySetName": "accounts"}};
+            return <RestResponseInfo>{"status_code": 200, "headers": {}, "body": {"EntitySetName": "accounts"}};
         }
         # no rows: the example data falls back to the generated one, which is what an empty
         # organisation produces
-        return {"body": {"value": ()}};
+        return <RestResponseInfo>{"status_code": 200, "headers": {}, "body": {"value": ()}};
     }
 }
 
@@ -304,7 +306,7 @@ class CdsEntityEventsTest inherits QUnit::Test {
         got no fields at all.
     */
     eventPayloadTypeTest() {
-        FakeCdsRestClient rest();
+        FakeCdsRestClientIo rest();
         # the events container resolves the entity's declaration and hands it to the watch provider
         CdsEventsDataProvider live(rest);
         AbstractDataProvider ep = cast<AbstractDataProvider>(live.getChildProvider("new-or-updated-account"));

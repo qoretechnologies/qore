@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ODataRecordIterator class definition
 
-/** ODataRecordIterator.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** ODataRecordIterator.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,27 +35,24 @@ public class ODataRecordIterator inherits AbstractODataRecordIterator {
         @param where_cond the where clause for the query, if any
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(CdsRestClient::CdsRestClient rest, string entity_name, hash<ODataRecordInfo> record_info,
+    constructor(CdsRestClient::CdsRestClientIo rest, string entity_name, hash<ODataRecordInfo> record_info,
             *hash<auto> where_cond, *hash<auto> search_options)
             : AbstractODataRecordIterator(rest, record_info, search_options) {
         # Make query
         *string query = makeQuery(where_cond, search_options);
-        hash<auto> info;
         try {
             string uri = entity_name;
             if (query) {
                 uri += sprintf("?%s", query);
             }
-            hash<auto> resp = rest.get(uri, NOTHING, \info);
+            hash<RestClient::RestResponseInfo> resp = rest.restGet(CdsRestDataProviderBase::encodeRequestPath(uri));
             i = new ListHashIterator(resp.body.value ?? ());
-            # Save next link for pagination (used by BC, ignored by CDS)
+            # Save next link for pagination
             nextLink = resp.body."@odata.nextLink";
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = {
-                "query": query,
-            } + info{"response-code", "response-body"};
-            throw ex.err, ex.desc, ex_arg;
+            # the query is added to the exception argument, which includes the response of an error response
+            hash<auto> ex_arg = ex.arg.typeCode() == NT_HASH ? ex.arg : {};
+            throw ex.err, ex.desc, ex_arg + {"query": query};
         }
     }
 
@@ -70,9 +67,10 @@ public class ODataRecordIterator inherits AbstractODataRecordIterator {
 
         # Check for next page (pagination support)
         if (nextLink) {
-            hash<auto> info;
             try {
-                hash<auto> resp = rest.get(nextLink, NOTHING, \info);
+                # the next link is an absolute URL; requests take its path
+                hash<RestClient::RestResponseInfo> resp = rest.restGet(
+                    CdsRestDataProviderBase::getRequestPath(nextLink));
                 i = new ListHashIterator(resp.body.value ?? ());
                 nextLink = resp.body."@odata.nextLink";
                 return i.next();
