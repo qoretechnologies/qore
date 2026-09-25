@@ -3653,9 +3653,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             rethrow;
                         }
                         if (chunk.typeCode() == NT_HASH) {
+                            if (chunk.err != "HTTP-BODY-TOO-LARGE") {
+                                # the body ended before END_STREAM (HTTP-BODY-INCOMPLETE): the handler must not
+                                # get the part received for the complete body
+                                throw chunk.err, chunk.desc;
+                            }
                             # the I/O layer stopped buffering a body that exceeds the limit; the bytes it
                             # buffered until then were delivered first, and the rest of the body is discarded
-                            @assert(chunk.err == "HTTP-BODY-TOO-LARGE");
                             hit_max_body = True;
                             break;
                         }

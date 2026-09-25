@@ -4289,11 +4289,14 @@ public class HttpAsyncSocketIoController {
                 # closure with an unlimited (max=-1) Queue.  The I/O thread
                 # drains previously-buffered frames into the Queue at
                 # registration time and pushes subsequent frames as they
-                # arrive; a NOTHING sentinel marks END_STREAM.  Used by
-                # GrpcServerAsync for client-streaming / bidi and to drain
-                # the unary request body without the sync helper.
+                # arrive; a NOTHING sentinel marks END_STREAM, and a body that
+                # ends otherwise (too large, or reset / connection closed
+                # before END_STREAM) ends with an error hash with "err" and
+                # "desc" keys.  Used by GrpcServerAsync for client-streaming /
+                # bidi and to drain the unary request body without the sync
+                # helper.
                 "register_body_queue": body_streaming ? sub (Queue q) {
-                    dispatch_h2op.registerStreamQueue(dispatch_stream_id, q);
+                    dispatch_h2op.registerStreamQueue(dispatch_stream_id, q, NOTHING, True);
                     resumeMultiplexedReading(dispatch_h2op, dispatch_uh,
                         HttpConnectionState::Http2);
                 } : NOTHING,

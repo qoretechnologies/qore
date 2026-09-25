@@ -129,6 +129,11 @@ struct Http2StreamInfo {
     bool marked_complete = false;  //!< True if already added to completed_streams (prevents duplicates)
     bool dispatched = false;       //!< True after headers-only dispatch (stream stays in map for DATA accumulation)
     bool headers_end_stream = false; //!< True if END_STREAM was on the initial HEADERS frame (no body expected)
+    //! True once the peer ended the stream with END_STREAM (on HEADERS, trailing HEADERS, or DATA)
+    /** Unlike @ref body_complete, which is also set when the stream is closed by RST_STREAM or otherwise, this flag
+        tells whether the peer sent its complete message body.
+    */
+    bool end_stream_received = false;
     bool streaming = false;        //!< True for streaming requests (bidi/client-streaming) on client side
     bool headers_streamed = false; //!< True after a headers-only event has been pushed for a non-CONNECT streaming
                                    //!< response.  Separate from @c dispatched because we do NOT want to inhibit
@@ -538,6 +543,13 @@ public:
         Http2StreamInfo::body_too_large
     */
     DLLLOCAL bool isStreamBodyTooLarge(int32_t stream_id) const;
+
+    //! Returns True if the peer ended the stream with END_STREAM, so the message body it sent is complete
+    /** @param stream_id the stream to check
+        @return True if the stream exists and the peer sent END_STREAM on it; False if the stream is not found, or if
+        it was closed without END_STREAM (for example, by RST_STREAM); see Http2StreamInfo::end_stream_received
+    */
+    DLLLOCAL bool isStreamEndStreamReceived(int32_t stream_id) const;
 
     //! Asks the client to stop sending its request after the server sent the complete response (server)
     /** Called when the frame that carries the response's END_STREAM flag has been sent; submits

@@ -2543,6 +2543,7 @@ void QuicSession::shutdownStreamReads() {
         for (auto& [id, info] : streams_) {
             (void)id;
             info->stream_data_shutdown = true;
+            info->stream_data_aborted = true;
         }
     }
     // Wake every controller-backed readQuicStreamDataBlock() poll op so it
@@ -3136,6 +3137,30 @@ bool QuicSession::isStreamBodyTooLarge(int64_t stream_id) const {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     auto it = streams_.find(stream_id);
     return it != streams_.end() && it->second->body_too_large;
+}
+
+const char* QuicSession::getStreamBodyIncompleteReason(int64_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it == streams_.end()) {
+        // a dispatched stream stays in the map until its handler cleans it up, so a stream that is gone was reset
+        // or canceled before its body was read completely
+        return peer_reset_streams_.find(stream_id) != peer_reset_streams_.end()
+            ? "the client reset the stream"
+            : "the stream was closed";
+    }
+    const QuicStreamInfo& info = *it->second;
+    if (info.fin_received || info.is_connect) {
+        return nullptr;
+    }
+    if (info.stream_data_aborted) {
+        return "the server stopped reading the stream";
+    }
+    if (info.stream_data_shutdown) {
+        // the read was canceled with shutdownStreamRead(); its caller tells the cancel from the end of the body
+        return nullptr;
+    }
+    return info.peer_stop_sending ? "the client reset the stream" : "the stream was closed";
 }
 
 int QuicSession::resetStream(int64_t stream_id) {
@@ -4380,6 +4405,7 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
                 // FIN on HEADERS = no body; mark truly complete
                 printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " headers-only mode "
                     "FIN on HEADERS - marking complete\n", stream_id);
+                stream->fin_received = true;
                 session->markStreamComplete(stream_id);
             } else {
                 // No FIN = body expected; stream stays in map with headers_complete=true
@@ -4395,6 +4421,7 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         if (fin) {
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " FIN set - marking complete (body=%d)\n",
                 stream_id, (int)stream->body.size());
+            stream->fin_received = true;
             session->markStreamComplete(stream_id);
         } else {
             printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD " no FIN - waiting for body\n",
@@ -4690,6 +4717,9 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
             return 0;
         }
 
+        if (it != session->streams_.end()) {
+            it->second->fin_received = true;
+        }
         session->markStreamComplete(stream_id);
     } catch (...) {
         return NGHTTP3_ERR_CALLBACK_FAILURE;

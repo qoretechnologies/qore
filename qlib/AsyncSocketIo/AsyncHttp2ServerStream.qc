@@ -146,6 +146,10 @@ public class AsyncHttp2ServerStream {
 
         @param t maximum time to wait (default 5s)
         @return binary payload, or @ref nothing on timeout or END_STREAM
+
+        @throw HTTP-BODY-TOO-LARGE the request body exceeds the maximum request body size
+        @throw HTTP-BODY-INCOMPLETE the request body ended before END_STREAM: the peer reset the stream, the
+        connection was closed, or the server stopped reading it; the data read is only a part of the body
     */
     *binary read(timeout t = 5s) {
         if (reads_done) {
@@ -153,6 +157,11 @@ public class AsyncHttp2ServerStream {
         }
         try {
             auto v = inbound.get(t);
+            if (v.typeCode() == NT_HASH) {
+                # the I/O thread ends a body that is too large or incomplete with an error hash
+                reads_done = True;
+                throw v.err, v.desc;
+            }
             if (!(v instanceof binary)) {
                 # NOTHING sentinel pushed by the I/O thread means END_STREAM
                 reads_done = True;

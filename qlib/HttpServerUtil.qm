@@ -2290,8 +2290,10 @@ public class AbstractStreamRequest {
                         rethrow;
                     }
                     if (chunk.typeCode() == NT_HASH) {
-                        # the body exceeds the maximum request body size (HTTP-BODY-TOO-LARGE); the server
-                        # answers the exception with 413
+                        # the body exceeds the maximum request body size (HTTP-BODY-TOO-LARGE), which the server
+                        # answers with 413, or it ended before the client's END_STREAM (HTTP-BODY-INCOMPLETE);
+                        # the handler is not told that the body ended, so it cannot take the part it received for
+                        # the complete body
                         throw chunk.err, chunk.desc;
                     }
                     if (!(chunk instanceof binary)) {
@@ -3227,7 +3229,9 @@ public class AbstractHttpRequestHandler {
                     # HTTP/2: register a Queue via the header_info closure; the
                     # I/O thread pushes binary DATA chunks and a NOTHING sentinel
                     # at END_STREAM, or a hash with "err" and "desc" keys instead
-                    # of the sentinel if the body exceeds the maximum size.
+                    # of the sentinel if the body exceeds the maximum size
+                    # (HTTP-BODY-TOO-LARGE) or ends before END_STREAM
+                    # (HTTP-BODY-INCOMPLETE).
                     code<nothing(Queue)> register_body_queue
                         = cx."header-info".register_body_queue;
                     Queue body_queue(-1);
@@ -3243,8 +3247,12 @@ public class AbstractHttpRequestHandler {
                             rethrow;
                         }
                         if (chunk.typeCode() == NT_HASH) {
-                            # the body exceeds the server's maximum request body size
-                            return makeResponse(413, chunk.desc);
+                            if (chunk.err == "HTTP-BODY-TOO-LARGE") {
+                                # the body exceeds the server's maximum request body size
+                                return makeResponse(413, chunk.desc);
+                            }
+                            # the body is incomplete: never process the part received
+                            throw chunk.err, chunk.desc;
                         }
                         if (!(chunk instanceof binary)) {
                             break;  # NOTHING sentinel = END_STREAM

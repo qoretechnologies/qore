@@ -1948,6 +1948,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         read by a stream handler (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest"): only a single
         chunk over the limit was rejected, so a body of any size sent in small chunks was delivered to the handler;
         such a body now receives HTTP 413 (Content Too Large), and the handler receives no data over the limit
+      - fixed taking the part of an HTTP/2 or HTTP/3 request body received for the complete body when the body ended
+        before the client's \c END_STREAM (HTTP/2) or \c FIN (HTTP/3), because the client reset the stream, the
+        connection was closed, or the server stopped: a handler reading the body as it arrives got the normal end of
+        the body, an @ref HttpServer::AbstractStreamRequest "AbstractStreamRequest" was told that the body ended, and
+        a handler whose body the server buffers was called with the partial body; such a body now ends with an
+        \c HTTP-BODY-INCOMPLETE error after the data received (a hash with \c "err" and \c "desc" keys in the body
+        queue, or an exception from @ref Qore::Socket::readQuicStreamDataBlock() "Socket::readQuicStreamDataBlock()"),
+        and a handler whose body the server buffers is not called
       - fixed HTTP/1.x clients sometimes receiving a connection reset instead of the response when the server
         closed the connection after the response while the client was still sending data that the server did not
         read, such as the rest of a request body answered with an error, a pipelined request, or the remainder of

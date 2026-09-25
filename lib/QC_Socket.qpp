@@ -8740,7 +8740,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
     @param timeout_ms the maximum time to wait for data; default 30s
 
     @return binary data if available, or @ref nothing if the stream is complete
-    (END_STREAM received and no more buffered data)
+    (END_STREAM received and no more buffered data), or if the read was canceled with @ref cancelQuicStreamRead()
 
     @throw QUIC-ERROR if no QUIC session with the given ID is active, or if the session
     is closed during the wait (e.g., server shutdown)
@@ -8748,6 +8748,10 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
     completes
     @throw HTTP-BODY-TOO-LARGE the request body exceeded the server's maximum request body size while it was buffered
     before the request was dispatched; raised after all buffered data has been returned, instead of the end of the
+    body
+    @throw HTTP-BODY-INCOMPLETE the request body ended before the client sent FIN: the client reset the stream, the
+    stream was closed, or the server stopped reading it (for example, because the server is stopping); raised after
+    all buffered data has been returned, instead of the end of the body, so the data returned is only a part of the
     body
 
     @see @ref cleanupQuicStream()

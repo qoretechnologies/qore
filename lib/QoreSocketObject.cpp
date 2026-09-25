@@ -689,6 +689,13 @@ private:
                     "maximum request body size", (long long)stream_id);
                 return -1;
             }
+            // a body that ended before the client's FIN ends with an error, so it can never be taken for a
+            // complete body
+            if (const char* reason = session->getStreamBodyIncompleteReason(stream_id)) {
+                xsink->raiseException("HTTP-BODY-INCOMPLETE", "HTTP/3 request body on stream %lld ended before the "
+                    "client sent FIN: %s", (long long)stream_id, reason);
+                return -1;
+            }
             return 0;
         }
         return 1;
@@ -5899,6 +5906,11 @@ bool QoreSocketObject::isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) 
 bool QoreSocketObject::isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const {
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return h2 && h2->isStreamBodyTooLarge(stream_id);
+}
+
+bool QoreSocketObject::isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const {
+    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+    return h2 && h2->isStreamEndStreamReceived(stream_id);
 }
 
 std::vector<int32_t> QoreSocketObject::takeHttp2PeerResetReportsForAsyncPoll() {

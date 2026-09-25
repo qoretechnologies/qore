@@ -1350,7 +1350,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http2PollOperationBase", "injectSendOp", ("send_operation",));
         assertNamedClassMethodVariantCount("Http2PollOperationBase", "injectReadOp", ("read_operation",));
         assertNamedClassMethodVariantCount("Http2PollOperationBase", "registerStreamQueue",
-            ("stream_id", "queue", "notifier"));
+            ("stream_id", "queue", "notifier", "request_body"));
         assertNamedClassMethodVariantCount("Http2PollOperationBase", "registerStreamFrameState",
             ("stream_id", "queue"));
         assertNamedClassMethodVariantCount("Http2PollOperationBase", "onStreamData", ("stream_id",));

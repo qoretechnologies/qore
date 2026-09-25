@@ -88,6 +88,11 @@ struct QuicStreamInfo {
     std::vector<char> body;
     bool headers_complete = false;
     bool body_complete = false;
+    //! True once the peer ended the stream with FIN (on HEADERS or after the body)
+    /** Unlike @ref body_complete, which is also set when the stream is closed or reset, this flag tells whether the
+        peer sent its complete message body.
+    */
+    bool fin_received = false;
     std::string error_message;  //!< non-empty if stream terminated with error
     //! true once a body on this stream exceeded its maximum size
     /** - server: the request body exceeded the maximum request body size before the request was dispatched; the
@@ -142,6 +147,13 @@ struct QuicStreamInfo {
         sessions sharing the listener UDP socket.
     */
     bool stream_data_shutdown = false;
+    //! Set with @ref stream_data_shutdown when the reads of all streams are aborted
+    /** Set by @ref QuicSession::shutdownStreamReads() (the owning listener operation is aborted, e.g. for a server
+        stop), but not by @ref QuicSession::shutdownStreamRead(), whose caller cancels a single read and tells a
+        cancel from the end of the body by its own state; a body whose reads were aborted before FIN ends with an
+        \c HTTP-BODY-INCOMPLETE error instead of a clean EOF.
+    */
+    bool stream_data_aborted = false;
 };
 
 //! The response header of a stream, reported once to the client that issued the request
@@ -630,6 +642,16 @@ public:
     /** @see QuicStreamInfo::body_too_large
     */
     DLLLOCAL bool isStreamBodyTooLarge(int64_t stream_id) const;
+
+    //! Returns why the request body of a complete stream ended before the peer's FIN, or nullptr (server)
+    /** Called when @ref takeStreamData() reports a complete stream with no more data.
+
+        @param stream_id the stream
+        @return nullptr if the body ended with FIN, if the stream is an extended CONNECT tunnel, or if its read was
+        canceled with @ref shutdownStreamRead(); otherwise a description of why the body ended before FIN: the peer
+        reset the stream, the stream was closed, or the reads of all streams were aborted
+    */
+    DLLLOCAL const char* getStreamBodyIncompleteReason(int64_t stream_id) const;
 
     //! Check if the QUIC handshake is complete
     DLLLOCAL bool isHandshakeComplete() const;

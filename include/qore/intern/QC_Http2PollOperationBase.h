@@ -214,7 +214,35 @@ public:
             This eliminates Qore-side O(N²) binary concatenation for large WS
             messages on H2 tunnels (mirrors the H3 path). */
         std::shared_ptr<WebSocketStreamFrameState> frame_state;
+        //! True if the queue receives a request body, False for a CONNECT tunnel
+        /** A request body that ends without the client's END_STREAM (the stream was reset, the connection was
+            closed, or the server stopped reading it) ends with an \c HTTP-BODY-INCOMPLETE error hash instead of
+            the NOTHING sentinel, so a consumer can never take the part it received for the complete body; a
+            tunnel always ends with NOTHING.
+        */
+        bool request_body = false;
     };
+
+    //! Returns the error hash that ends a request body that was not received completely
+    /** @param stream_id the HTTP/2 stream ID
+        @param reason why the body ended
+        @param xsink exception sink
+    */
+    DLLLOCAL static QoreHashNode* makeBodyIncompleteError(int32_t stream_id, const char* reason,
+            ExceptionSink* xsink);
+
+    //! Pushes the end of the data on a stream to its queue
+    /** Pushes the NOTHING sentinel, or for a request body not ended by END_STREAM, an \c HTTP-BODY-INCOMPLETE error
+        hash; see StreamQueueInfo::request_body.
+
+        @param stream_id the HTTP/2 stream ID
+        @param info the stream's queue
+        @param complete True if the client ended the stream with END_STREAM
+        @param reason why the body ended, if it is not complete
+        @param xsink exception sink
+    */
+    DLLLOCAL static void pushStreamEnd(int32_t stream_id, const StreamQueueInfo& info, bool complete,
+            const char* reason, ExceptionSink* xsink);
 
     //! Registers a Queue (and optional EventNotifier) for a CONNECT stream
     /** Called from the Qore wrapper when dispatching an extended CONNECT handler.
@@ -227,9 +255,10 @@ public:
         @param queue_obj the QoreObject wrapping queue (ref transferred)
         @param notifier optional EventNotifier for wake-up (ref transferred), or nullptr
         @param notifier_obj optional QoreObject wrapping notifier (ref transferred), or nullptr
+        @param request_body True if the queue receives a request body; see StreamQueueInfo::request_body
     */
     DLLLOCAL void registerStreamQueue(int32_t stream_id, Queue* queue, QoreObject* queue_obj,
-        QoreEventNotifier* notifier, QoreObject* notifier_obj);
+        QoreEventNotifier* notifier, QoreObject* notifier_obj, bool request_body);
 
     //! Registers a Queue backed by a C++ WebSocketStreamFrameState for a CONNECT stream
     /** Identical to @ref registerStreamQueue() except that incoming stream
@@ -295,7 +324,9 @@ public:
     //! Drains all registered stream queues after a read poll cycle
     /** Reads all available data from each registered stream's per-stream buffer
         and pushes it to the corresponding Queue.  When a stream is closed, a
-        NOTHING sentinel is pushed and the registration is removed.
+        NOTHING sentinel is pushed and the registration is removed; a request body that
+        was not ended by END_STREAM ends with an error hash instead (see
+        StreamQueueInfo::request_body).
 
         Pure C++ — no Qore interpreter calls.
 
@@ -305,7 +336,9 @@ public:
 
     //! Clears all stream queue registrations (called in abort/cleanup)
     /** Pushes NOTHING sentinels to all queues, notifies all EventNotifiers,
-        and derefs all queue/notifier objects.
+        and derefs all queue/notifier objects; a request body ends with an error hash
+        instead, because it was not received completely (see
+        StreamQueueInfo::request_body).
 
         @param xsink exception sink
     */

@@ -291,8 +291,11 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
             error_info->setKeyValue("desc",
                 desc.getReferencedValue(), xsink);
         }
-        // Push NOTHING sentinels to all registered stream Queues on error
+        // Deliver the data received before the error and end the streams whose END_STREAM was received, then end
+        // all other registered stream Queues; a request body that is not complete ends with an error
         ExceptionSink clear_xsink;
+        drainStreamQueues(&clear_xsink);
+        clear_xsink.clear();
         clearStreamQueues(&clear_xsink);
         h2_state = H2ServerState::CLOSED;
         return nullptr;
@@ -441,8 +444,25 @@ QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
     return nullptr;
 }
 
+QoreHashNode* Http2PollOperationPriv::makeBodyIncompleteError(int32_t stream_id, const char* reason,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> err(new QoreHashNode(autoTypeInfo), xsink);
+    err->setKeyValue("err", new QoreStringNode("HTTP-BODY-INCOMPLETE"), xsink);
+    err->setKeyValue("desc", new QoreStringNodeMaker("HTTP/2 request body on stream %d ended before the client "
+        "sent END_STREAM: %s", stream_id, reason), xsink);
+    return err.release();
+}
+
+void Http2PollOperationPriv::pushStreamEnd(int32_t stream_id, const StreamQueueInfo& info, bool complete,
+        const char* reason, ExceptionSink* xsink) {
+    // the queue takes the reference
+    info.queue->pushAndTakeRef(info.request_body && !complete
+        ? QoreValue(makeBodyIncompleteError(stream_id, reason, xsink))
+        : QoreValue());
+}
+
 void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue,
-        QoreObject* queue_obj, QoreEventNotifier* notifier, QoreObject* notifier_obj) {
+        QoreObject* queue_obj, QoreEventNotifier* notifier, QoreObject* notifier_obj, bool request_body) {
     // Push to pending queue (sq_lock only — never held during I/O).
     // The pending entry is applied to stream_queues at the start of the
     // next drainStreamQueues() call on the I/O thread, which is the single
@@ -483,12 +503,15 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
         // pending_stream_registrations — no I/O thread will drain it, so
         // the handler's body_queue.get(30s) blocks the full body-read
         // timeout and HttpServer.stop() waits 30s for the handler_pool to
-        // drain.  Push the NOTHING sentinel directly to the caller's Queue
-        // so the handler unblocks immediately and exits with an empty body
-        // (the subsequent submitHttp2Response will fail cleanly with
-        // HTTP2-ERROR: no HTTP/2 session active — the connection is gone).
+        // drain.  Push the end of the stream directly to the caller's Queue
+        // so the handler unblocks immediately; a request body ends with an
+        // error, because none of it can be delivered any more (the subsequent
+        // submitHttp2Response will fail cleanly with HTTP2-ERROR: no HTTP/2
+        // session active — the connection is gone).
         if (stream_queues_closed) {
-            queue->push(nullptr, QoreValue());
+            ExceptionSink push_xsink;
+            pushStreamEnd(stream_id, {queue, queue_obj, notifier, notifier_obj, {}, request_body}, false,
+                "the connection was closed", &push_xsink);
             if (notifier) {
                 notifier->notify();
             }
@@ -502,7 +525,8 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
             }
             return;
         }
-        pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj, {}}});
+        pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj, {},
+            request_body}});
     }
 
     // Wake the I/O thread so it picks up the pending registration on its
@@ -798,8 +822,11 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         if (sock->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
                 || sock->isHttp2StreamClosedForAsyncPoll(stream_id)
                 || !sock->isOpen()) {
-            // Push NOTHING sentinel so the handler thread knows the stream is done
-            info.queue->pushAndTakeRef(QoreValue());
+            // Push the end of the stream so the handler thread knows the stream is done; the data received before
+            // END_STREAM was drained above.  A request body closed without END_STREAM (RST_STREAM, a dropped
+            // connection) ends with an error, so its consumer cannot take the part it received for the complete body
+            pushStreamEnd(stream_id, info, sock->isHttp2StreamEndStreamReceivedForAsyncPoll(stream_id),
+                sock->isOpen() ? "the stream was closed" : "the connection was closed", xsink);
             // Also mark as data-ready so the handler wakes up for the sentinel
             if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
                     stream_id) == data_ready_streams.end()) {
@@ -846,8 +873,9 @@ void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
         pending_stream_registrations.clear();
     }
     for (auto& [stream_id, info] : stream_queues) {
-        // Push NOTHING sentinel so handler threads wake up and see closure
-        info.queue->push(xsink, QoreValue());
+        // Push the end of the stream so handler threads wake up and see closure; a stream still registered has not
+        // been ended by END_STREAM, so a request body ends with an error
+        pushStreamEnd(stream_id, info, false, "the connection was closed or the server stopped reading it", xsink);
         if (info.notifier) {
             info.notifier->notify();
         }
@@ -1202,18 +1230,29 @@ nothing Http2PollOperationBase::continueReading() {
     priv->continueReading(xsink);
 }
 
-//! Registers a Queue and optional EventNotifier for a CONNECT stream
-/** Called from the Qore wrapper when dispatching an extended CONNECT handler.
-    The Queue is used for non-blocking data delivery from the I/O thread to
+//! Registers a Queue and optional EventNotifier for the data of a request body or of a CONNECT stream
+/** Called from the Qore wrapper when dispatching a request handler that reads the request body as it arrives, or an
+    extended CONNECT handler.  The Queue is used for non-blocking data delivery from the I/O thread to
     handler threads.  The EventNotifier (if provided) is signaled after data
     is pushed to the Queue, enabling efficient cross-thread wake-up without
     Qore interpreter calls.
+
+    Each chunk of data received is pushed to the Queue as a binary value, and the end of the data is pushed as
+    follows:
+    - @ref nothing: the client ended the stream with END_STREAM, or the stream of a CONNECT tunnel was closed
+    - a hash with \c "err" and \c "desc" keys:
+      - \c HTTP-BODY-TOO-LARGE: the request body exceeds the maximum request body size
+      - \c HTTP-BODY-INCOMPLETE: a request body (\a request_body = @ref True) ended before the client sent
+        END_STREAM, because the client reset the stream, the connection was closed, or the server stopped reading
+        it; the data received is only a part of the body
 
     @param stream_id the HTTP/2 stream ID
     @param queue the Queue for data delivery; must be unlimited (size -1); once the reader sets an error on the Queue
     (@ref Qore::Thread::Queue::setError() "Queue::setError()", e.g. to cancel the read), the data received for the
     stream is discarded
     @param notifier optional EventNotifier for cross-thread wake-up
+    @param request_body @ref True if the Queue receives a request body, whose end without END_STREAM is reported with
+    an \c HTTP-BODY-INCOMPLETE error; @ref False for a CONNECT tunnel, whose data always ends with @ref nothing
 
     @throw HTTP2-QUEUE-ERROR the Queue has a maximum size
 
@@ -1222,7 +1261,8 @@ nothing Http2PollOperationBase::continueReading() {
     @since %Qore 3.0
 */
 nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
-        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
+        bool request_body = False) [flags=NAMED_ARGS] {
     // the I/O thread must never block pushing to the queue
     if (queue->getMax() != -1) {
         xsink->raiseException("HTTP2-QUEUE-ERROR", "the Queue passed to register a stream's body has a maximum size "
@@ -1244,7 +1284,7 @@ nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
     }
 
     priv->registerStreamQueue(static_cast<int32_t>(stream_id), queue_ptr,
-        const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr);
+        const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr, request_body);
 }
 
 //! Binds a Queue to receive the persistent-session close signal for this connection

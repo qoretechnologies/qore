@@ -1644,6 +1644,12 @@ bool Http2Session::isStreamBodyTooLarge(int32_t stream_id) const {
     return it != streams.end() && it->second->body_too_large;
 }
 
+bool Http2Session::isStreamEndStreamReceived(int32_t stream_id) const {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    return it != streams.end() && it->second->end_stream_received;
+}
+
 void Http2Session::cleanupStream(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -1922,6 +1928,7 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                             fflush(stderr);
                         }
                         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+                            stream->end_stream_received = true;
                             stream->body_complete = true;
                             h2->markStreamComplete(frame->hd.stream_id);
                         }
@@ -1935,6 +1942,7 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                         // For requests without a body (like GET), END_STREAM is on the HEADERS frame
                         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
                             stream->headers_end_stream = true;
+                            stream->end_stream_received = true;
                             stream->body_complete = true;
                             // Mark as complete so the handler is called
                             // For CONNECT streams, markStreamComplete() keeps the stream in the map
@@ -2000,6 +2008,7 @@ int Http2Session::onFrameRecvCallback(nghttp2_session* session,
                 printd(5, "onFrameRecvCallback DATA END_STREAM: stream=%p headers_complete=%d\n",
                     stream, stream ? stream->headers_complete : -1);
                 if (stream) {
+                    stream->end_stream_received = true;
                     stream->body_complete = true;
                     if (stream->headers_complete) {
                         printd(5, "onFrameRecvCallback: calling markStreamComplete(%d)\n", frame->hd.stream_id);

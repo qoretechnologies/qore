@@ -639,6 +639,38 @@ The HTTP/3 counterparts of the HTTP/2 rules above, in `lib/QuicSession.cpp`:
   did after clearing them), the rest is not read (STOP_SENDING `H3_NO_ERROR`), and `readQuicStreamDataBlock()`
   raises `HTTP-BODY-TOO-LARGE` after the buffered bytes.
 
+## HTTP/2 and HTTP/3 Server: Incomplete Request Bodies
+
+A request body ends cleanly only when the client ends the stream: `END_STREAM` (HTTP/2) or `FIN` (HTTP/3).  A stream
+closed any other way (the client resets it, the connection is closed, the server stops) leaves the handler with a
+part of the body, and a clean end would make it take that part for the complete body; a handler that commits what
+it receives at the end of the body would commit a truncated upload.  Closure alone does not tell the cases apart:
+nghttp2 and ngtcp2 close a stream after a clean end too, and `body_complete` is set for every close.  So the peer's
+end is recorded separately: `Http2StreamInfo::end_stream_received` (set only for `END_STREAM` on HEADERS, trailing
+HEADERS or DATA) and `QuicStreamInfo::fin_received` (set in `h3EndHeadersCallback()` with `fin` and in
+`h3EndStreamCallback()`).
+
+- HTTP/2: `Http2PollOperationBase::registerStreamQueue()` takes `request_body`; HttpServerAsyncIo's
+  `register_body_queue` closure passes `True`, CONNECT tunnels (raw and WebSocket frame-state) keep `False`.  When a
+  request body's stream closes, `drainStreamQueues()` delivers the data received and then pushes the NOTHING sentinel
+  only if `END_STREAM` was received; otherwise it pushes an `HTTP-BODY-INCOMPLETE` error hash (`err`, `desc`), the
+  same form as `HTTP-BODY-TOO-LARGE`.  `clearStreamQueues()` (connection closed, op aborted, server stopped) ends
+  every request body still registered with the error, since a body ended by `END_STREAM` has already been removed;
+  the read-error path drains before it clears, so a body completed in the same read is not failed.  A tunnel always
+  ends with NOTHING, which its consumers treat as the close.
+- HTTP/3: `readQuicStreamDataBlock()` raises `HTTP-BODY-INCOMPLETE` after the buffered data when the stream is
+  complete without `FIN` (`QuicSession::getStreamBodyIncompleteReason()`): the peer reset it, it was closed, or
+  `shutdownStreamReads()` aborted the reads of all streams (`stream_data_aborted`).  A read canceled for one stream
+  with `cancelQuicStreamRead()` still returns a clean EOF, as documented: its caller knows it canceled the read and
+  tells the cancel from the end of the body by its own state (`AbstractStreamRequest`'s `h3_body_aborted`).  A
+  dispatched stream stays in the session until its handler cleans it up, so a stream that is gone while its body is
+  read ends with the error too.
+
+Every consumer treats an error hash as an exception: `AbstractStreamRequest` throws it without telling the handler
+that the body ended (as for `HTTP-BODY-TOO-LARGE` on HTTP/1.1 chunked bodies), HttpServer's buffered-body path throws
+it instead of calling the handler, and `AsyncHttp2ServerStream::read()` raises it.  `HttpServerTruncatedBody.qtest`
+covers each consumer with a client that resets the stream or closes the connection mid-body.
+
 ## HTTP/1.x Lingering Close
 
 Closing a TCP socket with unread received data makes the kernel send RST instead of FIN (RFC 1122 section

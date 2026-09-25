@@ -675,6 +675,8 @@ public:
     DLLLOCAL bool isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) const;
     //! Internal async-poll helper: True if the request body of an HTTP/2 server stream exceeded the maximum size
     DLLLOCAL bool isHttp2StreamBodyTooLargeForAsyncPoll(int32_t stream_id) const;
+    //! Internal async-poll helper: True if the peer ended an HTTP/2 stream with END_STREAM
+    DLLLOCAL bool isHttp2StreamEndStreamReceivedForAsyncPoll(int32_t stream_id) const;
 
     //! Drains stream IDs reset by the peer since the last call (I/O thread only)
     /** Used by the HTTP/2 server poll operation to surface peer RST_STREAMs for

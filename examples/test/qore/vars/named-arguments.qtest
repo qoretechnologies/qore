@@ -1453,6 +1453,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "h2.injectSendOp(send_operation: send_operation); "
             "h2.injectReadOp(read_operation: read_operation); "
             "h2.registerStreamQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h2.registerStreamQueue(stream_id: 1, queue: queue, notifier: notifier, request_body: True); "
             "h2.registerStreamFrameState(stream_id: 1, queue: queue); "
             "h2.onStreamData(stream_id: 1); }",
             "http2-poll-operation-base-named");

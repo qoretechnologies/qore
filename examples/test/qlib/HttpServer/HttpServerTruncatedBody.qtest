@@ -1,0 +1,487 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    An HTTP/2 or HTTP/3 request body that ends before the client's END_STREAM (HTTP/2) or FIN (HTTP/3), because the
+    client reset the stream or the connection was closed, is never taken for the complete body:
+    - a handler that reads the body as it arrives gets an HTTP-BODY-INCOMPLETE error after the data received
+    - an AbstractStreamRequest is not told that the body ended, and makes no response
+    - a handler whose body the server buffers is not called
+    A body ended by the client is delivered completely in each case.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires AsyncSocketIo
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires HttpClientIo
+
+%exec-class HttpServerTruncatedBodyTest
+
+#! the events of the handlers and of the server's error log
+class Events {
+    public {
+        Queue q();
+    }
+
+    push(string event, *hash<auto> info) {
+        q.push({"event": event} + info);
+    }
+
+    #! returns the next event
+    hash<auto> get() {
+        return q.get(20s);
+    }
+}
+
+#! pushes the errors that the server logs about incomplete bodies to the events
+class ErrorAppender inherits LoggerAppenderWithLayout {
+    private {
+        Events events;
+    }
+
+    constructor(Events events) : LoggerAppenderWithLayout("errors", new LoggerLayoutPattern("%m")) {
+        self.events = events;
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG && params =~ /HTTP-BODY-INCOMPLETE/) {
+            events.push("error", {"msg": params});
+        }
+    }
+}
+
+#! reads the request body as it arrives, and reports the data and how the body ended
+class StreamingHandler inherits AbstractHttpRequestHandler {
+    private {
+        Events events;
+    }
+
+    constructor(Events events) {
+        self.events = events;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int size = 0;
+        try {
+            if (cx."header-info".http3) {
+                Socket sock = cx."header-info".sock;
+                while (True) {
+                    *binary chunk = sock.readQuicStreamDataBlock(cx."header-info".session_id,
+                        cx."header-info".stream_id, 20s);
+                    if (!chunk) {
+                        break;
+                    }
+                    if (!size) {
+                        events.push("data");
+                    }
+                    size += chunk.size();
+                }
+            } else {
+                Queue body_queue(-1);
+                cx."header-info".register_body_queue(body_queue);
+                while (True) {
+                    auto chunk = body_queue.get(20s);
+                    if (chunk.typeCode() == NT_HASH) {
+                        throw chunk.err, chunk.desc;
+                    }
+                    if (!exists chunk) {
+                        break;
+                    }
+                    if (!size) {
+                        events.push("data");
+                    }
+                    size += chunk.size();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            events.push("end", {"size": size, "err": ex.err});
+            rethrow;
+        }
+        events.push("end", {"size": size});
+        return makeResponse(200, sprintf("received %d bytes", size));
+    }
+}
+
+#! a handler whose request body the server buffers; reports when the request is dispatched and when it is called
+class BufferedHandler inherits AbstractHttpRequestHandler {
+    private {
+        Events events;
+    }
+
+    constructor(Events events) {
+        self.events = events;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        # called when the request is dispatched, before the server reads the body
+        events.push("dispatched");
+        return False;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        events.push("called", {"size": body.size()});
+        return makeResponse(200, sprintf("received %d bytes", body.size()));
+    }
+}
+
+#! an AbstractStreamRequest that reports the data received, the end of the body, and the response
+class RecordingRequest inherits AbstractStreamRequest {
+    private {
+        Events events;
+        int size = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body, Events events) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        self.events = events;
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.hasKey("data")) {
+            if (!size) {
+                events.push("data");
+            }
+            size += v.data.size();
+        } else if (v.hasKey("hdr")) {
+            events.push("eod", {"size": size});
+        }
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        events.push("responded", {"size": size});
+        return {"code": 200, "body": sprintf("received %d bytes", size)};
+    }
+}
+
+class RecordingHandler inherits AbstractHttpRequestHandler {
+    private {
+        Events events;
+    }
+
+    constructor(Events events) : AbstractHttpRequestHandler(NOTHING, True) {
+        self.events = events;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        # the request object reads an HTTP/2 or HTTP/3 body as it arrives
+        return True;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        return new RecordingRequest(listener, self, s, cx, hdr, body, events);
+    }
+}
+
+class HttpServerTruncatedBodyTest inherits QUnit::Test {
+    private {
+        #! the size of the data sent before the stream is reset or the connection is closed
+        const PartSize = 4096;
+
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIUahuuRGDlubXWYmiPhjVeT66vtNYwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI2MDIyMjE5MjIwMVoXDTM2MDIy
+MDE5MjIwMVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEAjZNfLFUyyo02MjZjouaR11FybkZNwDWBG/bhkpTVyj/x
+QKlwKf20LbGSCmMIYHaFnODMg6u6E6sfRJVk+ofwVHBN/Ug+mvoL1zlNJanMdXLH
+7oUsUILY6bVUDPm1ACZmFJsAc9jfHfkluJ6vfYG+DOJbyB0nsMfO9/fvrwndQPUQ
+k9eMq2VfDohni4ijk5BWD/P9UmrciZUNOaNISay469Le5ZrtfGt9An1+Ye3TckJC
+tTF4q7+V+GC88w5QtLd1AMQGf/1ax5cwqQv9SSFvhnwj9o3V3Wkz1dq4XA/9rSA1
+ecPHh/tJeGuvbD11Hyr9LTYjQ+DIel0DV0ZDHdc5vwIDAQABo1MwUTAdBgNVHQ4E
+FgQUYBBsVylVinbbAzTbUt0jRM6mJvwwHwYDVR0jBBgwFoAUYBBsVylVinbbAzTb
+Ut0jRM6mJvwwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfIAE
+EPvLO+gOnm366xJabLr2Sw3hfmvCq/zSTlPcrB9jdBlOLpMmKcdGiOOCNmzg9+BX
+YNX+I6+MNOGp0j3afWlVwEjiMD66ydSMPEQw0FTzvpIjFN3fHo/MJzFbingRLrk8
+LCo94GmjMBYG+50M8MCKE6EzqfmoYT9fiMJcyJwwdptOWf0URNYKKrG1wRlX4+o8
+uNjQ3VwynI95fAw9WcR/ZtP0pkmCor/hKaYgVRsSGjD78Fu0Uuhm/pCAOuObpEHj
+5eoTlaWC3pZzGA67piqlEDOWiRi9Mo2CzG0t5fmQ83KB51ImauKdYB21whxjkZ+5
+BjwMC4hqSD+bzO2B+A==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCNk18sVTLKjTYy
+NmOi5pHXUXJuRk3ANYEb9uGSlNXKP/FAqXAp/bQtsZIKYwhgdoWc4MyDq7oTqx9E
+lWT6h/BUcE39SD6a+gvXOU0lqcx1csfuhSxQgtjptVQM+bUAJmYUmwBz2N8d+SW4
+nq99gb4M4lvIHSewx8739++vCd1A9RCT14yrZV8OiGeLiKOTkFYP8/1SatyJlQ05
+o0hJrLjr0t7lmu18a30CfX5h7dNyQkK1MXirv5X4YLzzDlC0t3UAxAZ//VrHlzCp
+C/1JIW+GfCP2jdXdaTPV2rhcD/2tIDV5w8eH+0l4a69sPXUfKv0tNiND4Mh6XQNX
+RkMd1zm/AgMBAAECggEAATo1WYTgPK75DiS4PBR5UDS7DryvoN/LNOsGLUdQC9b+
+aEaacSrAvKKs9vJr2KuTtfahn0SbsjRKFZtL9aYRuHxZbhLfGWiF4MGflcOBQRq+
+eVFl6clwnaS+S/cq5rZD1/WODUhkisslqhI/cubvNwe2rvyduE510LgxYkLuIZ7a
++SCQz1XyPyhb8eVrWIZiprufjqXvDy01MC74l3ZYqaq1hr1oKi0ZDHI95Os7gtwQ
+4HQ3qdJsmYfbaf1223REp8gybnshsxkyjhKRU3nG7ZvgrRRMFkJvfHZ8VcS3cvsK
+ccKBJg7376+VDtc+RHUcBMyVZ881y4Rq2t6ssYVJVQKBgQDFq+N7ZGKOtQChSIXn
+ju/gP5WzSKJFaZhdkSggHi1K+PkuCZ1SXzKD3CPibreSUx9hzoZAAmTjzOfwhVZ7
+5HDqhrKfkWNeThAdXlglhNX5LVKhhmBsNGawANO8Pmq+pueWhK/76XgiGcOknyt6
+NH1ZE/QZpFeZB2binEhf6leYGwKBgQC3WgF2eaj2c4pugq13oZ9BHms5nsbYQgj8
+1H2C1wsgJNiz4tq6xFdvjiaw+r1OrCFrl9nz7npFc7uohtrRxXr7sq5nwMPO3QAP
+VxzyZ/TFP/FI70Avz6x+xX7HIlptpQ1mWacsdrvtoIG1c8veEJTyA4JgjoMhdDer
+JuPze+ZHLQKBgAzuLIhCzcul/W+Pberyx7A0mJdMtgiyWpwsRaKsNqxD0xD24gqk
+XYqQmOxT78Arnc7pEpEXVwArxDRQlJKwI87DluWnPgfKNXWmWT/DC7gsBc65Go+Z
+ceorc65JqvPjuRx4e4aQBCK+6rRXESICUvzDuGEBBhXljQ5fyMA1dRtnAoGAQSFH
+w74Ttvf0BK2G0SgoWglkLWOpXsiWSLlynDenTBPKppu+9vkn1gi41cU72eZrOL0I
+Pw5HgMRLtOGyeTGdLiuaqGBhLepzSv+22KT03dyI6U+TjWhH7gBZuIMLfEdVKzZN
+nA3RU+fgK4SmtotNXWrBtWrqScfuvm1iK+unMUECgYBrwc1rU/GI9tH4MWvBX99n
+pmFneeIUuXJajOsh7jUyTxcrHl+4kkgHDExuFMNPHfrIG8xCj43fjzxD/spz3xRS
++Ki3i3lYOFNhTUCREt5Xx23hkksK6j7SYlfY0IV2UruWt/UubpsfEqxC1Uk07NTo
+l50Xb2GWQesIt9k5jF5IOw==
+-----END PRIVATE KEY-----";
+
+        Logger logger;
+        Events events();
+        HttpServer server;
+        string h2_url;
+        *string h3_url;
+    }
+
+    constructor() : QUnit::Test("HttpServerTruncatedBodyTest", "1.0") {
+        addTestCase("H2 streaming handler: client reset", \h2StreamingResetTest());
+        addTestCase("H2 streaming handler: connection closed", \h2StreamingConnectionClosedTest());
+        addTestCase("H2 streaming handler: complete body", \h2StreamingCompleteTest());
+        addTestCase("H2 AbstractStreamRequest: client reset", \h2StreamRequestResetTest());
+        addTestCase("H2 AbstractStreamRequest: complete body", \h2StreamRequestCompleteTest());
+        addTestCase("H2 buffered body: client reset", \h2BufferedResetTest());
+        addTestCase("H2 buffered body: complete body", \h2BufferedCompleteTest());
+        addTestCase("H3 streaming handler: client reset", \h3StreamingResetTest());
+        addTestCase("H3 streaming handler: complete body", \h3StreamingCompleteTest());
+        addTestCase("H3 AbstractStreamRequest: client reset", \h3StreamRequestResetTest());
+        addTestCase("H3 buffered body: client reset", \h3BufferedResetTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        logger = new Logger("truncated-body", LoggerLevel::getLevelInfo());
+        logger.addAppender(new ErrorAppender(events));
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "quic_headers_only": True,
+        });
+        server.setHandler("streaming", "/streaming", NOTHING, new StreamingHandler(events));
+        server.setHandler("buffered", "/buffered", NOTHING, new BufferedHandler(events));
+        server.setHandler("recording", "/recording", NOTHING, new RecordingHandler(events));
+
+        int h2_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        h2_url = "https://127.0.0.1:" + h2_port;
+        try {
+            h3_url = "https://127.0.0.1:" + server.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            # QUIC is not available; the HTTP/3 tests are skipped
+        }
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    setUp() {
+        # discard the events of a test that failed before it read them
+        while (events.q.size()) {
+            events.q.get();
+        }
+    }
+
+    h2StreamingResetTest() {
+        streamingAbortTest("h2", False);
+    }
+
+    h2StreamingConnectionClosedTest() {
+        streamingAbortTest("h2", True);
+    }
+
+    h2StreamingCompleteTest() {
+        streamingCompleteTest("h2");
+    }
+
+    h2StreamRequestResetTest() {
+        streamRequestResetTest("h2");
+    }
+
+    h2StreamRequestCompleteTest() {
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr("h2");
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = startUpload(mgr, "h2", "/recording");
+        stream.sendData(makeData(PartSize), True);
+        assertEq("data", events.get().event);
+        assertEq({"event": "eod", "size": PartSize}, events.get());
+        assertEq({"event": "responded", "size": PartSize}, events.get());
+        assertEq(200, readStatus(stream));
+    }
+
+    h2BufferedResetTest() {
+        bufferedResetTest("h2");
+    }
+
+    h2BufferedCompleteTest() {
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr("h2");
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = startUpload(mgr, "h2", "/buffered");
+        assertEq("dispatched", events.get().event);
+        stream.sendData(makeData(PartSize), True);
+        assertEq({"event": "called", "size": PartSize}, events.get());
+        assertEq(200, readStatus(stream));
+    }
+
+    h3StreamingResetTest() {
+        streamingAbortTest("h3", False);
+    }
+
+    h3StreamingCompleteTest() {
+        streamingCompleteTest("h3");
+    }
+
+    h3StreamRequestResetTest() {
+        streamRequestResetTest("h3");
+    }
+
+    h3BufferedResetTest() {
+        bufferedResetTest("h3");
+    }
+
+    #! the client resets the stream or closes the connection after a part of the body
+    private streamingAbortTest(string proto, bool close_connection) {
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr(proto);
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = startUpload(mgr, proto, "/streaming");
+        stream.sendData(makeData(PartSize));
+        # the handler has received data of the body
+        assertEq("data", events.get().event);
+        abort(stream, close_connection);
+        hash<auto> end = events.get();
+        assertEq("end", end.event);
+        # the error is raised after all the data received
+        assertEq(PartSize, end.size);
+        assertEq("HTTP-BODY-INCOMPLETE", end.err);
+        # the server logs the handler's error
+        assertEq("error", events.get().event);
+    }
+
+    private streamingCompleteTest(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr(proto);
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = startUpload(mgr, proto, "/streaming");
+        stream.sendData(makeData(PartSize));
+        assertEq("data", events.get().event);
+        stream.sendData(makeData(PartSize), True);
+        assertEq({"event": "end", "size": PartSize * 2}, events.get());
+        assertEq(200, readStatus(stream));
+    }
+
+    #! an AbstractStreamRequest is not told that a body cut short ended, and makes no response
+    private streamRequestResetTest(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr(proto);
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = startUpload(mgr, proto, "/recording");
+        stream.sendData(makeData(PartSize));
+        assertEq("data", events.get().event);
+        stream.cancel();
+        # the server logs the request's error; there is no "eod" or "responded" event
+        hash<auto> ev = events.get();
+        assertEq("error", ev.event, sprintf("%y", ev));
+    }
+
+    #! a handler whose body the server buffers is not called with a body cut short
+    private bufferedResetTest(string proto) {
+        HttpClientIo::HttpClientConnectionManager mgr = makeMgr(proto);
+        on_exit delete mgr;
+        HttpClientIo::HttpClientStreamHandle stream = startUpload(mgr, proto, "/buffered");
+        assertEq("dispatched", events.get().event);
+        stream.sendData(makeData(PartSize));
+        stream.cancel();
+        # the server logs the error; there is no "called" event
+        hash<auto> ev = events.get();
+        assertEq("error", ev.event, sprintf("%y", ev));
+    }
+
+    private abort(HttpClientIo::HttpClientStreamHandle stream, bool close_connection) {
+        if (close_connection) {
+            stream.getConnection().close();
+        } else {
+            stream.cancel();
+        }
+    }
+
+    #! starts a streamed upload; skips the test if the protocol is not available
+    private HttpClientIo::HttpClientStreamHandle startUpload(HttpClientIo::HttpClientConnectionManager mgr,
+            string proto, string path) {
+        *string url = proto == "h3" ? h3_url : h2_url;
+        if (!url) {
+            testSkip(sprintf("%s is not available", proto));
+        }
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        stream.startStreaming("POST", path, {"Content-Type": "application/octet-stream"}, True);
+        return stream;
+    }
+
+    #! returns the status code of the response
+    /** HTTP/3 can deliver the response headers with the body, so the status code is taken from the response
+        information once the response is complete
+    */
+    private int readStatus(HttpClientIo::HttpClientStreamHandle stream) {
+        while (True) {
+            auto ev = stream.readData(20s);
+            if (!exists ev) {
+                throw "TEST-TIMEOUT", "timed out waiting for the response";
+            }
+            if (ev.typeCode() == NT_HASH && (ev.status_code || ev.end_stream)) {
+                return stream.getResponse().status_code;
+            }
+        }
+    }
+
+    private HttpClientIo::HttpClientConnectionManager makeMgr(string proto) {
+        return new HttpClientIo::HttpClientConnectionManager(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": proto,
+            "connect_timeout": 10s,
+            "request_timeout": 30s,
+            "logger": logger,
+        });
+    }
+
+    private static binary makeData(int size) {
+        return binary(strmul("x", size));
+    }
+}
