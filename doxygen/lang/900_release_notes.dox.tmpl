@@ -2211,6 +2211,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         cache out of sync for structurally divergent tables; now processes tables in FK topological order
       - fixed foreign-key DDL generation for Oracle, MySQL, SQL Server, Firebird, and SQLite to preserve quoted
         and renamed column names on both sides of the constraint
+      - PostgreSQL indexes now preserve partial predicates, non-key INCLUDE columns, NULLS NOT DISTINCT,
+        and per-key sort/null order through introspection, SQL dumps, schema exports, and alignment;
+        DataSchema can declare these options for both fresh installs and upgrades (issue 5470)
       - fixed a failed native PostgreSQL upsert writing the database error, the SQL statement, and its bind
         arguments to standard output before the exception reached the caller; the statement and arguments are now
         only added to the exception description, and the original error code, exception argument (including the

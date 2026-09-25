@@ -525,14 +525,9 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                 ret.columns{c.name} = columnToQore(c);
             }
 
-            # indexes
+            # Preserve the driver's declarative index options as well as keys and uniqueness.
             if (!t.getIndexes().empty()) {
-                my HashIterator it = t.getIndexes().iterator();
-                while (it.next()) {
-                    ret.indexes{it.getValue().name} = ( "columns" : it.getValue().columns.keys(),
-                                                        "unique" : it.getValue().unique,
-                                                    );
-                }
+                ret.indexes = t.getDescriptionHash().indexes;
             }
 
             # PK

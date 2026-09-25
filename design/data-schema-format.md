@@ -212,6 +212,16 @@ tables:
         columns: [name]
         unique: true
 
+      # One unfinished order per account, including NULL account IDs (PostgreSQL 15+)
+      uk_orders_active:
+        columns: [account_id]
+        unique: true
+        where: "state NOT IN ('completed', 'failed', 'aborted', 'rolled_back')"
+        include: [description]                # non-key covering columns (PostgreSQL 11+)
+        nulls_not_distinct: true               # requires unique: true (PostgreSQL 15+)
+        order: {account_id: desc}              # per-key asc / desc (btree only)
+        nulls: {account_id: last}              # per-key first / last
+
       # Example: pgvector IVFFlat index with method / opclass / WITH storage options
       sk_chunks_embedding:
         columns: [embedding]
@@ -409,6 +419,23 @@ Common expressions: `now`, `+`, `-`, `*`, `/`, `upr`, `lwr`, `substr`, `length`,
 
 See `DataProvider::GenericExpressionImplementations` for the full list of available expressions.
 
+### PostgreSQL Index Options
+
+Index definitions accept `where` (a nonempty SQL predicate), `include` (an ordered list of non-key
+column names), `nulls_not_distinct` (a boolean requiring a unique index), and the per-key `order` and
+`nulls` maps. Keys in the maps must appear in `columns`; `include` entries must be distinct existing
+columns outside the index keys. Sort direction defaults to `asc`, with NULLs last; `desc` defaults to
+NULLs first. Direction and null-placement values are case-insensitive in SqlUtil, and the schema
+accepts lowercase or uppercase values. These options can also appear under `driver.pgsql`.
+Other drivers reject these PostgreSQL-only options unless an applicable driver override removes them.
+
+PostgreSQL introspection, SQL dumps, and schema exports preserve these features. Alignment compares
+all index options and uses PostgreSQL's parsed expression output to compare differently formatted
+partial-index predicates when the columns already exist. This read-only planning step does not execute
+the query. It handles server-inserted casts and rewrites such as `NOT IN` to `<> ALL`; it does not
+attempt to prove arbitrary logical equivalence. Functional index key equivalence remains subject to
+[issue #1429](https://github.com/qoretechnologies/qore/issues/1429).
+
 ## Migrations
 
 Migrations define version-based data transformations:
@@ -431,6 +458,13 @@ migrations:
 
 A migration's `version` is the schema version it advances the database **to**: it runs whenever
 the database's current (source) version is in the range `(current_version, target_version]`.
+
+Fresh installs skip both `pre_align` and `post_align` migrations. Keep required schema objects in
+the declarative model, including partial and covering indexes, so both new and upgraded databases
+receive them. Raw DDL that exists only in a historical migration is **not** replayed during a fresh
+install. Declare an existing migration-created index using the same name to bring it under alignment;
+an unchanged definition preserves the index. Schema alignment continues to preserve undeclared indexes
+under its existing policy.
 
 ### Source-Version Gating
 

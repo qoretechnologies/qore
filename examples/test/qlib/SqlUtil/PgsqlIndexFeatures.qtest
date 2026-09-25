@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires SqlUtil
+%requires PgsqlSqlUtilBase
+%requires Schema
+%requires SchemaReverse
+%try-module pgsql
+%define NO_PGSQL
+%endtry
+%exec-class PgsqlIndexFeaturesTest
+
+class PgsqlIndexFeaturesTest inherits QUnit::Test {
+    constructor() : Test("PostgreSQL index features", "1.0", \ARGV) {
+        addTestCase("DDL and option equality", \ddlAndEquality());
+        addTestCase("nested and quoted index definitions", \parser());
+        addTestCase("invalid index options", \invalidOptions());
+        addTestCase("DataSchema option validation", \schemaOptions());
+        addTestCase("catalog and DDL round trip", \roundTrip());
+        addTestCase("fresh DataSchema install and repeated alignment", \freshInstall());
+        set_return_value(main());
+    }
+
+    private PgsqlIndex index(*hash<auto> options) {
+        return new PgsqlIndex("idx", True, {"id": {}, "b": {}}, NOTHING, NOTHING, NOTHING, NOTHING, options);
+    }
+
+    private ddlAndEquality() {
+        hash<auto> options = {"where": "state <> 'done'", "include": ("order", "odd\"name"),
+            "nulls_not_distinct": True, "order": {"b": "DESC"}, "nulls": {"b": "LAST"}};
+        PgsqlIndex ix = index(options);
+        assertEq("create unique index idx on orders (id, b desc nulls last) include (\"order\", \"odd\"\"name\")"
+            " nulls not distinct where state <> 'done'", ix.getCreateSql("orders"));
+        assertTrue(ix.equal(index(options)));
+        foreach string option in (options.keys()) {
+            hash<auto> changed = options - option;
+            assertFalse(ix.equal(index(changed)), sprintf("%s participates in equality", option));
+        }
+        assertTrue(index().equal(index({"order": {"id": "asc"}, "nulls": {"id": "last"}})));
+        assertTrue(index({"order": {"id": "desc"}}).equal(
+            index({"order": {"id": "desc"}, "nulls": {"id": "first"}})));
+        assertFalse(index({"order": {"id": "desc"}}).equal(index({"order": {"id": "asc"}})));
+    }
+
+    private parser() {
+        hash<auto> parsed = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX idx ON t USING btree (lower((a)::text), \"odd\"\"name\" text_pattern_ops DESC NULLS LAST, "
+            "(coalesce(a, 'WITH (fake=1), )'))) WITH (fillfactor='70') WHERE state <> 'WITH (fake=2)'");
+        assertEq({"fillfactor": 70}, parsed.with_options);
+        assertEq({"odd\"name": "text_pattern_ops"}, parsed.opclass);
+        assertEq({"odd\"name": "desc"}, parsed.order);
+        assertEq({"odd\"name": "last"}, parsed.nulls);
+        parsed = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX idx ON t USING btree ((coalesce(a, 'WITH (fake=1)'))) WHERE a <> 'WITH (fake=2)'");
+        assertNothing(parsed.with_options);
+        assertNothing(parsed.opclass);
+        parsed = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX idx ON t USING hnsw (embedding vector_l2_ops) WITH (m='16', ef_construction='64')");
+        assertEq({"m": 16, "ef_construction": 64}, parsed.with_options);
+        assertEq({"embedding": "vector_l2_ops"}, parsed.opclass);
+        parsed = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX idx ON t USING btree (\"město\" varchar_pattern_ops) WHERE state <> 'žluťoučký'");
+        assertEq({"město": "varchar_pattern_ops"}, parsed.opclass);
+        assertThrows("INDEX-DEFINITION-ERROR", sub() {
+            PgsqlTable::parsePgIndexDef("CREATE INDEX idx ON t USING btree ((a)");
+        });
+    }
+
+    private invalidOptions() {
+        foreach hash<auto> options in (({"where": " "}, {"include": ("id",)}, {"include": ("c", "c")},
+                {"order": {"missing": "desc"}}, {"order": {"b": "sideways"}}, {"nulls": {"b": "middle"}})) {
+            assertThrows("INDEX-OPTION-ERROR", \index(), (options,));
+        }
+        assertThrows("INDEX-OPTION-ERROR", sub() {
+            new PgsqlIndex("idx", False, {"id": {}}, NOTHING, NOTHING, NOTHING, NOTHING,
+                {"nulls_not_distinct": True});
+        });
+    }
+
+    private schemaOptions() {
+        foreach hash<auto> options in (({"order": {"id": "sideways"}}, {"nulls": {"id": "middle"}},
+                {"where": ""}, {"include": ("payload", "payload")}, {"nulls_not_distinct": "yes"})) {
+            hash<auto> raw = {"schema": {"name": "validation", "version": "1.0"},
+                "tables": {"orders": {"columns": {"id": {"type": "int"}},
+                    "indexes": {"idx": options + {"columns": ("id",)}}}}};
+            assertThrows("DATA-SCHEMA-VALIDATION-ERROR", \Schema::DataSchemaLoader::validate(), (raw,));
+        }
+    }
+
+    private Datasource datasource() {
+%ifdef NO_PGSQL
+        testSkip("pgsql module unavailable");
+%endif
+        if (!ENV.QORE_DB_CONNSTR_PGSQL) {
+            testSkip("QORE_DB_CONNSTR_PGSQL is not set");
+        }
+        Datasource ds(ENV.QORE_DB_CONNSTR_PGSQL);
+        if (ds.getServerVersion() < 150000) {
+            ds.rollback();
+            testSkip("combined index feature test requires PostgreSQL 15+");
+        }
+        return ds;
+    }
+
+    private roundTrip() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        string ns = "qore_idx_features_" + getpid();
+        ds.execRaw("create schema " + ns);
+        ds.execRaw("set local search_path = " + ns);
+        ds.execRaw("create table probe (id int not null, a varchar(10), b int, c int, state varchar(10), \"order\" int)");
+        ds.execRaw("create unique index idx_partial on probe (a) where state <> 'done'");
+        ds.execRaw("create index idx_desc on probe (b desc nulls last, c nulls first)");
+        ds.execRaw("create unique index idx_include on probe (id) include (b, c, \"order\")");
+        ds.execRaw("create unique index idx_nnd on probe (c) nulls not distinct");
+        ds.execRaw("create index idx_expr on probe (lower(a), b)");
+        ds.execRaw("create index idx_nested on probe ((coalesce(a, 'WITH(x)')), b)");
+        ds.execRaw("create index idx_opclass on probe (a varchar_pattern_ops desc nulls last) with (fillfactor=70)");
+        ds.execRaw("create index idx_expr_ops on probe ((coalesce(a, '')) varchar_pattern_ops desc nulls last, b)");
+        ds.execRaw("create index idx_collate on probe (a collate \"C\" varchar_pattern_ops)");
+        PgsqlTable table(ds, "probe");
+        Indexes indexes = table.getIndexes();
+        PgsqlIndex covering = cast<PgsqlIndex>(indexes.idx_include);
+        assertEq(("id",), covering.columns.keys());
+        assertEq(("b", "c", "order"), covering.include);
+        assertTrue(cast<PgsqlIndex>(indexes.idx_nnd).nulls_not_distinct);
+        assertTrue(cast<PgsqlIndex>(indexes.idx_partial).predicate.val());
+        assertEq({"b": "desc"}, cast<PgsqlIndex>(indexes.idx_desc).order);
+        assertEq({"b": "last", "c": "first"}, cast<PgsqlIndex>(indexes.idx_desc).nulls);
+        ds.execRaw("create table cloned (like probe)");
+        foreach PgsqlIndex ix in (indexes.iterator()) {
+            string ddl = ix.getCreateSql("cloned");
+            ddl =~ s/index /index clone_/;
+            ds.execRaw(ddl);
+        }
+        Indexes clones = new PgsqlTable(ds, "cloned").getIndexes();
+        foreach PgsqlIndex ix in (indexes.iterator()) {
+            assertTrue(ix.equalExceptName(clones{"clone_" + ix.name}), ix.name + " survives dump and recreation");
+        }
+        hash<auto> exported = table.getDescriptionHash();
+        assertEq(("b", "c", "order"), exported.indexes.idx_include.driver.pgsql.include);
+        assertEq(exported.indexes, new SchemaReverse::TableReverse(ds, "probe").toQore().indexes);
+        PgsqlTable expected(ds, "probe");
+        expected.setupTable(exported);
+        assertEq((), table.getAlignSql(expected));
+
+        # Uniqueness applies only to key columns; NULLs remain non-distinct in regenerated DDL.
+        ds.execRaw("insert into cloned (id, a, b, c, state) values (1, 'x', 10, 20, 'done')");
+        ds.execRaw("insert into cloned (id, a, b, c, state) values (2, 'x', 11, 21, 'done')");
+        rejected(ds, "insert into cloned (id, a, b, c, state) values (1, 'y', 12, 22, 'active')");
+        ds.execRaw("insert into cloned (id, a, b, c, state) values (3, 'z', 13, null, 'active')");
+        rejected(ds, "insert into cloned (id, a, b, c, state) values (4, 'z2', 14, null, 'active')");
+        rejected(ds, "insert into cloned (id, a, b, c, state) values (4, 'z', 14, 23, 'active')");
+    }
+
+    private rejected(Datasource ds, string sql) {
+        ds.execRaw("savepoint rejected_row");
+        *string sqlstate;
+        try {
+            ds.execRaw(sql);
+        } catch (hash<ExceptionInfo> ex) {
+            sqlstate = ex.arg.alterr;
+        }
+        ds.execRaw("rollback to savepoint rejected_row");
+        assertEq("23505", sqlstate, "unique index rejects conflicting row");
+    }
+
+    private freshInstall() {
+        Datasource ds = datasource();
+        on_exit ds.rollback();
+        string ns = "qore_idx_install_" + getpid();
+        ds.execRaw("create schema " + ns);
+        ds.execRaw("set local search_path = " + ns);
+        hash<auto> definition = Schema::DataSchemaLoader::loadHash({
+            "schema": {"name": "orders", "version": "1.0", "version_table": "schema_version",
+                "version_column": "version", "version_where": {"name": "orders"}},
+            "tables": {
+                "schema_version": {"columns": {"name": {"type": "text", "notnull": True}, "version": {"type": "text"}},
+                    "primary_key": {"name": "pk_version", "columns": ("name",)}},
+                "orders": {"columns": {"id": {"type": "int"}, "state": {"type": "varchar", "size": 30},
+                    "payload": {"type": "text"}}, "indexes": {
+                    "idx_active": {"columns": ("id",), "unique": True,
+                        "where": "state NOT IN ('completed', 'failed', 'aborted', 'rolled_back')",
+                        "include": ("payload",), "nulls_not_distinct": True,
+                        "order": {"id": "desc"}, "nulls": {"id": "last"}},
+                }},
+            },
+            "reference_data": {"normal": {"schema_version": {
+                "columns": ("name", "version"), "rows": (("orders", "1.0"),),
+            }}},
+            # A fresh install must not execute historical data migrations.
+            "migrations": ({"version": "1.0", "pre_align": ({"action": "update", "table": "legacy_only",
+                "set": {"state": "done"}},), "post_align": ({"action": "update", "table": "legacy_only",
+                "set": {"state": "done"}},)},),
+        });
+        Schema::DataSchema schema(ds, definition);
+        schema.alignWithInfoInTransaction(True, -1, False);
+        PgsqlTable live(ds, "orders");
+        PgsqlIndex ix = cast<PgsqlIndex>(live.getIndexes().idx_active);
+        assertEq(("payload",), ix.include);
+        assertTrue(ix.nulls_not_distinct);
+        PgsqlTable expected(ds, "orders");
+        expected.setupTable(definition.tables.orders);
+        assertEq((), live.getAlignSql(expected), "server-rewritten NOT IN predicate aligns unchanged");
+        auto oid = ds.selectRow("select 'idx_active'::regclass::oid as oid").oid;
+        ds.execRaw("create index idx_undeclared on orders (state)");
+        auto extra_oid = ds.selectRow("select 'idx_undeclared'::regclass::oid as oid").oid;
+        new Schema::DataSchema(ds, definition).alignWithInfoInTransaction(True, -1, False);
+        assertEq(oid, ds.selectRow("select 'idx_active'::regclass::oid as oid").oid,
+            "repeated alignment preserves the same physical index");
+        assertEq(extra_oid, ds.selectRow("select 'idx_undeclared'::regclass::oid as oid").oid,
+            "schema alignment preserves undeclared indexes");
+        hash<auto> changed = definition.tables.orders;
+        changed.indexes.idx_active.where = "state <> 'failed'";
+        PgsqlTable changed_table(ds, "orders");
+        changed_table.setupTable(changed);
+        assertTrue(live.getAlignSql(changed_table).val(), "changed predicate requires replacement");
+    }
+}

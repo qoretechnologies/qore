@@ -224,6 +224,31 @@ public const DataSchemaJsonSchema = {
                     "additionalProperties": {"type": "string"},
                     "description": "Per-column operator class (pgsql only): column name → opclass name",
                 },
+                "where": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "SQL predicate for a partial index (pgsql only)",
+                },
+                "include": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1},
+                    "uniqueItems": True,
+                    "description": "Non-key covering columns (PostgreSQL 11+)",
+                },
+                "nulls_not_distinct": {
+                    "type": "boolean",
+                    "description": "Treat NULL keys as equal in a unique index (PostgreSQL 15+)",
+                },
+                "order": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string", "enum": ("asc", "desc", "ASC", "DESC")},
+                    "description": "Per-key sort direction; omitted keys use ASC (pgsql btree only)",
+                },
+                "nulls": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string", "enum": ("first", "last", "FIRST", "LAST")},
+                    "description": "Per-key null placement; defaults to LAST for ASC and FIRST for DESC (pgsql only)",
+                },
                 "driver": {
                     "type": "object",
                     "description": "Per-driver overrides for any of the above keys",

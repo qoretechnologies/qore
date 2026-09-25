@@ -10684,13 +10684,15 @@ list<auto> l = table.getAlignSql(table2);
         }
 
         if (!opt.omit.indexes) {
+            # Compare the available column names once; expression parsing cannot reference newly added columns.
+            bool index_expressions_available = columns.keys() == t.columns.keys();
             # check for indexes in the template that are not present or different in the current table
             foreach AbstractIndex ix in (t.indexes.iterator()) {
                 if (!indexes.hasKey(ix.name)) {
                     # add index to table
                     l += AbstractDatabase::doCallback(opt, ix.getCreateSql(getSqlName(), opt),
                         AbstractDatabase::AC_Add, "index", ix.name, name);
-                } else if (!ix.equal(indexes{ix.name})) {
+                } else if (!indexesEqualImpl(ix, indexes{ix.name}, index_expressions_available)) {
                     l += AbstractDatabase::doCallback(opt, ix.getRecreateSql(ds, getSqlName(), opt),
                         AbstractDatabase::AC_Recreate, "index", ix.name, name);
                 } else
@@ -12055,6 +12057,14 @@ on_exit printf("SQL> %s\n", sql);
     */
     private bool partitionUniqueKeysRequireAllColumnsImpl() {
         return False;
+    }
+
+    #! Compares indexes during alignment while the table lock is held
+    /** Drivers may normalize expressions against the live table only when expressions_available is True:
+        adding or removing columns can make a declared expression unavailable before DDL alignment.
+    */
+    private bool indexesEqualImpl(AbstractIndex declared, AbstractIndex live, bool expressions_available) {
+        return declared.equal(live);
     }
 
     #! returns recreatable driver-specific index options for a table description
