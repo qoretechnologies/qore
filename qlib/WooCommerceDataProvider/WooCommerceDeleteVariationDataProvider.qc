@@ -81,7 +81,7 @@ public class WooCommerceDeleteVariationDataProvider inherits WooCommerceDataProv
         static WooCommerceVariationDataType ResponseType();
     }
 
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

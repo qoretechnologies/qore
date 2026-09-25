@@ -65,11 +65,11 @@ public class ZohoInventoryGetItemAdjustmentDataProvider inherits ZohoInventoryDa
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.inventory_adjustment_id) {
             inventory_adjustment_id = options.inventory_adjustment_id;
         }
@@ -97,12 +97,12 @@ public class ZohoInventoryGetItemAdjustmentDataProvider inherits ZohoInventoryDa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.inventory_adjustment_id ?? request_options.inventory_adjustment_id ?? inventory_adjustment_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "inventory_adjustment_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/inventoryadjustments/%s", id));
+        hash<auto> response = doGet(sprintf("/inventoryadjustments/%s", id), NOTHING, org_id);
         return response.inventory_adjustment;
     }
 

@@ -47,7 +47,7 @@ public class LinearLabelDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object
-    constructor(LinearRestClient::LinearRestClient rest, string labelId) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, string labelId) : LinearDataProviderBase(rest) {
         @assert(labelId.val(), "label ID cannot be empty");
         self.labelId = labelId;
     }

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore HttpClientDataProvider module definition
 
-/** HttpGetDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** HttpGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,11 +25,8 @@
 #! contains all public definitions in the HttpClientDataProvider module
 public namespace HttpClientDataProvider {
 #! The HTTP get data provider class
-public class HttpClientGetDataProvider inherits AbstractDataProvider {
+public class HttpClientGetDataProvider inherits HttpClientDataProviderBase {
     public {
-        #! HTTP connection
-        HTTPClient http;
-
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
             "name": "get",
@@ -52,14 +49,33 @@ public class HttpClientGetDataProvider inherits AbstractDataProvider {
     }
 
     #! Creates the object from constructor options
-    constructor(*hash<auto> options) {
-        checkOptions("CONSTRUCTOR-ERROR", HttpClientDataProvider::ConstructorOptions, options);
-        http = HttpClientDataProvider::getHttpConnection(options);
+    /** @param options the constructor options; see @ref HttpClientDataProvider::ConstructorOptions
+
+        @throw CONSTRUCTOR-ERROR invalid or missing constructor option
+    */
+    constructor(*hash<auto> options) : HttpClientDataProviderBase(options) {
     }
 
     #! Creates the object from an HTTP connection
-    constructor(HTTPClient http) {
-        self.http = http;
+    /** Requests are made with a connection manager created from the configuration of \a http; see
+        @ref httpclientdataprovider_client
+
+        @param http the synchronous HTTP client whose configuration is used; it is not used for requests
+    */
+    constructor(HTTPClient http) : HttpClientDataProviderBase(http) {
+    }
+
+    #! Creates the object from an HttpClientIo connection manager
+    /** @param mgr the connection manager for requests; it is never closed by the data provider
+        @param url the target URL
+        @param options request options; see the corresponding constructor of @ref HttpClientDataProviderBase
+
+        @throw CONSTRUCTOR-ERROR the URL has no host, or an unsupported option was given
+
+        @since HttpClientDataProvider 1.2
+    */
+    constructor(HttpClientIo::HttpClientConnectionManager mgr, string url, *hash<auto> options)
+            : HttpClientDataProviderBase(mgr, url, options) {
     }
 
     #! Returns the data provider name
@@ -74,10 +90,9 @@ public class HttpClientGetDataProvider inherits AbstractDataProvider {
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return HttpClientDataProvider::makeRequest(http, "GET", NOTHING, req.path, req.hdr);
+        return doHttpRequest("GET", NOTHING, req.path, req.hdr);
     }
 
-    #! Makes a request and returnscallwithoutbody
     #! Returns the description of a successful request message, if any
     /** @return the request type for this provider
     */

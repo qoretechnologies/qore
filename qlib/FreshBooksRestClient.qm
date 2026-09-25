@@ -175,10 +175,9 @@ public class FreshBooksRestClientBase {
             remove rv.token;
         }
 
-        # Remove custom options that RestClient doesn't understand
-        remove rv.account_id;
-        remove rv.business_id;
-
+        # the account_id and business_id options are kept in the returned hash (they are ignored by the base
+        # classes), so that the options saved in the base class can be used to create a copy of the object with
+        # copyWithUrl()
         return rv;
     }
 }
@@ -187,10 +186,10 @@ public class FreshBooksRestClientBase {
 /** FreshBooks uses a REST API at https://api.freshbooks.com with OAuth2 authentication.
 
     @par Endpoint Structure:
-    - Accounting: /accounting/account/<accountId>/...
-    - Time tracking: /timetracking/business/<businessId>/...
+    - Accounting: /accounting/account/&lt;accountId&gt;/...
+    - Time tracking: /timetracking/business/&lt;businessId&gt;/...
     - Identity: /auth/api/v1/...
-    - Events: /events/account/<accountId>/...
+    - Events: /events/account/&lt;accountId&gt;/...
 
     @par Authentication:
     - OAuth2 with Bearer tokens
@@ -200,10 +199,10 @@ public class FreshBooksRestClientBase {
 public class FreshBooksRestClient inherits RestClient::RestClient, FreshBooksRestClientBase {
     private {
         #! The FreshBooks account ID for accounting endpoints
-        string account_id;
+        *string account_id;
 
         #! The FreshBooks business ID for timetracking endpoints
-        string business_id;
+        *string business_id;
     }
 
     #! creates the object with the given options
@@ -240,8 +239,8 @@ FreshBooksRestClient fb({
         setAssumedEncoding("UTF-8");
     }
 
-    #! Returns the account ID
-    string getAccountId() {
+    #! Returns the account ID, if any
+    *string getAccountId() {
         return account_id;
     }
 
@@ -250,8 +249,8 @@ FreshBooksRestClient fb({
         account_id = aid;
     }
 
-    #! Returns the business ID
-    string getBusinessId() {
+    #! Returns the business ID, if any
+    *string getBusinessId() {
         return business_id;
     }
 
@@ -467,12 +466,49 @@ public class FreshBooksRestConnection inherits RestClient::RestConnection {
 /** @see FreshBooksRestClient for more information
 */
 public class FreshBooksRestClientIo inherits RestClientIo::RestClientIo, FreshBooksRestClientBase {
+    private {
+        #! The FreshBooks account ID for accounting endpoints
+        *string account_id;
+
+        #! The FreshBooks business ID for timetracking endpoints
+        *string business_id;
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts constructor options; in addition to the options of @ref RestClientIo::RestClientIo
+        "RestClientIo", the following options are supported:
+        - \c account_id: the FreshBooks account ID (required for accounting endpoints)
+        - \c business_id: the FreshBooks business ID (required for time tracking endpoints)
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(FreshBooksRestClientBase::getOptions(opts), shared_mgr) {
+        if (opts.account_id) {
+            account_id = opts.account_id;
+        }
+        if (opts.business_id) {
+            business_id = opts.business_id;
+        }
+    }
+
+    #! Returns the account ID, if any
+    *string getAccountId() {
+        return account_id;
+    }
+
+    #! Sets the account ID
+    setAccountId(string aid) {
+        account_id = aid;
+    }
+
+    #! Returns the business ID, if any
+    *string getBusinessId() {
+        return business_id;
+    }
+
+    #! Sets the business ID
+    setBusinessId(string bid) {
+        business_id = bid;
     }
 }
 }

@@ -645,10 +645,11 @@ public class RestHandlerTest inherits QUnit::Test {
         assertEq("application/octet-stream", info."body-content-type");
         assertEq(<01020304>, binary(bin_resp.body));
 
-        resp = hc.get("/raw?action=noType", NOTHING, \info);
+        # application/octet-stream is binary data, even with the charset that the server adds to a string body
+        auto no_type_resp = hc.get("/raw?action=noType", NOTHING, \info);
         assertEq(200, info."response-headers".status_code);
         assertEq("application/octet-stream", info."body-content-type");
-        assertEq("raw-no-type", resp);
+        assertEq(binary("raw-no-type"), no_type_resp);
     }
 
     xmlTest() {

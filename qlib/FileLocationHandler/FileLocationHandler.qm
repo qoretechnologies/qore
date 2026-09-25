@@ -30,6 +30,8 @@
 # enable all warnings
 
 %requires Util
+# for creating HttpClientIo options at runtime; HttpClientIo is loaded dynamically, see FileLocationHandlerHttp.qc
+%requires reflection
 # for non-blocking FTP retrieval; FtpClientIo requires nothing from this module, so there is no cycle
 %requires FtpClientIo
 
@@ -261,7 +263,7 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
     the absolute URL it was resolved to, and its headers.  Request headers, such as \c Authorization, are never
     reported.
 
-    HTTP redirects are followed by the transport (see @ref Qore::HTTPClient "HTTPClient"): \c Location values are
+    HTTP redirects are followed by the handler (see @ref filelocationhandler_http): \c Location values are
     resolved according to RFC 3986, fragments are never sent, and credentials are only sent to the origin of the
     original request.  A handler bound to a client with
     @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "getHttpHandlerForClient()" or
@@ -290,9 +292,45 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
     @note Response headers can be sensitive (for example \c Set-Cookie); the metadata is returned to the caller
     and is never logged by this module
 
+    @section filelocationhandler_http HTTP and REST Locations
+
+    \c "http://" and \c "https://" locations are retrieved with the
+    <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> module, which supports HTTP/1.1, HTTP/2, and
+    HTTP/3; \c "rest://" and \c "rests://" locations are retrieved with
+    <a href="../../RestClientIo/html/index.html">RestClientIo</a> clients.  Both modules depend on this module, so they
+    are loaded when an HTTP or REST location is first used rather than declared as dependencies.
+
+    |!Operation|!Implementation
+    |text and binary reads, writes, and resources|the request is made as for the non-blocking reads, and it is driven on the calling thread until it completes
+    |non-blocking reads (\c getIoPollerForLocation() and \c getResourcePollerForLocation())|a poller that performs no blocking I/O: connections are established and responses are received with the event notifiers of the connection manager, and redirects are followed as the poller is driven
+    |stream reads (\c getBinaryStreamFromLocation() and \c getStreamReaderFromLocation())|the response headers are received before the stream is returned, so an error response raises an exception there; the body is read from the network as the stream is read, and any content encoding is decoded as it is read
+    |stream writes (\c getOutputStreamForLocation())|the data written is sent as the request body while it is written (with chunked transfer encoding for HTTP/1.1); the response status is checked when the stream is closed and reported by \c OutputStreamWrapper::waitForIo()
+
+    Requests and responses keep the behavior of the synchronous @ref Qore::HTTPClient "HTTPClient" used by earlier
+    versions:
+    - an error status raises \c HTTP-CLIENT-RECEIVE-ERROR with the response headers, \c status_code,
+      \c status_message, and \c body in the exception argument, unless the \c error_passthru option is set; the
+      non-blocking data reader returns the body of an error response, as it always has
+    - a timeout raises \c SOCKET-TIMEOUT; the \c timeout option is the maximum time to wait for any I/O event
+    - redirect errors raise \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED, \c HTTP-CLIENT-REDIRECT-ERROR, or
+      \c HTTP-CLIENT-UNKNOWN-PROTOCOL; up to 5 redirects are followed for \c http(s):// locations
+    - user information in the location is sent with HTTP basic authentication, and server certificates are only
+      verified if the \c ssl_verify_cert option is set
+    - content encodings are decoded unless the \c encoding_passthru option is set
+    - characters that cannot be sent in a request target (spaces, control and non-ASCII characters, and
+      <tt>&quot; &lt; &gt; \\ ^ &#96; { | }</tt>) are percent-encoded; percent-encoded octets are sent as given
+
+    Requests send an \c Accept header accepting any media type (<tt>&#42;/&#42;</tt>); a request body is sent with
+    \c "Content-Type: application/octet-stream" (binary data) or \c "text/plain" with the string's character
+    encoding.  Each request made for an unbound \c http(s):// location uses its own connection manager, like the
+    synchronous client created for each request in earlier versions.
+
     @section filelocationhandler_relnotes Release Notes
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
+    - the stream readers of HTTP locations decode the text in the encoding determined from the response, like text
+      reads do (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"), with the \c encoding option as
+      the assumed encoding; the option was used for every response
     - added @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
       and @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri()
       "AbstractFileLocationHandler::getPathFromFileUri()" to convert between local paths and \c file URIs
@@ -327,6 +365,22 @@ hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(i
     - added @ref FileLocationHandler::AbstractFileLocationHandler::isBound() "AbstractFileLocationHandler::isBound()"
       so that any handler reference can be asked whether it is bound to an already-authenticated client
       (<a href="https://github.com/qoretechnologies/qore/issues/5386">issue 5386</a>)
+    - \c "http://" and \c "https://" locations are retrieved with \c HttpClientIo, and \c "rest://" and
+      \c "rests://" locations with \c RestClientIo, instead of the synchronous @ref Qore::HTTPClient "HTTPClient" and
+      \c RestClient::RestClient; see @ref filelocationhandler_http
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>):
+      - the non-blocking readers perform no blocking I/O and support HTTP/2 and HTTP/3
+      - stream reads receive the body as the stream is read, and raise an error response or a failed connection
+        when the stream is opened instead of returning an empty stream
+      - stream writes report an error response from \c OutputStreamWrapper::waitForIo()
+      - the \c http_version option accepts \c "2.0" and \c "3.0"
+    - @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient()
+      "FileLocationHandler::getHttpHandlerForClient()" also binds a handler to an
+      \c HttpClientIo::HttpClientConnectionManager with a URL, and
+      @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient()
+      "FileLocationHandler::getRestHandlerForClient()" drives a \c RestClientIo::RestClientIo client, or one created
+      from a synchronous \c RestClient::RestClient
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection filelocationhandler_v2_2_1 FileLocationHandler v2.2.1
     - allow handler information to be returned

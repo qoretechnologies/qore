@@ -103,11 +103,11 @@ public class ZohoInvoiceEmailInvoiceDataProvider inherits ZohoInvoiceDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest) : ZohoInvoiceDataProviderBase(rest) {
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest) : ZohoInvoiceDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options) : ZohoInvoiceDataProviderBase(rest) {
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options) : ZohoInvoiceDataProviderBase(rest) {
         if (options.invoice_id) {
             invoice_id = options.invoice_id;
         }

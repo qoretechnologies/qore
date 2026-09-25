@@ -32,6 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) RestClientIo
+%requires json
 %try-module uuid
 %define NoUuid
 %endtry
@@ -181,9 +182,16 @@ module EmpathicBuildingDataProvider {
     @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
     - migrated to the async multiplexed @ref RestClientIo::RestClientIo "RestClientIo"
       transport (HTTP/1.1/2/3) on the default build path; the \c restclient data provider
-      option is widened to @ref RestClient::AbstractRestClient "AbstractRestClient" so callers
-      can still pass a sync @ref RestClient::RestClient "RestClient" when HTTP/1.x-only
-      features are required
+      option is widened to @ref RestClient::AbstractRestClient "AbstractRestClient"
+    - added @ref EmpathicBuildingDataProvider::EmpathicBuildingRestClientIo "EmpathicBuildingRestClientIo", an
+      asynchronous client with the Haltian login and token refresh of
+      @ref EmpathicBuildingDataProvider::EmpathicBuildingRestClient "EmpathicBuildingRestClient"; Empathic
+      Building connections return it from \c getAsync(), and their data providers use it
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - the data providers make all API calls with an asynchronous client; a synchronous
+      @ref RestClient::RestClient "RestClient" passed to them is converted with
+      @ref EmpathicBuildingDataProvider::EmpathicBuildingDataProviderBase::getAsyncClient() "getAsyncClient()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection empathicbuildingdataprovider_v1_1 EmpathicBuildingDataProvider v1.1
     - added support for the data provider action catalog API

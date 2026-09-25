@@ -80,7 +80,7 @@ public class ChargebeeCollectInvoicePaymentDataProvider inherits ChargebeeDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(ChargebeeRestClient::ChargebeeRestClient rest)
+    constructor(ChargebeeRestClient::ChargebeeRestClientIo rest)
             : ChargebeeDataProviderBase(rest) {
     }
 

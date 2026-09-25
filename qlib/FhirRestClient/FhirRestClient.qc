@@ -25,8 +25,34 @@
 #! the %FhirRestClient namespace holds all public definitions in the %FhirRestClient module
 public namespace FhirRestClient {
 
-#! Common FHIR REST client constants and option handling
+#! Common FHIR REST client constants, option handling, and FHIR helper methods
+/** The FHIR helper methods are shared by @ref FhirRestClient and @ref FhirRestClientIo, which provide the REST
+    transport.
+*/
 public class FhirRestClientBase {
+    private:internal {
+        #! Resource types advertised by the server CapabilityStatement, cached on first use
+        *hash<string, bool> capability_resource_type_map;
+        #! Protects the resource type cache
+        Mutex capability_resource_type_mutex();
+
+        #! Characters percent-encoded in request paths by @ref encodeRequestPath()
+        const PathEncodingMap = {
+            "\"": "%22",
+            "#": "%23",
+            "<": "%3C",
+            ">": "%3E",
+            "[": "%5B",
+            "\\": "%5C",
+            "]": "%5D",
+            "^": "%5E",
+            "`": "%60",
+            "{": "%7B",
+            "|": "%7C",
+            "}": "%7D",
+        };
+    }
+
     public {
         #! FHIR JSON MIME type
         const MimeTypeFhirJson = "application/fhir+json";
@@ -347,24 +373,6 @@ public class FhirRestClientBase {
                 sprintf("unsupported FHIR Bundle request method: %y", method);
         }
         return normalized;
-    }
-}
-
-#! FHIR JSON REST client
-public class FhirRestClient inherits RestClient::RestClient, FhirRestClientBase {
-    private {
-        *hash<string, bool> capability_resource_type_map;
-        Mutex capability_resource_type_mutex();
-    }
-
-    #! Creates the FHIR REST client
-    /** @param opts valid options are all options supported by @ref RestClient::RestClient
-        @param do_not_connect if False, then a connection will be established immediately
-        @throw REST-CLIENT-CONSTRUCTOR-ERROR if the underlying REST client cannot be initialized
-    */
-    constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(FhirRestClientBase::getOptions(opts), do_not_connect) {
-        setAssumedEncoding("UTF-8");
     }
 
     #! Returns the server CapabilityStatement
@@ -935,68 +943,38 @@ hash<auto> oauth2_options = FhirRestClient::FhirRestClient::makeSmartBackendOAut
         return doCheckedFhirRequest(method, path, body, hdr);
     }
 
+    #! Sends a FHIR REST request without validating the path and maps OperationOutcome errors
     private hash<RestClient::RestResponseInfo> doCheckedFhirRequest(string method, string path, auto body,
             *hash<auto> hdr) {
+        hash<RestClient::RestResponseInfo> resp;
         try {
-            hash<RestClient::RestResponseInfo> resp = restDoRequest(method, path, body, hdr);
-            if (resp.status_code < 200 || resp.status_code >= 300) {
-                if (resp.body.typeCode() == NT_HASH && resp.body.resourceType == "OperationOutcome") {
-                    throw "FHIR-OPERATION-OUTCOME", getOperationOutcomeSummary(resp.body), {
-                        "headers": resp.headers,
-                        "outcome": resp.body,
-                        "status_code": resp.status_code,
-                    };
-                }
-                throw "FHIR-REST-ERROR", sprintf("FHIR REST request failed with HTTP status %d",
-                    resp.status_code), resp;
-            }
-            return resp;
+            resp = sendFhirRequest(method, path, body, hdr);
         } catch (hash<ExceptionInfo> ex) {
+            # an error response raised by the REST client (if error_passthru is disabled)
             if (*hash<auto> outcome = getExceptionOperationOutcome(ex)) {
                 throw "FHIR-OPERATION-OUTCOME", getOperationOutcomeSummary(outcome), {
-                    "headers": ex.arg - "body",
+                    "headers": getErrorResponseHeaders({} + ex.arg),
                     "outcome": outcome,
                     "status_code": ex.arg.status_code,
                 };
             }
             rethrow;
         }
-    }
-
-    #! Processes the raw REST response and treats application/fhir+json as JSON
-    /** @param resp raw REST response
-        @param method HTTP method
-        @param path relative REST path
-        @param info optional response info reference
-        @return processed REST response body
-    */
-    hash<auto> processRestResponse(hash<auto> resp, string method, string path, *reference<hash<auto>> info) {
-        normalizeFhirJsonContentType(\resp);
-        return RestClient::processRestResponse(resp, method, path, \info);
-    }
-
-    #! Processes the raw async REST response and treats application/fhir+json as JSON
-    /** @param resp raw REST response
-        @param method HTTP method
-        @param path relative REST path
-        @param info response info reference
-        @param decode_errors whether error responses should be decoded by the REST client
-        @return processed REST response body
-    */
-    hash<auto> processAsyncResponse(hash<auto> resp, string method, string path,
-            reference<hash<auto>> info, bool decode_errors) {
-        normalizeFhirJsonContentType(\resp);
-        return RestClient::processAsyncResponse(resp, method, path, \info, decode_errors);
-    }
-
-    #! Normalizes FHIR JSON response content for RestClient deserialization
-    private static normalizeFhirJsonContentType(reference<hash<auto>> resp) {
-        string ct = resp."content-type" ?? "";
-        if (ct =~ /^application\/fhir\+json/i) {
-            resp."content-type" = MimeTypeJson;
+        if (resp.status_code < 200 || resp.status_code >= 300) {
+            if (resp.body.typeCode() == NT_HASH && resp.body.resourceType == "OperationOutcome") {
+                throw "FHIR-OPERATION-OUTCOME", getOperationOutcomeSummary(resp.body), {
+                    "headers": resp.headers,
+                    "outcome": resp.body,
+                    "status_code": resp.status_code,
+                };
+            }
+            throw "FHIR-REST-ERROR", sprintf("FHIR REST request failed with HTTP status %d",
+                resp.status_code), resp;
         }
+        return resp;
     }
 
+    #! Returns the resource types advertised by the server CapabilityStatement, loading them if necessary
     private hash<string, bool> getCapabilityStatementResourceTypeMap(bool reload) {
         if (!reload) {
             AutoLock al(capability_resource_type_mutex);
@@ -1027,7 +1005,7 @@ hash<auto> oauth2_options = FhirRestClient::FhirRestClient::makeSmartBackendOAut
         string path = url;
         if (url =~ /^[A-Za-z][A-Za-z0-9+.-]*:/) {
             hash<UrlInfo> link = parse_url(url);
-            hash<UrlInfo> base = parse_url(getUrl());
+            hash<UrlInfo> base = parse_url(getFhirBaseUrl());
             if (link.protocol.lwr() != base.protocol.lwr() || link.host.lwr() != base.host.lwr()
                     || getUrlPort(link) != getUrlPort(base)) {
                 throw "FHIR-PAGINATION-ERROR",
@@ -1117,22 +1095,219 @@ hash<auto> oauth2_options = FhirRestClient::FhirRestClient::makeSmartBackendOAut
             return;
         }
 
-        if (ex.arg.body.typeCode() == NT_HASH && ex.arg.body.resourceType == "OperationOutcome") {
-            return ex.arg.body;
-        }
-
-        string ct = ex.arg."content-type" ?? ex.arg.headers."content-type" ?? "";
-        if (ct =~ /^application\/fhir\+json/i) {
-            try {
-                string desc = ex.desc;
-                desc =~ s/ \(REST URL .*$//;
-                hash<auto> body = parse_json(desc);
-                if (body.resourceType == "OperationOutcome") {
-                    return body;
-                }
-            } catch () {
+        # the argument may be a typed hash (ex: RestClient::RestResponseInfo), which cannot be accessed with keys
+        # that it does not declare
+        hash<auto> arg = {} + ex.arg;
+        # RestClientIo raises the decoded body; RestClient raises it in "deserialized_body"
+        foreach auto body in ((arg.body, arg.deserialized_body)) {
+            if (body.typeCode() == NT_HASH && body.resourceType == "OperationOutcome") {
+                return body;
             }
         }
+
+        string ct = arg."content-type" ?? arg.headers."content-type" ?? "";
+        if (ct =~ /^application\/(fhir\+)?json/i) {
+            # the body could not be decoded by the REST client; try the raw body or the error description
+            *string raw_body = arg.body.typeCode() == NT_STRING ? arg.body : NOTHING;
+            string desc = ex.desc;
+            desc =~ s/ \(REST URL .*$//;
+            foreach string text in ((raw_body, desc)) {
+                if (!text) {
+                    continue;
+                }
+                try {
+                    auto body = parse_json(text);
+                    if (body.typeCode() == NT_HASH && body.resourceType == "OperationOutcome") {
+                        return body;
+                    }
+                } catch () {
+                    # not an OperationOutcome
+                }
+            }
+        }
+    }
+
+    #! Returns the given request path with characters that are not valid in a request target percent-encoded
+    /** Percent-encoded characters are left unchanged, so a path with a query string built by
+        @ref getPathWithParams() or taken from a Bundle link is not encoded twice.
+
+        @param path the request path, which may include a query string
+
+        @return the path with spaces, control characters, non-ASCII characters (as UTF-8 bytes), double quotes,
+        angle brackets, hash signs, braces, vertical bars, backslashes, carets, square brackets, and grave accents
+        percent-encoded
+
+        @par Example:
+        @code{.py}
+string path = FhirRestClientBase::encodeRequestPath("Patient?identifier=http://x.org/mrn|12 3");
+# path: "Patient?identifier=http://x.org/mrn%7C12%203"
+        @endcode
+    */
+    static string encodeRequestPath(string path) {
+        # fast path: nothing to encode
+        if (path !~ /[^!$%&-;=?-Z_a-z~]/) {
+            return path;
+        }
+        # the request target is encoded byte by byte from the UTF-8 representation of the path
+        binary b = path.encoding() == "UTF-8" ? path.toBinary() : convert_encoding(path, "UTF-8").toBinary();
+        string rv;
+        int size = b.size();
+        for (int i = 0; i < size; ++i) {
+            int code = b[i];
+            if (code < 0x21 || code >= 0x7f) {
+                rv += sprintf("%%%02X", code);
+                continue;
+            }
+            string c = chr(code);
+            rv += PathEncodingMap{c} ?? c;
+        }
+        return rv;
+    }
+
+    #! Sends a REST request with the underlying REST client
+    /** @param method HTTP method
+        @param path request path relative to the connection path; empty for the connection path itself
+        @param body optional request body
+        @param hdr optional request headers
+
+        @return full REST response including status, headers, and parsed body
+    */
+    private abstract hash<RestClient::RestResponseInfo> sendFhirRequest(string method, string path, auto body,
+            *hash<auto> hdr);
+
+    #! Returns the FHIR service base URL of the client
+    private abstract string getFhirBaseUrl();
+
+    #! Returns the response headers from the argument of an exception raised for an HTTP error response
+    /** @param arg the exception argument
+
+        @return the response headers
+    */
+    private abstract hash<auto> getErrorResponseHeaders(hash<auto> arg);
+}
+
+#! FHIR JSON REST client
+public class FhirRestClient inherits RestClient::RestClient, FhirRestClientBase {
+    #! Creates the FHIR REST client
+    /** @param opts valid options are all options supported by @ref RestClient::RestClient; the
+        \c pre_encoded_urls option is always enabled, as the FHIR helper methods percent-encode request paths
+        themselves (see @ref FhirRestClientBase::encodeRequestPath()), so paths passed to the generic REST methods of
+        this object must be percent-encoded as well
+        @param do_not_connect if False, then a connection will be established immediately
+        @throw REST-CLIENT-CONSTRUCTOR-ERROR if the underlying REST client cannot be initialized
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(FhirRestClientBase::getOptions(opts) + {"pre_encoded_urls": True}, do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+
+    #! Processes the raw REST response and treats application/fhir+json as JSON
+    /** @param resp raw REST response
+        @param method HTTP method
+        @param path relative REST path
+        @param info optional response info reference
+        @return processed REST response body
+    */
+    hash<auto> processRestResponse(hash<auto> resp, string method, string path, *reference<hash<auto>> info) {
+        normalizeFhirJsonContentType(\resp);
+        return RestClient::processRestResponse(resp, method, path, \info);
+    }
+
+    #! Processes the raw async REST response and treats application/fhir+json as JSON
+    /** @param resp raw REST response
+        @param method HTTP method
+        @param path relative REST path
+        @param info response info reference
+        @param decode_errors whether error responses should be decoded by the REST client
+        @return processed REST response body
+    */
+    hash<auto> processAsyncResponse(hash<auto> resp, string method, string path,
+            reference<hash<auto>> info, bool decode_errors) {
+        normalizeFhirJsonContentType(\resp);
+        return RestClient::processAsyncResponse(resp, method, path, \info, decode_errors);
+    }
+
+    #! Normalizes FHIR JSON response content for RestClient deserialization
+    private static normalizeFhirJsonContentType(reference<hash<auto>> resp) {
+        string ct = resp."content-type" ?? "";
+        if (ct =~ /^application\/fhir\+json/i) {
+            resp."content-type" = MimeTypeJson;
+        }
+    }
+
+    #! Sends a REST request with @ref RestClient::RestClient::restDoRequest() "RestClient::restDoRequest()"
+    /** The path is percent-encoded with @ref FhirRestClientBase::encodeRequestPath(), and sent as-is by the
+        HTTP client, as the \c pre_encoded_urls option is enabled; otherwise the percent-encoded search parameter
+        values would be encoded again
+    */
+    private hash<RestClient::RestResponseInfo> sendFhirRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest(method, FhirRestClientBase::encodeRequestPath(path), body, hdr);
+    }
+
+    #! Returns the FHIR service base URL of the client
+    private string getFhirBaseUrl() {
+        return getUrl();
+    }
+
+    #! Returns the response headers from the argument of an exception raised for an HTTP error response
+    /** The synchronous client raises error responses with the response headers, the body and the decoded body as
+        the argument
+    */
+    private hash<auto> getErrorResponseHeaders(hash<auto> arg) {
+        return arg - ("body", "deserialized_body");
+    }
+}
+
+#! FHIR JSON REST client for non-blocking I/O
+/** This class provides the FHIR helper methods of @ref FhirRestClient with a
+    <a href="../../RestClientIo/html/index.html">RestClientIo</a> client, which supports HTTP/1.1, HTTP/2 and HTTP/3
+    and can share its connection manager with other clients.
+
+    Request paths are percent-encoded with @ref FhirRestClientBase::encodeRequestPath() before they are sent, as
+    \c RestClientIo sends request paths verbatim.
+
+    @par Example:
+    @code{.py}
+FhirRestClient::FhirRestClientIo client({
+    "url": "https://fhir.example.org/r4",
+    "token": ENV.FHIR_TOKEN,
+});
+
+hash<auto> patient = client.readResource("Patient", "example");
+hash<auto> bundle = client.searchAllResources("Patient", {"family": "Smith"});
+    @endcode
+*/
+public class FhirRestClientIo inherits RestClientIo::RestClientIo, FhirRestClientBase {
+    #! Creates the FHIR REST client
+    /** @param opts all options supported by
+        <a href="../../RestClientIo/html/class_rest_client_io_1_1_rest_client_io.html">RestClientIo</a>; FHIR
+        defaults are applied with @ref FhirRestClientBase::getOptions()
+        @param shared_mgr an optional shared connection manager; if given, the client does not close it
+
+        @throw RESTCLIENTIO-ERROR the \c url option is missing or invalid
+        @throw RESTCLIENTIO-OPTION-ERROR an option is invalid
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(FhirRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Sends a REST request with \c RestClientIo::restDoRequest() with the path percent-encoded
+    private hash<RestClient::RestResponseInfo> sendFhirRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        return restDoRequest(method, FhirRestClientBase::encodeRequestPath(path), body, hdr);
+    }
+
+    #! Returns the FHIR service base URL of the client
+    private string getFhirBaseUrl() {
+        return getUrl();
+    }
+
+    #! Returns the response headers from the argument of an exception raised for an HTTP error response
+    /** \c RestClientIo raises error responses with the response info as the argument
+    */
+    private hash<auto> getErrorResponseHeaders(hash<auto> arg) {
+        return arg.headers ?? {};
     }
 }
 

@@ -32,15 +32,15 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         const BaseConstructorOptions = {
             "woocommercerestclient": <DataProviderOptionInfo>{
                 "display_name": "WooCommerce REST Client",
-                "short_desc": "The WooCommerceRestClient object",
-                "type": AbstractDataProviderType::get(new Type("WooCommerceRestClient::WooCommerceRestClient")),
-                "desc": "The WooCommerceRestClient object to use for API calls",
+                "short_desc": "The WooCommerceRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("WooCommerceRestClient::WooCommerceRestClientIo")),
+                "desc": "The `WooCommerceRestClientIo` object to use for API calls",
             },
             "woocommercerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "WooCommerce REST Client Options",
-                "short_desc": "Options for creating a WooCommerceRestClient",
+                "short_desc": "Options for creating a WooCommerceRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a WooCommerceRestClient object if one is not provided directly",
+                "desc": "Options for creating a `WooCommerceRestClientIo` object if one is not provided directly",
             },
             "store_url": <DataProviderOptionInfo>{
                 "display_name": "Store URL",
@@ -70,7 +70,7 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
 
     private {
         #! The REST client object for API calls
-        WooCommerceRestClient::WooCommerceRestClient rest;
+        WooCommerceRestClient::WooCommerceRestClientIo rest;
 
         #! The connection object, if applicable
         *WooCommerceRestClient::WooCommerceRestConnection conn;
@@ -81,14 +81,19 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest) {
+    /** @param rest the REST client for API calls
+    */
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
+    /** @param conn the connection; API calls are made with the REST client returned by its
+        @ref ConnectionProvider::AbstractConnection::getAsync() "getAsync()" method
+    */
     constructor(WooCommerceRestClient::WooCommerceRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -107,12 +112,12 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
             if (copts.consumer_secret) {
                 client_opts.consumer_secret = copts.consumer_secret;
             }
-            rest = new WooCommerceRestClient::WooCommerceRestClient(client_opts);
+            rest = new WooCommerceRestClient::WooCommerceRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    WooCommerceRestClient::WooCommerceRestClient getRestClient() {
+    WooCommerceRestClient::WooCommerceRestClientIo getRestClient() {
         return rest;
     }
 
@@ -131,16 +136,11 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         @param params optional query parameters
         @return the response data (can be hash or list depending on endpoint)
 
-        @throw WOOCOMMERCE-API-ERROR if the response indicates an error
+        @throw WOOCOMMERCE-API-ERROR the server returned an error response; the exception argument is the response
+        (a @ref RestClient::RestResponseInfo "RestResponseInfo" hash)
     */
     auto doGet(string path, *hash<auto> params) {
-        string url = path;
-        if (params) {
-            url += "?" + buildQueryString(params);
-        }
-        hash<auto> response = rest.get(url);
-        checkResponse(response);
-        return response.body;
+        return doApiRequest("GET", getRequestPath(path, params)).body;
     }
 
     #! Makes a GET request returning both body and pagination headers
@@ -148,20 +148,17 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         @param params optional query parameters
         @return a hash with \c body (response data), \c total (total items), and \c total_pages
 
-        @throw WOOCOMMERCE-API-ERROR if the response indicates an error
+        @throw WOOCOMMERCE-API-ERROR the server returned an error response; the exception argument is the response
+        (a @ref RestClient::RestResponseInfo "RestResponseInfo" hash)
     */
     hash<auto> doGetPaginated(string path, *hash<auto> params) {
-        string url = path;
-        if (params) {
-            url += "?" + buildQueryString(params);
-        }
-        hash<auto> info;
-        hash<auto> response = rest.get(url, NOTHING, \info);
-        checkResponse(response);
+        hash<RestClient::RestResponseInfo> response = doApiRequest("GET", getRequestPath(path, params));
+        *string total = RestClient::RestClient::getSingleHeaderValue(response.headers."x-wp-total");
+        *string total_pages = RestClient::RestClient::getSingleHeaderValue(response.headers."x-wp-totalpages");
         return {
             "body": response.body,
-            "total": info."response-headers"."x-wp-total" ? info."response-headers"."x-wp-total".toInt() : 0,
-            "total_pages": info."response-headers"."x-wp-totalpages" ? info."response-headers"."x-wp-totalpages".toInt() : 0,
+            "total": total ? total.toInt() : 0,
+            "total_pages": total_pages ? total_pages.toInt() : 0,
         };
     }
 
@@ -171,10 +168,21 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         foreach string key in (keys params) {
             auto val = params{key};
             if (exists val) {
-                parts += sprintf("%s=%s", key, encode_url(string(val), True));
+                parts += sprintf("%s=%s", encode_url(key, True), encode_url(string(val), True));
             }
         }
         return parts.join("&");
+    }
+
+    #! Returns the request path with any query parameters
+    private string getRequestPath(string path, *hash<auto> params) {
+        if (params) {
+            string query = buildQueryString(params);
+            if (query.val()) {
+                path += "?" + query;
+            }
+        }
+        return path;
     }
 
     #! Makes a POST request to the WooCommerce API
@@ -182,12 +190,11 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         @param body the request body
         @return the response data
 
-        @throw WOOCOMMERCE-API-ERROR if the response indicates an error
+        @throw WOOCOMMERCE-API-ERROR the server returned an error response; the exception argument is the response
+        (a @ref RestClient::RestResponseInfo "RestResponseInfo" hash)
     */
     hash<auto> doPost(string path, *hash<auto> body) {
-        hash<auto> response = rest.post(path, body);
-        checkResponse(response);
-        return response.body;
+        return doApiRequest("POST", path, body).body ?? {};
     }
 
     #! Makes a PUT request to the WooCommerce API
@@ -195,12 +202,11 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         @param body the request body
         @return the response data
 
-        @throw WOOCOMMERCE-API-ERROR if the response indicates an error
+        @throw WOOCOMMERCE-API-ERROR the server returned an error response; the exception argument is the response
+        (a @ref RestClient::RestResponseInfo "RestResponseInfo" hash)
     */
     hash<auto> doPut(string path, *hash<auto> body) {
-        hash<auto> response = rest.put(path, body);
-        checkResponse(response);
-        return response.body;
+        return doApiRequest("PUT", path, body).body ?? {};
     }
 
     #! Makes a DELETE request to the WooCommerce API
@@ -208,35 +214,62 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         @param params optional query parameters
         @return the response data
 
-        @throw WOOCOMMERCE-API-ERROR if the response indicates an error
+        @throw WOOCOMMERCE-API-ERROR the server returned an error response; the exception argument is the response
+        (a @ref RestClient::RestResponseInfo "RestResponseInfo" hash)
     */
     hash<auto> doDelete(string path, *hash<auto> params) {
-        string url = path;
-        if (params) {
-            url += "?" + buildQueryString(params);
-        }
-        hash<auto> response = rest.del(url);
-        checkResponse(response);
-        return response.body;
+        return doApiRequest("DELETE", getRequestPath(path, params)).body ?? {};
     }
 
-    #! Checks the WooCommerce API response for errors
-    /** @param response the API response hash
+    #! Makes a request to the WooCommerce API and returns the response
+    /** Transport errors are retried up to @ref MaxRetries times: errors in @ref RetrySet for all requests, and
+        errors in @ref IdempotentRetrySet for requests with an idempotent method.
 
-        @throw WOOCOMMERCE-API-ERROR if the response indicates an error
+        @param method the HTTP method
+        @param path the API path, including any query string
+        @param body the request body, if any
+
+        @return the response
+
+        @throw WOOCOMMERCE-API-ERROR the server returned an error response; the exception argument is the response
+        (a @ref RestClient::RestResponseInfo "RestResponseInfo" hash)
     */
-    private checkResponse(hash<auto> response) {
-        if (response.status_code >= 400) {
-            string err_msg;
-            if (response.body.message) {
-                err_msg = response.body.message;
-            } else if (response.body.code) {
-                err_msg = sprintf("WooCommerce API error: %s", response.body.code);
-            } else {
-                err_msg = sprintf("WooCommerce API error (HTTP %d)", response.status_code);
+    private hash<RestClient::RestResponseInfo> doApiRequest(string method, string path, *hash<auto> body) {
+        int retries = 0;
+        while (True) {
+            try {
+                return rest.restDoRequest(method, path, body);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
+                    throwApiError(ex.arg);
+                }
+                bool retriable = IdempotentMethods{method} ? IdempotentRetrySet{ex.err} : RetrySet{ex.err};
+                if (retriable && ++retries <= MaxRetries) {
+                    log(LoggerLevel::WARN, "WooCommerce %s %s: %s: %s; retrying (%d/%d)", method, path, ex.err,
+                        ex.desc, retries, MaxRetries);
+                    continue;
+                }
+                rethrow;
             }
-            throw "WOOCOMMERCE-API-ERROR", err_msg, response.body;
         }
+    }
+
+    #! Throws a \c WOOCOMMERCE-API-ERROR exception for an error response
+    /** @param response the error response
+
+        @throw WOOCOMMERCE-API-ERROR always thrown; the description is the error message of the response, and the
+        argument is the response
+    */
+    private static throwApiError(hash<auto> response) {
+        string err_msg;
+        if (response.body.typeCode() == NT_HASH && response.body.message) {
+            err_msg = sprintf("%s (HTTP %d)", response.body.message, response.status_code);
+        } else if (response.body.typeCode() == NT_HASH && response.body.code) {
+            err_msg = sprintf("WooCommerce API error: %s (HTTP %d)", response.body.code, response.status_code);
+        } else {
+            err_msg = sprintf("WooCommerce API error (HTTP %d)", response.status_code);
+        }
+        throw "WOOCOMMERCE-API-ERROR", err_msg, response;
     }
 
     #! Helper method to get client options from constructor options

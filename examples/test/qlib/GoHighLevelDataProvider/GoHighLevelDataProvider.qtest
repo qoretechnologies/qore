@@ -36,13 +36,62 @@
 
 %requires GoHighLevelRestClient
 %requires GoHighLevelDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class GoHighLevelDataProviderTest
+
+#! A local GoHighLevel API server that records requests
+class FakeGoHighLevelHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "version": hdr.version,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"message": "rate limited"}),
+            };
+        }
+        if (hdr.method == "DELETE") {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"message": "contact not found"}),
+            };
+        }
+        if (hdr.method == "GET") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"contact": {"id": "c1", "firstName": "Jane"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"contacts": ({"id": "c2", "firstName": "John"},)}),
+        };
+    }
+}
 
 public class GoHighLevelDataProviderTest inherits QUnit::Test {
     private {
         #! GoHighLevel REST client for integration tests
-        *GoHighLevelRestClient::GoHighLevelRestClient client;
+        *GoHighLevelRestClient::GoHighLevelRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -87,6 +136,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require GoHighLevel credentials)
         addTestCase("integration tests", \integrationTests());
@@ -111,7 +161,8 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = (cast<GoHighLevelRestClient::GoHighLevelRestConnection>(get_connection(conn_name)))
+                .getAsync();
             return;
         }
 
@@ -129,7 +180,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Using token mode with location_id: %s\n", location_id);
             }
-            client = new GoHighLevelRestClient::GoHighLevelRestClient({
+            client = new GoHighLevelRestClient::GoHighLevelRestClientIo({
                 "token": token,
                 "token_type": "Bearer",
                 "location_id": location_id,
@@ -162,7 +213,78 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         if (location_id) {
             opts.location_id = location_id;
         }
-        client = new GoHighLevelRestClient::GoHighLevelRestClient(opts);
+        client = new GoHighLevelRestClient::GoHighLevelRestClientIo(opts);
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeGoHighLevelHandler handler();
+        server.setHandler("gohighlevel", "", NOTHING, handler);
+        server.setDefaultHandler("gohighlevel", handler);
+
+        GoHighLevelDataProvider::GoHighLevelDataProvider provider({
+            "gohighlevelrestclient_options": {
+                "url": "http://localhost:" + port,
+                "token": "test-token",
+                "location_id": "loc1",
+            },
+        });
+        GoHighLevelRestClient::GoHighLevelRestClientIo rest = provider.getRestClient();
+        assertEq("loc1", rest.getLocationId());
+        AbstractDataProvider contacts = provider.getChildProviderPath("contacts");
+
+        # a search is sent as a POST request with the location ID added to the body
+        list<hash<auto>> recs = getRecords(contacts.searchRecords(NOTHING, {"query": "john", "limit": 5}));
+        assertEq(({"id": "c2", "firstName": "John"},), recs);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("contacts/search", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+        assertEq("2021-07-28", handler.requests[0].version);
+        assertEq({"query": "john", "pageLimit": 5, "locationId": "loc1"}, handler.requests[0].body);
+
+        # a GET request gets the location ID as a query parameter
+        handler.requests = ();
+        recs = getRecords(contacts.searchRecords(NOTHING, {"contact_id": "c1"}));
+        assertEq(({"id": "c1", "firstName": "Jane"},), recs);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("contacts/c1?locationId=loc1", handler.requests[0].path);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        recs = getRecords(contacts.searchRecords(NOTHING, {"contact_id": "c1"}));
+        assertEq(({"id": "c1", "firstName": "Jane"},), recs);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        handler.requests = ();
+        try {
+            contacts.getChildProvider("delete").doRequest({"contact_id": "c3"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("contact not found", ex.arg.body.message);
+        }
+        assertEq(1, handler.requests.size());
+        assertEq("DELETE", handler.requests[0].method);
+        assertEq("contacts/c3?locationId=loc1", handler.requests[0].path);
+    }
+
+    #! Returns all records from the given iterator
+    private list<hash<auto>> getRecords(AbstractDataProviderRecordIterator<hash<auto>> i) {
+        list<hash<auto>> rv = ();
+        while (i.next()) {
+            rv += i.getValue();
+        }
+        return rv;
     }
 
     #! Check if json module is available
@@ -661,7 +783,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         # If no pipeline found from opportunities, fetch from pipelines API
         if (!pipelineId) {
             try {
-                hash<auto> response = client.get("opportunities/pipelines");
+                hash<auto> response = client.restGet("opportunities/pipelines");
                 if (response.body.pipelines && response.body.pipelines.size()) {
                     pipelineId = response.body.pipelines[0].id;
                     if (response.body.pipelines[0].stages && response.body.pipelines[0].stages.size()) {
@@ -948,7 +1070,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
 
         # Find a campaign ID via the REST client
         try {
-            hash<auto> result = client.get("campaigns");
+            hash<auto> result = client.restGet("campaigns");
             if (result.body.campaigns && result.body.campaigns.size() > 0) {
                 campaignId = result.body.campaigns[0].id;
             }

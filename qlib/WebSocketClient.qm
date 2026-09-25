@@ -268,6 +268,13 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
       standard HTTP/1.1 \c 101 Upgrade on a fresh HTTP/1.1 connection when the extended-\c CONNECT handshake
       fails for any reason; the fallback is skipped only when a specific HTTP version was requested or when
       HTTP/3 was explicitly required, and if the HTTP/1.1 attempt also fails its error is reported
+    - \c WebSocketPingPollOperation (used by \c WebSocketConnectionObject::startPollConnect()) makes the
+      WebSocket handshake with non-blocking <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> I/O instead
+      of \c HTTPClient: an HTTP/1.1 \c Upgrade handshake by default, or an extended \c CONNECT handshake
+      (RFC 8441 / RFC 9220) when the \c http_version option is \c "2.0" or \c "3.0"; the WebSocket is closed
+      once the handshake has been validated, \c SOCKET-TIMEOUT is raised when the connection's \c timeout
+      expires, and the constructor now takes the URL and options
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection wsc_v2_4 v2.4
     - AsyncAPI is now a hard module dependency so AOT-compiled WebSocketClient
@@ -3915,88 +3922,163 @@ class MyObserver inherits Observer {
 #! Poll operation for WebSocket connection ping
 /** Performs a WebSocket handshake to verify the connection is working.
 
-    Uses the C++ HttpClientPingPollOperationBase for I/O thread fast path.
-    The constructor creates the HTTPClient, builds WebSocket upgrade headers,
-    starts the inner poll operation, and passes it to the C++ base which
-    handles delegation and response validation (status 101, Sec-WebSocket-Accept).
+    The handshake is made with an
+    @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" using only non-blocking I/O:
+    - with the \c http_version option set to \c "2.0" or \c "3.0", an extended \c CONNECT request
+      (RFC 8441 / RFC 9220) is sent over HTTP/2 or HTTP/3 and a \c 200 response is expected
+    - otherwise an HTTP/1.1 \c Upgrade request is sent and a \c 101 response with a valid
+      \c Sec-WebSocket-Accept header is expected
 
-    Use the static @ref create() factory method to construct this object:
+    The WebSocket is closed once the handshake has been validated.
+
+    The goal is \c "ws-ping"; the output is the handshake response without a body as described for
+    @ref ConnectionProvider::HttpClientIoPollOperation "HttpClientIoPollOperation".
+
+    Errors raised by @ref continuePoll() in addition to the errors of the transport (for example
+    \c SOCKET-CONNECT-ERROR if the connection is refused and \c SOCKET-TIMEOUT if the response is not received in
+    time):
+    - \c WEBSOCKET-PING-ERROR: the response has an unexpected status code or a missing or invalid
+      \c Sec-WebSocket-Accept header
+
+    Use the static @ref create() factory method or the constructor to create this object:
     @code{.py}
     auto op = WebSocketPingPollOperation::create(url, http_opts, headers, logger);
     @endcode
 
     @since WebSocketClient 2.4
 */
-public class WebSocketPingPollOperation inherits Qore::HttpClientPingPollOperationBase {
+public class WebSocketPingPollOperation inherits ConnectionProvider::HttpClientIoPollOperation {
     private {
-        #! Logger for this operation
-        *Logger::LoggerInterface logger;
+        #! The WebSocket key sent in the \c Sec-WebSocket-Key header
+        string ws_key;
+
+        #! True if an extended \c CONNECT request is sent over HTTP/2 or HTTP/3
+        bool extended_connect;
     }
 
-    #! Creates the poll operation from pre-computed inner op and WebSocket key
-    /** @param inner_op the inner poll operation from HTTPClient.startPollSendRecv()
-        @param ws_key the WebSocket key used in the Sec-WebSocket-Key header
+    #! Creates the poll operation
+    /** @param base_url the WebSocket URL (\c ws://, \c wss://, \c http://, or \c https://)
+        @param http_opts @ref ConnectionProvider::HttpConnection "HttpConnection" options; see
+        @ref ConnectionProvider::HttpConnection::getAsyncConnectionManager() for the options used for the
+        connection; \c http_version \c "2.0" or \c "3.0" selects an extended \c CONNECT handshake, any other value
+        an HTTP/1.1 \c Upgrade handshake; the \c headers, \c username, \c password, \c max_redirects,
+        \c redirect_passthru, and \c timeout options are used for the request
+        @param headers additional headers for the request
         @param logger optional logger
 
-        @note Use the static @ref create() method to construct this object; it handles
-        creating the HTTPClient, generating the key, and starting the inner op.
+        @throw HTTP-CLIENT-URL-ERROR the URL has no host or an unsupported scheme
 
         @since WebSocketClient 2.4
     */
-    constructor(AbstractPollOperation inner_op, string ws_key,
-            *Logger::LoggerInterface logger) :
-            HttpClientPingPollOperationBase(inner_op, 101, 101,
-                "WEBSOCKET-PING-ERROR", NOTHING, NOTHING, ws_key) {
-        self.logger = logger;
-        # Override the default goal from the base class
-        goal = "ws-ping";
+    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger)
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(
+                WebSocketPingPollOperation::getHttpOptions(http_opts), logger),
+                WebSocketPingPollOperation::getHttpUrl(base_url), "GET",
+                HttpClientIoPollOperation::getRequestHeaders(WebSocketPingPollOperation::getHttpUrl(base_url),
+                    http_opts, headers),
+                NOTHING, HttpClientIoPollOperation::getOptions("ws-ping", http_opts, 0), logger) {
+        opts.headers_only = True;
+        ws_key = get_random_string(16).toBase64();
+        extended_connect = WebSocketPingPollOperation::isExtendedConnect(http_opts);
+        if (extended_connect) {
+            method = "CONNECT";
+            opts.body_streaming = True;
+            self.headers += {
+                ":protocol": "websocket",
+                "Sec-WebSocket-Key": ws_key,
+                "Sec-WebSocket-Version": "13",
+            };
+        } else {
+            self.headers += {
+                "Upgrade": "websocket",
+                "Connection": "Upgrade",
+                "Sec-WebSocket-Key": ws_key,
+                "Sec-WebSocket-Version": "13",
+            };
+        }
+        if (logger) {
+            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", base_url);
+        }
     }
 
     #! Creates a WebSocket ping poll operation
-    /** @param base_url the WebSocket URL (ws:// or wss://)
-        @param http_opts HTTP client options
+    /** @param base_url the WebSocket URL (\c ws://, \c wss://, \c http://, or \c https://)
+        @param http_opts @ref ConnectionProvider::HttpConnection "HttpConnection" options
         @param headers additional headers for the request
         @param logger optional logger
 
         @return a new WebSocketPingPollOperation
 
+        @throw HTTP-CLIENT-URL-ERROR the URL has no host or an unsupported scheme
+
         @since WebSocketClient 2.4
     */
     static WebSocketPingPollOperation create(string base_url, *hash<auto> http_opts,
             *hash<auto> headers, *Logger::LoggerInterface logger) {
-        # Convert ws:// to http:// and wss:// to https://
-        string http_url = base_url;
-        if (http_url =~ /^wss:/) {
-            http_url = regex_subst(http_url, "^wss:", "https:");
-        } else if (http_url =~ /^ws:/) {
-            http_url = regex_subst(http_url, "^ws:", "http:");
-        }
+        return new WebSocketPingPollOperation(base_url, http_opts, headers, logger);
+    }
 
-        # Generate WebSocket key
-        string ws_key = get_random_string(16).toBase64();
+    #! Returns the WebSocket key sent in the \c Sec-WebSocket-Key header
+    /** @return the WebSocket key sent in the \c Sec-WebSocket-Key header
 
-        # Build WebSocket upgrade headers
-        hash<auto> ws_headers = {
-            "Upgrade": "websocket",
-            "Connection": "Upgrade",
-            "Sec-WebSocket-Key": ws_key,
-            "Sec-WebSocket-Version": "13",
-        };
-        ws_headers += headers;
+        @since WebSocketClient 2.4
+    */
+    string getWebSocketKey() {
+        return ws_key;
+    }
 
-        hash<auto> client_opts = (http_opts ?? {}) + {"url": http_url};
-        if (!client_opts.http_version || client_opts.http_version == "auto") {
-            # WebSocketPingPollOperation validates an HTTP/1.1 Upgrade handshake (101 +
-            # Sec-WebSocket-Accept).  Do not let HTTPClient auto-negotiate HTTP/2 here,
-            # where the upgraded stream can stay open and make the ping poll time out.
-            client_opts.http_version = "1.1";
+    #! Validates the handshake response
+    /** @throw WEBSOCKET-PING-ERROR the response has an unexpected status code or a missing or invalid
+        \c Sec-WebSocket-Accept header
+    */
+    private validateResponse(hash<auto> output) {
+        int expected = extended_connect ? 200 : 101;
+        if (output.code != expected) {
+            throw "WEBSOCKET-PING-ERROR", sprintf("expected status %d, got %d %s", expected, output.code,
+                output.status_message ?? ""), output - "info";
         }
-        HTTPClient hc(client_opts);
-        if (logger) {
-            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", base_url);
+        auto accept = output.headers."sec-websocket-accept";
+        if (accept.typeCode() != NT_STRING) {
+            # RFC 8441 / RFC 9220: the accept header is optional for an extended CONNECT handshake
+            if (extended_connect) {
+                return;
+            }
+            throw "WEBSOCKET-PING-ERROR", "WebSocket handshake failed: missing Sec-WebSocket-Accept header",
+                output - "info";
         }
-        auto inner_op = hc.startPollSendRecv("GET", "", NOTHING, ws_headers);
-        return new WebSocketPingPollOperation(inner_op, ws_key, logger);
+        string expected_accept = ws_get_response_key(ws_key);
+        if (accept != expected_accept) {
+            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: invalid Sec-WebSocket-Accept header: "
+                "got '%s', expected '%s'", accept, expected_accept), output - "info";
+        }
+    }
+
+    #! Returns the HTTP URL for a WebSocket URL
+    private static string getHttpUrl(string base_url) {
+        if (base_url =~ /^wss:/i) {
+            return regex_subst(base_url, "^wss:", "https:", RE_Caseless);
+        }
+        if (base_url =~ /^ws:/i) {
+            return regex_subst(base_url, "^ws:", "http:", RE_Caseless);
+        }
+        return base_url;
+    }
+
+    #! Returns @ref True if an extended \c CONNECT handshake is made with the given options
+    private static bool isExtendedConnect(*hash<auto> http_opts) {
+        return http_opts.http_version == "2.0" || http_opts.http_version == "3.0";
+    }
+
+    #! Returns the connection options for the handshake
+    /** HTTP/1.1 is used unless HTTP/2 or HTTP/3 is requested explicitly: an HTTP/1.1 \c Upgrade handshake is not
+        possible on a connection that negotiated HTTP/2 or HTTP/3
+    */
+    private static hash<auto> getHttpOptions(*hash<auto> http_opts) {
+        hash<auto> rv = {} + http_opts;
+        if (!WebSocketPingPollOperation::isExtendedConnect(http_opts)) {
+            rv.http_version = "1.1";
+        }
+        return rv;
     }
 }
 

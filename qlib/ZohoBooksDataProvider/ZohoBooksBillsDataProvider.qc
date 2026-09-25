@@ -46,7 +46,7 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {
     }
 
     string getName() { return "bills"; }
@@ -76,7 +76,7 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
 
 public class ZohoBooksCreateBillDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "create-bill", "desc": "Creates a bill", "type": "ZohoBooksCreateBillDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksBillDataType(); }
@@ -86,7 +86,7 @@ public class ZohoBooksCreateBillDataProvider inherits ZohoBooksDataProviderBase 
 
 public class ZohoBooksUpdateBillDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "update-bill", "desc": "Updates a bill", "type": "ZohoBooksUpdateBillDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksBillDataType(); }
@@ -100,7 +100,7 @@ public class ZohoBooksUpdateBillDataProvider inherits ZohoBooksDataProviderBase 
 
 public class ZohoBooksDeleteBillDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "delete-bill", "desc": "Deletes a bill", "type": "ZohoBooksDeleteBillDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "delete-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
@@ -114,7 +114,7 @@ public class ZohoBooksDeleteBillDataProvider inherits ZohoBooksDataProviderBase 
 
 public class ZohoBooksGetBillDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "get-bill", "desc": "Gets a bill", "type": "ZohoBooksGetBillDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-bill"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksBillDataType(); }

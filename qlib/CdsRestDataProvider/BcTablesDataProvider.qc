@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcTablesDataProvider class definition
 
-/** BcTablesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcTablesDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -106,7 +106,7 @@ public class BcTablesDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestClient rest, string companyId) : CdsRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClientIo rest, string companyId) : CdsRestDataProviderBase(rest) {
         self.companyId = companyId;
     }
 

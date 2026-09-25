@@ -38,7 +38,7 @@ public class ApolloWatchContactsCreatedDataProvider inherits ApolloWatchDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(ApolloRestClient::ApolloRestClient rest, *hash<auto> options)
+    constructor(ApolloRestClient::ApolloRestClientIo rest, *hash<auto> options)
             : ApolloWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -110,7 +110,7 @@ public class ApolloWatchContactsUpdatedDataProvider inherits ApolloWatchDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(ApolloRestClient::ApolloRestClient rest, *hash<auto> options)
+    constructor(ApolloRestClient::ApolloRestClientIo rest, *hash<auto> options)
             : ApolloWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -188,7 +188,7 @@ public class ApolloWatchAccountsCreatedDataProvider inherits ApolloWatchDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(ApolloRestClient::ApolloRestClient rest, *hash<auto> options)
+    constructor(ApolloRestClient::ApolloRestClientIo rest, *hash<auto> options)
             : ApolloWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -260,7 +260,7 @@ public class ApolloWatchDealsCreatedDataProvider inherits ApolloWatchDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(ApolloRestClient::ApolloRestClient rest, *hash<auto> options)
+    constructor(ApolloRestClient::ApolloRestClientIo rest, *hash<auto> options)
             : ApolloWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name

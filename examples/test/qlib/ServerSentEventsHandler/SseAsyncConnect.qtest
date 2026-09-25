@@ -18,6 +18,8 @@
 %requires ServerSentEventClient
 %requires ServerSentEventHandler
 
+%requires json
+
 %exec-class SseAsyncConnectTest
 
 #! Handler that returns 200 with wrong Content-Type
@@ -34,6 +36,43 @@ class NotFoundHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that records SSE requests and blocks requests to /block until released
+class RecordingBlockingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! Requests received: method, path, headers, and body
+        Queue requests();
+        #! Signaled when a request is blocked in the handler
+        Queue entered();
+    }
+
+    private {
+        #! Blocked requests wait on this queue
+        Queue gate();
+    }
+
+    #! Releases a blocked request
+    release() {
+        gate.push(True);
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/block") {
+            entered.push(True);
+            # bounded so that a failing test cannot leave the server thread blocked forever
+            gate.get(60s);
+        }
+        requests.push({
+            "method": hdr.method,
+            "path": cx.raw_path,
+            "accept": hdr.accept,
+            "authorization": hdr.authorization,
+            "content-type": hdr."content-type",
+            "body": body.typeCode() == NT_BINARY ? body.toString() : body,
+        });
+        return makeResponse(200, "data: x\n\n", {"Content-Type": MimeTypeSse});
+    }
+}
+
 public class SseAsyncConnectTest inherits QUnit::Test {
     private {
         HttpServer m_server;
@@ -42,6 +81,8 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         Logger logger;
         int port;
         int error_port;
+        RecordingBlockingHandler recording_handler();
+        int h2_port;
     }
 
     constructor() : Test("SseAsyncConnectTest", "1.0") {
@@ -51,6 +92,10 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         addTestCase("SseConnectPollOperation error handling", \sseConnectErrorTest());
         addTestCase("SseConnectPollOperation non-200 response", \sseConnectNon200Test());
         addTestCase("SseConnectPollOperation wrong Content-Type", \sseConnectWrongContentTypeTest());
+        addTestCase("SseConnectPollOperation request", \sseConnectRequestTest());
+        addTestCase("SseConnectPollOperation timeout", \sseConnectTimeoutTest());
+        addTestCase("SseConnectPollOperation HTTP/2", \sseConnectHttp2Test());
+        addTestCase("ServerSentEventConnection ping", \connectionPingTest());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -72,8 +117,16 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         m_error_server = new HttpServer(http_opts);
         m_error_server.setHandler("/wrong-ct", "/wrong-ct", MimeTypeJson,
             new WrongContentTypeHandler());
+        m_error_server.setHandler("recording", "/(rec|block)", NOTHING, recording_handler);
         m_error_server.setDefaultHandler("not-found", new NotFoundHandler());
         error_port = m_error_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string cert_dir = get_script_dir() + "/../ConnectionProvider/";
+        h2_port = m_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(ReadOnlyFile::readTextFile(cert_dir + "mycert.pem")),
+            "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(cert_dir + "mykey.pem"), "password"),
+            "http_version": "2.0",
+        }).port;
 
         set_return_value(main());
 
@@ -112,15 +165,14 @@ public class SseAsyncConnectTest inherits QUnit::Test {
     sseConnectPollStateTest() {
         SseConnectPollOperation poller = SseConnectPollOperation::create("http://127.0.0.1:" + port);
 
-        # check initial state — on localhost the conn_mgr may connect
-        # synchronously before we read the state, so accept any valid
-        # in-progress state (connecting, sending, or complete)
-        string initial_state = poller.getState();
-        assertTrue(initial_state =~ /connect|sending|complete/,
-            sprintf("initial state is a valid poll state; got %y", initial_state));
+        # no I/O is performed until the operation is polled
+        assertEq("connecting", poller.getState());
 
-        drivePoll(poller);
-        assertEq("complete", poller.getState());
+        hash<auto> result = drivePoll(poller);
+        assertEq("completed", poller.getState());
+        assertEq(MimeTypeSse, result.info."body-content-type");
+        # the event stream is not read
+        assertNothing(result."response-body");
     }
 
     connectionPollingApiTest() {
@@ -141,6 +193,8 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         # test connection to a port that will reject
         SseConnectPollOperation poller = SseConnectPollOperation::create("http://127.0.0.1:1");
         assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+        assertEq("aborted", poller.getState());
+        assertFalse(poller.goalReached());
     }
 
     sseConnectNon200Test() {
@@ -155,5 +209,88 @@ public class SseAsyncConnectTest inherits QUnit::Test {
         SseConnectPollOperation poller =
             SseConnectPollOperation::create("http://127.0.0.1:" + error_port + "/wrong-ct");
         assertThrows("SSE-CONNECT-ERROR", "text/event-stream", \drivePoll(), poller);
+    }
+
+    sseConnectRequestTest() {
+        string url = "http://127.0.0.1:" + error_port + "/rec";
+        # a GET request with SSE headers and HTTP basic authentication
+        drivePoll(SseConnectPollOperation::create(url, {"username": "user", "password": "pass"}));
+        hash<auto> req = recording_handler.requests.get(10s);
+        assertEq("GET", req.method);
+        assertEq("/rec", req.path);
+        assertEq(MimeTypeSse, req.accept);
+        assertEq("Basic dXNlcjpwYXNz", req.authorization);
+
+        # a POST request with a body serialized with JSON
+        drivePoll(SseConnectPollOperation::create(url, NOTHING, {"Authorization": "Bearer t"}, NOTHING, "POST",
+            binary("{}")));
+        req = recording_handler.requests.get(10s);
+        assertEq("POST", req.method);
+        assertEq("Bearer t", req.authorization);
+        assertEq(MimeTypeJson, req."content-type");
+        assertEq(make_json(binary("{}")), req.body);
+
+        # connection options: method, body, and token
+        ServerSentEventConnection conn("test-sse-post", "test", "sse://127.0.0.1:" + error_port + "/rec", {}, {
+            "method": "POST",
+            "body": "text body",
+            "token": "tok",
+        });
+        drivePoll(conn.startPollConnect(logger));
+        req = recording_handler.requests.get(10s);
+        assertEq("POST", req.method);
+        assertEq("text body", req.body);
+        assertEq("Bearer tok", req.authorization);
+    }
+
+    sseConnectTimeoutTest() {
+        SseConnectPollOperation poller = SseConnectPollOperation::create("http://127.0.0.1:" + error_port + "/block",
+            {"timeout": 250ms});
+        on_exit recording_handler.release();
+        # the handler never answers until released, so the operation must time out by itself
+        assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
+        assertTrue(recording_handler.entered.get(10s));
+        assertEq("aborted", poller.getState());
+    }
+
+    sseConnectHttp2Test() {
+        string url = "https://127.0.0.1:" + h2_port;
+        SseConnectPollOperation poller = SseConnectPollOperation::create(url, {"http_version": "2.0"});
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.code);
+        assertEq("h2", result.protocol);
+
+        ServerSentEventConnection conn("test-sse-h2", "test", "sses://127.0.0.1:" + h2_port, {}, {
+            "http_version": "2.0",
+        });
+        result = drivePoll(conn.startPollConnect(logger));
+        assertEq("h2", result.protocol);
+        assertTrue(conn.ping().ok);
+    }
+
+    connectionPingTest() {
+        ServerSentEventConnection conn("test-sse-ping", "test", "sse://127.0.0.1:" + port);
+        hash<PingInfo> info = conn.ping();
+        assertTrue(info.ok);
+        assertEq("OK", info.info);
+
+        conn = new ServerSentEventConnection("test-sse-ping-404", "test",
+            "sse://127.0.0.1:" + error_port + "/not-found");
+        info = conn.ping();
+        assertFalse(info.ok);
+        assertEq("SSE-CONNECT-ERROR", info.ex.err);
+
+        conn = new ServerSentEventConnection("test-sse-ping-refused", "test", "sse://127.0.0.1:1");
+        info = conn.ping();
+        assertFalse(info.ok);
+        assertEq("SOCKET-CONNECT-ERROR", info.ex.err);
+
+        conn = new ServerSentEventConnection("test-sse-ping-timeout", "test",
+            "sse://127.0.0.1:" + error_port + "/block", {}, {"timeout": 250ms});
+        on_exit recording_handler.release();
+        info = conn.ping();
+        assertFalse(info.ok);
+        assertEq("SOCKET-TIMEOUT", info.ex.err);
+        assertTrue(recording_handler.entered.get(10s));
     }
 }

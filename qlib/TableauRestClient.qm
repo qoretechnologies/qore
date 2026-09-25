@@ -127,29 +127,42 @@ public class TableauRestClientBase {
     }
 
     #! returns options for @ref TableauRestClient::TableauRestClient::constructor()
-    /** @throw TABLEAU-ERROR missing required option \c subdomain
+    /** The returned options keep the Tableau-specific input options (\c subdomain, \c token_name,
+        \c token_secret, \c content_url, \c api_version), which the REST client ignores, and derive the REST client
+        options from them; this makes the method idempotent, so a client can be recreated from its own processed
+        options, as with @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over the URL derived from \c subdomain and
+        \c api_version, and \c subdomain is not required; the URL must include the API path
+        (ex: \c "https://us-east-23b.online.tableau.com/api/3.27")
+
+        @throw TABLEAU-ERROR missing required option \c subdomain when no \c url option is given
     */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Build URL from subdomain and api_version
-        *string subdomain = opts.subdomain;
-        if (!subdomain.val()) {
-            throw "TABLEAU-ERROR", "missing required option 'subdomain' (Tableau Cloud pod name)";
+        # an explicit URL takes precedence over the URL derived from the subdomain and api_version options
+        if (!rv.url) {
+            *string subdomain = opts.subdomain;
+            if (!subdomain.val()) {
+                throw "TABLEAU-ERROR", "missing required option 'subdomain' (Tableau Cloud pod name) or 'url'";
+            }
+            rv.url = getApiUrl(subdomain, opts.api_version ?? DefaultApiVersion);
         }
-        string api_version = opts.api_version ?? DefaultApiVersion;
-        rv.url = sprintf("https://%s.online.tableau.com/api/%s", subdomain, api_version);
-
-        # Remove custom options that RestClient doesn't understand
-        remove rv.token_name;
-        remove rv.token_secret;
-        remove rv.content_url;
-        remove rv.subdomain;
-        remove rv.api_version;
 
         return rv;
+    }
+
+    #! Returns the API URL for the given Tableau Cloud pod name and API version
+    /** @param subdomain the Tableau Cloud pod name
+        @param api_version the API version
+
+        @return the API URL (ex: \c "https://us-east-23b.online.tableau.com/api/3.27")
+    */
+    static string getApiUrl(string subdomain, string api_version) {
+        return sprintf("https://%s.online.tableau.com/api/%s", subdomain, api_version);
     }
 }
 
@@ -210,11 +223,16 @@ TableauRestClient tableau({
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
-        - \c subdomain: the Tableau Cloud pod name (required)
+        - \c subdomain: the Tableau Cloud pod name (required if no \c url option is given)
         - \c token_name: the Personal Access Token name (required)
         - \c token_secret: the Personal Access Token secret (required)
         - \c content_url: the site content URL / site name (default: empty string for default site)
-        - \c api_version: the API version (default: 3.27)
+        - \c api_version: the API version (default: 3.27); used to derive the URL if no \c url option is given
+
+        If the \c url option is given, it takes precedence over the URL derived from \c subdomain and
+        \c api_version; the URL must include the API path (ex:
+        \c "https://us-east-23b.online.tableau.com/api/3.27"); this can be used to send requests through a proxy or
+        to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -416,7 +434,8 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     #! creates the TableauRestConnection object
     /** @param name the name of the connection
         @param description connection description
-        @param url connection URL (potentially with password info)
+        @param url connection URL (potentially with password info); if the default URL is given, the URL is derived
+        from the \c subdomain and \c api_version options
         @param attributes various attributes. See below
         @param options connection options
 
@@ -426,7 +445,9 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     */
     constructor(string name, string description, string url = "tableaures://online.tableau.com",
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url == "tableaures://online.tableau.com"
+                ? TableauRestConnection::getConnectionUrl(options)
+                : url, attributes, options) {
     }
 
     #! creates the TableauRestConnection object
@@ -455,12 +476,24 @@ public class TableauRestConnection inherits RestClient::RestConnection {
     /** Constructs the connection URL from the subdomain and api_version options
     */
     private static hash<auto> getConfig(hash<auto> config) {
-        string subdomain = config.opts.subdomain ?? "online";
-        string api_version = config.opts.api_version ?? TableauRestClientBase::DefaultApiVersion;
-        string url = sprintf("tableaures://%s.online.tableau.com/api/%s", subdomain, api_version);
         return config + {
-            "url": url,
+            "url": TableauRestConnection::getConnectionUrl(config.opts),
         };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c subdomain and \c api_version options (ex:
+        \c "tableaures://us-east-23b.online.tableau.com/api/3.27"); the URL given to the client is the connection URL
+        with the \c "tableaures" scheme replaced with \c "https", which is the URL that the client would derive from
+        the same options
+
+        @param opts the connection options
+
+        @return the connection URL for the given connection options
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        return regex_subst(TableauRestClientBase::getApiUrl(opts.subdomain ?? "online",
+            opts.api_version ?? TableauRestClientBase::DefaultApiVersion), "^https:", "tableaures:");
     }
 
     #! returns \c "tableaures"
@@ -507,10 +540,7 @@ public class TableauRestConnection inherits RestClient::RestConnection {
         if (update_options) {
             hash<auto> updates;
             # Rebuild URL from current subdomain and api_version options
-            string subdomain = opts.subdomain ?? "online";
-            string api_version = opts.api_version ?? TableauRestClientBase::DefaultApiVersion;
-            string correct_url = sprintf("tableaures://%s.online.tableau.com/api/%s",
-                subdomain, api_version);
+            string correct_url = getConnectionUrl(opts);
             if (url != correct_url) {
                 updates.url = correct_url;
             }
@@ -550,13 +580,173 @@ public class TableauRestConnection inherits RestClient::RestConnection {
 #! REST client for Tableau REST API using multiplexed HTTP connections
 /** @see TableauRestClient for more information
 */
+/** Requests are authenticated with a session token acquired by signing in with the Personal Access Token as with
+    @ref TableauRestClient::TableauRestClient "TableauRestClient"; see @ref restDoRequest()
+*/
 public class TableauRestClientIo inherits RestClientIo::RestClientIo, TableauRestClientBase {
+    private {
+        #! The PAT token name
+        string token_name;
+
+        #! The PAT token secret
+        string token_secret;
+
+        #! The site content URL (site name)
+        string content_url;
+
+        #! The API version
+        string api_version;
+
+        #! The session token from sign-in
+        *string session_token;
+
+        #! The site LUID from sign-in
+        *string site_luid;
+
+        #! The session expiry time
+        *date session_expiry;
+
+        #! Mutex for thread-safe authentication
+        Mutex auth_lock();
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo"
+        class plus:
+        - \c subdomain: the Tableau Cloud pod name (required if no \c url option is given)
+        - \c token_name: the Personal Access Token name (required)
+        - \c token_secret: the Personal Access Token secret (required)
+        - \c content_url: the site content URL / site name (default: empty string for default site)
+        - \c api_version: the API version (default: 3.27); used to derive the URL if no \c url option is given
+
+        If the \c url option is given, it takes precedence over the URL derived from \c subdomain and
+        \c api_version; the URL must include the API path (ex:
+        \c "https://us-east-23b.online.tableau.com/api/3.27"); this can be used to send requests through a proxy or
+        to a test server
         @param shared_mgr optional shared connection manager
+
+        The client signs in when the first request that requires authentication is sent.
+
+        @throw RESTCLIENTIO-ERROR invalid option passed to the constructor
+        @throw TABLEAU-ERROR missing required option \c subdomain when no \c url option is given
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(TableauRestClientBase::getOptions(opts), shared_mgr) {
+        token_name = opts.token_name;
+        token_secret = opts.token_secret;
+        content_url = opts.content_url ?? "";
+        api_version = opts.api_version ?? DefaultApiVersion;
+    }
+
+    #! Returns the site LUID, if the client has signed in
+    /** @return the site LUID, if the client has signed in
+    */
+    *string getSiteLuid() {
+        return site_luid;
+    }
+
+    #! Sends a REST request with session-token authentication and path prefixing
+    /** For paths other than \c auth/... and \c serverinfo, this method:
+        - ensures the client is signed in (lazy sign-in)
+        - prefixes the path with <tt>sites/{site-luid}/</tt>
+        - adds the \c X-Tableau-Auth header
+        - signs in again and retries the request once if the server responds with HTTP 401
+
+        @param method the HTTP method
+        @param path the URI path relative to the API URL
+        @param body the request body to send (if any)
+        @param hdr any headers to send with the request
+
+        @return the response from the server
+
+        @throw REST-RESPONSE-ERROR the server returned an error response (also raised if signing in fails)
+        @throw TABLEAU-ERROR the sign-in response does not contain a session token and site ID
+    */
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        # Paths that don't need auth or site prefix
+        if (path =~ /^auth\// || path == "serverinfo") {
+            return RestClientIo::restDoRequest(method, path, body, hdr);
+        }
+
+        hash<auto> session = getSession();
+        try {
+            return RestClientIo::restDoRequest(method, "sites/" + session.site_luid + "/" + path, body,
+                hdr + {"X-Tableau-Auth": session.token});
+        } catch (hash<ExceptionInfo> ex) {
+            # On 401, sign in again and retry once
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 401) {
+                invalidateSession(session.token);
+                session = getSession();
+                return RestClientIo::restDoRequest(method, "sites/" + session.site_luid + "/" + path, body,
+                    hdr + {"X-Tableau-Auth": session.token});
+            }
+            rethrow;
+        }
+    }
+
+    #! Returns the current session token and site LUID, signing in if necessary
+    /** @return a hash with the following keys:
+        - \c token: the session token
+        - \c site_luid: the site LUID
+
+        @throw REST-RESPONSE-ERROR signing in failed
+        @throw TABLEAU-ERROR the sign-in response does not contain a session token and site ID
+    */
+    private hash<auto> getSession() {
+        auth_lock.lock();
+        on_exit auth_lock.unlock();
+        if (!session_token || (session_expiry && now_us() >= session_expiry)) {
+            signIn();
+        }
+        return {
+            "token": session_token,
+            "site_luid": site_luid,
+        };
+    }
+
+    #! Invalidates the given session
+    /** The session is only invalidated if it is still current, so a session acquired by another thread in the
+        meantime is kept
+
+        @param token the session token that was rejected
+    */
+    private invalidateSession(string token) {
+        auth_lock.lock();
+        on_exit auth_lock.unlock();
+        if (session_token == token) {
+            remove session_token;
+            remove site_luid;
+            remove session_expiry;
+        }
+    }
+
+    #! Signs in to Tableau with PAT credentials; must be called with the auth lock held
+    /** Uses RestClientIo::restDoRequest() to avoid recursion through the override in this class
+
+        @throw REST-RESPONSE-ERROR signing in failed
+        @throw TABLEAU-ERROR the sign-in response does not contain a session token and site ID
+    */
+    private signIn() {
+        hash<auto> body = {
+            "credentials": {
+                "personalAccessTokenName": token_name,
+                "personalAccessTokenSecret": token_secret,
+                "site": {
+                    "contentUrl": content_url,
+                },
+            },
+        };
+        hash<RestClient::RestResponseInfo> response = RestClientIo::restDoRequest("POST", "auth/signin", body);
+        *string token = response.body.credentials.token;
+        *string luid = response.body.credentials.site.id;
+        if (!token.val() || !luid.val()) {
+            throw "TABLEAU-ERROR", sprintf("the sign-in response does not contain a session token and site ID; "
+                "response keys: %y", keys response.body);
+        }
+        session_token = token;
+        site_luid = luid;
+        # Conservative expiry: 100 minutes (Cloud actual: 120 min, Server: 240 min)
+        session_expiry = now_us() + 100m;
     }
 }
 }

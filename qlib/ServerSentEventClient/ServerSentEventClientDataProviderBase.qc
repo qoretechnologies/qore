@@ -236,7 +236,7 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
 
     private {
         #! The SSE client itself
-        ServerSentEventClient client;
+        ServerSentEventClientIo client;
 
         #! Mutex for wait for message child data provider handling
         Mutex m();
@@ -249,19 +249,58 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
     }
 
     #! Creates the object from constructor options
+    /** @param options the constructor options; events are received with a
+        @ref ServerSentEventClientIo "ServerSentEventClientIo" object created from the options of the synchronous
+        client given in the \c sseclient option (see @ref getAsyncClient()), or from the other options
+
+        @throw CONSTRUCTOR-ERROR invalid or missing option
+        @throw SSE-ERROR invalid client option
+    */
     constructor(*hash<auto> options) {
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options, RequiredConstructorOptions);
         if (copts.sseclient) {
-            client = copts.sseclient;
-            if (copts.logger) {
-                setLogger(copts.logger);
-            }
+            client = ServerSentEventClientDataProviderBase::getAsyncClient(copts.sseclient);
         } else {
-            client = new ServerSentEventClient(copts);
-            if (copts.logger) {
-                LoggerWrapper::setLogger(logger);
-            }
+            client = new ServerSentEventClientIo(copts);
         }
+        if (copts.logger) {
+            setLogger(copts.logger);
+        }
+    }
+
+    #! Creates the object with the client used to receive events
+    /** @param client the client used to receive events; it is deleted with this object
+        @param logger an optional logger
+
+        @since ServerSentEventClient 1.1
+    */
+    constructor(ServerSentEventClientIo client, *Logger::LoggerInterface logger) {
+        self.client = client;
+        if (logger) {
+            setLogger(logger);
+        }
+    }
+
+    #! Returns the client used to receive events
+    /** @return the client used to receive events
+
+        @since ServerSentEventClient 1.1
+    */
+    ServerSentEventClientIo getClient() {
+        return client;
+    }
+
+    #! Returns an asynchronous client created with the options of a synchronous client
+    /** @param client the synchronous client
+
+        @return an asynchronous client created with the options and the data serialization of \a client
+
+        @since ServerSentEventClient 1.1
+    */
+    static ServerSentEventClientIo getAsyncClient(ServerSentEventClient client) {
+        return new ServerSentEventClientIo(client.getConstructorOptions() + {
+            "data": client.getSerialization(),
+        });
     }
 
     destructor() {
@@ -321,6 +360,15 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
     */
     observersReady() {
         client.observersReady();
+    }
+
+    #! Called to stop generating events
+    /** Disconnects the event stream and stops the event thread of the client
+
+        @since ServerSentEventClient 1.1
+    */
+    stopEvents() {
+        client.stopEvents();
     }
 
     #! Returns True if the object is currently connected

@@ -36,13 +36,80 @@
 
 %requires KeapRestClient
 %requires KeapDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class KeapDataProviderTest
+
+#! A local Keap API server that records requests
+class FakeKeapHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"message": "rate limited"}),
+            };
+        }
+        # an error response
+        if (hdr.path =~ /contacts\/bad/) {
+            return <HttpResponseInfo>{
+                "code": 400,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"message": "invalid contact", "status_code": 400}),
+            };
+        }
+        # a successful response with an error payload
+        if (hdr.path =~ /contacts\/payload-error/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"error": "invalid_request", "error_description": "bad payload"}),
+            };
+        }
+        if (hdr.method == "POST" && hdr.path =~ /contacts$/) {
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": "42"}),
+            };
+        }
+        if (hdr.method == "DELETE") {
+            return <HttpResponseInfo>{
+                "code": 204,
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({
+                "id": "42",
+                "given_name": "Jane",
+                "family_name": "Doe",
+                "email_addresses": ({"email": "jane@example.com", "field": "EMAIL1"},),
+            }),
+        };
+    }
+}
 
 public class KeapDataProviderTest inherits QUnit::Test {
     private {
         #! Keap REST client for integration tests
-        *KeapRestClient::KeapRestClient client;
+        *KeapRestClient::KeapRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -77,6 +144,7 @@ public class KeapDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require Keap credentials)
         addTestCase("integration tests", \integrationTests());
@@ -100,7 +168,7 @@ public class KeapDataProviderTest inherits QUnit::Test {
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
             if (conn instanceof KeapRestClient::KeapRestConnection) {
-                client = (cast<KeapRestClient::KeapRestConnection>(conn)).get(True);
+                client = (cast<KeapRestClient::KeapRestConnection>(conn)).getAsync();
             }
             return;
         }
@@ -112,9 +180,9 @@ public class KeapDataProviderTest inherits QUnit::Test {
         *string refresh_token = ENV.KEAP_REFRESH_TOKEN;
 
         if (token) {
-            client = new KeapRestClient::KeapRestClient({"token": token});
+            client = new KeapRestClient::KeapRestClientIo({"token": token});
         } else if (client_id && client_secret && refresh_token) {
-            client = new KeapRestClient::KeapRestClient({
+            client = new KeapRestClient::KeapRestClientIo({
                 "oauth2_client_id": client_id,
                 "oauth2_client_secret": client_secret,
                 "oauth2_refresh_token": refresh_token,
@@ -285,6 +353,81 @@ public class KeapDataProviderTest inherits QUnit::Test {
         # Verify connection scheme info
         hash<auto> scheme = ConnectionSchemeCache::getScheme("keaprest");
         assertEq("Keap REST Connection", scheme.display_name);
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeKeapHandler handler();
+        server.setHandler("keap", "", NOTHING, handler);
+        server.setDefaultHandler("keap", handler);
+
+        KeapDataProvider::KeapDataProvider provider({
+            "keaprestclient_options": {
+                "url": "http://localhost:" + port + "/crm/rest/v2",
+                "token": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof KeapRestClient::KeapRestClientIo);
+        AbstractDataProvider contacts = provider.getChildProvider("contacts");
+
+        # the contact is created with a POST and then read with a GET
+        hash<auto> contact = contacts.getChildProvider("create").doRequest({
+            "given_name": "Jane",
+            "family_name": "Doe",
+            "email": "jane@example.com",
+        });
+        assertEq("42", contact.id);
+        assertEq("Jane", contact.given_name);
+        assertEq("jane@example.com", contact.email);
+        assertFalse(contact.hasKey("email_addresses"));
+        assertEq(2, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("crm/rest/v2/contacts", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+        assertEq("Jane", handler.requests[0].body.given_name);
+        assertEq(({"email": "jane@example.com", "field": "EMAIL1"},),
+            handler.requests[0].body.email_addresses);
+        assertEq("GET", handler.requests[1].method);
+        assertRegex("^crm/rest/v2/contacts/42\\?optional_properties=", handler.requests[1].path);
+        assertEq("Bearer test-token", handler.requests[1].authorization);
+
+        # a DELETE request with an empty response
+        handler.requests = ();
+        contacts.getChildProvider("delete").doRequest({"contact_id": "42"});
+        assertEq(1, handler.requests.size());
+        assertEq("DELETE", handler.requests[0].method);
+        assertEq("crm/rest/v2/contacts/42", handler.requests[0].path);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        contacts.getChildProvider("delete").doRequest({"contact_id": "42"});
+        assertEq(2, handler.requests.size());
+        assertEq("DELETE", handler.requests[1].method);
+
+        # an error response is raised with the response
+        try {
+            contacts.getChildProvider("delete").doRequest({"contact_id": "bad"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(400, ex.arg.status_code);
+            assertEq("invalid contact", ex.arg.body.message);
+        }
+
+        # an error payload in a successful response is raised as an API error
+        try {
+            contacts.getChildProvider("delete").doRequest({"contact_id": "payload-error"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("KEAP-API-ERROR", ex.err);
+            assertEq("invalid_request: bad payload", ex.desc);
+        }
     }
 
     #! Integration tests (require Keap credentials)

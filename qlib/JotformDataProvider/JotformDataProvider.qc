@@ -59,7 +59,7 @@ public class JotformDataProvider inherits JotformDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(JotformRestClient::JotformRestClient rest) : JotformDataProviderBase(rest) {
+    constructor(JotformRestClient::JotformRestClientIo rest) : JotformDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

@@ -28,7 +28,7 @@ public namespace ServiceNowRestDataProvider {
 public class ServiceNowRestDataProviderBase inherits DataProvider::AbstractDataProvider {
     private {
         #! The REST client object for API calls
-        ServiceNowRestClient::ServiceNowRestClient rest;
+        ServiceNowRestClient::ServiceNowRestClientIo rest;
     }
 
     #! Creates the object
@@ -36,8 +36,41 @@ public class ServiceNowRestDataProviderBase inherits DataProvider::AbstractDataP
     }
 
     #! Creates the object
-    constructor(ServiceNowRestClient::ServiceNowRestClient rest) {
+    /** @param rest the REST client for API calls
+
+        @since ServiceNowRestDataProvider 2.1
+    */
+    constructor(ServiceNowRestClient::ServiceNowRestClientIo rest) {
         self.rest = rest;
+    }
+
+    #! Creates the object
+    /** @param rest a synchronous REST client; API calls are made with a
+        @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo" created from it with
+        @ref getAsyncClient()
+    */
+    constructor(ServiceNowRestClient::ServiceNowRestClient rest) {
+        self.rest = ServiceNowRestDataProviderBase::getAsyncClient(rest);
+    }
+
+    #! Returns the REST client for API calls
+    /** @since ServiceNowRestDataProvider 2.1
+    */
+    ServiceNowRestClient::ServiceNowRestClientIo getRestClient() {
+        return rest;
+    }
+
+    #! Returns an asynchronous REST client created with the options and the connection path of a synchronous one
+    /** @param rest the synchronous REST client
+
+        @return an asynchronous REST client created with the options and the connection path of \a rest
+
+        @since ServiceNowRestDataProvider 2.1
+    */
+    static ServiceNowRestClient::ServiceNowRestClientIo getAsyncClient(ServiceNowRestClient::ServiceNowRestClient rest) {
+        ServiceNowRestClient::ServiceNowRestClientIo rv(rest.getConstructorOptions());
+        rv.setConnectionPath(rest.getConnectionPath());
+        return rv;
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)

@@ -48,7 +48,7 @@ public class SquareWatchDataProviderBase inherits SquareDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -57,11 +57,6 @@ public class SquareWatchDataProviderBase inherits SquareDataProviderBase,
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not guaranteed, so the watch orders records itself before delivery

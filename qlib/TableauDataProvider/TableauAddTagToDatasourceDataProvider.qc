@@ -71,7 +71,7 @@ public class TableauAddTagToDatasourceDataProvider inherits TableauDataProviderB
         const ResponseType = AbstractDataProviderTypeMap."hash";
     }
 
-    constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProviderBase(rest) {
     }
 
     string getName() {

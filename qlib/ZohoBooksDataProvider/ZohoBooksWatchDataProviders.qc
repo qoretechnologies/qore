@@ -36,7 +36,7 @@ public class ZohoBooksNewInvoiceWatchDataProvider inherits ZohoBooksWatchDataPro
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-invoice"; }
@@ -74,7 +74,7 @@ public class ZohoBooksNewBillWatchDataProvider inherits ZohoBooksWatchDataProvid
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-bill"; }
@@ -111,7 +111,7 @@ public class ZohoBooksNewPaymentWatchDataProvider inherits ZohoBooksWatchDataPro
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-payment"; }
@@ -146,7 +146,7 @@ public class ZohoBooksNewCustomerWatchDataProvider inherits ZohoBooksWatchDataPr
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-customer"; }
@@ -184,7 +184,7 @@ public class ZohoBooksNewExpenseWatchDataProvider inherits ZohoBooksWatchDataPro
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-expense"; }
@@ -217,7 +217,7 @@ public class ZohoBooksNewSalesOrderWatchDataProvider inherits ZohoBooksWatchData
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-salesorder"; }
@@ -251,7 +251,7 @@ public class ZohoBooksNewEstimateWatchDataProvider inherits ZohoBooksWatchDataPr
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-estimate"; }
@@ -286,7 +286,7 @@ public class ZohoBooksNewItemWatchDataProvider inherits ZohoBooksWatchDataProvid
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-item"; }
@@ -320,7 +320,7 @@ public class ZohoBooksNewPurchaseOrderWatchDataProvider inherits ZohoBooksWatchD
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-purchaseorder"; }
@@ -355,7 +355,7 @@ public class ZohoBooksNewVendorWatchDataProvider inherits ZohoBooksWatchDataProv
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest, *hash<auto> options)
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest, *hash<auto> options)
             : ZohoBooksWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-vendor"; }

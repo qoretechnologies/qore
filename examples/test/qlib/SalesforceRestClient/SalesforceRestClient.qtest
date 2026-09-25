@@ -12,6 +12,9 @@
 %requires RestClient
 %requires SalesforceRestClient
 %requires SalesforceRestDataProvider
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClientIo
 
 %requires json
 
@@ -20,6 +23,27 @@
 %modern
 
 %exec-class SalesforceTest
+
+#! A local Salesforce identity service that records requests
+class FakeIdServiceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+        };
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"user_id": "u1", "organization_id": "o1"}),
+        };
+    }
+}
 
 class SalesforceTest inherits QUnit::Test {
     public {}
@@ -57,6 +81,7 @@ class SalesforceTest inherits QUnit::Test {
     constructor() : Test("SalesforceTest", "1.0", \ARGV, MyOpts) {
         addTestCase("app/action catalog tests", \actionCatalogTests());
         addTestCase("ping tests", \pingTests());
+        addTestCase("local poll ping test", \localPollPingTest());
         addTestCase("Salesforce.com DataProvider test", \salesForceDataProviderTests());
         addTestCase("AND/OR expression tests", \andOrExpressionTests());
         addTestCase("SOQL operator unit tests", \soqlOperatorUnitTests());
@@ -136,6 +161,37 @@ class SalesforceTest inherits QUnit::Test {
         list<hash<DataProviderActionInfo>> actions =
             DataProviderActionCatalog::getActions(SalesforceRestDataProvider::AppName);
         assertGt(0, actions.size());
+    }
+
+    #! A polling ping is made with the async client against the identity service URL
+    localPollPingTest() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeIdServiceHandler handler();
+        server.setHandler("id", "", NOTHING, handler);
+        server.setDefaultHandler("id", handler);
+        string url = "http://localhost:" + port;
+
+        SalesforceRestConnection conn("sf", "sf", url, {"monitor": False}, {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "token": "test-token",
+            "id_service_url": url + "/id/o1/u1",
+            "instance_url": url,
+        });
+        AbstractPollOperation op = conn.startPollConnect();
+        assertTrue(op instanceof RestClientIoPingPollOperation);
+        while (*hash<SocketPollInfo> info = op.continuePoll()) {
+            Socket::poll((info,), 10s);
+        }
+        assertTrue(op.goalReached());
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("id/o1/u1", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
     }
 
     private pingTests() {

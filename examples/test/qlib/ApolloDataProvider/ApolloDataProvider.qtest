@@ -36,13 +36,54 @@
 
 %requires ApolloRestClient
 %requires ApolloDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class ApolloDataProviderTest
+
+#! A local Apollo API server that records requests
+class FakeApolloHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"error": "rate limited"}),
+            };
+        }
+        if (hdr.path =~ /mixed_people/) {
+            return <HttpResponseInfo>{
+                "code": 422,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"error": "invalid search"}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"organizations": ({"id": "o1", "name": "Acme"},)}),
+        };
+    }
+}
 
 public class ApolloDataProviderTest inherits QUnit::Test {
     private {
         #! Apollo REST client for integration tests
-        *ApolloRestClient::ApolloRestClient client;
+        *ApolloRestClient::ApolloRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -69,6 +110,7 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         addTestCase("metadata tests", \metadataTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require Apollo credentials)
         addTestCase("child provider tests", \childProviderTests());
@@ -101,7 +143,7 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
             if (conn instanceof ApolloRestClient::ApolloRestConnection) {
-                client = (cast<ApolloRestClient::ApolloRestConnection>(conn)).get(True);
+                client = (cast<ApolloRestClient::ApolloRestConnection>(conn)).getAsync();
             }
             return;
         }
@@ -110,7 +152,54 @@ public class ApolloDataProviderTest inherits QUnit::Test {
         *string token = m_options.token ?? ENV.APOLLO_TOKEN;
 
         if (token) {
-            client = new ApolloRestClient::ApolloRestClient({"token": token});
+            client = new ApolloRestClient::ApolloRestClientIo({"token": token});
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeApolloHandler handler();
+        server.setHandler("apollo", "", NOTHING, handler);
+        server.setDefaultHandler("apollo", handler);
+
+        ApolloDataProvider::ApolloDataProvider provider({
+            "apollorestclient_options": {
+                "url": "http://localhost:" + port + "/api/v1",
+                "token": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof ApolloRestClient::ApolloRestClientIo);
+        AbstractDataProvider orgs = provider.getChildProviderPath("search/organizations");
+
+        # the request is sent with the async client and the response is returned
+        auto result = orgs.doRequest({"q_keywords": "acme"});
+        assertEq(({"id": "o1", "name": "Acme"},), result);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v1/mixed_companies/search", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+        assertEq("acme", handler.requests[0].body.q_keywords);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        result = orgs.doRequest({"q_keywords": "acme"});
+        assertEq(({"id": "o1", "name": "Acme"},), result);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderPath("search/people").doRequest({"q_keywords": "x"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(422, ex.arg.status_code);
+            assertEq("invalid search", ex.arg.body.error);
         }
     }
 

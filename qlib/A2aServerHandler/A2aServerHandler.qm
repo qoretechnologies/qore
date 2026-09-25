@@ -31,6 +31,7 @@
 %requires ServerSentEventHandler
 %requires JsonRpcHandler
 %requires Logger
+%requires HttpClientIo
 %requires DataProvider
 %requires(reexport) A2aClient
 %try-module uuid

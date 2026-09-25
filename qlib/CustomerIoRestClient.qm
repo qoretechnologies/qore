@@ -98,11 +98,14 @@ public namespace CustomerIoRestClient {
 #! Common base class for CustomerIoRestClient functionality
 public class CustomerIoRestClientBase {
     public {
+        #! The App API path
+        const AppApiPath = "/v1/api";
+
         #! Default US App API URL
-        const DefaultAppApiUrl = "https://api.customer.io/v1/api";
+        const DefaultAppApiUrl = "https://api.customer.io" + AppApiPath;
 
         #! EU App API URL
-        const EuAppApiUrl = "https://api-eu.customer.io/v1/api";
+        const EuAppApiUrl = "https://api-eu.customer.io" + AppApiPath;
 
         #! Default US Track API URL
         const DefaultTrackApiUrl = "https://track.customer.io/api/v1";
@@ -156,6 +159,16 @@ public class CustomerIoRestClientBase {
     }
 
     #! returns options for @ref CustomerIoRestClient::CustomerIoRestClient::constructor()
+    /** The returned options keep the Customer.io-specific input options (\c app_api_key, \c site_id,
+        \c tracking_api_key, \c region), which the REST client ignores, and derive the REST client options from
+        them; this makes the method idempotent, so a client can be recreated from its own processed options, as with
+        @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over the URL derived from \c region; if the given URL
+        has no path (ex: \c "https://api.customer.io"), the App API path (\c "/v1/api") is appended to it
+
+        @throw CUSTOMERIO-ERROR invalid \c region option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
@@ -167,19 +180,22 @@ public class CustomerIoRestClientBase {
             throw "CUSTOMERIO-ERROR", sprintf("invalid region %y; allowed values: \"us\", \"eu\"", region);
         }
 
-        # Build App API URL from region
-        rv.url = getAppApiUrl(region);
+        if (!rv.url) {
+            # Build App API URL from region
+            rv.url = getAppApiUrl(region);
+        } else {
+            # an explicit URL takes precedence over the URL derived from the region; a URL without a path (as used by
+            # connections created before the connection URL included the App API path) gets the App API path
+            *string path = parse_url(rv.url).path;
+            if (!path.val() || path == "/") {
+                rv.url = regex_subst(rv.url, "/+$", "") + AppApiPath;
+            }
+        }
 
-        # Set Bearer token authentication
+        # Set Bearer token authentication; the app_api_key option is kept so that the options can be processed again
         if (opts.app_api_key) {
             rv.token = opts.app_api_key;
         }
-
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.app_api_key;
-        remove rv.site_id;
-        remove rv.tracking_api_key;
-        remove rv.region;
 
         return rv;
     }
@@ -191,8 +207,8 @@ public class CustomerIoRestClientBase {
     - Track API (handled in DataProvider base class): Basic auth, for writing customer data and tracking events
 
     @par Regional URLs:
-    - US: https://api.customer.io/v1 (App API), https://track.customer.io/api/v1 (Track API)
-    - EU: https://api-eu.customer.io/v1 (App API), https://track-eu.customer.io/api/v1 (Track API)
+    - US: https://api.customer.io/v1/api (App API), https://track.customer.io/api/v1 (Track API)
+    - EU: https://api-eu.customer.io/v1/api (App API), https://track-eu.customer.io/api/v1 (Track API)
 
     @par Rate Limits:
     - App API: 10 requests per second (standard), 100/s (transactional), 1/10s (broadcasts)
@@ -216,7 +232,11 @@ CustomerIoRestClient cio({
         - \c app_api_key: the Customer.io App API key (required for App API access)
         - \c site_id: the Customer.io Site ID (required for Track API access)
         - \c tracking_api_key: the Customer.io Tracking API key (required for Track API access)
-        - \c region: the data center region ("us" or "eu")
+        - \c region: the data center region ("us" or "eu"); used to derive the URL if no \c url option is given
+
+        If the \c url option is given, it takes precedence over the URL derived from \c region; this can be used to
+        send requests through a proxy or to a test server; if the given URL has no path, the App API path
+        (\c "/v1/api") is appended to it
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -236,33 +256,49 @@ CustomerIoRestClient cio({
         date current_delay = InitialRetryDelay;
 
         while (True) {
-            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
-
-            if (info.response_code == 429) {
-                date elapsed = now_us() - start_time;
-                if (elapsed >= MaxRetryTime) {
-                    return response;
+            # a 429 response is raised as an error, or returned if errors are passed through
+            *hash<auto> response;
+            *hash<ExceptionInfo> error;
+            # the status code and headers of the response
+            *int status;
+            *hash<auto> response_headers;
+            try {
+                response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+                status = info."response-code";
+                response_headers = info."response-headers";
+            } catch (hash<ExceptionInfo> ex) {
+                # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
+                # and the response headers in the exception argument
+                status = info."response-code" ?? ex.arg.status_code;
+                if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR") || status != 429) {
+                    rethrow;
                 }
-
-                date retry_delay = getRetryDelay(info, current_delay);
-
-                if (elapsed + retry_delay > MaxRetryTime) {
-                    retry_delay = MaxRetryTime - elapsed;
-                    if (retry_delay <= 0s) {
-                        return response;
-                    }
-                }
-
-                sleep(retry_delay);
-
-                current_delay = current_delay * 2;
-                if (current_delay > MaxRetryDelay) {
-                    current_delay = MaxRetryDelay;
-                }
-                continue;
+                response_headers = info."response-headers" ?? ex.arg;
+                error = ex;
+            }
+            if (status != 429) {
+                return response;
             }
 
-            return response;
+            date elapsed = now_us() - start_time;
+            date retry_delay = getRetryDelay({"headers": response_headers}, current_delay);
+            if (elapsed + retry_delay > MaxRetryTime) {
+                retry_delay = MaxRetryTime - elapsed;
+            }
+            if (retry_delay <= 0s) {
+                # the maximum retry time has been exceeded; the 429 error is returned or raised
+                if (error) {
+                    throw error.err, error.desc, error.arg;
+                }
+                return response;
+            }
+
+            sleep(retry_delay);
+
+            current_delay = current_delay * 2;
+            if (current_delay > MaxRetryDelay) {
+                current_delay = MaxRetryDelay;
+            }
         }
     }
 
@@ -291,7 +327,10 @@ CustomerIoRestClient cio({
 public class CustomerIoRestConnection inherits RestClient::RestConnection {
     public {
         #! Default connection URL
-        const DefaultConnectionUrl = "customerio://api.customer.io";
+        /** The URL includes the App API path, so that the client receives the same URL from the connection that it
+            would derive from the \c region option
+        */
+        const DefaultConnectionUrl = "customerio://api.customer.io/v1/api";
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -419,9 +458,21 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
     }
 
     #! creates the CustomerIoRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL; if @ref DefaultConnectionUrl is given, the URL is derived from the \c region option
+        @param attributes connection attributes
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
     constructor(string name, string description, string url = DefaultConnectionUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url == DefaultConnectionUrl
+                ? CustomerIoRestConnection::getConnectionUrl(options)
+                : url, attributes, options) {
     }
 
     #! creates the CustomerIoRestConnection object
@@ -431,23 +482,28 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
 
     #! returns config for @ref CustomerIoRestConnection::constructor()
     private static hash<auto> getConfig(hash<auto> config) {
-        string region = config.opts.region ?? CustomerIoRestClientBase::DefaultRegion;
-        string url = sprintf("customerio://api%s.customer.io",
-            region == "eu" ? "-eu" : "");
         return config + {
-            "url": url,
+            "url": CustomerIoRestConnection::getConnectionUrl(config.opts),
         };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c region option (ex: \c "customerio://api.customer.io/v1/api"); the
+        URL given to the client is the connection URL with the \c "customerio" scheme replaced with \c "https",
+        which is the URL that the client would derive from the same option
+
+        @param opts the connection options
+
+        @return the connection URL for the given connection options
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        string url = CustomerIoRestClientBase::getAppApiUrl(opts.region ?? CustomerIoRestClientBase::DefaultRegion);
+        return regex_subst(url, "^https:", "customerio:");
     }
 
     #! returns \c "customerio"
     string getType() {
         return "customerio";
-    }
-
-    #! Returns connection options with dynamically built URLs from region
-    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
-        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
-        return rv;
     }
 
     #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
@@ -478,9 +534,7 @@ public class CustomerIoRestConnection inherits RestClient::RestConnection {
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
         if (update_options) {
-            string region = opts.region ?? CustomerIoRestClientBase::DefaultRegion;
-            string correct_url = sprintf("customerio://api%s.customer.io",
-                region == "eu" ? "-eu" : "");
+            string correct_url = getConnectionUrl(opts);
             hash<auto> updates;
             if (url != correct_url) {
                 updates.url = correct_url;
@@ -523,6 +577,58 @@ public class CustomerIoRestClientIo inherits RestClientIo::RestClientIo, Custome
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(CustomerIoRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Makes a REST request with automatic retry on 429 (Too Many Requests) errors
+    /** A rate-limited request is retried after the time given in the \c Retry-After response header, or after an
+        exponentially increasing delay if the header is not present, for up to @ref MaxRetryTime in total
+
+        @param method the HTTP method
+        @param path the request path
+        @param body the request body, if any
+        @param hdr any additional request headers
+
+        @return the response
+
+        @throw REST-RESPONSE-ERROR an HTTP error response was received, or the request was still rate-limited after
+        @ref MaxRetryTime
+    */
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+        while (True) {
+            try {
+                return RestClientIo::restDoRequest(method, path, body, hdr);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                    rethrow;
+                }
+                date elapsed = now_us() - start_time;
+                if (elapsed >= MaxRetryTime) {
+                    rethrow;
+                }
+                date retry_delay = getRetryDelay(ex.arg, current_delay);
+                if (elapsed + retry_delay > MaxRetryTime) {
+                    retry_delay = MaxRetryTime - elapsed;
+                }
+                usleep(retry_delay);
+                current_delay = current_delay * 2;
+                if (current_delay > MaxRetryDelay) {
+                    current_delay = MaxRetryDelay;
+                }
+            }
+        }
+    }
+
+    #! Returns the retry delay based on response headers or exponential backoff
+    private date getRetryDelay(hash<auto> info, date default_delay) {
+        if (info.headers."retry-after") {
+            int secs = info.headers."retry-after".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+        return default_delay;
     }
 }
 } # namespace CustomerIoRestClient

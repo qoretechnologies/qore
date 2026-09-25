@@ -34,6 +34,7 @@ public class OpenSearchDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("OpenSearchDataProvider Test", "1.0") {
         addTestCase("mainTest", \mainTest());
+        addTestCase("connection data provider", \connectionDataProviderTest());
         addTestCase("bulkApiTest", \bulkApiTest());
         addTestCase("scrollApiTest", \scrollApiTest());
         addTestCase("aggregationTest", \aggregationTest());
@@ -47,6 +48,15 @@ public class OpenSearchDataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    private connectionDataProviderTest() {
+        # the provider is created without any I/O, so a server that is not running does not prevent it
+        OpenSearchRestConnection conn("test", "test", "http://localhost:1", {"monitor": False});
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("OpenSearchDataProvider", prov.className());
+        # requests fail when they are sent
+        assertTrue(prov.getChildProviderNames().size() > 0);
     }
 
     private mainTest() {

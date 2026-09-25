@@ -32,15 +32,15 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
         const BaseConstructorOptions = {
             "jotformrestclient": <DataProviderOptionInfo>{
                 "display_name": "JotForm REST Client",
-                "short_desc": "The JotformRestClient object",
-                "type": AbstractDataProviderType::get(new Type("JotformRestClient::JotformRestClient")),
-                "desc": "The JotformRestClient object to use for API calls",
+                "short_desc": "The JotformRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("JotformRestClient::JotformRestClientIo")),
+                "desc": "The `JotformRestClientIo` object to use for API calls",
             },
             "jotformrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "JotForm REST Client Options",
-                "short_desc": "Options for creating a JotformRestClient",
+                "short_desc": "Options for creating a JotformRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a JotformRestClient object if one is not provided directly",
+                "desc": "Options for creating a `JotformRestClientIo` object if one is not provided directly",
             },
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "API Key",
@@ -77,7 +77,7 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
 
     private {
         #! The REST client object for API calls
-        JotformRestClient::JotformRestClient rest;
+        JotformRestClient::JotformRestClientIo rest;
 
         #! The connection object, if applicable
         *JotformRestClient::JotformRestConnection conn;
@@ -88,7 +88,7 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(JotformRestClient::JotformRestClient rest) {
+    constructor(JotformRestClient::JotformRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -97,7 +97,7 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
     constructor(JotformRestClient::JotformRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -114,12 +114,12 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
             if (copts.api_domain) {
                 client_opts.api_domain = copts.api_domain;
             }
-            rest = new JotformRestClient::JotformRestClient(client_opts);
+            rest = new JotformRestClient::JotformRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    JotformRestClient::JotformRestClient getRestClient() {
+    JotformRestClient::JotformRestClientIo getRestClient() {
         return rest;
     }
 
@@ -148,7 +148,7 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -177,7 +177,7 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -193,7 +193,7 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doDelete: DELETE %s", path));
-        hash<auto> response = rest.del(path);
+        hash<auto> response = rest.restDel(path, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;
@@ -490,14 +490,9 @@ public class JotformDataProviderBase inherits DataProvider::AbstractDataProvider
             "Content-Type": "application/x-www-form-urlencoded",
         };
 
-        # Save current serialization and switch to "text" to send raw body
-        # This prevents RestClient from serializing the body (e.g., JSON-encoding it)
-        string old_serialization = rest.getSerialization();
-        rest.setSerialization("text");
-        on_exit rest.setSerialization(old_serialization);
-
-        # rest.post signature: post(path, body, *reference<hash<auto>> info, *hash<auto> hdr)
-        hash<auto> response = rest.post(path, encoded_body, NOTHING, headers);
+        # Send the pre-encoded body as-is; the client's serialization is not changed, because the client can be
+        # shared by other threads, and the response is still deserialized
+        hash<auto> response = rest.restDoRawRequest("POST", path, encoded_body, headers);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPostFormEncoded: success, response keys: %y", keys response.body));
         return response.body;

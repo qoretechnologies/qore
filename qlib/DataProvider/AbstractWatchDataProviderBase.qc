@@ -94,6 +94,9 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         #! True once the polling thread has been started
         bool started = False;
 
+        #! The TID of the polling thread while it is running; protected by @ref sleep_m
+        *int poll_tid;
+
         #! Optional callback that durably stores a provider-owned checkpoint
         *code<nothing(hash<auto>)> checkpoint_saver;
 
@@ -189,28 +192,79 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
         } catch (hash<ExceptionInfo> ex) {
             # Ignore cancel errors to ensure wg.wait() always runs
         }
+        cancelPollThread();
         wg.wait();
+    }
+
+    #! Cancels the polling thread, so that a blocking operation in it, such as an HTTP request, ends at once
+    /** The polling thread is cancelled with @ref Qore::cancel_thread() "cancel_thread()"; observer
+        notifications and checkpoint persistence are not interrupted, as they run with cancellation deferred.
+        The TID is only used while the thread is running, so no other thread that reuses it can be cancelled.
+    */
+    private cancelPollThread() {
+        AutoLock al(sleep_m);
+        if (poll_tid && poll_tid != gettid()) {
+            cancel_thread(poll_tid, "event polling stopped");
+        }
     }
 
     #! Polling thread main loop
     private pollThread() {
         on_exit wg.done();
+        {
+            AutoLock al(sleep_m);
+            poll_tid = gettid();
+        }
+        on_exit {
+            # a cancellation requested when polling was stopped is still pending if the thread was not blocked;
+            # once the TID has been removed, no other cancellation can be requested, so it can be cleared
+            defer_thread_cancel(sub () {
+                AutoLock al(sleep_m);
+                remove poll_tid;
+            });
+            clear_thread_cancel();
+        }
 
         while (!stop_flag) {
             try {
                 pollOnce();
             } catch (hash<ExceptionInfo> ex) {
+                # the thread is cancelled when polling is stopped
+                if (ex.err == "THREAD-CANCELLED" && stop_flag) {
+                    break;
+                }
                 logPollError(ex);
             }
 
             # Wait for next poll interval with instant wakeup on stop
-            {
+            try {
                 AutoLock al(sleep_m);
                 if (!stop_flag) {
                     sleep_cond.wait(sleep_m, poll_interval_secs * 1000);
                 }
+            } catch (hash<ExceptionInfo> ex) {
+                # the thread is cancelled when polling is stopped
+                if (ex.err == "THREAD-CANCELLED" && stop_flag) {
+                    break;
+                }
+                rethrow;
             }
         }
+    }
+
+    #! Notifies observers of an event; the notification is not interrupted when polling is stopped
+    /** @param event_id the event ID
+        @param data_ the event data
+
+        @throw OBSERVER-NOTIFICATION-ERROR one or more observers failed to handle the event; see
+        @ref DataProvider::Observable::notifyObservers() "Observable::notifyObservers()"
+
+        @since DataProvider 3.8
+    */
+    notifyObservers(string event_id, hash<auto> data_) {
+        defer_thread_cancel(sub () {
+            DelayedObservable::notifyObservers(event_id, data_);
+        });
     }
 
     #! Returns the ordering of this provider's upstream feed
@@ -267,9 +321,11 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
     }
 
     #! Called during shutdown to cancel any in-flight polling operation
-    /** Override this method to cancel blocking I/O (e.g., close a REST client) so the
-        polling thread can exit promptly instead of waiting for the operation to complete
-        or time out.
+    /** The polling thread is cancelled after this method is called, which ends blocking operations in it, such as
+        HTTP requests, at once; override this method only to release resources that the polling operation uses
+        exclusively.  A REST client shared with other data providers must not be closed here: closing a
+        <a href="../../RestClientIo/html/index.html">RestClientIo</a> shuts down its connection manager for good, so every
+        later request of the other data providers would fail.
 
         The default implementation does nothing.
 
@@ -295,7 +351,8 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
     */
     private persistCheckpoint(hash<auto> checkpoint) {
         if (checkpoint_saver) {
-            checkpoint_saver(checkpoint);
+            # a checkpoint is stored completely, even if polling is stopped while it is being stored
+            defer_thread_cancel(checkpoint_saver, checkpoint);
         }
     }
 

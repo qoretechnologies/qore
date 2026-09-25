@@ -88,6 +88,10 @@ printf("%Y\n", ans.body);
     @section Mewsrestclientrelnotes Release Notes
 
     @subsection Mewsrestclientv1_0_1 MewsRestClient v1.0.1
+    - polling pings are made with a @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo" (HTTP/1.1, HTTP/2, and
+      HTTP/3)
+    - the data provider of a connection uses a @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo" and is
+      created without connecting to the server
     - the connection URL is no longer generated automatically; it depends on the Mews environment
       (ex: \c https://api.mews.com or \c https://api.mews-demo.com) and must be supplied by the user
 
@@ -402,34 +406,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the MewsDataProvider and creates the data provider
         # object dynamically
         load_module("MewsRestDataProvider");
-        return create_object("MewsRestDataProvider", get());
-    }
-
-    #! Called to start a non-blocking polling ping operation on the remote REST server
-    /**
-        @return a socket poll operation object that will allow the connection goal to be reached with polling
-
-        @see supportsPollingApi()
-    */
-    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        # ensure that no validator is used, as loading the schema cannot be done in a nonblocking way in the polling
-        # thread
-        hash<auto> new_opts = real_opts + {
-            "ping_path": "/" + MewsRestClientBase::DefaultUriPathPrefix + "/" + real_opts.ping_path,
-            "ping_body": getPingBody(),
-        };
-        if (real_opts.validator instanceof AbstractRestSchemaValidator) {
-            new_opts.validator = real_opts.validator;
-        } else {
-            new_opts.validator = new NullRestSchemaValidator(logger);
-        }
-
-        MewsRestClient client = getImpl(False, new_opts);
-        if (logger) {
-            client.setLogger(logger);
-        }
-        # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new RestPingPollOperation(self, client, new_opts);
+        return create_object("MewsRestDataProvider", getAsync());
     }
 
     #! Returns the ping path from the \c ping_path option

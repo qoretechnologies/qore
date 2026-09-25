@@ -32,15 +32,15 @@ public class WaveDataProviderBase inherits DataProvider::AbstractDataProvider {
         const BaseConstructorOptions = {
             "waverestclient": <DataProviderOptionInfo>{
                 "display_name": "Wave REST Client",
-                "short_desc": "The WaveRestClient object",
-                "type": AbstractDataProviderType::get(new Type("WaveRestClient::WaveRestClient")),
-                "desc": "The WaveRestClient object to use for API calls",
+                "short_desc": "The WaveRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("WaveRestClient::WaveRestClientIo")),
+                "desc": "The `WaveRestClientIo` object to use for API calls",
             },
             "waverestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Wave REST Client Options",
-                "short_desc": "Options for creating a WaveRestClient",
+                "short_desc": "Options for creating a WaveRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a WaveRestClient object if one is not provided directly",
+                "desc": "Options for creating a `WaveRestClientIo` object if one is not provided directly",
             },
             "token": <DataProviderOptionInfo>{
                 "display_name": "API Token",
@@ -67,7 +67,7 @@ public class WaveDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client object for API calls
-        WaveRestClient::WaveRestClient rest;
+        WaveRestClient::WaveRestClientIo rest;
 
         #! The connection object, if applicable
         *WaveRestClient::WaveRestConnection conn;
@@ -78,7 +78,7 @@ public class WaveDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the object with a REST client
-    constructor(WaveRestClient::WaveRestClient rest) {
+    constructor(WaveRestClient::WaveRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -87,7 +87,7 @@ public class WaveDataProviderBase inherits DataProvider::AbstractDataProvider {
     constructor(WaveRestClient::WaveRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -107,12 +107,12 @@ public class WaveDataProviderBase inherits DataProvider::AbstractDataProvider {
             if (copts.oauth2_client_secret) {
                 client_opts.oauth2_client_secret = copts.oauth2_client_secret;
             }
-            rest = new WaveRestClient::WaveRestClient(client_opts);
+            rest = new WaveRestClient::WaveRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    WaveRestClient::WaveRestClient getRestClient() {
+    WaveRestClient::WaveRestClientIo getRestClient() {
         return rest;
     }
 

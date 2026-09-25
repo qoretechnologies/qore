@@ -80,7 +80,7 @@ public class ShippoShipmentsDataProvider inherits ShippoDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(ShippoRestClient::ShippoRestClient rest) : ShippoDataProviderBase(rest) {
+    constructor(ShippoRestClient::ShippoRestClientIo rest) : ShippoDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

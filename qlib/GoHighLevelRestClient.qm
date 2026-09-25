@@ -562,12 +562,88 @@ public class GoHighLevelRestConnection inherits RestClient::RestConnection {
 /** @see GoHighLevelRestClient for more information
 */
 public class GoHighLevelRestClientIo inherits RestClientIo::RestClientIo, GoHighLevelRestClientBase {
+    private {
+        #! The location ID - automatically extracted from OAuth2 login, or set manually
+        *string location_id;
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts constructor options; valid options are all the options for the
+        @ref RestClientIo::RestClientIo "RestClientIo" class plus:
+        - \c location_id: (optional) the GoHighLevel location/sub-account ID; automatically
+          extracted from OAuth2 login
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(GoHighLevelRestClientBase::getOptions(opts), shared_mgr) {
+        if (opts.location_id) {
+            location_id = opts.location_id;
+        }
+    }
+
+    #! Returns the location ID
+    *string getLocationId() {
+        return location_id;
+    }
+
+    #! Sets the location ID
+    setLocationId(string loc_id) {
+        location_id = loc_id;
+    }
+
+    #! Adds the location ID to the request before it is serialized
+    /** For GET and DELETE requests, the location ID is added as a query parameter.
+        For POST requests to top-level endpoints, \c locationId is added to the request body. PUT
+        requests do not get the location ID injected (endpoints reject it).
+
+        The location ID is not added for /oauth paths or when already present.
+    */
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        *string loc_id = location_id;
+        if (loc_id && path !~ /^\/?oauth($|\?)/) {
+            if (method == "GET" || method == "DELETE") {
+                # GHL API uses camelCase "locationId" for most GET endpoints,
+                # but "location_id" (snake_case) for opportunities/search
+                if (path !~ /location/) {
+                    string loc_param = path =~ /opportunities\/search/ ? "location_id" : "locationId";
+                    path += (path =~ /\?/ ? "&" : "?") + loc_param + "=" + loc_id;
+                }
+            } else if (method == "POST" && body.typeCode() == NT_HASH && !body.locationId) {
+                # add locationId to the POST body only for top-level endpoints (e.g., contacts,
+                # contacts/search, opportunities) — resource-scoped endpoints like
+                # contacts/{id}/notes reject it
+                string clean_path = (path =~ x/^([^?]+)/)[0] ?? path;
+                clean_path =~ s/^\///;
+                if (clean_path.split("/").size() <= 2) {
+                    body.locationId = loc_id;
+                }
+            }
+        }
+        return RestClientIo::prepareRequest(method, \path, body, \hdr);
+    }
+
+    #! Sets options from the OAuth2 login response on the local object
+    /** Extracts \c locationId from the GoHighLevel OAuth2 token response.
+    */
+    private setOAuth2LoginInfo(hash<auto> h) {
+        RestClientIo::setOAuth2LoginInfo(h);
+        if (h.locationId && h.locationId != location_id) {
+            location_id = h.locationId;
+            log(LoggerLevel::DEBUG, "GoHighLevelRestClientIo: set location ID to %y from OAuth2 response",
+                h.locationId);
+        }
+    }
+
+    #! Returns options to update after an OAuth2 login
+    /** Persists the \c locationId back to the connection options so it survives restarts.
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
+        *hash<auto> new_opts = RestClientIo::getUpdateOptionsAfterLogin(h);
+        if (h.locationId && h.locationId != location_id) {
+            new_opts.location_id = h.locationId;
+        }
+        return new_opts;
     }
 }
 }

@@ -42,7 +42,7 @@ public class FreshBooksCreateServiceDataProvider inherits FreshBooksDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) : FreshBooksDataProviderBase(rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) : FreshBooksDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -67,8 +67,8 @@ public class FreshBooksCreateServiceDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setBusinessIdFromReq(req);
-        return doPost(businessPath("/service"), {"service": req}).service;
+        *string business_id = getBusinessIdFromReq(\req);
+        return doPost(businessPath("/service", business_id), {"service": req}).service;
     }
 
     #! Returns static provider info

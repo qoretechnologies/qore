@@ -79,7 +79,7 @@ public class BigCommerceShipmentsDataProvider inherits BigCommerceDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(BigCommerceRestClient::BigCommerceRestClient rest)
+    constructor(BigCommerceRestClient::BigCommerceRestClientIo rest)
             : BigCommerceDataProviderBase(rest) {
     }
 

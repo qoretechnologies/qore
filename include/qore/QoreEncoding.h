@@ -218,6 +218,9 @@ public:
    //! finds an encoding if it exists (also looks up against alias names) and creates a new one if it doesn't
    DLLEXPORT static const QoreEncoding* findCreate(const char* name);
 
+   //! finds an encoding if it exists (also looks up against alias names); returns nullptr if it does not
+   DLLLOCAL static const QoreEncoding* find(const char* name);
+
    //! finds an encoding if it exists (also looks up against alias names) and creates a new one if it doesn't
    DLLEXPORT static const QoreEncoding* findCreate(const QoreString* str);
 

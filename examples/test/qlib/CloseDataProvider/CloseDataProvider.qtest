@@ -37,13 +37,61 @@
 
 %requires CloseRestClient
 %requires CloseDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class CloseDataProviderTest
+
+#! A local Close API server that records requests
+class FakeCloseHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Rate-Reset": "1"},
+                "body": make_json({"error": "rate limited"}),
+            };
+        }
+        if (hdr.path =~ /lead\/missing$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"error": "Empty query: Lead matching query does not exist."}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": "lead_2"} + parse_json(body.toString())),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"data": ({"id": "lead_1", "name": "Acme"},), "has_more": False}),
+        };
+    }
+}
 
 public class CloseDataProviderTest inherits QUnit::Test {
     private {
         #! Close REST client for integration tests
-        *CloseRestClient::CloseRestClient client;
+        *CloseRestClient::CloseRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -76,6 +124,7 @@ public class CloseDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require CLOSE_API_KEY or OAuth2 connection)
         addTestCase("integration tests", \integrationTests());
@@ -100,12 +149,12 @@ public class CloseDataProviderTest inherits QUnit::Test {
         *string conn_name = m_options.conn ?? ENV.CLOSE_CONNECTION;
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
-            client = conn.get(True);
+            client = conn.getAsync();
             return;
         }
         *string token = ENV.CLOSE_TOKEN;
         if (token) {
-            client = new CloseRestClient::CloseRestClient({"token": token});
+            client = new CloseRestClient::CloseRestClientIo({"token": token});
             return;
         }
         *string apikey = ENV.CLOSE_API_KEY;
@@ -116,7 +165,7 @@ public class CloseDataProviderTest inherits QUnit::Test {
             }
             return;
         }
-        client = new CloseRestClient::CloseRestClient({"apikey": apikey});
+        client = new CloseRestClient::CloseRestClientIo({"apikey": apikey});
     }
 
     #! Check if json module is available
@@ -387,6 +436,62 @@ public class CloseDataProviderTest inherits QUnit::Test {
         assertThrows("INVALID-CHILD-PROVIDER", sub() {
             events.getChildProviderEx("invalid-event-type");
         });
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeCloseHandler handler();
+        server.setHandler("close", "", NOTHING, handler);
+        server.setDefaultHandler("close", handler);
+
+        CloseDataProvider::CloseDataProvider provider({
+            "closerestclient_options": {
+                "url": "http://localhost:" + port + "/api/v1",
+                "token": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof CloseRestClient::CloseRestClientIo);
+        AbstractDataProvider leads = provider.getChildProviderPath("leads");
+
+        # a search is sent with the async client and the token as a bearer token
+        list<hash<auto>> records = map $1, leads.searchRecords(NOTHING, {"query": "acme"});
+        assertEq(1, records.size());
+        assertEq("lead_1", records[0].id);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("api/v1/lead?query=acme&_limit=100&_skip=0", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+
+        # a POST request sends the request body
+        handler.requests = ();
+        auto result = leads.getChildProviderPath("create").doRequest({"name": "Widgets Inc"});
+        assertEq("lead_2", result.id);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/v1/lead", handler.requests[0].path);
+        assertEq("Widgets Inc", handler.requests[0].body.name);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        records = map $1, leads.searchRecords(NOTHING, {"query": "acme"});
+        assertEq("lead_1", records[0].id);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            leads.searchRecords(NOTHING, {"lead_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Empty query: Lead matching query does not exist.", ex.arg.body.error);
+        }
     }
 
     #! Connection tests - verify connection scheme

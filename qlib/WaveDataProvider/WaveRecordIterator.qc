@@ -32,7 +32,7 @@ public namespace WaveDataProvider {
 public class WaveRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client for API calls
-        WaveRestClient::WaveRestClient rest;
+        WaveRestClient::WaveRestClientIo rest;
 
         #! The GraphQL query template
         string query;
@@ -74,7 +74,7 @@ public class WaveRecordIterator inherits DataProvider::AbstractDataProviderRecor
         @param pageSize the number of records per page (default: 50)
         @param recordType optional record type definition
     */
-    constructor(WaveRestClient::WaveRestClient rest, string query, string rootPath,
+    constructor(WaveRestClient::WaveRestClientIo rest, string query, string rootPath,
             string dataPath, *hash<auto> variables, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType) {
         @assert(rest, "REST client cannot be null");
@@ -99,7 +99,7 @@ public class WaveRecordIterator inherits DataProvider::AbstractDataProviderRecor
         @param pageSize the number of records per page (default: 50)
         @param recordType optional record type definition
     */
-    constructor(WaveRestClient::WaveRestClient rest, string query, string dataPath,
+    constructor(WaveRestClient::WaveRestClientIo rest, string query, string dataPath,
             *hash<auto> variables, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType) {
         @assert(rest, "REST client cannot be null");

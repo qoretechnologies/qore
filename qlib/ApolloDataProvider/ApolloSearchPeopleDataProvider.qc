@@ -95,7 +95,7 @@ public class ApolloSearchPeopleDataProvider inherits ApolloDataProviderBase {
         static *AbstractDataProviderType RequestType = new ApolloSearchPeopleRequestDataType();
     }
 
-    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClientIo rest) : ApolloDataProviderBase(rest) {
     }
 
     string getName() {

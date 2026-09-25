@@ -32,7 +32,7 @@ public namespace JotformDataProvider {
 public class JotformRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client for API calls
-        JotformRestClient::JotformRestClient rest;
+        JotformRestClient::JotformRestClientIo rest;
 
         #! The API endpoint path
         string endpoint;
@@ -70,7 +70,7 @@ public class JotformRecordIterator inherits DataProvider::AbstractDataProviderRe
         @param recordType optional record type definition
         @param totalLimit optional total limit on number of records (0 = unlimited)
     */
-    constructor(JotformRestClient::JotformRestClient rest, string endpoint,
+    constructor(JotformRestClient::JotformRestClientIo rest, string endpoint,
             *hash<auto> queryParams, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType, int totalLimit = 0) {
         @assert(rest, "REST client cannot be null");
@@ -163,7 +163,7 @@ public class JotformRecordIterator inherits DataProvider::AbstractDataProviderRe
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
 
         # JotForm returns content in the response body
         if (!response.body || !response.body.content) {

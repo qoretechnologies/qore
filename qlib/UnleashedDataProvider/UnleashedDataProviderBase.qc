@@ -32,15 +32,15 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
         const BaseConstructorOptions = {
             "unleashedrestclient": <DataProviderOptionInfo>{
                 "display_name": "Unleashed REST Client",
-                "short_desc": "The UnleashedRestClient object",
-                "type": AbstractDataProviderType::get(new Type("UnleashedRestClient::UnleashedRestClient")),
-                "desc": "The UnleashedRestClient object to use for API calls",
+                "short_desc": "The UnleashedRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("UnleashedRestClient::UnleashedRestClientIo")),
+                "desc": "The `UnleashedRestClientIo` object to use for API calls",
             },
             "unleashedrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Unleashed REST Client Options",
-                "short_desc": "Options for creating an UnleashedRestClient",
+                "short_desc": "Options for creating an UnleashedRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating an UnleashedRestClient object if one is not provided directly",
+                "desc": "Options for creating an `UnleashedRestClientIo` object if one is not provided directly",
             },
             "api_id": <DataProviderOptionInfo>{
                 "display_name": "API ID",
@@ -61,7 +61,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
 
     private {
         #! The REST client object for API calls
-        UnleashedRestClient::UnleashedRestClient rest;
+        UnleashedRestClient::UnleashedRestClientIo rest;
 
         #! The connection object, if applicable
         *UnleashedRestClient::UnleashedRestConnection conn;
@@ -72,7 +72,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Creates the object with a REST client
-    constructor(UnleashedRestClient::UnleashedRestClient rest) {
+    constructor(UnleashedRestClient::UnleashedRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -81,7 +81,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
     constructor(UnleashedRestClient::UnleashedRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -98,12 +98,12 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
             }
-            rest = new UnleashedRestClient::UnleashedRestClient(client_opts, True);
+            rest = new UnleashedRestClient::UnleashedRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    UnleashedRestClient::UnleashedRestClient getRestClient() {
+    UnleashedRestClient::UnleashedRestClientIo getRestClient() {
         return rest;
     }
 
@@ -132,7 +132,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -165,7 +165,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -182,7 +182,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPut: PUT %s with body: %y", path, body));
-        hash<auto> response = rest.put(path, body);
+        hash<auto> response = rest.restPut(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPut: success, response keys: %y", keys response.body));
         return response.body;
@@ -203,7 +203,7 @@ public class UnleashedDataProviderBase inherits DataProvider::AbstractDataProvid
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.del(url);
+        hash<auto> response = rest.restDel(url, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;

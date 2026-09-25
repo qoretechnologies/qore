@@ -36,13 +36,58 @@
 
 %requires WaveRestClient
 %requires WaveDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class WaveDataProviderTest
+
+#! A local Wave GraphQL API server that records requests
+class FakeWaveHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> req = parse_json(body.toString());
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "x-test": hdr."x-test",
+            "body": req,
+        };
+        hash<auto> rv;
+        if (req.query =~ /unauthorized/) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"errors": ({"message": "invalid token"},)}),
+            };
+        } else if (req.query =~ /failing/) {
+            rv = {"errors": ({"message": "Cannot query field \"failing\""},)};
+        } else if (req.query =~ /^mutation/) {
+            rv = {"data": {"customerCreate": {"didSucceed": True, "customer": {"id": "c2"}}}};
+        } else if (req.query =~ /customers/) {
+            rv = {"data": {"business": {"customers": {
+                "pageInfo": {"currentPage": 1, "totalPages": 1},
+                "edges": ({"node": {"id": "c1", "name": "Acme"}},),
+            }}}};
+        } else {
+            rv = {"data": {"user": {"id": "u1"}}};
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(rv),
+        };
+    }
+}
 
 public class WaveDataProviderTest inherits QUnit::Test {
     private {
         #! Wave REST client for integration tests
-        *WaveRestClient::WaveRestClient client;
+        *WaveRestClient::WaveRestClientIo client;
 
         #! Business ID for integration tests
         *string businessId;
@@ -70,6 +115,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require WAVE_TOKEN environment variable or -t option)
@@ -112,7 +158,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
             }
             return;
         }
-        client = new WaveRestClient::WaveRestClient({"token": token});
+        client = new WaveRestClient::WaveRestClientIo({"token": token});
 
         # Try to get business ID from option or by querying
         businessId = m_options.business_id ?? ENV.WAVE_BUSINESS_ID;
@@ -1364,6 +1410,84 @@ public class WaveDataProviderTest inherits QUnit::Test {
             printf("  Events hierarchy test passed\n");
             printf("\n--- All Webhook Trigger Tests Completed Successfully ---\n");
         }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeWaveHandler handler();
+        server.setHandler("wave", "", NOTHING, handler);
+        server.setDefaultHandler("wave", handler);
+
+        WaveDataProvider::WaveDataProvider provider({
+            "waverestclient_options": {
+                "url": "http://localhost:" + port + "/graphql/public",
+            },
+            "token": "test-token",
+        });
+        assertTrue(provider.getRestClient() instanceof WaveRestClient::WaveRestClientIo);
+
+        # a GraphQL query is posted with the async client and the data is returned
+        list<hash<auto>> recs = map $1, provider.getChildProviderEx("customers").searchRecords(NOTHING,
+            {"businessId": "b1"});
+        assertEq(1, recs.size());
+        assertEq("c1", recs[0].id);
+        assertEq("Acme", recs[0].name);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("graphql/public", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+        assertEq("b1", handler.requests[0].body.variables.businessId);
+        assertEq(1, handler.requests[0].body.variables.page);
+        assertRegex("customers", handler.requests[0].body.query);
+
+        handler.requests = ();
+        hash<auto> result = provider.getChildProviderEx("execute-graphql").doRequest({
+            "query": "query { user { id } }",
+        });
+        assertEq({"user": {"id": "u1"}}, result);
+        assertEq("query { user { id } }", handler.requests[0].body.query);
+
+        # GraphQL errors are raised
+        try {
+            provider.getChildProviderEx("execute-graphql").doRequest({"query": "query { failing }"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("GRAPHQL-ERROR", ex.err);
+            assertRegex("failing", ex.desc);
+        }
+
+        # an HTTP error response is raised with the response
+        try {
+            provider.getChildProviderEx("execute-graphql").doRequest({"query": "query { unauthorized }"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+            assertEq("invalid token", ex.arg.body.errors[0].message);
+        }
+
+        # the query() and mutate() methods of the async client send the query with the given headers
+        WaveRestClient::WaveRestClientIo rest = provider.getRestClient();
+        handler.requests = ();
+        hash<auto> resp = rest.query("query { user { id } }", NOTHING, {"X-Test": "q"});
+        assertEq(200, resp.status_code);
+        assertEq({"user": {"id": "u1"}}, resp.body.data);
+        assertEq("q", handler.requests[0]."x-test");
+        assertEq("query { user { id } }", handler.requests[0].body.query);
+
+        resp = rest.mutate("mutation ($input: CustomerCreateInput!) { customerCreate(input: $input) { didSucceed } }",
+            {"input": {"businessId": "b1", "name": "Beta"}}, {"X-Test": "m"});
+        assertTrue(resp.body.data.customerCreate.didSucceed);
+        assertEq("m", handler.requests[1]."x-test");
+        assertEq({"input": {"businessId": "b1", "name": "Beta"}}, handler.requests[1].body.variables);
+
+        assertThrows("GRAPHQL-ERROR", \rest.query(), ("query { failing }",));
+        assertThrows("GRAPHQL-ERROR", \rest.mutate(), ("mutation { failing }",));
     }
 }
 

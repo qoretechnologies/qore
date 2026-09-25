@@ -25,7 +25,7 @@ public class ZohoBooksItemsDataProvider inherits ZohoBooksDataProviderBase {
             },
         };
     }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "items"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksItemDataType().getFields(); }
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
@@ -41,7 +41,7 @@ public class ZohoBooksItemsDataProvider inherits ZohoBooksDataProviderBase {
 
 public class ZohoBooksCreateItemDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "create-item", "desc": "Creates an item", "type": "ZohoBooksCreateItemDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-item"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksItemDataType(); }
@@ -51,7 +51,7 @@ public class ZohoBooksCreateItemDataProvider inherits ZohoBooksDataProviderBase 
 
 public class ZohoBooksGetItemDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "get-item", "desc": "Gets an item", "type": "ZohoBooksGetItemDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-item"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksItemDataType(); }

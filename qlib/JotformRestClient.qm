@@ -127,26 +127,35 @@ public class JotformRestClientBase {
     }
 
     #! returns options for @ref JotformRestClient::JotformRestClient::constructor()
+    /** The returned options keep the JotForm-specific input options (\c apikey, \c api_domain), which the REST
+        client ignores, and derive the REST client options from them; this makes the method idempotent, so a client
+        can be recreated from its own processed options, as with
+        @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over the URL derived from \c api_domain
+
+        @throw JOTFORM-ERROR missing \c apikey option or invalid \c api_domain option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
-        # Validate and build URL from api_domain option
+        # Validate the api_domain option even if an explicit URL is given
         string domain = opts.api_domain ?? DefaultApiDomain;
         if (!ApiDomains.hasKey(domain)) {
             throw "JOTFORM-ERROR", sprintf("invalid api_domain %y; allowed values: %y", domain, keys ApiDomains);
         }
-        rv.url = sprintf("https://%s", domain);
+        # an explicit URL takes precedence over the URL derived from the api_domain option
+        if (!rv.url) {
+            rv.url = sprintf("https://%s", domain);
+        }
         # Validate apikey is provided
         if (!opts.apikey) {
             throw "JOTFORM-ERROR", "missing required option 'apikey' (JotForm API key)";
         }
-        # Set API key header authentication
+        # Set API key header authentication; the header is set (not added), so processing the options again does
+        # not change them, and the apikey option is kept so that the options can be processed again
         rv.headers.APIKEY = opts.apikey;
-        # Remove apikey from opts so RestClient doesn't try to use it
-        remove rv.apikey;
-        # Remove api_domain from options as it's not a RestClient option
-        remove rv.api_domain;
         return rv;
     }
 }
@@ -172,7 +181,11 @@ JotformRestClient jotform({"apikey": "your-api-key"});
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
         - \c apikey: the JotForm API key (required)
-        - \c api_domain: the API domain to use (default: api.jotform.com)
+        - \c api_domain: the API domain to use (default: api.jotform.com); used to derive the URL if no \c url
+          option is given
+
+        If the \c url option is given, it takes precedence over the URL derived from \c api_domain; this can be
+        used to send requests through a proxy or to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -313,7 +326,8 @@ public class JotformRestConnection inherits RestClient::RestConnection {
     #! creates the JotformRestConnection object
     /** @param name the name of the connection
         @param description connection description
-        @param url connection URL (potentially with password info)
+        @param url connection URL (potentially with password info); if the default URL is given, the URL is derived
+        from the \c api_domain option
         @param attributes various attributes. See below
         @param options connection options
 
@@ -323,7 +337,9 @@ public class JotformRestConnection inherits RestClient::RestConnection {
     */
     constructor(string name, string description, string url = DefaultConnectionUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url == DefaultConnectionUrl
+                ? JotformRestConnection::getConnectionUrl(options)
+                : url, attributes, options) {
     }
 
     #! creates the JotformRestConnection object
@@ -352,13 +368,22 @@ public class JotformRestConnection inherits RestClient::RestConnection {
     /** Constructs the connection URL from the api_domain option
     */
     private static hash<auto> getConfig(hash<auto> config) {
-        # Get api_domain from options, default to standard domain
-        string domain = config.opts.api_domain ?? JotformRestClientBase::DefaultApiDomain;
-        # Build URL from domain: jotform://api.jotform.com
-        string url = "jotform://" + domain;
         return config + {
-            "url": url,
+            "url": JotformRestConnection::getConnectionUrl(config.opts),
         };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c api_domain option (ex: \c "jotform://api.jotform.com"); the URL
+        given to the client is the connection URL with the \c "jotform" scheme replaced with \c "https", which is
+        the URL that the client would derive from the same option
+
+        @param opts the connection options
+
+        @return the connection URL for the given connection options
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        return "jotform://" + (opts.api_domain ?? JotformRestClientBase::DefaultApiDomain);
     }
 
     #! returns \c "jotform"
@@ -406,13 +431,16 @@ public class JotformRestConnection inherits RestClient::RestConnection {
     */
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
-        # update the URL immediately if necessary
-        if (update_options && url != DefaultConnectionUrl) {
-            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
-            # believe that no changes are necessary
-            doUpdateOptions(self, {
-                "url": DefaultConnectionUrl,
-            });
+        # update the URL immediately if necessary; the URL is derived from the api_domain option
+        if (update_options) {
+            string expected_url = getConnectionUrl(opts);
+            if (url != expected_url) {
+                # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+                # will believe that no changes are necessary
+                doUpdateOptions(self, {
+                    "url": expected_url,
+                });
+            }
         }
     }
 

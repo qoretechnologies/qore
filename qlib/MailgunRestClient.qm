@@ -126,33 +126,53 @@ public class MailgunRestClientBase {
     }
 
     #! returns options for @ref MailgunRestClient::MailgunRestClient::constructor()
+    /** The returned options keep the Mailgun-specific input options (\c apikey, \c api_region, \c api_domain),
+        which the REST client ignores, and derive the REST client options from them; this makes the method
+        idempotent, so a client can be recreated from its own processed options, as with
+        @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over the URL derived from \c api_region
+
+        @throw MAILGUN-ERROR missing \c apikey option or invalid \c api_region option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Determine base URL from api_region option
-        string region = opts.api_region ?? DefaultApiRegion;
-        if (!ApiRegionUrls.hasKey(region)) {
-            throw "MAILGUN-ERROR", sprintf("invalid api_region %y; allowed values: %y", region, keys ApiRegionUrls);
+        # the region is validated even if an explicit URL is given
+        string region_url = getApiUrl(opts.api_region ?? DefaultApiRegion);
+        # an explicit URL takes precedence over the URL derived from the api_region option
+        if (!rv.url) {
+            rv.url = region_url;
         }
-        rv.url = ApiRegionUrls{region};
 
         # Validate apikey is provided
         if (!opts.apikey) {
             throw "MAILGUN-ERROR", "missing required option 'apikey' (Mailgun API key)";
         }
 
-        # Set HTTP Basic Auth: username=api, password=API_KEY
+        # Set HTTP Basic Auth: username=api, password=API_KEY; the apikey option is kept so that the options can
+        # be processed again
         rv.username = "api";
         rv.password = opts.apikey;
 
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.apikey;
-        remove rv.api_region;
-        remove rv.api_domain;
-
         return rv;
+    }
+
+    #! Returns the API URL for the given region
+    /** @param region the API region; see @ref ApiRegionUrls
+
+        @return the API URL for the given region
+
+        @throw MAILGUN-ERROR invalid region
+    */
+    static string getApiUrl(string region) {
+        *string url = ApiRegionUrls{region};
+        if (!url) {
+            throw "MAILGUN-ERROR", sprintf("invalid api_region %y; allowed values: %y", region, keys ApiRegionUrls);
+        }
+        return url;
     }
 }
 
@@ -176,8 +196,12 @@ MailgunRestClient mailgun({"apikey": "your-api-key", "api_domain": "mg.example.c
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
         plus:
         - \c apikey: the Mailgun API key (required)
-        - \c api_region: the API region to use (US or EU, default: US)
+        - \c api_region: the API region to use (US or EU, default: US); used to derive the URL if no \c url option
+          is given
         - \c api_domain: the sending domain (required for most operations)
+
+        If the \c url option is given, it takes precedence over the URL derived from \c api_region; this can be
+        used to send requests through a proxy or to a test server
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -331,7 +355,8 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
     #! creates the MailgunRestConnection object
     /** @param name the name of the connection
         @param description connection description
-        @param url connection URL (potentially with password info)
+        @param url connection URL (potentially with password info); if the default URL is given, the URL is derived
+        from the \c api_region option
         @param attributes various attributes. See below
         @param options connection options
 
@@ -341,7 +366,9 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
     */
     constructor(string name, string description, string url = DefaultConnectionUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, url == DefaultConnectionUrl
+                ? MailgunRestConnection::getConnectionUrl(options)
+                : url, attributes, options) {
     }
 
     #! creates the MailgunRestConnection object
@@ -370,20 +397,25 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
     /** Constructs the connection URL from the api_region option
     */
     private static hash<auto> getConfig(hash<auto> config) {
-        # Get api_region from options, default to US
-        string region = config.opts.api_region ?? MailgunRestClientBase::DefaultApiRegion;
-        # Build URL from region
-        string url;
-        switch (region) {
-            case "EU":
-                url = "mailgun://api.eu.mailgun.net";
-                break;
-            default:
-                url = "mailgun://api.mailgun.net";
-        }
         return config + {
-            "url": url,
+            "url": MailgunRestConnection::getConnectionUrl(config.opts),
         };
+    }
+
+    #! Returns the connection URL for the given connection options
+    /** The connection URL is derived from the \c api_region option; the URL given to the client is the connection
+        URL with the \c "mailgun" scheme replaced with \c "https", which is the URL that the client would derive
+        from the same option
+
+        @param opts the connection options
+
+        @return the connection URL for the given connection options; if the \c api_region option is invalid, the
+        URL for the default region is returned, and the invalid option is reported when the options are validated
+    */
+    static string getConnectionUrl(*hash<auto> opts) {
+        string url = MailgunRestClientBase::ApiRegionUrls{opts.api_region ?? MailgunRestClientBase::DefaultApiRegion}
+            ?? MailgunRestClientBase::ApiRegionUrls{MailgunRestClientBase::DefaultApiRegion};
+        return regex_subst(url, "^https:", "mailgun:");
     }
 
     #! returns \c "mailgun"
@@ -431,13 +463,16 @@ public class MailgunRestConnection inherits RestClient::RestConnection {
     */
     setUpdateOptionsCode(*code update_options) {
         UpdateOptionsInterface::setUpdateOptionsCode(update_options);
-        # update the URL immediately if necessary
-        if (update_options && url != DefaultConnectionUrl) {
-            # NOTE: do not update the URL or real URL values here, or the external update will fail, because it will
-            # believe that no changes are necessary
-            doUpdateOptions(self, {
-                "url": DefaultConnectionUrl,
-            });
+        # update the URL immediately if necessary; the URL is derived from the api_region option
+        if (update_options) {
+            string expected_url = getConnectionUrl(opts);
+            if (url != expected_url) {
+                # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
+                # will believe that no changes are necessary
+                doUpdateOptions(self, {
+                    "url": expected_url,
+                });
+            }
         }
     }
 

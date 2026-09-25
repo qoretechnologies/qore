@@ -43,7 +43,7 @@ public class InstantlyEmailBouncedEventDataProvider inherits InstantlyBaseEventD
         static InstantlyEmailBouncedEventDataType eventDataType();
     }
 
-    constructor(InstantlyRestClient::InstantlyRestClient rest, *hash<auto> options)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest, *hash<auto> options)
             : InstantlyBaseEventDataProvider(rest, options) {
     }
 

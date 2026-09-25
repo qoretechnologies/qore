@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  WooCommerceRestClient.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires WooCommerceRestClient
+
+%requires json
+
+%exec-class WooCommerceRestClientTest
+
+#! A local WooCommerce API server that records requests
+class FakeWooCommerceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.authorization != "Basic " + make_base64_string("ck_test:cs_test")) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"code": "woocommerce_rest_cannot_view", "message": "Sorry, you cannot list "
+                    "resources."}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": 7} + parse_json(body.toString())),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"environment": {"version": "9.0.0"}}),
+        };
+    }
+}
+
+public class WooCommerceRestClientTest inherits QUnit::Test {
+    constructor() : Test("WooCommerceRestClientTest", "1.0") {
+        addTestCase("option tests", \optionTests());
+        addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
+
+        set_return_value(main());
+    }
+
+    #! Option processing of the async client
+    optionTests() {
+        # the same required options as the synchronous client
+        assertThrows("WOOCOMMERCE-ERROR", sub () { new WooCommerceRestClientIo({}); });
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceRestClientIo({"store_url": "https://example.com"});
+        });
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceRestClientIo({"store_url": "https://example.com", "consumer_key": "ck_test"});
+        });
+        # a URL without credentials is not accepted in place of the store URL
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceRestClientIo({"url": "https://example.com/wp-json/wc/v3/"});
+        });
+
+        WooCommerceRestClientIo rest({
+            "store_url": "https://example.com/shop/",
+            "consumer_key": "ck_test",
+            "consumer_secret": "cs_test",
+        });
+        assertEq("https://example.com/shop/wp-json/wc/v3/", rest.getUrl());
+        assertEq("/shop/wp-json/wc/v3", rest.getConnectionPath());
+        hash<auto> opts = rest.getConstructorOptions();
+        assertEq("ck_test", opts.username);
+        assertEq("cs_test", opts.password);
+        assertFalse(opts.hasKey("store_url"));
+
+        # a copy with another URL keeps the credentials and uses the path of the new URL
+        RestClientIo copy = cast<RestClientIo>(rest.copyWithUrl("https://other.example.com/wp-json/wc/v3/"));
+        assertTrue(copy instanceof WooCommerceRestClientIo);
+        assertEq("/wp-json/wc/v3", copy.getConnectionPath());
+        assertEq("ck_test", copy.getConstructorOptions().username);
+    }
+
+    #! The connection returns the async client
+    connectionTests() {
+        WooCommerceRestConnection conn("woo", "", "woocommerce://localhost", {}, {
+            "store_url": "https://shop.example.com",
+            "consumer_key": "ck_test",
+            "consumer_secret": "cs_test",
+        });
+        object rest = conn.getAsync(False);
+        assertTrue(rest instanceof WooCommerceRestClientIo);
+        assertEq("https://shop.example.com/wp-json/wc/v3/", cast<WooCommerceRestClientIo>(rest).getUrl());
+        assertEq("/wp-json/wc/v3", cast<WooCommerceRestClientIo>(rest).getConnectionPath());
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeWooCommerceHandler handler();
+        server.setHandler("woocommerce", "", NOTHING, handler);
+        server.setDefaultHandler("woocommerce", handler);
+
+        hash<auto> opts = {
+            "store_url": "http://localhost:" + port,
+            "consumer_key": "ck_test",
+            "consumer_secret": "cs_test",
+        };
+
+        # GET with Basic authentication below the API path
+        WooCommerceRestClientIo rest(opts);
+        hash<RestResponseInfo> resp = rest.restGet("system_status");
+        assertEq(200, resp.status_code);
+        assertEq("9.0.0", resp.body.environment.version);
+        assertEq("GET", handler.requests[0].method);
+        assertEq("wp-json/wc/v3/system_status", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("ck_test:cs_test"), handler.requests[0].authorization);
+
+        # POST with a JSON body
+        resp = rest.restPost("products", {"name": "Mug"});
+        assertEq(201, resp.status_code);
+        assertEq({"id": 7, "name": "Mug"}, resp.body);
+        assertEq("wp-json/wc/v3/products", handler.requests[1].path);
+        assertEq({"name": "Mug"}, handler.requests[1].body);
+
+        # the synchronous client sends the same request
+        WooCommerceRestClient sync_rest(opts);
+        assertEq("9.0.0", sync_rest.get("system_status").body.environment.version);
+        assertEq(handler.requests[0] - "body", handler.requests[2] - "body");
+
+        # the client created by the connection sends the same request
+        WooCommerceRestConnection conn("woo", "", "woocommerce://localhost", {}, opts);
+        WooCommerceRestClientIo conn_rest = conn.getAsync();
+        assertEq("9.0.0", conn_rest.restGet("system_status").body.environment.version);
+        assertEq(handler.requests[0] - "body", handler.requests[3] - "body");
+
+        # wrong credentials: the error response is raised with the response
+        WooCommerceRestClientIo bad_rest(opts + {"consumer_secret": "wrong"});
+        try {
+            bad_rest.restGet("products");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+            assertEq("woocommerce_rest_cannot_view", ex.arg.body.code);
+        }
+        assertEq("Basic " + make_base64_string("ck_test:wrong"), handler.requests.last().authorization);
+    }
+}

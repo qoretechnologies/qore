@@ -129,6 +129,8 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - documented the \c Content-Type of a response body without one in
+      @ref HttpServer::HttpResponseInfo::hdr "HttpResponseInfo::hdr"
     - a request handler receives the effective maximum request body size of the listener in
       \c cx."header-info".max_request_body_size, so a handler that reads the request body as a stream (see
       @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming() "wantsBodyStreaming()") can enforce the
@@ -490,6 +492,11 @@ public hashdecl HttpResponseInfo {
     softbool close = False;
 
     #! set this key to a hash of extra header information to be returned with the response
+    /** A response body without a \c Content-Type is sent with one that depends on the data: a string is sent as
+        \c text/html in the response encoding, binary data (including an @ref Qore::InputStream "InputStream" other
+        than a @ref Qore::StringInputStream "StringInputStream") as \c application/octet-stream, and a body produced
+        by a \c send_callback without a \c Content-Type, as its type is not known (RFC 9110 section 8.3).
+    */
     *hash<auto> hdr;
 
     #! this key can be set to @ref True "True" if the reply has already been sent (by a chunked callback for example)
@@ -614,6 +621,9 @@ public hashdecl HttpHandlerResponseInfo {
     #! set this key to a hash of extra header information to be returned with the response
     /** @note The default \c NullRestSchemaValidator class will try use any \c Content-Type header if set here to
         serialize the response if the MIME type is supported and acceptable by the client
+
+        @see @ref HttpServer::HttpResponseInfo::hdr "HttpResponseInfo::hdr" for the \c Content-Type of a body
+        without one
     */
     *hash<auto> hdr;
 

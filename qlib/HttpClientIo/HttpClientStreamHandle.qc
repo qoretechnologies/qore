@@ -119,6 +119,9 @@ public class HttpClientStreamHandle {
 
         #! The maximum size of a response body that is returned whole, after decoding; <= 0 means no limit
         int max_response_body_size = 0;
+
+        #! The encoding assumed for text response bodies whose encoding is not determined otherwise
+        string assumed_encoding = "ISO-8859-1";
     }
 
     #! Creates a new stream handle
@@ -143,6 +146,24 @@ public class HttpClientStreamHandle {
     */
     setMaxResponseBodySize(int max_size) {
         max_response_body_size = max_size;
+    }
+
+    #! Returns the maximum size of a response body that is returned whole, after its content encoding is decoded
+    /** @return the maximum size in bytes; <= 0 means no limit
+
+        @see @ref setMaxResponseBodySize()
+    */
+    int getMaxResponseBodySize() {
+        return max_response_body_size;
+    }
+
+    #! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
+    /** @param encoding the assumed encoding
+
+        @see @ref HttpClientIo::HttpClientConnectionManagerOptions::assume_encoding "assume_encoding"
+    */
+    setAssumedEncoding(string encoding) {
+        assumed_encoding = encoding;
     }
 
     #! Releases any unreleased stream reservation
@@ -445,7 +466,7 @@ public class HttpClientStreamHandle {
                 state = HttpClientStreamState::Complete;
                 response = rv;
             }
-            return normalizeResponseBody(rv ?? {}, max_response_body_size);
+            return normalizeResponseBody(rv ?? {}, max_response_body_size, assumed_encoding);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
@@ -848,7 +869,7 @@ public class HttpClientStreamHandle {
     #! Internal: returns the result of an async submission with a future that decodes the response
     private hash<auto> decodeResultFuture(hash<auto> result) {
         if (result.future) {
-            result.future = new DecodingResponseFuture(result.future, max_response_body_size);
+            result.future = new DecodingResponseFuture(result.future, max_response_body_size, assumed_encoding);
         }
         return result;
     }
@@ -860,18 +881,19 @@ public class HttpClientStreamHandle {
         coding, and an unknown coding leave the body as it is.  The decoded body is limited to \a max_size; the
         \c Content-Encoding header is left in the response.
 
-        Then the body is converted to a string for text types, to ensure consistent body types across all HTTP
-        protocol versions (H1, H2, H3): the H1 and H2 layers already convert a body that is not compressed, and
-        the H3 (QUIC) layer returns bodies as binary.  The charset parameter from the Content-Type header is used
-        for encoding conversion when present; JSON and YAML content types always use UTF-8 per RFC 8259 / YAML
-        spec regardless of any charset parameter.
+        Then a binary body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
+        "decode_http_body()"): a text body becomes a string in its character encoding and any other body stays
+        binary.  The H1 and H2 layers already decode a body that is not compressed by the same rules; the H3 (QUIC)
+        layer returns bodies as binary.
 
         @param resp the response
         @param max_size the maximum size of the decoded body; <= 0 means no limit
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
 
         @throw HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE the decoded body exceeds \a max_size
     */
-    static hash<auto> normalizeResponseBody(hash<auto> resp, int max_size = 0) {
+    static hash<auto> normalizeResponseBody(hash<auto> resp, int max_size = 0,
+            string assumed_encoding = "ISO-8859-1") {
         if (resp.body) {
             *string coding = getContentCoding(resp.headers."content-encoding");
             if (coding) {
@@ -894,26 +916,40 @@ public class HttpClientStreamHandle {
                 }
             }
         }
-        *string ct = resp.headers."content-type";
+        auto ct = resp.headers."content-type";
+        # a header sent more than once arrives as a list; the last value is used
+        if (ct.typeCode() == NT_LIST) {
+            ct = ct.last();
+        }
         # expose the bare MIME type so downstream consumers don't each re-strip parameters
-        resp.content_type = mime_get_base_type(ct);
-        if (resp.body && resp.body.typeCode() == NT_BINARY) {
-            if (ct && (is_mime_json(resp.content_type) || ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
-                    || ct =~ /\+(json|xml)/ || ct =~ /charset=/
-                    || ct =~ /x-www-form-urlencoded/)) {
-                # JSON and YAML are always UTF-8 per their respective specs
-                bool force_utf8 = is_mime_json(resp.content_type) || ct =~ /\/(json|x-yaml|yaml)/ || ct =~ /\+json/;
-                *string charset;
-                if (!force_utf8) {
-                    *list<*string> m = (ct =~ x/charset=["']?([^\s;,"']+)/i);
-                    if (m) {
-                        charset = m[0];
-                    }
-                }
-                resp.body = resp.body.toString(charset ?? "UTF-8");
+        resp.content_type = ct.typeCode() == NT_STRING ? mime_get_base_type(ct) : NOTHING;
+        if (resp.body.typeCode() == NT_BINARY && resp.body) {
+            *string body_ct = ct.typeCode() == NT_STRING ? ct : NOTHING;
+            # a character encoding misused as a content encoding is the charset of the body, as with HTTPClient
+            *string charset = getCharsetContentCoding(resp.headers."content-encoding");
+            if (charset && (!body_ct || body_ct !~ /;\s*charset\s*=/i)) {
+                body_ct = (body_ct ?? "text/plain") + "; charset=" + charset;
             }
+            resp.body = decode_http_body(body_ct, resp.body, assumed_encoding);
         }
         return resp;
+    }
+
+    #! Internal: returns a character encoding sent as the first coding of a Content-Encoding value, if any
+    /** Some servers send the character encoding of the body in the \c Content-Encoding header; a value starting
+        with \c "iso" or \c "utf-" is a character encoding, as with @ref Qore::HTTPClient "HTTPClient"
+    */
+    private static *string getCharsetContentCoding(auto content_encoding) {
+        if (content_encoding.typeCode() == NT_LIST) {
+            content_encoding = content_encoding[0];
+        }
+        if (content_encoding.typeCode() != NT_STRING) {
+            return;
+        }
+        *string coding = (content_encoding =~ x/^[ \t]*([^ \t,;]+)/)[0];
+        if (coding =~ /^(iso|utf-)/i) {
+            return coding;
+        }
     }
 
     #! Internal: returns the first coding of a Content-Encoding value if the body is to be decoded
@@ -1307,14 +1343,16 @@ class DecodingResponseFuture inherits Future<auto> {
     private {
         Future real_future;
         int max_size;
+        string assumed_encoding;
         Mutex m();
         bool decoded;
         auto rv;
     }
 
-    constructor(Future real_future, int max_size) {
+    constructor(Future real_future, int max_size, string assumed_encoding) {
         self.real_future = real_future;
         self.max_size = max_size;
+        self.assumed_encoding = assumed_encoding;
     }
 
     #! Blocks until the response is available, then decodes and returns it
@@ -1324,7 +1362,9 @@ class DecodingResponseFuture inherits Future<auto> {
         auto resp = real_future.get(timeout_ms);
         AutoLock al(m);
         if (!decoded) {
-            rv = resp.typeCode() == NT_HASH ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size) : resp;
+            rv = resp.typeCode() == NT_HASH
+                ? HttpClientStreamHandle::normalizeResponseBody(resp, max_size, assumed_encoding)
+                : resp;
             decoded = True;
         }
         return rv;

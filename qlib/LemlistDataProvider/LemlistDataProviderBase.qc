@@ -32,15 +32,15 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
         const BaseConstructorOptions = {
             "lemlistrestclient": <DataProviderOptionInfo>{
                 "display_name": "Lemlist REST Client",
-                "short_desc": "The LemlistRestClient object",
-                "type": AbstractDataProviderType::get(new Type("LemlistRestClient::LemlistRestClient")),
-                "desc": "The LemlistRestClient object to use for API calls",
+                "short_desc": "The LemlistRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("LemlistRestClient::LemlistRestClientIo")),
+                "desc": "The `LemlistRestClientIo` object to use for API calls",
             },
             "lemlistrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Lemlist REST Client Options",
-                "short_desc": "Options for creating a LemlistRestClient",
+                "short_desc": "Options for creating a LemlistRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a LemlistRestClient object if one is not provided directly",
+                "desc": "Options for creating a `LemlistRestClientIo` object if one is not provided directly",
             },
             "apikey": <DataProviderOptionInfo>{
                 "display_name": "API Key",
@@ -55,7 +55,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
 
     private {
         #! The REST client object for API calls
-        LemlistRestClient::LemlistRestClient rest;
+        LemlistRestClient::LemlistRestClientIo rest;
 
         #! The connection object, if applicable
         *LemlistRestClient::LemlistRestConnection conn;
@@ -66,14 +66,14 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(LemlistRestClient::LemlistRestClient rest) {
+    constructor(LemlistRestClient::LemlistRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(LemlistRestClient::LemlistRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -86,12 +86,12 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
             }
-            rest = new LemlistRestClient::LemlistRestClient(client_opts);
+            rest = new LemlistRestClient::LemlistRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    LemlistRestClient::LemlistRestClient getRestClient() {
+    LemlistRestClient::LemlistRestClientIo getRestClient() {
         return rest;
     }
 
@@ -117,7 +117,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
         if (params) {
             url += (path =~ /\?/ ? "&" : "?") + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         return response.body;
     }
@@ -130,7 +130,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
         @throw LEMLIST-API-ERROR if the response indicates an error
     */
     auto doPost(string path, *hash<auto> body) {
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         return response.body;
     }
@@ -143,7 +143,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
         @throw LEMLIST-API-ERROR if the response indicates an error
     */
     auto doPatch(string path, *hash<auto> body) {
-        hash<auto> response = rest.patch(path, body);
+        hash<auto> response = rest.restPatch(path, body);
         checkResponse(response);
         return response.body;
     }
@@ -155,7 +155,7 @@ public class LemlistDataProviderBase inherits DataProvider::AbstractDataProvider
         @throw LEMLIST-API-ERROR if the response indicates an error
     */
     auto doDelete(string path) {
-        hash<auto> response = rest.del(path);
+        hash<auto> response = rest.restDel(path, NOTHING);
         checkResponse(response);
         return response.body;
     }

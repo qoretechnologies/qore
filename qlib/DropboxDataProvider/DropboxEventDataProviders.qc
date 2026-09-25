@@ -143,11 +143,6 @@ public class DropboxWatchDataProviderBase inherits DropboxDataProviderBase,
         }
     }
 
-    #! Cancels an in-flight request so that a stop does not wait out the poll
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! The delta feed guarantees only that an entry's latest state comes last
     /** Dropbox does not document a total order over a delta page, so no ordering is claimed here; the whole
         page is delivered and the replacement cursor is made durable only once it has been.

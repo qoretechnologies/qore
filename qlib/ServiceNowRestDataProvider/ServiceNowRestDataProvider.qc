@@ -50,16 +50,17 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
             },
             "snrestclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
-                "short_desc": "The ServiceNowRestClient object",
-                "type": AbstractDataProviderType::get(new Type("ServiceNowRestClient")),
-                "desc": "The ServiceNowRestClient object",
+                "short_desc": "The ServiceNowRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("RestClient::AbstractRestClient")),
+                "desc": "The `ServiceNowRestClientIo` object; a synchronous `ServiceNowRestClient` is also "
+                    "accepted, and a `ServiceNowRestClientIo` is created with its options",
             },
             "snrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
-                "short_desc": "Options to the ServiceNowRestClient constructor",
+                "short_desc": "Options to the ServiceNowRestClientIo constructor",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options to the `ServiceNowRestClient` constructor; only used if a "
-                    "`ServiceNowRestClient` object is created for a call",
+                "desc": "Options to the `ServiceNowRestClientIo` constructor; only used if a "
+                    "`ServiceNowRestClientIo` object is created for a call",
             },
             "client_id": <DataProviderOptionInfo>{
                 "display_name": "OAuth2 Client ID",
@@ -107,6 +108,15 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
     }
 
     #! Creates the object from the arguments
+    /** @since ServiceNowRestDataProvider 2.1
+    */
+    constructor(ServiceNowRestClient::ServiceNowRestClientIo rest) : ServiceNowRestDataProviderBase(rest) {
+    }
+
+    #! Creates the object from the arguments
+    /** API calls are made with a @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo"
+        created with the options and the connection path of \a rest
+    */
     constructor(ServiceNowRestClient::ServiceNowRestClient rest) : ServiceNowRestDataProviderBase(rest) {
     }
 
@@ -119,15 +129,19 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.snrestclient) {
-            copts.snrestclient.checkClientOptions(copts);
-            rest = copts.snrestclient;
-        }
-
-        if (!rest) {
-            if (!options.url && !options.snrestclient) {
+            if (copts.snrestclient instanceof ServiceNowRestClientIo) {
+                rest = copts.snrestclient;
+            } else if (copts.snrestclient instanceof ServiceNowRestClient) {
+                rest = ServiceNowRestDataProviderBase::getAsyncClient(copts.snrestclient);
+            } else {
+                throw "CONSTRUCTOR-ERROR", sprintf("the 'snrestclient' option must be a ServiceNowRestClientIo or a "
+                    "ServiceNowRestClient object; got class %y", copts.snrestclient.className());
+            }
+        } else {
+            if (!options.url) {
                 throw "CONSTRUCTOR-ERROR", sprintf("missing 'url' option for connection to the ServiceNow instance");
             }
-            rest = new ServiceNowRestClient(getClientOptions(copts));
+            rest = new ServiceNowRestClientIo(getClientOptions(copts));
         }
     }
 
@@ -164,7 +178,7 @@ public class ServiceNowRestDataProvider inherits ServiceNowRestDataProviderBase 
         }
     }
 
-    #! Returns options for the ServiceNowRestClient
+    #! Returns options for the ServiceNowRestClientIo
     static private *hash<auto> getClientOptions(*hash<auto> copts) {
         return copts - ("snrestclient_options", "snrestclient")
             + copts.snrestclient_options;

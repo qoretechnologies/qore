@@ -75,11 +75,6 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
         stopEventsIntern();
     }
 
-    #! Cancels in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! Polls for new events once
     #! The Smartsheet event stream is returned in ascending event order
     /** The stream position is an opaque cursor, so this provider is a documented exemption from the

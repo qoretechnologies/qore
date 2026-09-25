@@ -60,13 +60,6 @@ public class SendCloudWatchDataProviderBase inherits SendCloudDataProviderBase,
                   options.start_date) {
     }
 
-    #! Cancels in-flight REST operations for graceful shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! The upstream ordering is not relied on; records are ordered by timestamp before delivery
     /** Records are sorted by their timestamp and delivered oldest-first, and the durable cursor
         advances only after a record has been delivered successfully.

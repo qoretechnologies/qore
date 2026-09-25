@@ -36,13 +36,83 @@
 
 %requires KitRestClient
 %requires KitDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class KitDataProviderTest
+
+#! A local Kit API server that records requests
+class FakeKitHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "apikey": hdr."x-kit-api-key",
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"errors": ("rate limited",)}),
+            };
+        }
+        if (hdr.method == "POST" && hdr.path == "v4/tags") {
+            hash<auto> req = parse_json(body.toString());
+            if (req.name == "invalid") {
+                return <HttpResponseInfo>{
+                    "code": 422,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({"errors": ("Name is invalid",)}),
+                };
+            }
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"tag": {"id": 5, "name": req.name}}),
+            };
+        }
+        if (hdr.method == "GET" && hdr.path =~ /^v4\/tags\?/) {
+            # the second page is requested with the cursor returned with the first page
+            if (hdr.path =~ /after=c1/) {
+                return <HttpResponseInfo>{
+                    "code": 200,
+                    "hdr": {"Content-Type": MimeTypeJson},
+                    "body": make_json({
+                        "tags": ({"id": 2, "name": "second"},),
+                        "pagination": {"has_next_page": False},
+                    }),
+                };
+            }
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({
+                    "tags": ({"id": 1, "name": "first"},),
+                    "pagination": {"has_next_page": True, "end_cursor": "c1"},
+                }),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 404,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"errors": ("Not Found",)}),
+        };
+    }
+}
 
 public class KitDataProviderTest inherits QUnit::Test {
     private {
         #! Kit REST client for integration tests
-        *KitRestClient::KitRestClient client;
+        *KitRestClient::KitRestClientIo client;
 
         #! Custom command-line options
         const MyOpts = Opts + {
@@ -66,6 +136,7 @@ public class KitDataProviderTest inherits QUnit::Test {
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("semantic string type tests", \semanticStringTypeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require Kit credentials)
         addTestCase("tag CRUD tests", \tagCrudTests());
@@ -100,7 +171,7 @@ public class KitDataProviderTest inherits QUnit::Test {
         if (conn_name) {
             AbstractConnection conn = get_connection(conn_name);
             if (conn instanceof KitRestClient::KitRestConnection) {
-                client = (cast<KitRestClient::KitRestConnection>(conn)).get(True);
+                client = (cast<KitRestClient::KitRestConnection>(conn)).getAsync();
             }
             return;
         }
@@ -112,11 +183,11 @@ public class KitDataProviderTest inherits QUnit::Test {
         *string refresh_token = ENV.KIT_OAUTH2_REFRESH_TOKEN;
 
         if (apikey) {
-            client = new KitRestClient::KitRestClient({"apikey": apikey});
+            client = new KitRestClient::KitRestClientIo({"apikey": apikey});
         } else if (token) {
-            client = new KitRestClient::KitRestClient({"token": token});
+            client = new KitRestClient::KitRestClientIo({"token": token});
         } else if (client_id && client_secret && refresh_token) {
-            client = new KitRestClient::KitRestClient({
+            client = new KitRestClient::KitRestClientIo({
                 "oauth2_client_id": client_id,
                 "oauth2_client_secret": client_secret,
                 "oauth2_refresh_token": refresh_token,
@@ -268,6 +339,69 @@ public class KitDataProviderTest inherits QUnit::Test {
 
         hash<auto> scheme = ConnectionSchemeCache::getScheme("kitrest");
         assertEq("Kit REST Connection", scheme.display_name);
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeKitHandler handler();
+        server.setHandler("kit", "", NOTHING, handler);
+        server.setDefaultHandler("kit", handler);
+
+        KitDataProvider::KitDataProvider provider({
+            "kitrestclient_options": {
+                "url": "http://localhost:" + port + "/v4",
+                "apikey": "test-key",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof KitRestClient::KitRestClientIo);
+        AbstractDataProvider tags = provider.getChildProviderPath("tags");
+
+        # the request is sent with the async client and the response is returned
+        auto result = tags.getChildProvider("create").doRequest({"name": "qore"});
+        assertEq({"id": 5, "name": "qore"}, result);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("v4/tags", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+        assertEq({"name": "qore"}, handler.requests[0].body);
+
+        # records are read from all pages with GET requests without a body
+        handler.requests = ();
+        AbstractDataProviderRecordIterator i = tags.searchRecords();
+        list<hash<auto>> records = map $1, i;
+        assertEq(({"id": 1, "name": "first"}, {"id": 2, "name": "second"}), records);
+        assertEq(2, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertRegex("^v4/tags\\?", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+        assertNothing(handler.requests[0].body);
+        assertRegex("after=c1", handler.requests[1].path);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        result = tags.getChildProvider("create").doRequest({"name": "retry"});
+        assertEq({"id": 5, "name": "retry"}, result);
+        assertEq(2, handler.requests.size());
+        assertEq(handler.requests[0], handler.requests[1]);
+
+        # an error response is raised with the response
+        handler.requests = ();
+        try {
+            tags.getChildProvider("create").doRequest({"name": "invalid"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(422, ex.arg.status_code);
+            assertEq(("Name is invalid",), ex.arg.body.errors);
+        }
+        # an error response other than 429 is not retried
+        assertEq(1, handler.requests.size());
     }
 
     # ========== INTEGRATION TESTS ==========

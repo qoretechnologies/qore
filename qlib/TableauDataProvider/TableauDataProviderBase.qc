@@ -28,20 +28,28 @@ public namespace TableauDataProvider {
 #! Base class for Tableau data providers
 public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Tableau data providers
         const BaseConstructorOptions = {
             "tableaurestclient": <DataProviderOptionInfo>{
                 "display_name": "Tableau REST Client",
-                "short_desc": "The TableauRestClient object",
+                "short_desc": "The TableauRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("TableauRestClient::TableauRestClient")),
-                "desc": "The TableauRestClient object to use for API calls",
+                    new Type("TableauRestClient::TableauRestClientIo")),
+                "desc": "The `TableauRestClientIo` object to use for API calls",
             },
             "tableaurestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Tableau REST Client Options",
-                "short_desc": "Options for creating a TableauRestClient",
+                "short_desc": "Options for creating a TableauRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a TableauRestClient object if one is not provided "
+                "desc": "Options for creating a `TableauRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
 
     private {
         #! The REST client object for API calls
-        TableauRestClient::TableauRestClient rest;
+        TableauRestClient::TableauRestClientIo rest;
 
         #! The connection object, if applicable
         *TableauRestClient::TableauRestConnection conn;
@@ -60,14 +68,14 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(TableauRestClient::TableauRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
             rest = copts.tableaurestclient;
         } else {
             hash<auto> client_opts = copts.tableaurestclient_options ?? {};
-            rest = new TableauRestClient::TableauRestClient(client_opts, True);
+            rest = new TableauRestClient::TableauRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    TableauRestClient::TableauRestClient getRestClient() {
+    TableauRestClient::TableauRestClientIo getRestClient() {
         return rest;
     }
 
@@ -220,24 +228,11 @@ public class TableauDataProviderBase inherits DataProvider::AbstractDataProvider
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "TABLEAU-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "TABLEAU-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

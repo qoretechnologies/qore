@@ -95,6 +95,8 @@ printf("%Y\n", ans.body);
     @section Awsrestclientrelnotes Release Notes
 
     @subsection awsrestclientv1_4 AwsRestClient v1.4
+    - the data provider of a connection uses an @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" and is
+      created without connecting to the server; before, creating the data provider failed without a schema
     - added incremental signed event-stream sessions with response validation, cancellation, and timeouts
     - supports full-duplex uploads with chained SigV4 event signatures and signed terminal envelopes
     - added signed raw-body requests to @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" so schema-driven
@@ -444,7 +446,7 @@ public class AwsRestClientBase {
     }
 
     #! Performs an AWS STS AssumeRole call and returns temporary credentials
-    /** Builds a one-shot @ref AwsRestClient bound to the STS service with
+    /** Builds a one-shot @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" bound to the STS service with
         the supplied base credentials, posts the AssumeRole action, parses
         the XML response, and returns the temporary credentials in a hash.
         Auto-refresh is the caller's responsibility — credentials carry an
@@ -486,8 +488,8 @@ public class AwsRestClientBase {
         string session_name = opts.aws_role_session_name ?? "qore-sdk-session";
         int duration = opts.aws_duration_seconds ?? 3600;
 
-        # Build the STS Query API parameters as a hash so RestClient's
-        # built-in "url" data mode form-encodes them on the wire.
+        # Build the STS Query API parameters as a hash so the client's
+        # "url" data mode form-encodes them on the wire.
         hash<auto> form = {
             "Action": "AssumeRole",
             "Version": "2011-06-15",
@@ -499,28 +501,25 @@ public class AwsRestClientBase {
             form.ExternalId = opts.aws_external_id;
         }
 
-        # Use a one-shot AwsRestClient bound to the STS service; explicitly
-        # drop aws_role_arn so we don't recurse into another AssumeRole call.
+        # Use a one-shot client bound to the STS service that form-encodes the
+        # hash body for the STS Query API; aws_role_arn is not passed, so the
+        # client does not recurse into another AssumeRole call.
         hash<auto> sts_opts = {
             "url": url,
             "aws_keyid": opts.aws_keyid,
             "aws_secret": opts.aws_secret,
             "aws_region": region,
             "aws_service": "sts",
+            "data": "url",
         };
         if (opts.aws_token.val()) {
             sts_opts.aws_token = opts.aws_token;
         }
-        AwsRestClient sts(sts_opts, True);
         hash<auto> resp;
         try {
-            # switch serialization to "url" so RestClient form-encodes the
-            # hash body for the STS Query API (AwsRestClient hardcodes
-            # data="json" on its parent at construction; we restore on exit)
-            string saved_ds = sts.getSerialization();
-            on_exit sts.setSerialization(saved_ds);
-            sts.setSerialization("url");
-            resp = sts.post("/", form);
+            AwsRestClientIo sts(sts_opts);
+            on_exit sts.close();
+            resp = sts.restPost("/", form);
         } catch (hash<ExceptionInfo> ex) {
             throw "AWSRESTCLIENT-STS-ERROR",
                 sprintf("AssumeRole call to %y failed: %s", url, ex.desc), ex;
@@ -1454,8 +1453,8 @@ public class AwsRestConnection inherits RestClient::RestConnection {
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         if (opts.validator || opts.swagger) {
-            # get a REST client object without connecting
-            AwsRestClient rest = get(False);
+            # get an async REST client object without connecting
+            AwsRestClientIo rest = getAsync(False);
             # get any validator
             *AbstractRestSchemaValidator validator = rest.getValidator();
             if (validator) {
@@ -1467,7 +1466,7 @@ public class AwsRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the RestClientDataProvider and creates the data provider
         # object dynamically
         load_module("AwsRestClientDataProvider");
-        return create_object("AwsRestClientDataProvider", get());
+        return create_object("AwsRestClientDataProvider", getAsync());
     }
 
     #! returns @ref True, as this connection always returns a data provider with the \c getDataProvider() method

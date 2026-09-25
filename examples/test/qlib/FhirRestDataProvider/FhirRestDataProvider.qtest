@@ -31,6 +31,7 @@
 %requires Logger
 %requires FhirRestClient
 %requires FhirRestDataProvider
+%requires RestClient
 %exec-class FhirRestDataProviderTest
 
 const TestFhirMimeTypeJson = "application/fhir+json";
@@ -82,6 +83,52 @@ class TestFhirProviderHandler inherits AbstractHttpRequestHandler {
                 "id": "pat-1",
                 "active": True,
             }, {"ETag": "W/\"1\""});
+        }
+
+        if (hdr.method == "GET" && path == "Patient/secure") {
+            if (hdr.authorization != "Bearer secret-token") {
+                return fhirResponse(401, {
+                    "resourceType": "OperationOutcome",
+                    "issue": ({
+                        "severity": "error",
+                        "code": "login",
+                        "diagnostics": "Authentication required",
+                    },),
+                });
+            }
+            return fhirResponse(200, {
+                "resourceType": "Patient",
+                "id": "secure",
+                "requestAccept": hdr.accept,
+            });
+        }
+
+        # the first page links to the next one with an absolute URL whose query has characters that are not valid
+        # in a request target
+        if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "abs1") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "link": ({
+                    "relation": "next",
+                    "url": sprintf("http://%s/fhir/Patient?page=abs2&identifier=http://example.org/mrn|a b",
+                        hdr.host),
+                },),
+                "entry": ({"resource": {"resourceType": "Patient", "id": "abs-1"}},),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "abs2") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "entry": ({"resource": {
+                    "resourceType": "Patient",
+                    "id": "abs-2",
+                    "requestPath": hdr.path,
+                    "requestIdentifier": parsed.params.identifier,
+                }},),
+            });
         }
 
         if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "2") {
@@ -277,6 +324,10 @@ class FhirRestDataProviderTest inherits QUnit::Test {
         addTestCase("generated resource data types test", \generatedResourceDataTypesTest());
         addTestCase("terminology actions test", \terminologyActionsTest());
         addTestCase("negative constructor test", \negativeConstructorTest());
+        addTestCase("async client test", \asyncClientTest());
+        addTestCase("absolute pagination link test", \absolutePaginationLinkTest());
+        addTestCase("operation outcome error test", \operationOutcomeErrorTest());
+        addTestCase("authentication header test", \authenticationHeaderTest());
 
         set_return_value(main());
     }
@@ -471,7 +522,7 @@ class FhirRestDataProviderTest inherits QUnit::Test {
         });
         assertEq(200, conditional.status_code);
         assertEq("Patient", conditional.body.requestBodyType);
-        assertEq("http%3A%2F%2Fexample.org%2Fmrn%7C123", conditional.body.queryIdentifier);
+        assertEq("http://example.org/mrn|123", conditional.body.queryIdentifier);
 
         hash<auto> patched = resources.getChildProviderEx("patch").doRequest({
             "resource_type": "Patient",
@@ -739,5 +790,127 @@ class FhirRestDataProviderTest inherits QUnit::Test {
         assertThrows("FHIR-DATA-PROVIDER-ERROR", sub () {
             new FhirRestDataProvider::FhirRestDataProvider({});
         });
+        assertThrows("FHIR-DATA-PROVIDER-ERROR", "must be a FhirRestClientIo or a FhirRestClient", sub () {
+            new FhirRestDataProvider::FhirRestDataProvider({
+                "fhir": new RestClient::RestClient({"url": base_url}, True),
+            });
+        });
+    }
+
+    asyncClientTest() {
+        # a client created for the url option
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        FhirRestClient::FhirRestClientIo client = provider.getFhirClient();
+        assertEq(base_url, client.getUrl());
+        assertEq("FHIR REST data provider for " + base_url, provider.getDesc());
+
+        # an async client is used as-is
+        FhirRestClient::FhirRestClientIo io_client({"url": base_url, "token": "secret-token"});
+        provider = new FhirRestDataProvider::FhirRestDataProvider(io_client);
+        assertTrue(provider.getFhirClient() == io_client);
+        provider = new FhirRestDataProvider::FhirRestDataProvider({"fhir": io_client});
+        assertTrue(provider.getFhirClient() == io_client);
+
+        # a synchronous client is converted with its options, token, and connection path
+        FhirRestClient::FhirRestClient sync_client({"url": base_url, "token": "secret-token"}, True);
+        foreach FhirRestDataProvider::FhirRestDataProvider sync_provider in (
+                new FhirRestDataProvider::FhirRestDataProvider(sync_client),
+                new FhirRestDataProvider::FhirRestDataProvider({"fhir": sync_client})) {
+            FhirRestClient::FhirRestClientIo converted = sync_provider.getFhirClient();
+            assertEq(base_url, converted.getUrl());
+            assertEq("/fhir", converted.getConnectionPath());
+            hash<auto> patient = sync_provider.getChildProviderEx("resources").getChildProviderEx("read")
+                .doRequest({
+                    "resource_type": "Patient",
+                    "id": "secure",
+                });
+            assertEq("secure", patient.id);
+            assertEq(TestFhirMimeTypeJson, patient.requestAccept);
+        }
+
+        FhirRestClient::FhirRestClientIo converted = FhirRestDataProvider::FhirRestDataProviderBase::getAsyncClient(
+            sync_client);
+        assertEq("secret-token", converted.getToken());
+    }
+
+    absolutePaginationLinkTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        hash<auto> all = provider.getChildProviderEx("resources").getChildProviderEx("search-all").doRequest({
+            "resource_type": "Patient",
+            "params": {
+                "page": "abs1",
+            },
+        });
+        assertEq(("abs-1", "abs-2"), (map $1.resource.id, all.entry));
+        # the link is followed by its path, with the characters that are not valid in a request target
+        # percent-encoded
+        assertEq("fhir/Patient?page=abs2&identifier=http://example.org/mrn%7Ca%20b",
+            all.entry[1].resource.requestPath);
+        assertEq("http://example.org/mrn|a b", all.entry[1].resource.requestIdentifier);
+
+        hash<auto> bundle = provider.getChildProviderEx("resources").getChildProviderEx("search").doRequest({
+            "resource_type": "Patient",
+            "params": {
+                "identifier": "http://example.org/mrn|a b",
+            },
+        });
+        # search parameters are percent-encoded once
+        assertEq("http://example.org/mrn|a b", bundle.query.identifier);
+    }
+
+    operationOutcomeErrorTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url});
+        try {
+            provider.getChildProviderEx("resources").getChildProviderEx("read").doRequest({
+                "resource_type": "Patient",
+                "id": "missing",
+            });
+            assertTrue(False, "expected FHIR-OPERATION-OUTCOME");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FHIR-OPERATION-OUTCOME", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("not-found", ex.arg.outcome.issue[0].code);
+            assertEq("error/not-found: No route for GET Patient/missing", ex.desc);
+        }
+
+        # also with error responses raised by the REST client
+        provider = new FhirRestDataProvider::FhirRestDataProvider({
+            "url": base_url,
+            "client_options": {"error_passthru": False},
+        });
+        try {
+            provider.getChildProviderEx("resources").getChildProviderEx("read").doRequest({
+                "resource_type": "Patient",
+                "id": "missing",
+            });
+            assertTrue(False, "expected FHIR-OPERATION-OUTCOME");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FHIR-OPERATION-OUTCOME", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertRegex("^application/fhir\\+json", ex.arg.headers."content-type");
+        }
+    }
+
+    authenticationHeaderTest() {
+        FhirRestDataProvider::FhirRestDataProvider provider({"url": base_url, "token": "secret-token"});
+        hash<auto> patient = provider.getChildProviderEx("resources").getChildProviderEx("read").doRequest({
+            "resource_type": "Patient",
+            "id": "secure",
+        });
+        assertEq("secure", patient.id);
+        assertEq(TestFhirMimeTypeJson, patient.requestAccept);
+
+        provider = new FhirRestDataProvider::FhirRestDataProvider({"url": base_url});
+        try {
+            provider.getChildProviderEx("resources").getChildProviderEx("read").doRequest({
+                "resource_type": "Patient",
+                "id": "secure",
+            });
+            assertTrue(False, "expected FHIR-OPERATION-OUTCOME");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("FHIR-OPERATION-OUTCOME", ex.err);
+            assertEq(401, ex.arg.status_code);
+            assertEq("login", ex.arg.outcome.issue[0].code);
+        }
     }
 }

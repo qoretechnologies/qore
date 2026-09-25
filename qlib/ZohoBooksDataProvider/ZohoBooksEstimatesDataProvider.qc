@@ -25,7 +25,7 @@ public class ZohoBooksEstimatesDataProvider inherits ZohoBooksDataProviderBase {
             },
         };
     }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "estimates"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksEstimateDataType().getFields(); }
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
@@ -41,7 +41,7 @@ public class ZohoBooksEstimatesDataProvider inherits ZohoBooksDataProviderBase {
 
 public class ZohoBooksCreateEstimateDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "create-estimate", "desc": "Creates an estimate", "type": "ZohoBooksCreateEstimateDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-estimate"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksEstimateDataType(); }
@@ -51,7 +51,7 @@ public class ZohoBooksCreateEstimateDataProvider inherits ZohoBooksDataProviderB
 
 public class ZohoBooksUpdateEstimateDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "update-estimate", "desc": "Updates an estimate", "type": "ZohoBooksUpdateEstimateDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-estimate"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksEstimateDataType(); }
@@ -65,7 +65,7 @@ public class ZohoBooksUpdateEstimateDataProvider inherits ZohoBooksDataProviderB
 
 public class ZohoBooksGetEstimateDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "get-estimate", "desc": "Gets an estimate", "type": "ZohoBooksGetEstimateDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-estimate"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksEstimateDataType(); }

@@ -86,11 +86,11 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.item_id) {
             item_id = options.item_id;
         }
@@ -118,7 +118,7 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.item_id ?? request_options.item_id ?? item_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "item_id is required for mark-item-active operation";
@@ -128,7 +128,7 @@ public class ZohoInventoryMarkItemActiveDataProvider inherits ZohoInventoryDataP
         }
 
         string status = req.active ? "active" : "inactive";
-        return doPost(sprintf("/items/%s/%s", id, status));
+        return doPost(sprintf("/items/%s/%s", id, status), NOTHING, org_id);
     }
 
     #! Returns static provider info

@@ -103,7 +103,7 @@ public class SquarespaceUpdateProductDataProvider inherits SquarespaceDataProvid
         const ConstructorOptions = BaseConstructorOptions;
     }
 
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest) : SquarespaceDataProviderBase(rest) {
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest) : SquarespaceDataProviderBase(rest) {
     }
 
     string getName() {

@@ -74,7 +74,7 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(UnleashedRestClient::UnleashedRestClient rest, *hash<auto> options)
+    constructor(UnleashedRestClient::UnleashedRestClientIo rest, *hash<auto> options)
             : UnleashedDataProviderBase(rest),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
         configured_since = options.since;
@@ -100,11 +100,6 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
     #! Destructor
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! Performs a single polling operation

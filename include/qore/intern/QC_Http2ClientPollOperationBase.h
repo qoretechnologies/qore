@@ -274,6 +274,18 @@ public:
         }
     }
 
+    //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
+    /** The session reads the value from the socket when a response is complete; see
+        qore_socket_private::http_assumed_encoding
+
+        @param enc the assumed encoding; nullptr means ISO-8859-1
+    */
+    DLLLOCAL void setAssumedEncoding(const QoreEncoding* enc) {
+        if (sock_obj) {
+            sock_obj->setHttpAssumedEncoding(enc);
+        }
+    }
+
     DLLLOCAL void setIdleTimeout(int64_t timeout_us) {
         idle_timeout_us = timeout_us;
     }

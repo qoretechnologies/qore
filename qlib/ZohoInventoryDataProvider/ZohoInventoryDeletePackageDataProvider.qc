@@ -79,11 +79,11 @@ public class ZohoInventoryDeletePackageDataProvider inherits ZohoInventoryDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.package_id) {
             package_id = options.package_id;
         }
@@ -111,12 +111,12 @@ public class ZohoInventoryDeletePackageDataProvider inherits ZohoInventoryDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.package_id ?? request_options.package_id ?? package_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "package_id is required for delete operation";
         }
-        return doDelete(sprintf("/packages/%s", id));
+        return doDelete(sprintf("/packages/%s", id), org_id);
     }
 
     #! Returns static provider info

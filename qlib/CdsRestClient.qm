@@ -328,15 +328,84 @@ public class CdsRestClientBase {
         throw "CDSRESTCLIENT-ERROR", vsprintf(fmt, argv);
     }
 
-    #! returns options for the CdsRestClient constructors
-    #! Returns @ref True if the given URL still targets the Global Discovery Service
-    /** A connection targeting the discovery service has not been given an environment yet, which is what
-        says the discovery is still to be done.
+    #! Returns the API settings for the given client options
+    /** @param opts the client options
 
-        @param url the URL to check
+        @return a hash with the following keys:
+        - \c api: the API version
+        - \c api_profile: the API profile name, if any
+        - \c profile: the API profile definition, if any
+        - \c instance_type: the Business Central instance type, if required by the profile
+        - \c tenant: the tenant ID (default: \c "common")
+        - \c uri_path_pfx: the URI path prefix of API calls; the connection path is the prefix followed by the API
+          version if the prefix is not empty
 
-        @since CdsRestClient 1.1
+        @throw CDSRESTCLIENT-ERROR the API profile is unknown, or a required instance type is missing
+
+        @since CdsRestClient 2.2
     */
+    static hash<auto> getApiSettings(hash<auto> opts) {
+        # the values have different types, so the hash must not take the narrow type of the initial values
+        hash<auto!> rv = {
+            "api_profile": opts.api_profile,
+            "tenant": ConnectionProvider::OptionHelper::getString(opts, "tenant") ?? "common",
+        };
+        *hash<CdsApiProfile> profile = ApiProfileMap{opts.api_profile};
+        if (profile) {
+            rv.profile = profile;
+            rv.api = ConnectionProvider::OptionHelper::getString(opts, "api") ?? profile.default_api_version;
+            if (profile.requires_instance_type) {
+                rv.instance_type = ConnectionProvider::OptionHelper::getString(opts, "instance_type");
+                if (!rv.instance_type) {
+                    raiseError("missing the required \"instance_type\" option for %s", profile.display_name);
+                }
+            }
+            rv.uri_path_pfx = profile.uri_path_prefix;
+        } else if (opts.api_profile && opts.api_profile != "none") {
+            raiseError("unknown api_profile %y; known profiles: %y", opts.api_profile, keys ApiProfileMap);
+        } else {
+            # No profile - use Dynamics defaults for backward compatibility
+            rv.api = ConnectionProvider::OptionHelper::getString(opts, "api")
+                ?? DynamicsProfile.default_api_version;
+            rv.uri_path_pfx = DynamicsProfile.uri_path_prefix;
+        }
+        return rv;
+    }
+
+    #! Returns the OAuth2 URL for the tenant if the URL is \c "auto"
+    /** @param url the OAuth2 URL option value
+        @param tenant the tenant ID
+        @param suffix the URI path suffix of the OAuth2 URL (@ref OAuth2AuthUriPathSuffix or
+        @ref OAuth2TokenUriPathSuffix)
+
+        @return the OAuth2 URL
+
+        @since CdsRestClient 2.2
+    */
+    static *string resolveOAuth2Url(*string url, string tenant, string suffix) {
+        return url == "auto" ? OAuth2BaseUrl + tenant + suffix : url;
+    }
+
+    #! Raises the CDS error of an error response, if any
+    /** @param ex the exception raised for the error response
+        @param body the decoded response body
+
+        @throw <error code> the CDS error code, with the error message as the description and the error hash from
+        the server plus a \c decoded_body argument with the decoded response body as the argument
+
+        @since CdsRestClient 2.2
+    */
+    static checkCdsError(hash<ExceptionInfo> ex, auto body) {
+        if (body.error && body.size() == 1
+                && body.error."code".typeCode() == NT_STRING
+                && body.error.message.typeCode() == NT_STRING) {
+            hash<auto> error = body.error;
+            string errcode = remove error."code";
+            string msg = remove error.message;
+            throw errcode, msg, error + (ex.arg.typeCode() == NT_HASH ? ex.arg : {}) + {"decoded_body": body};
+        }
+    }
+
     #! Returns @ref True if the connection has not been pointed at an environment yet
     /** True while the connection still targets the discovery service, and also for the placeholder URL the
         platform assigns when it has no default to use - a connection on either has no environment, which is
@@ -374,6 +443,14 @@ public class CdsRestClientBase {
         return m[0];
     }
 
+    #! Returns @ref True if the given URL still targets the Global Discovery Service
+    /** A connection targeting the discovery service has not been given an environment yet, which is what
+        says the discovery is still to be done.
+
+        @param url the URL to check
+
+        @since CdsRestClient 1.1
+    */
     static bool isDiscoveryUrl(*string url) {
         if (!url.val()) {
             return False;
@@ -588,6 +665,7 @@ public class CdsRestClientBase {
         return scope;
     }
 
+    #! returns options for the CdsRestClient constructors
     static hash<auto> getOptions(hash<auto> opts0) {
         # create an untyped hash to avoid type constraints from the input hash
         hash<auto> opts += opts0;
@@ -703,35 +781,18 @@ CdsRestClient rest({
             raiseError("missing the \"oauth2_client_id\" and \"oauth2_client_secret\" options");
         }
 
-        api_profile = opts.api_profile;
-        profile = ApiProfileMap{api_profile};
-        tenant = getString(opts, "tenant") ?? "common";
+        hash<auto> settings = CdsRestClientBase::getApiSettings(opts);
+        api_profile = settings.api_profile;
+        profile = settings.profile;
+        tenant = settings.tenant;
+        api = settings.api;
+        instance_type = settings.instance_type;
+        uri_path_pfx = settings.uri_path_pfx;
 
-        if (oauth2_token_url == "auto") {
-            oauth2_token_url = OAuth2BaseUrl + tenant + OAuth2TokenUriPathSuffix;
-        }
-        if (oauth2_auth_url == "auto") {
-            oauth2_auth_url = OAuth2BaseUrl + tenant + OAuth2AuthUriPathSuffix;
-        }
+        oauth2_token_url = CdsRestClientBase::resolveOAuth2Url(oauth2_token_url, tenant, OAuth2TokenUriPathSuffix);
+        oauth2_auth_url = CdsRestClientBase::resolveOAuth2Url(oauth2_auth_url, tenant, OAuth2AuthUriPathSuffix);
 
-        if (profile) {
-            api = getString(opts, "api") ?? profile.default_api_version;
-            if (profile.requires_instance_type) {
-                instance_type = getString(opts, "instance_type");
-                if (!instance_type) {
-                    raiseError("missing the required \"instance_type\" option for %s", profile.display_name);
-                }
-            }
-            uri_path_pfx = profile.uri_path_prefix;
-            if (uri_path_pfx) {
-                setConnectionPath(uri_path_pfx + api);
-            }
-        } else if (api_profile && api_profile != "none") {
-            raiseError("unknown api_profile %y; known profiles: %y", api_profile, keys ApiProfileMap);
-        } else {
-            # No profile - use Dynamics defaults for backward compatibility
-            api = getString(opts, "api") ?? DynamicsProfile.default_api_version;
-            uri_path_pfx = DynamicsProfile.uri_path_prefix;
+        if (uri_path_pfx) {
             setConnectionPath(uri_path_pfx + api);
         }
 
@@ -783,14 +844,7 @@ CdsRestClient rest({
                 shdr, signer);
         } catch (hash<ExceptionInfo> ex) {
             # throw an exception for the CDS error
-            if (info."response-body".error && info."response-body".size() == 1
-                && info."response-body".error."code".typeCode() == NT_STRING
-                && info."response-body".error.message.typeCode() == NT_STRING) {
-                hash<auto> error = info."response-body".error;
-                string errcode = remove error."code";
-                string msg = remove error.message;
-                throw errcode, msg, error + ex.arg + {"decoded_body": info."response-body"};
-            }
+            CdsRestClientBase::checkCdsError(ex, info."response-body");
             rethrow;
         }
     }
@@ -804,14 +858,7 @@ CdsRestClient rest({
             return RestClient::processAsyncResponse(resp, method, path, \info, decode_errors);
         } catch (hash<ExceptionInfo> ex) {
             # throw an exception for the CDS error
-            if (info."response-body".error && info."response-body".size() == 1
-                    && info."response-body".error."code".typeCode() == NT_STRING
-                    && info."response-body".error.message.typeCode() == NT_STRING) {
-                hash<auto> error = info."response-body".error;
-                string errcode = remove error."code";
-                string msg = remove error.message;
-                throw errcode, msg, error + ex.arg + {"decoded_body": info."response-body"};
-            }
+            CdsRestClientBase::checkCdsError(ex, info."response-body");
             rethrow;
         }
     }
@@ -1477,25 +1524,122 @@ public class BusinessCentralRestConnection inherits CdsRestConnection {
 
 #! CDS REST client for non-blocking I/O
 public class CdsRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientBase {
-    #! Creates the object with the given options
-    /** @param opts constructor options
-        @param shared_mgr optional shared connection manager
-    */
-    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClientBase::getOptions(opts), shared_mgr) {
+    private:internal {
+        #! API version
+        string api;
+        #! URI path prefix for API calls
+        *string uri_path_pfx;
+        #! API profile
+        *string api_profile;
+        #! API profile definition
+        *hash<CdsApiProfile> profile;
+        #! Instance type for Business Central (sandbox, production, or GUID)
+        *string instance_type;
+        #! Tenant ID
+        string tenant;
     }
-}
 
-#! Dynamics REST client for non-blocking I/O
-public class DynamicsRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientBase {
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts the options of @ref CdsRestClient::constructor() "CdsRestClient::constructor()" and the
+        options of @ref RestClientIo::RestClientIo::constructor() "RestClientIo::constructor()"; OAuth2 URLs set to
+        \c "auto" (the default) are the Microsoft identity platform URLs of the tenant, and the connection path is
+        set from the API profile, as with @ref CdsRestClient
         @param shared_mgr optional shared connection manager
+
+        @throw CDSRESTCLIENT-ERROR missing or invalid required option for REST authentication or communication
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClientBase::getOptions(opts + {
-                "api_profile": CdsRestClient::DynamicsProfile.name,
-            }), shared_mgr) {
+            : RestClientIo(CdsRestClientIo::getIoOptions(opts), shared_mgr) {
+        hash<auto> settings = CdsRestClientBase::getApiSettings(opts);
+        api_profile = settings.api_profile;
+        profile = settings.profile;
+        tenant = settings.tenant;
+        api = settings.api;
+        instance_type = settings.instance_type;
+        uri_path_pfx = settings.uri_path_pfx;
+        if (uri_path_pfx) {
+            setConnectionPath(uri_path_pfx + api);
+        }
+    }
+
+    #! Returns the CDS REST API version currently in use
+    /** @since CdsRestClient 2.2
+    */
+    string getApi() {
+        return api;
+    }
+
+    #! Returns the API profile name in use
+    /** @since CdsRestClient 2.2
+    */
+    *string getApiProfile() {
+        return api_profile;
+    }
+
+    #! Returns the API profile definition in use
+    /** @since CdsRestClient 2.2
+    */
+    *hash<CdsApiProfile> getProfile() {
+        return profile;
+    }
+
+    #! Returns the Business Central instance type (only set for the Business Central profile)
+    /** @since CdsRestClient 2.2
+    */
+    *string getInstanceType() {
+        return instance_type;
+    }
+
+    #! Returns the tenant ID
+    /** @since CdsRestClient 2.2
+    */
+    string getTenant() {
+        return tenant;
+    }
+
+    #! Returns the URI path prefix
+    /** @since CdsRestClient 2.2
+    */
+    *string getUriPathPrefix() {
+        return uri_path_pfx;
+    }
+
+    #! Returns the client options with the OAuth2 URLs of the tenant
+    /** @param opts the client options
+
+        @return the options for the @ref RestClientIo::RestClientIo "RestClientIo" constructor
+
+        @throw CDSRESTCLIENT-ERROR the OAuth2 client ID and secret are missing
+    */
+    private static hash<auto> getIoOptions(hash<auto> opts) {
+        hash<auto> rv = CdsRestClientBase::getOptions(opts);
+        # check for the OAuth2 client id/secret options
+        if (!rv.oauth2_client_id || !rv.oauth2_client_secret) {
+            raiseError("missing the \"oauth2_client_id\" and \"oauth2_client_secret\" options");
+        }
+        string tenant = ConnectionProvider::OptionHelper::getString(opts, "tenant") ?? "common";
+        rv.oauth2_token_url = CdsRestClientBase::resolveOAuth2Url(rv.oauth2_token_url, tenant,
+            OAuth2TokenUriPathSuffix);
+        rv.oauth2_auth_url = CdsRestClientBase::resolveOAuth2Url(rv.oauth2_auth_url, tenant,
+            OAuth2AuthUriPathSuffix);
+        return rv;
+    }
+
+    #! Builds the response and raises CDS errors
+    /** An error response with a CDS error raises the CDS error code, as with @ref CdsRestClient
+    */
+    private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw, bool req_error_passthru,
+            bool req_allow_any_response, string method, string path, *hash<auto> request_headers,
+            *data request_body) {
+        try {
+            return RestClientIo::buildResponse(raw, req_error_passthru, req_allow_any_response, method, path,
+                request_headers, request_body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
+                CdsRestClientBase::checkCdsError(ex, ex.arg.body);
+            }
+            rethrow;
+        }
     }
 
     #! Returns options to update after an OAuth2 login, discovering the environment on the first one
@@ -1511,16 +1655,25 @@ public class DynamicsRestClientIo inherits RestClientIo::RestClientIo, CdsRestCl
     }
 }
 
-#! Business Central REST client for non-blocking I/O
-public class BusinessCentralRestClientIo inherits RestClientIo::RestClientIo, CdsRestClientBase {
+#! Dynamics REST client for non-blocking I/O
+public class DynamicsRestClientIo inherits CdsRestClientIo {
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts constructor options; the API profile is always the Dynamics profile
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(CdsRestClientBase::getOptions(opts + {
-                "api_profile": CdsRestClient::BusinessCentralProfile.name,
-            }), shared_mgr) {
+            : CdsRestClientIo(opts + {"api_profile": CdsRestClient::DynamicsProfile.name}, shared_mgr) {
+    }
+}
+
+#! Business Central REST client for non-blocking I/O
+public class BusinessCentralRestClientIo inherits CdsRestClientIo {
+    #! Creates the object with the given options
+    /** @param opts constructor options; the API profile is always the Business Central profile
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : CdsRestClientIo(opts + {"api_profile": CdsRestClient::BusinessCentralProfile.name}, shared_mgr) {
     }
 }
 }

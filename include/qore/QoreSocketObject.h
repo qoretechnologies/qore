@@ -775,6 +775,13 @@ public:
     */
     DLLLOCAL void setMaxResponseBodySize(int64 size);
 
+    //! Sets the encoding assumed for text HTTP/2 response bodies whose encoding is not determined otherwise
+    /** Can be called from any thread; client sessions on this socket read the value when a response is complete.
+
+        @param enc the assumed encoding; nullptr means ISO-8859-1
+    */
+    DLLLOCAL void setHttpAssumedEncoding(const QoreEncoding* enc);
+
     //! Sets the maximum request body size for HTTP/2 streams (0 = unlimited)
     DLLEXPORT void setHttp2MaxRequestBodySize(int64 size);
 

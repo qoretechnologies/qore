@@ -34,6 +34,35 @@ public const DefaultPageSize = 100;
 #! Maximum page size for WooCommerce API
 public const MaxPageSize = 100;
 
+#! Maximum number of retries for a request that failed with a transport error
+public const MaxRetries = 3;
+
+#! Transport errors of the REST client that are retried for all requests, because the request was not sent
+public const RetrySet = {
+    "SOCKET-CONNECT-ERROR": True,
+    "HTTPCLIENT-CONNECT-ERROR": True,
+};
+
+#! Transport errors of the REST client that are retried only for idempotent requests
+/** A request that failed with one of these errors may have been processed by the server, so it is only retried if
+    repeating it has no further effect
+*/
+public const IdempotentRetrySet = RetrySet + {
+    "SOCKET-SSL-ERROR": True,
+    "SOCKET-CLOSED": True,
+    "SOCKET-TIMEOUT": True,
+    "HTTPCLIENT-STREAM-CLOSED": True,
+    "HTTPCLIENT-TIMEOUT": True,
+    "FUTURE-TIMEOUT": True,
+};
+
+#! Idempotent HTTP methods
+public const IdempotentMethods = {
+    "GET": True,
+    "PUT": True,
+    "DELETE": True,
+};
+
 # ---- Order Statuses ----
 
 #! Order status: pending payment

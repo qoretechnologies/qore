@@ -36,7 +36,7 @@ public class ZohoInventoryNewContactWatchDataProvider inherits ZohoInventoryWatc
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-contact"; }
@@ -71,7 +71,7 @@ public class ZohoInventoryNewInvoiceWatchDataProvider inherits ZohoInventoryWatc
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-invoice"; }
@@ -107,7 +107,7 @@ public class ZohoInventoryNewItemAdjustmentWatchDataProvider inherits ZohoInvent
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-item-adjustment"; }
@@ -140,7 +140,7 @@ public class ZohoInventoryNewItemGroupWatchDataProvider inherits ZohoInventoryWa
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-item-group"; }
@@ -173,7 +173,7 @@ public class ZohoInventoryNewItemWatchDataProvider inherits ZohoInventoryWatchDa
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-item"; }
@@ -208,7 +208,7 @@ public class ZohoInventoryNewPackageWatchDataProvider inherits ZohoInventoryWatc
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-package"; }
@@ -241,7 +241,7 @@ public class ZohoInventoryNewPurchaseOrderWatchDataProvider inherits ZohoInvento
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-purchase-order"; }
@@ -276,7 +276,7 @@ public class ZohoInventoryNewSalesOrderWatchDataProvider inherits ZohoInventoryW
         };
     }
 
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-sales-order"; }

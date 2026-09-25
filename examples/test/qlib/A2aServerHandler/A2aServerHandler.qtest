@@ -5,6 +5,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires json
+%requires Util
 %requires QUnit
 %requires HttpServer
 %requires Logger
@@ -13,7 +14,6 @@
 %requires JsonRpcHandler
 %requires A2aClient
 %requires A2aServerHandler
-%requires HttpStreamClient
 
 %exec-class A2aServerHandlerTest
 
@@ -37,12 +37,47 @@ class WebhookCapture inherits AbstractHttpRequestHandler {
             "content_type": hdr."content-type",
             "token": hdr{"x-a2a-notification-token"},
             "body": parsed,
+            "method": hdr.method,
+            "path": cx.raw_path,
+            "authorization": hdr.authorization,
         };
+        if (cx.raw_path =~ /^\/webhook\/fail/) {
+            return makeResponse({"Content-Type": MimeTypeText}, 500, "delivery refused");
+        }
+        if (cx.raw_path =~ /^\/webhook\/redirect/) {
+            return makeResponse({"Location": "/webhook/target"}, 307, "");
+        }
         return makeResponse({"Content-Type": MimeTypeJson}, 200, "{}");
     }
 
     reset() {
         requests = ();
+    }
+}
+
+#! Records log messages so that errors logged by the handler can be asserted
+class LogCapture inherits LoggerAppenderWithLayout {
+    private {
+        list<string> messages;
+        Mutex lck();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            AutoLock al(lck);
+            messages += params;
+        }
+    }
+
+    #! returns the messages logged since the last call and clears them
+    list<string> takeMessages() {
+        AutoLock al(lck);
+        on_exit messages = ();
+        return messages;
     }
 }
 
@@ -56,6 +91,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         HttpServer webhook_http;
         WebhookCapture webhook;
         string webhook_url;
+        LogCapture log_capture;
     }
 
     constructor() : QUnit::Test("A2aServerHandler test", "1.0") {
@@ -74,6 +110,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         addTestCase("json-rpc tasks/get test", \jsonRpcTasksGetTest());
         addTestCase("json-rpc tasks/cancel test", \jsonRpcTasksCancelTest());
         addTestCase("json-rpc push notification config test", \jsonRpcPushNotificationConfigTest());
+        addTestCase("push notification delivery test", \pushNotificationDeliveryTest());
         addTestCase("push notification webhook body v0.3", \pushNotificationWebhookV03Test());
         addTestCase("push notification webhook body v1.0", \pushNotificationWebhookV10Test());
         addTestCase("json-rpc error codes test", \jsonRpcErrorCodesTest());
@@ -149,6 +186,8 @@ class A2aServerHandlerTest inherits QUnit::Test {
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
+        log_capture = new LogCapture();
+        logger.addAppender(log_capture);
 
         handler = new A2aServerHandler(logger, {
             "name": "TestAgent",
@@ -186,6 +225,7 @@ class A2aServerHandlerTest inherits QUnit::Test {
         # separate server used to capture push-notification webhook deliveries
         webhook = new WebhookCapture();
         webhook_http = new HttpServer(http_opts);
+        webhook_http.setHandler("webhook", "", NOTHING, webhook);
         webhook_http.setDefaultHandler("webhook", webhook);
         webhook_url = sprintf("http://localhost:%d/webhook",
             webhook_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
@@ -899,6 +939,58 @@ class A2aServerHandlerTest inherits QUnit::Test {
         }
         assertEq(1, v03_bodies);
         assertEq(1, v10_bodies);
+    }
+
+    #! push notifications are delivered to the webhook URL; delivery failures are logged, not raised
+    pushNotificationDeliveryTest() {
+        webhook.reset();
+        log_capture.takeMessages();
+        A2aClient::A2aClient client(base_url);
+        string webhook_base = (webhook_url =~ x/^(http:\/\/[^\/]+)/)[0];
+
+        # the path and query of the webhook URL are requested, and user information is sent as basic
+        # authentication
+        hash<A2aTaskInfo> task = handler.createTask();
+        client.setPushNotificationConfig(task.id, {
+            "url": replace(webhook_base, "http://", "http://user:pass@") + "/webhook/path?x=1",
+        });
+        handler.updateTaskState(task.id, A2aTaskState::Working);
+        assertEq(1, webhook.requests.size());
+        assertEq("POST", webhook.requests[0].method);
+        assertEq("/webhook/path?x=1", webhook.requests[0].path);
+        assertEq("Basic " + make_base64_string("user:pass"), webhook.requests[0].authorization);
+        assertEq(task.id, webhook.requests[0].body.id);
+        assertEq(0, (select log_capture.takeMessages(), $1 =~ /Push notification delivery failed/).size());
+
+        # a 307 redirect repeats the POST with its body at the new location
+        webhook.reset();
+        task = handler.createTask();
+        client.setPushNotificationConfig(task.id, {"url": webhook_base + "/webhook/redirect"});
+        handler.updateTaskState(task.id, A2aTaskState::Working);
+        assertEq(2, webhook.requests.size());
+        assertEq("/webhook/redirect", webhook.requests[0].path);
+        assertEq("/webhook/target", webhook.requests[1].path);
+        assertEq("POST", webhook.requests[1].method);
+        assertEq(task.id, webhook.requests[1].body.id);
+
+        # an error response is logged
+        webhook.reset();
+        task = handler.createTask();
+        client.setPushNotificationConfig(task.id, {"url": webhook_base + "/webhook/fail"});
+        handler.updateTaskState(task.id, A2aTaskState::Working);
+        assertEq(1, webhook.requests.size());
+        *list<string> errors = select log_capture.takeMessages(), $1 =~ /Push notification delivery failed/;
+        assertEq(1, errors.size());
+        assertRegex("HTTP status code 500", errors[0]);
+
+        # a connection failure is logged, and the state change succeeds
+        task = handler.createTask();
+        client.setPushNotificationConfig(task.id, {"url": sprintf("http://localhost:%d/webhook", get_free_port())});
+        hash<auto> updated = handler.updateTaskState(task.id, A2aTaskState::Working);
+        assertEq("working", updated.status.state);
+        errors = select log_capture.takeMessages(), $1 =~ /Push notification delivery failed/;
+        assertEq(1, errors.size());
+        assertRegex("HTTPCLIENT-CONNECT-ERROR", errors[0]);
     }
 
     jsonRpcPushNotificationConfigTest() {

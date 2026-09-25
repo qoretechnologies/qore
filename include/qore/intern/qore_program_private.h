@@ -489,6 +489,12 @@ public:
     // modules loadded with parse commands
     strset_t parse_modules;
 
+    //! the module requests of %try-module directives that failed, in parse order, without duplicates
+    /** An AOT artifact records them, since its code takes the branch for the module being unavailable; see
+        qoreAOTAppendOptionalModulesTrailer()
+    */
+    std::vector<std::string> unavailable_try_modules;
+
     struct ModuleParseCommand {
         std::string module;
         std::string command;
@@ -1005,6 +1011,14 @@ public:
 
     DLLLOCAL void addParseModule(const char* mod) {
         parse_modules.insert(mod);
+    }
+
+    //! Records the module request of a %try-module directive that failed
+    DLLLOCAL void addUnavailableTryModule(const char* spec) {
+        if (std::find(unavailable_try_modules.begin(), unavailable_try_modules.end(), spec)
+                == unavailable_try_modules.end()) {
+            unavailable_try_modules.emplace_back(spec);
+        }
     }
 
     DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd) {

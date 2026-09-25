@@ -35,7 +35,7 @@ public class FhirValidateCodeDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -70,7 +70,7 @@ public class FhirLookupCodeDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -105,7 +105,7 @@ public class FhirTranslateCodeDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -140,7 +140,7 @@ public class FhirExpandValueSetDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {

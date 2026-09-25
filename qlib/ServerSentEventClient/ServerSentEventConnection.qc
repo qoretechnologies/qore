@@ -198,10 +198,25 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         };
     }
 
+    #! Checks the connection to the SSE server
+    /** Sends the SSE request with the operation returned by @ref startPollConnect() and waits for the response
+        headers on the calling thread; the event stream is closed once the response has been validated.
+
+        @throw SSE-CONNECT-ERROR the response status code is not 200, or the response \c Content-Type is not
+        \c text/event-stream
+        @throw SOCKET-TIMEOUT the response headers were not received in time
+    */
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
         date start = now_us();
-        object o = get();
-        on_exit o.disconnect();
+        AbstractPollOperation op = startPollConnect(logger);
+        on_error op.abort();
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> info = op.continuePoll();
+            if (info) {
+                # the operation raises SOCKET-TIMEOUT when its deadline passes; it wakes at least once a second
+                Socket::poll((info,), info.poll_timeout_ms ?? 1000);
+            }
+        }
         return rv += {
             "ok": True,
             "time": now_us() - start,
@@ -341,77 +356,112 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
 }
 
 #! Poll operation for non-blocking SSE connection verification
-/** Connects to an SSE server and validates the response (200 OK, Content-Type: text/event-stream).
+/** Connects to an SSE server and validates the response (status 200, \c Content-Type: \c text/event-stream).
 
-    Uses the C++ HttpClientPingPollOperationBase for I/O thread fast path.
-    The static @ref create() method creates the HTTPClient, builds SSE headers,
-    starts the header-only streaming poll operation, and passes it to the C++
-    base which handles delegation and response validation (status 200,
-    Content-Type: text/event-stream).
+    The request is made with an
+    @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" (HTTP/1.1, HTTP/2, or HTTP/3 as
+    negotiated or configured with the \c http_version option) using only non-blocking I/O; the operation completes
+    once the response headers have been received, and the event stream is then closed.
+
+    The goal is \c "sse-connect"; the output is the response without a body as described for
+    @ref ConnectionProvider::HttpClientIoPollOperation "HttpClientIoPollOperation".
+
+    Errors raised by @ref continuePoll() in addition to the errors of the transport (for example
+    \c SOCKET-CONNECT-ERROR if the connection is refused and \c SOCKET-TIMEOUT if the response headers are not
+    received in time):
+    - \c SSE-CONNECT-ERROR: the response status code is not 200, or the response \c Content-Type is missing or not
+      \c text/event-stream
 
     @since ServerSentEventClient 1.1
 */
-public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationBase {
-    private {
-        #! Optional logger
-        *Logger::LoggerInterface logger;
-    }
-
-    #! Creates the poll operation from a pre-computed inner poll op
-    /** @param inner_op the inner poll operation from HTTPClient.startPollSendAndStream()
+public class SseConnectPollOperation inherits ConnectionProvider::HttpClientIoPollOperation {
+    #! Creates the poll operation
+    /** @param base_url the SSE URL with an \c http or \c https scheme
+        @param http_opts @ref ConnectionProvider::HttpConnection "HttpConnection" options; see
+        @ref ConnectionProvider::HttpConnection::getAsyncConnectionManager() for the options used for the connection;
+        the \c headers, \c username, \c password, \c max_redirects, \c redirect_passthru, and \c timeout options
+        are used for the request
+        @param headers additional headers for the request
         @param logger optional logger
+        @param sse_method the HTTP method for the request
+        @param sse_body the request body; a binary value is sent serialized with JSON
 
-        @note Use the static @ref create() method to construct this object.
+        @throw HTTP-CLIENT-URL-ERROR the URL has no host or an unsupported scheme
 
         @since ServerSentEventClient 1.1
     */
-    constructor(AbstractPollOperation inner_op, *Logger::LoggerInterface logger) :
-            HttpClientPingPollOperationBase(inner_op, 200, 200, "SSE-CONNECT-ERROR",
-                "content-type", "text/event-stream") {
-        self.logger = logger;
-        # Override the default goal from the base class
-        goal = "sse-connect";
+    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers, *Logger::LoggerInterface logger,
+            string sse_method = "GET", *data sse_body)
+            : HttpClientIoPollOperation(HttpConnection::getAsyncConnectionManager(http_opts, logger), base_url,
+                sse_method,
+                HttpClientIoPollOperation::getRequestHeaders(base_url, http_opts,
+                    SseConnectPollOperation::getSseHeaders(headers, sse_body)),
+                SseConnectPollOperation::getSseBody(sse_body),
+                HttpClientIoPollOperation::getOptions("sse-connect", http_opts, 0), logger) {
+        opts.headers_only = True;
+        if (logger) {
+            logger.logArgs("INFO", "SSE async connect start: url=%y method=%y", (base_url, sse_method));
+        }
     }
 
     #! Creates an SSE connect poll operation
-    /** @param base_url the SSE URL
-        @param http_opts HTTP client options
+    /** @param base_url the SSE URL with an \c http or \c https scheme
+        @param http_opts @ref ConnectionProvider::HttpConnection "HttpConnection" options
         @param headers additional headers for the request
         @param logger optional logger
+        @param sse_method the HTTP method for the request
+        @param sse_body the request body; a binary value is sent serialized with JSON
 
         @return a new SseConnectPollOperation
+
+        @throw HTTP-CLIENT-URL-ERROR the URL has no host or an unsupported scheme
 
         @since ServerSentEventClient 1.1
     */
     static SseConnectPollOperation create(string base_url, *hash<auto> http_opts,
             *hash<auto> headers, *Logger::LoggerInterface logger,
             string sse_method = "GET", *data sse_body) {
-        # Build SSE request headers
+        return new SseConnectPollOperation(base_url, http_opts, headers, logger, sse_method, sse_body);
+    }
+
+    #! Validates the SSE response
+    /** @throw SSE-CONNECT-ERROR the response status code is not 200, or the response \c Content-Type is missing or
+        not \c text/event-stream
+    */
+    private validateResponse(hash<auto> output) {
+        if (output.code != 200) {
+            throw "SSE-CONNECT-ERROR", sprintf("expected status 200, got %d %s", output.code,
+                output.status_message ?? ""), output - "info";
+        }
+        auto ct = output.headers."content-type";
+        if (ct.typeCode() != NT_STRING) {
+            throw "SSE-CONNECT-ERROR", "missing required response header 'content-type'", output - "info";
+        }
+        if (ct.lwr().find(MimeTypeSse) != 0) {
+            throw "SSE-CONNECT-ERROR", sprintf("expected header 'content-type' to start with '%s', got '%s'",
+                MimeTypeSse, ct), output - "info";
+        }
+    }
+
+    #! Returns the request headers for an SSE request
+    private static hash<auto> getSseHeaders(*hash<auto> headers, *data sse_body) {
         hash<auto> sse_headers = {
             "Accept": MimeTypeSse,
             "Cache-Control": "no-cache",
         };
         sse_headers += headers;
-
-        # Serialize body if needed
-        *data send_body;
-        if (exists sse_body) {
-            if (sse_body.typeCode() != NT_STRING) {
-                send_body = make_json(sse_body);
-                if (!sse_headers."Content-Type") {
-                    sse_headers."Content-Type" = MimeTypeJson;
-                }
-            } else {
-                send_body = sse_body;
-            }
+        if (exists sse_body && sse_body.typeCode() != NT_STRING && !sse_headers."Content-Type") {
+            sse_headers."Content-Type" = MimeTypeJson;
         }
+        return sse_headers;
+    }
 
-        HTTPClient hc((http_opts ?? {}) + {"url": base_url});
-        if (logger) {
-            logger.logArgs("INFO", "SSE async connect start: url=%y method=%y", (base_url, sse_method));
+    #! Returns the request body for an SSE request
+    private static *data getSseBody(*data sse_body) {
+        if (exists sse_body && sse_body.typeCode() != NT_STRING) {
+            return make_json(sse_body);
         }
-        auto inner_op = hc.startPollSendAndStream(sse_method, "", send_body, sse_headers);
-        return new SseConnectPollOperation(inner_op, logger);
+        return sse_body;
     }
 }
 }

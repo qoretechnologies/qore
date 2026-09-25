@@ -36,13 +36,75 @@
 
 %requires JotformRestClient
 %requires JotformDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class JotformDataProviderTest
+
+#! A local JotForm API server that records requests
+class FakeJotformHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "apikey": hdr.apikey,
+            "content-type": hdr."content-type",
+            "body": body ? body.toString() : NOTHING,
+        };
+        if (hdr.path == "form/F1/questions" && hdr.method == "GET") {
+            return makeResponse(200, {
+                "responseCode": 200,
+                "content": {
+                    "3": {"qid": "3", "name": "email", "text": "Email", "type": "control_email"},
+                },
+            });
+        }
+        if (hdr.path == "form/F1/submissions" && hdr.method == "POST") {
+            return makeResponse(200, {"responseCode": 200, "content": {"submissionID": "S1"}});
+        }
+        if (hdr.path == "submission/S1" && hdr.method == "GET") {
+            return makeResponse(200, {
+                "responseCode": 200,
+                "content": {"id": "S1", "form_id": "F1", "status": "ACTIVE"},
+            });
+        }
+        if (hdr.path == "submission/S1" && hdr.method == "DELETE") {
+            return makeResponse(200, {"responseCode": 200, "message": "success", "content": "Submission deleted"});
+        }
+        if (hdr.path == "submission/denied" && hdr.method == "DELETE") {
+            # JotForm can report errors in the body of a successful HTTP response
+            return makeResponse(200, {"responseCode": 401, "message": "You are not allowed"});
+        }
+        if (hdr.path =~ /^user\/forms\?/ && hdr.method == "GET") {
+            return makeResponse(200, {
+                "responseCode": 200,
+                "content": (
+                    {"id": "F1", "title": "Contact", "status": "ENABLED"},
+                    {"id": "F2", "title": "Survey", "status": "ENABLED"},
+                ),
+            });
+        }
+        return makeResponse(404, {"responseCode": 404, "message": "Not found"});
+    }
+
+    private static hash<HttpResponseInfo> makeResponse(int code, hash<auto> body) {
+        return <HttpResponseInfo>{
+            "code": code,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(body),
+        };
+    }
+}
 
 public class JotformDataProviderTest inherits QUnit::Test {
     private {
         #! JotForm REST client for integration tests
-        *JotformRestClient::JotformRestClient client;
+        *JotformRestClient::JotformRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -74,6 +136,9 @@ public class JotformDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
+        addTestCase("url option tests", \urlOptionTests());
+        addTestCase("connection url tests", \connectionUrlTests());
 
         # Integration tests (require JOTFORM_TOKEN environment variable or -t option)
         addTestCase("integration tests", \integrationTests());
@@ -106,7 +171,192 @@ public class JotformDataProviderTest inherits QUnit::Test {
         if (m_options.domain) {
             opts.api_domain = m_options.domain;
         }
-        client = new JotformRestClient::JotformRestClient(opts);
+        client = new JotformRestClient::JotformRestClientIo(opts);
+    }
+
+    #! An explicit url option is honored, and copyWithUrl() keeps the credentials
+    urlOptionTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeJotformHandler handler();
+        server.setHandler("jotform", "", NOTHING, handler);
+        server.setDefaultHandler("jotform", handler);
+
+        string url = "http://127.0.0.1:" + port;
+        hash<auto> opts = {"apikey": "test-key", "api_domain": "eu-api.jotform.com"};
+
+        # the url option takes precedence over the URL built by the client
+        JotformRestClient::JotformRestClient rest(opts + {"url": url}, True);
+        assertEq(url, rest.getUrl());
+        rest.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        JotformRestClient::JotformRestClientIo io(opts + {"url": url});
+        assertEq(url, io.getUrl());
+        handler.requests = ();
+        io.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # the processed options are processed again without change
+        hash<auto> processed = JotformRestClient::JotformRestClientBase::getOptions(opts);
+        assertEq("https://eu-api.jotform.com", processed.url);
+        assertEq("test-key", processed.headers.APIKEY);
+        assertEq(processed, JotformRestClient::JotformRestClientBase::getOptions(processed));
+
+        # a copy of the synchronous client keeps the credentials and uses the new URL
+        JotformRestClient::JotformRestClient orig(opts, True);
+        assertEq("https://eu-api.jotform.com", orig.getUrl());
+        RestClient::AbstractRestClient copy = orig.copyWithUrl(url);
+        assertTrue(copy instanceof JotformRestClient::JotformRestClient);
+        assertEq(url, copy.getUrl());
+        assertEq("https://eu-api.jotform.com", orig.getUrl());
+        handler.requests = ();
+        copy.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # a copy of the async client keeps the credentials and uses the new URL
+        JotformRestClient::JotformRestClientIo orig_io(opts);
+        assertEq("https://eu-api.jotform.com", orig_io.getUrl());
+        RestClient::AbstractRestClient copy_io = orig_io.copyWithUrl(url);
+        assertTrue(copy_io instanceof JotformRestClient::JotformRestClientIo);
+        assertEq(url, copy_io.getUrl());
+        handler.requests = ();
+        copy_io.restGet("submission/S1");
+        assertEq(1, handler.requests.size());
+        assertEq("submission/S1", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # the API domain is validated and the API key is required even with an explicit URL
+        assertThrows("JOTFORM-ERROR", sub () {
+            new JotformRestClient::JotformRestClient({"apikey": "x", "api_domain": "invalid.example.com",
+                "url": url}, True);
+        });
+        assertThrows("JOTFORM-ERROR", sub () {
+            new JotformRestClient::JotformRestClientIo({"url": url});
+        });
+    }
+
+    #! Connections produce the URL that the client would derive from the options
+    connectionUrlTests() {
+        # the URL is derived from the API domain for connections created from a config hash
+        JotformRestClient::JotformRestConnection conn({
+            "name": "test",
+            "url": "jotform://api.jotform.com",
+            "opts": {"apikey": "k", "api_domain": "hipaa-api.jotform.com"},
+        });
+        assertEq("jotform://hipaa-api.jotform.com", conn.url);
+        assertEq("https://hipaa-api.jotform.com", conn.getConnectionOptions().url);
+        assertEq("https://hipaa-api.jotform.com", conn.get(False).getUrl());
+        assertEq("https://hipaa-api.jotform.com", conn.getAsync(False).getUrl());
+        assertEq("k", conn.getAsync(False).getConstructorOptions().headers.APIKEY);
+
+        # and for connections created with the default URL
+        conn = new JotformRestClient::JotformRestConnection("test", "test",
+            JotformRestClient::JotformRestConnection::DefaultConnectionUrl, {},
+            {"apikey": "k", "api_domain": "eu-api.jotform.com"});
+        assertEq("https://eu-api.jotform.com", conn.get(False).getUrl());
+        assertEq("https://eu-api.jotform.com", conn.getAsync(False).getUrl());
+
+        conn = new JotformRestClient::JotformRestConnection("test", "test",
+            JotformRestClient::JotformRestConnection::DefaultConnectionUrl, {}, {"apikey": "k"});
+        assertEq("https://api.jotform.com", conn.get(False).getUrl());
+        assertEq("https://api.jotform.com", conn.getAsync(False).getUrl());
+
+        # an explicit connection URL is used by the clients
+        conn = new JotformRestClient::JotformRestConnection("test", "test", "jotform://proxy.example.com", {},
+            {"apikey": "k"});
+        assertEq("https://proxy.example.com", conn.get(False).getUrl());
+        assertEq("https://proxy.example.com", conn.getAsync(False).getUrl());
+
+        # the stored URL is updated to the URL derived from the API domain
+        list<hash<auto>> updates = ();
+        conn = new JotformRestClient::JotformRestConnection("test", "test", "jotform://api.jotform.com", {},
+            {"apikey": "k", "api_domain": "eu-api.jotform.com"});
+        assertEq("jotform://eu-api.jotform.com", conn.url);
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq((), updates);
+        conn = new JotformRestClient::JotformRestConnection("test", "test", "jotform://api.jotform.com/x", {},
+            {"apikey": "k", "api_domain": "eu-api.jotform.com"});
+        conn.setUpdateOptionsCode(sub (hash<auto> new_opts) { updates += new_opts; });
+        assertEq(({"url": "jotform://eu-api.jotform.com"},), updates);
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeJotformHandler handler();
+        server.setHandler("jotform", "", NOTHING, handler);
+        server.setDefaultHandler("jotform", handler);
+
+        JotformRestClient::JotformRestClientIo rest({"apikey": "test-key", "url": "http://localhost:" + port});
+        JotformDataProvider::JotformDataProvider provider(rest);
+        assertTrue(provider.getRestClient() instanceof JotformRestClient::JotformRestClientIo);
+
+        # a submission is created with a form-encoded body sent as-is, and the created submission is returned
+        AbstractDataProvider create = provider.getChildProviderEx("create-submission");
+        string serialization = rest.getSerialization();
+        auto result = create.doRequest({"formID": "F1", "email": "a@b.com"});
+        assertEq({"id": "S1", "form_id": "F1", "status": "ACTIVE"}, result{"id", "form_id", "status"});
+        # the client's serialization is not changed to send the form-encoded body
+        assertEq(serialization, rest.getSerialization());
+        list<hash<auto>> posts = select handler.requests, $1.method == "POST";
+        assertEq(1, posts.size());
+        assertEq("form/F1/submissions", posts[0].path);
+        assertEq("application/x-www-form-urlencoded", posts[0]."content-type");
+        assertEq("submission[3]=a%40b.com", posts[0].body);
+        assertEq("GET", handler.requests.last().method);
+        assertEq("submission/S1", handler.requests.last().path);
+        # every request is authenticated with the API key header
+        assertEq((), select handler.requests, $1.apikey != "test-key");
+
+        # records are retrieved with the record iterator
+        handler.requests = ();
+        list<hash<auto>> forms = map $1, provider.getChildProviderEx("forms").searchRecords();
+        assertEq(("F1", "F2"), map $1.id, forms);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertRegex("^user/forms\\?", handler.requests[0].path);
+        assertEq("test-key", handler.requests[0].apikey);
+
+        # a submission is deleted
+        handler.requests = ();
+        AbstractDataProvider del = provider.getChildProviderEx("delete-submission");
+        assertEq({"success": True, "message": "success"}, del.doRequest({"submissionID": "S1"}));
+        assertEq(1, handler.requests.size());
+        assertEq("DELETE", handler.requests[0].method);
+        assertEq("submission/S1", handler.requests[0].path);
+
+        # an error reported in the body of a successful response is raised
+        try {
+            del.doRequest({"submissionID": "denied"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JOTFORM-API-ERROR", ex.err);
+            assertEq("You are not allowed", ex.desc);
+        }
+
+        # an error response is raised with the response
+        try {
+            del.doRequest({"submissionID": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Not found", ex.arg.body.message);
+        }
     }
 
     #! Check if json module is available
@@ -434,7 +684,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("/user");
+        hash<auto> response = client.restGet("/user");
         assertTrue(response.body.content.val());
         if (m_options.verbose) {
             printf("Connected as: %s <%s>\n", response.body.content.name, response.body.content.email);
@@ -598,7 +848,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
         JotformDataProvider::JotformDataProvider prov(client);
 
         # First, get form questions to know what fields are available
-        hash<auto> questionsResponse = client.get(sprintf("/form/%s/questions", testFormID));
+        hash<auto> questionsResponse = client.restGet(sprintf("/form/%s/questions", testFormID));
         if (!questionsResponse.body.content) {
             if (m_options.verbose) {
                 printf("No questions found for form %s, skipping data integrity test\n", testFormID);
@@ -663,7 +913,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
             }
 
             # Verify the data was actually saved by fetching it back
-            hash<auto> fetchResponse = client.get(sprintf("/submission/%s", createdSubmissionId));
+            hash<auto> fetchResponse = client.restGet(sprintf("/submission/%s", createdSubmissionId));
             hash<auto> fetchedSubmission = fetchResponse.body.content;
 
             # Check that answers hash is not empty
@@ -716,7 +966,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
                 updateProvider.doRequest(updateRequest);
 
                 # Verify the update was saved
-                hash<auto> fetchResponse = client.get(sprintf("/submission/%s", createdSubmissionId));
+                hash<auto> fetchResponse = client.restGet(sprintf("/submission/%s", createdSubmissionId));
                 hash<auto> fetchedSubmission = fetchResponse.body.content;
 
                 # Find our updated value
@@ -747,7 +997,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
 
             # Cleanup: delete the test submission
             try {
-                client.del(sprintf("/submission/%s", createdSubmissionId));
+                client.restDel(sprintf("/submission/%s", createdSubmissionId), NOTHING);
                 if (m_options.verbose) {
                     printf("\nCleaned up test submission: %s\n", createdSubmissionId);
                 }

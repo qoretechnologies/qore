@@ -320,6 +320,35 @@ class AwsTest inherits QUnit::Test {
         assertEq("test-session", sts_handler.params.RoleSessionName);
         assertEq("ext-id-42",    sts_handler.params.ExternalId);
         assertEq("3600",         sts_handler.params.DurationSeconds);
+        # the request is form-encoded and signed with the base credentials for the STS service
+        assertRegex("^application/x-www-form-urlencoded", sts_handler.last_hdr."content-type");
+        assertRegex("^AWS4-HMAC-SHA256 Credential=AKIA-BASE/[0-9]{8}/us-east-1/sts/aws4_request",
+            sts_handler.last_hdr.authorization);
+
+        # the asynchronous client also assumes the role when it is created
+        int requests = sts_handler.requests;
+        AwsRestClientIo role_client_io({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIA-BASE",
+            "aws_secret": "baseSecret",
+            "aws_region": "us-east-1",
+            "aws_service": "iam",
+            "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+            "aws_sts_endpoint": "http://localhost:" + sts_port,
+        });
+        assertEq(requests + 1, sts_handler.requests);
+
+        # an error response from STS is reported
+        {
+            sts_handler.status = 403;
+            on_exit sts_handler.status = 200;
+            assertThrows("AWSRESTCLIENT-STS-ERROR", "AssumeRole call to", \AwsRestClientBase::assumeRole(), {
+                "aws_keyid": "AKIA-BASE",
+                "aws_secret": "baseSecret",
+                "aws_role_arn": "arn:aws:iam::123456789012:role/MyRole",
+                "aws_sts_endpoint": "http://localhost:" + sts_port,
+            });
+        }
 
         # constructor with aws_role_arn should overlay the temp creds onto opts
         # (no actual signed request is made in this test — we just verify the
@@ -612,9 +641,21 @@ class HeaderCaptureHandler inherits AbstractHttpRequestHandler {
 class FakeStsHandler inherits AbstractHttpRequestHandler {
     public {
         hash<auto> params = {};
+        #! the headers of the last request
+        hash<auto> last_hdr;
+        #! the number of requests received
+        int requests;
+        #! the status code to return; errors are returned without credentials
+        int status = 200;
     }
 
     hash handleRequest(hash cx, hash hdr, *data body) {
+        last_hdr = hdr;
+        ++requests;
+        if (status != 200) {
+            return makeResponse({"Content-Type": "text/xml"}, status, "<ErrorResponse><Error><Code>AccessDenied"
+                "</Code></Error></ErrorResponse>");
+        }
         # parse form-encoded body
         string body_str;
         if (body.typeCode() == NT_BINARY) {

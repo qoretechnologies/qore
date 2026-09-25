@@ -38,7 +38,7 @@ public class SquareWatchCustomersDataProvider inherits SquareWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -108,7 +108,7 @@ public class SquareWatchOrdersDataProvider inherits SquareWatchDataProviderBase 
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -190,7 +190,7 @@ public class SquareWatchPaymentsDataProvider inherits SquareWatchDataProviderBas
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -245,7 +245,7 @@ public class SquareNewAppointmentDataProvider inherits SquareWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -299,7 +299,7 @@ public class SquareNewCatalogItemDataProvider inherits SquareWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name
@@ -362,7 +362,7 @@ public class SquareNewInvoiceDataProvider inherits SquareWatchDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {}
 
     #! Returns the provider name

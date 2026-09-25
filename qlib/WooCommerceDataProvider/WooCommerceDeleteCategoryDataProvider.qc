@@ -70,7 +70,7 @@ public class WooCommerceDeleteCategoryDataProvider inherits WooCommerceDataProvi
         static WooCommerceCategoryDataType ResponseType();
     }
 
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

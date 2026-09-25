@@ -70,7 +70,7 @@ public class WooCommerceDeleteTagDataProvider inherits WooCommerceDataProviderBa
         static WooCommerceTagDataType ResponseType();
     }
 
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

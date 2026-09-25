@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTOptionalModulesTest
+
+# An AOT module compiled when a module requested with %try-module was unavailable takes the branch for the module
+# being unavailable.  qcc records the failed requests in the artifact and in its depfile, and the loader detects that
+# the artifact is stale when one of the modules can be loaded: the source module is loaded instead if it is present,
+# otherwise the binary module is loaded with a warning.
+class AOTOptionalModulesTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string tmp_dir;
+        # the directory of the optional module
+        string opt_dir;
+        # the directory of the compiled module and its source
+        string artifact_dir;
+        string env;
+
+        const UsesSource = "%modern
+%try-module Opt >= 2.0
+%define NoOpt
+%endtry
+
+module Uses { version = \"1.0\"; desc = \"uses an optional module\"; author = \"Qore\"; license = \"MIT\"; }
+
+public namespace Uses {
+    public string sub mode() {
+%ifdef NoOpt
+        return \"without Opt\";
+%else
+        return \"with Opt \" + Opt::version();
+%endif
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTOptionalModulesTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a failed optional module is a build dependency", \depfileTest());
+        addTestCase("a qmod is used while the optional module is unavailable", \unavailableTest());
+        addTestCase("a stale qmod falls back to its source module", \sourceFallbackTest());
+        addTestCase("a stale qmod without a source module is loaded with a warning", \noSourceTest());
+        addTestCase("a qmod compiled with the optional module records nothing", \availableAtCompileTest());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private TmpDir initDirs() {
+        TmpDir tmp("qore-aot-optional-modules-");
+        tmp_dir = tmp.path;
+        opt_dir = tmp_dir + "/opt";
+        artifact_dir = tmp_dir + "/artifacts";
+        mkdir(opt_dir);
+        mkdir(artifact_dir);
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        return tmp;
+    }
+
+    # installs the optional module with the given version
+    private installOpt(string version) {
+        write(opt_dir + "/Opt.qm", sprintf("%%modern\nmodule Opt { version = %y; desc = \"optional\"; "
+            "author = \"Qore\"; license = \"MIT\"; }\n"
+            "public namespace Opt { public string sub version() { return %y; } }\n", version, version));
+    }
+
+    # compiles the module that uses the optional module, and returns its depfile
+    private string compileUses() {
+        string src = tmp_dir + "/Uses.qm";
+        write(src, UsesSource);
+        string depfile = tmp_dir + "/Uses.d";
+        string out = run(sprintf("%s QORE_MODULE_DIR=%s %s -m --depfile=%s -o %s/Uses.qmod %s", env, opt_dir,
+            qcc_bin, depfile, artifact_dir, src));
+        assertTrue(is_file(artifact_dir + "/Uses.qmod"), "compiled Uses.qmod: " + out);
+        return File::readTextFile(depfile);
+    }
+
+    # returns the output of a script that loads the module and prints its mode
+    private string runUses() {
+        return trim(run(sprintf("%s QORE_MODULE_DIR=%s:%s %s -ne '%%requires Uses\nprint(Uses::mode());'", env,
+            artifact_dir, opt_dir, qore_bin)));
+    }
+
+    # returns True if the compiled module has the trailer recording unavailable optional modules
+    private bool hasOptionalModuleTrailer() {
+        # every byte is a valid ISO-8859-1 character; the trailer footer carries the "QAOM" magic
+        string data = File::readBinaryFile(artifact_dir + "/Uses.qmod").toString("ISO-8859-1");
+        return data.find("QAOM") != -1;
+    }
+
+    depfileTest() {
+        TmpDir tmp = initDirs();
+        installOpt("1.0");
+        string deps = compileUses();
+        assertTrue(hasOptionalModuleTrailer());
+        # replacing the module that was too old must rebuild the artifact
+        assertNeq(-1, deps.find(realpath(opt_dir) + "/Opt.qm"), "depfile names the optional module: " + deps);
+    }
+
+    unavailableTest() {
+        TmpDir tmp = initDirs();
+        installOpt("1.0");
+        compileUses();
+        # the module is still too old: the artifact is current
+        assertEq("without Opt", runUses());
+        # without the optional module at all
+        unlink(opt_dir + "/Opt.qm");
+        assertEq("without Opt", runUses());
+    }
+
+    sourceFallbackTest() {
+        TmpDir tmp = initDirs();
+        installOpt("1.0");
+        compileUses();
+        # the source module is installed with the artifact
+        write(artifact_dir + "/Uses.qm", UsesSource);
+        assertEq("without Opt", runUses());
+
+        installOpt("2.0");
+        string out = runUses();
+        assertEq("with Opt 2.0", out.split("\n").last(), out);
+    }
+
+    noSourceTest() {
+        TmpDir tmp = initDirs();
+        installOpt("1.0");
+        compileUses();
+        installOpt("2.0");
+        string out = runUses();
+        list<string> lines = out.split("\n");
+        # the binary module is loaded without the functionality, and this is reported
+        assertEq("without Opt", lines.last(), out);
+        assertRegex("AOT module .*Uses\\.qmod' was compiled when optional module 'Opt >= 2.0' was not available, "
+            "but it is available now, and no source module was found", out);
+    }
+
+    availableAtCompileTest() {
+        TmpDir tmp = initDirs();
+        installOpt("2.0");
+        string deps = compileUses();
+        assertEq("with Opt 2.0", runUses());
+        # a module that was loaded is an ordinary dependency
+        assertNeq(-1, deps.find("Opt.qm"), deps);
+        # the artifact has no optional-module trailer
+        assertFalse(hasOptionalModuleTrailer(), "no optional module request is recorded");
+    }
+}

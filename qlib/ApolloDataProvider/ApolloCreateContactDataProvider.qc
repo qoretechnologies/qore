@@ -108,7 +108,7 @@ public class ApolloCreateContactDataProvider inherits ApolloDataProviderBase {
         static *AbstractDataProviderType RequestType = new ApolloCreateContactRequestDataType();
     }
 
-    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClientIo rest) : ApolloDataProviderBase(rest) {
     }
 
     string getName() {

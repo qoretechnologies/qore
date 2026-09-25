@@ -28,20 +28,28 @@ public namespace SquarespaceDataProvider {
 #! Base class for Squarespace data providers
 public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Squarespace data providers
         const BaseConstructorOptions = {
             "squarespacerestclient": <DataProviderOptionInfo>{
                 "display_name": "Squarespace REST Client",
-                "short_desc": "The SquarespaceRestClient object",
+                "short_desc": "The SquarespaceRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("SquarespaceRestClient::SquarespaceRestClient")),
-                "desc": "The SquarespaceRestClient object to use for API calls",
+                    new Type("SquarespaceRestClient::SquarespaceRestClientIo")),
+                "desc": "The `SquarespaceRestClientIo` object to use for API calls",
             },
             "squarespacerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Squarespace REST Client Options",
-                "short_desc": "Options for creating a SquarespaceRestClient",
+                "short_desc": "Options for creating a SquarespaceRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a SquarespaceRestClient object if one is not provided "
+                "desc": "Options for creating a `SquarespaceRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProv
 
     private {
         #! The REST client object for API calls
-        SquarespaceRestClient::SquarespaceRestClient rest;
+        SquarespaceRestClient::SquarespaceRestClientIo rest;
 
         #! The connection object, if applicable
         *SquarespaceRestClient::SquarespaceRestConnection conn;
@@ -60,14 +68,14 @@ public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest) {
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(SquarespaceRestClient::SquarespaceRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProv
             rest = copts.squarespacerestclient;
         } else {
             hash<auto> client_opts = copts.squarespacerestclient_options ?? {};
-            rest = new SquarespaceRestClient::SquarespaceRestClient(client_opts);
+            rest = new SquarespaceRestClient::SquarespaceRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    SquarespaceRestClient::SquarespaceRestClient getRestClient() {
+    SquarespaceRestClient::SquarespaceRestClientIo getRestClient() {
         return rest;
     }
 
@@ -221,24 +229,11 @@ public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProv
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "SQUARESPACE-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "SQUARESPACE-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

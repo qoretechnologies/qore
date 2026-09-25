@@ -92,7 +92,7 @@ public class ShipStationDeleteOrderDataProvider inherits ShipStationDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(ShipStationRestClient::ShipStationRestClient rest)
+    constructor(ShipStationRestClient::ShipStationRestClientIo rest)
             : ShipStationDataProviderBase(rest) {
     }
 

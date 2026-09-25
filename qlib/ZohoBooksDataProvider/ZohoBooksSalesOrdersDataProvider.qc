@@ -25,7 +25,7 @@ public class ZohoBooksSalesOrdersDataProvider inherits ZohoBooksDataProviderBase
             },
         };
     }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "salesorders"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksSalesOrderDataType().getFields(); }
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
@@ -41,7 +41,7 @@ public class ZohoBooksSalesOrdersDataProvider inherits ZohoBooksDataProviderBase
 
 public class ZohoBooksCreateSalesOrderDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "create-salesorder", "desc": "Creates a sales order", "type": "ZohoBooksCreateSalesOrderDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-salesorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
@@ -51,7 +51,7 @@ public class ZohoBooksCreateSalesOrderDataProvider inherits ZohoBooksDataProvide
 
 public class ZohoBooksUpdateSalesOrderDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "update-salesorder", "desc": "Updates a sales order", "type": "ZohoBooksUpdateSalesOrderDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-salesorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksSalesOrderDataType(); }
@@ -65,7 +65,7 @@ public class ZohoBooksUpdateSalesOrderDataProvider inherits ZohoBooksDataProvide
 
 public class ZohoBooksDeleteSalesOrderDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "delete-salesorder", "desc": "Deletes a sales order", "type": "ZohoBooksDeleteSalesOrderDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "delete-salesorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
@@ -79,7 +79,7 @@ public class ZohoBooksDeleteSalesOrderDataProvider inherits ZohoBooksDataProvide
 
 public class ZohoBooksGetSalesOrderDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "get-salesorder", "desc": "Gets a sales order", "type": "ZohoBooksGetSalesOrderDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-salesorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksSalesOrderDataType(); }

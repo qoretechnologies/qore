@@ -36,12 +36,16 @@ public namespace PdfCoDataProvider {
     #! Initial polling interval
     public const JobPollInterval = 2s;
 
-    #! Set of retriable socket errors
+    #! Set of retriable transport errors of the synchronous and asynchronous REST clients
     public const RetrySet = {
         "SOCKET-CONNECT-ERROR": True,
         "SOCKET-SSL-ERROR": True,
         "SOCKET-CLOSED": True,
         "SOCKET-TIMEOUT": True,
+        "HTTPCLIENT-CONNECT-ERROR": True,
+        "HTTPCLIENT-STREAM-CLOSED": True,
+        "HTTPCLIENT-TIMEOUT": True,
+        "FUTURE-TIMEOUT": True,
     };
 
     #! Map of output format to PDF.co conversion endpoint path

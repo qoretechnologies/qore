@@ -37,7 +37,7 @@ public class ZohoBooksContactsDataProvider inherits ZohoBooksDataProviderBase {
         };
     }
 
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "contacts"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksContactDataType().getFields(); }
 
@@ -58,7 +58,7 @@ public class ZohoBooksContactsDataProvider inherits ZohoBooksDataProviderBase {
 
 public class ZohoBooksCreateContactDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "create-contact", "desc": "Creates a contact", "type": "ZohoBooksCreateContactDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "create-contact"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksContactDataType(); }
@@ -68,7 +68,7 @@ public class ZohoBooksCreateContactDataProvider inherits ZohoBooksDataProviderBa
 
 public class ZohoBooksUpdateContactDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "update-contact", "desc": "Updates a contact", "type": "ZohoBooksUpdateContactDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "update-contact"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksContactDataType(); }
@@ -82,7 +82,7 @@ public class ZohoBooksUpdateContactDataProvider inherits ZohoBooksDataProviderBa
 
 public class ZohoBooksGetContactDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "get-contact", "desc": "Gets a contact", "type": "ZohoBooksGetContactDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-contact"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksContactDataType(); }

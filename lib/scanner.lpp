@@ -1536,6 +1536,13 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     if (!xsink) {
                                                        BEGIN(p_skip_to_endtry);
                                                     } else {
+                                                       // a module that is not available when an AOT artifact
+                                                       // is compiled makes the artifact stale once it is; a
+                                                       // module denied by the parse options is not recorded
+                                                       if (!(pgm->getParseOptions() & PO_NO_MODULES)) {
+                                                          qore_program_private::get(*pgm)
+                                                             ->addUnavailableTryModule(str.c_str());
+                                                       }
                                                        BEGIN(INITIAL);
                                                        if (var.empty()) {
                                                           // ignore exception in this case

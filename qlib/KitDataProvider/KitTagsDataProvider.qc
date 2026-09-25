@@ -78,7 +78,7 @@ public class KitTagsDataProvider inherits KitDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(KitRestClient::KitRestClient rest) : KitDataProviderBase(rest) {
+    constructor(KitRestClient::KitRestClientIo rest) : KitDataProviderBase(rest) {
     }
 
     #! Returns the provider name

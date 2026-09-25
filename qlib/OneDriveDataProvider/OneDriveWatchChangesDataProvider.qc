@@ -77,11 +77,6 @@ public class OneDriveWatchChangesDataProvider inherits OneDriveDataProviderBase,
     string getName() { return ProviderInfo.name; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
-    #! Cancels in-flight REST operations for graceful shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! Polls for changes using delta query
     #! The Microsoft Graph delta feed returns changes in ascending change order
     /** The delta link is an opaque cursor, so this provider is a documented exemption from the

@@ -92,7 +92,7 @@ public class TableauCreateUserDataProvider inherits TableauDataProviderBase {
         static TableauUserDataType ResponseType();
     }
 
-    constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProviderBase(rest) {
     }
 
     string getName() {

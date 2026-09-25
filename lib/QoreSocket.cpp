@@ -66,6 +66,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 
 #include <ares.h>
@@ -18359,50 +18360,8 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
 
     // Convert body vector to Qore binary or string based on content-type
     if (!stream->body.empty()) {
-        // Check if content-type indicates text-based content
-        bool is_text = false;
-        bool force_utf8 = false;
-        std::string media_type;
-        auto ct_it = stream->headers.find("content-type");
-        if (ct_it != stream->headers.end() && !ct_it->second.empty()) {
-            // Extract media type (before any parameters like charset)
-            media_type = ct_it->second.back();
-            size_t semicolon = media_type.find(';');
-            if (semicolon != std::string::npos) {
-                media_type = media_type.substr(0, semicolon);
-            }
-            // Trim whitespace
-            while (!media_type.empty() && isspace(static_cast<unsigned char>(media_type.back()))) {
-                media_type.pop_back();
-            }
-            while (!media_type.empty() && isspace(static_cast<unsigned char>(media_type.front()))) {
-                media_type.erase(0, 1);
-            }
-            // Convert to lowercase for comparison
-            std::transform(media_type.begin(), media_type.end(), media_type.begin(),
-                [](unsigned char c) { return std::tolower(c); });
-
-            // Check for text types
-            is_text = (media_type.size() >= 5 && media_type.compare(0, 5, "text/") == 0)
-                || media_type == "application/json"
-                || media_type == "application/xml"
-                || media_type == "application/javascript"
-                || media_type == "application/x-www-form-urlencoded"
-                || (media_type.size() > 5 && media_type.compare(media_type.size() - 5, 5, "+json") == 0)
-                || (media_type.size() > 4 && media_type.compare(media_type.size() - 4, 4, "+xml") == 0);
-
-            // JSON and YAML are always UTF-8 per RFC 8259 / YAML spec
-            force_utf8 = media_type == "application/json"
-                || (media_type.size() > 5 && media_type.compare(media_type.size() - 5, 5, "+json") == 0)
-                || media_type == "application/x-yaml" || media_type == "text/yaml"
-                || media_type == "text/x-yaml" || media_type == "application/yaml";
-        }
-
-        // Skip text conversion if content-encoding indicates compression
-        // (gzip, deflate, br, zstd, etc.) — the compressed bytes must stay
-        // as binary until the upstream decompression layer in
-        // send_internal_conn_mgr / process_binary_body runs.  Without this
-        // check, compressed bytes are interpreted as UTF-8 and corrupted.
+        // compressed bodies stay binary until the upstream decompression layer in send_internal_conn_mgr /
+        // process_binary_body decodes them; the bytes of a compressed body are not text
         bool has_content_encoding = false;
         {
             auto ce_it = stream->headers.find("content-encoding");
@@ -18415,19 +18374,22 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
             }
         }
 
-        if (is_text && !has_content_encoding) {
-            const QoreEncoding* enc = QCS_UTF8;
-            if (!force_utf8) {
-                qore_http_media_type_param charset;
-                if (qore_find_http_media_type_param(ct_it->second.back().c_str(), "charset", charset)
-                        && !charset.value.empty()) {
-                    enc = QEM.findCreate(charset.value.c_str());
-                }
-            }
-            QoreStringNode* body_str = new QoreStringNode(
-                reinterpret_cast<const char*>(stream->body.data()),
-                stream->body.size(), enc);
-            response->setKeyValue("body", body_str, xsink);
+        // text is decoded by the rules shared by all HTTP clients; see qore_get_http_body_charset()
+        // the body of a streaming stream is only what remains after the chunks already delivered, which cannot be
+        // decoded on its own, as the encoding depends on the start of the body: it stays binary for the consumer,
+        // which decodes the whole body
+        QoreHttpBodyCharset charset;
+        if (!has_content_encoding && !stream->streaming) {
+            // a response without a Content-Type is examined to tell text from binary data
+            auto ct_it = stream->headers.find("content-type");
+            const char* ct = ct_it != stream->headers.end() && !ct_it->second.empty()
+                ? ct_it->second.back().c_str() : nullptr;
+            charset = qore_get_http_body_charset(ct, stream->body.data(), stream->body.size(),
+                sock->priv->socket->priv->http_assumed_encoding.load(std::memory_order_relaxed));
+        }
+        if (charset.enc) {
+            response->setKeyValue("body", qore_http_body_string(charset, stream->body.data(),
+                stream->body.size()), xsink);
         } else {
             SimpleRefHolder<BinaryNode> body(new BinaryNode);
             body->append(stream->body.data(), stream->body.size());

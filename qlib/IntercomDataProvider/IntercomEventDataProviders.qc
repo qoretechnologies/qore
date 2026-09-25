@@ -115,13 +115,6 @@ public class IntercomWatchDataProviderBase inherits DataProvider::AbstractTimest
         stopEventsIntern();
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! An Intercom record is positioned by when it was created
     private string getTimestampField() {
         return IntercomCreatedField;

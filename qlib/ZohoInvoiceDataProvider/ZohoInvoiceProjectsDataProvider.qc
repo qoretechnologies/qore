@@ -95,7 +95,7 @@ public class ZohoInvoiceProjectsDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest) : ZohoInvoiceDataProviderBase(rest) {
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest) : ZohoInvoiceDataProviderBase(rest) {
     }
 
     #! Returns the provider name

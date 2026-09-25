@@ -127,7 +127,7 @@ public class GoHighLevelWatchNewMessageDataProvider inherits GoHighLevelWatchDat
     }
 
     #! Creates the object with a REST client
-    constructor(GoHighLevelRestClient::GoHighLevelRestClient rest, *hash<auto> options)
+    constructor(GoHighLevelRestClient::GoHighLevelRestClientIo rest, *hash<auto> options)
             : GoHighLevelWatchDataProviderBase(rest, options) {
     }
 

@@ -104,7 +104,7 @@ public class BigCommerceUpdateOrderDataProvider inherits BigCommerceDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(BigCommerceRestClient::BigCommerceRestClient rest) : BigCommerceDataProviderBase(rest) {
+    constructor(BigCommerceRestClient::BigCommerceRestClientIo rest) : BigCommerceDataProviderBase(rest) {
     }
 
     #! Returns the provider name

@@ -67,7 +67,7 @@ public class WooCommerceGetCustomerDataProvider inherits WooCommerceDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

@@ -27,11 +27,17 @@ public namespace EmpathicBuildingDataProvider {
 #! The EmpathicBuilding data provider class
 public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDataProvider {
     private {
-        #! The REST client — any @ref RestClient::AbstractRestClient "AbstractRestClient" subclass
-        /** May be a sync @ref RestClient::RestClient "RestClient" (HTTP/1.x) or an async
-            @ref RestClientIo::RestClientIo "RestClientIo" (HTTP/1.1/2/3 multiplexed).
-        */
-        RestClient::AbstractRestClient rest;
+        #! Default headers of a synchronous REST client that are not copied by @ref getAsyncClient()
+        const IgnoredHeaders = {
+            "accept": True,
+            "user-agent": True,
+            "content-type": True,
+        };
+    }
+
+    private {
+        #! The REST client for API calls
+        RestClientIo::RestClientIo rest;
     }
 
     #! Creates the object
@@ -39,11 +45,76 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
     }
 
     #! Creates the object
+    /** @param rest the REST client; a synchronous @ref RestClient::RestClient "RestClient" is converted with
+        @ref getAsyncClient()
+        @param logger an optional logger
+    */
     constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger) {
-        self.rest = rest;
+        self.rest = EmpathicBuildingDataProviderBase::getAsyncClient(rest);
         if (logger) {
             setLogger(logger);
         }
+    }
+
+    #! Returns the REST client for API calls
+    /** @return the REST client for API calls
+
+        @since EmpathicBuildingDataProvider 1.2
+    */
+    RestClientIo::RestClientIo getRestClient() {
+        return rest;
+    }
+
+    #! Returns an asynchronous REST client for the given REST client
+    /** @param rest the REST client
+
+        @return \a rest if it is a @ref RestClientIo::RestClientIo "RestClientIo" object, otherwise an asynchronous
+        client created with the constructor options, connection path, and default headers of \a rest: an
+        @ref EmpathicBuildingRestClientIo for an @ref EmpathicBuildingRestClient, otherwise a
+        @ref RestClientIo::RestClientIo "RestClientIo"
+
+        @throw EMPATHICBUILDING-CLIENT-ERROR \a rest is neither a @ref RestClientIo::RestClientIo "RestClientIo" nor a
+        @ref RestClient::RestClient "RestClient" object
+
+        @since EmpathicBuildingDataProvider 1.2
+    */
+    static RestClientIo::RestClientIo getAsyncClient(RestClient::AbstractRestClient rest) {
+        if (rest instanceof RestClientIo::RestClientIo) {
+            return cast<RestClientIo::RestClientIo>(rest);
+        }
+        if (!(rest instanceof RestClient::RestClient)) {
+            throw "EMPATHICBUILDING-CLIENT-ERROR", sprintf("cannot use a REST client of class %y; expecting a "
+                "\"RestClientIo\" or \"RestClient\" object", rest.className());
+        }
+        RestClient::RestClient sync_rest = cast<RestClient::RestClient>(rest);
+        # the options can have values of different types, so the hash must not take a narrower type
+        hash<auto> opts = {};
+        opts += sync_rest.getConstructorOptions();
+        # the synchronous client has already logged in if possible; its token is used
+        *string token = sync_rest.getToken();
+        if (token.val()) {
+            opts.token = token;
+            opts.token_type = sync_rest.getTokenType();
+            opts.skip_login = True;
+        }
+        # the current default headers, including any added after the client was created, for example a gateway
+        # token; they are given as an option so that copies of the client made with copyWithUrl() keep them; the
+        # async client sends header names in lower case
+        hash<auto> headers = {};
+        foreach hash<auto> i in (sync_rest.getDefaultHeaders().pairIterator()) {
+            string key = i.key.lwr();
+            if (!IgnoredHeaders{key}) {
+                headers{key} = i.value;
+            }
+        }
+        if (headers) {
+            opts.headers = headers;
+        }
+        RestClientIo::RestClientIo rv = rest instanceof EmpathicBuildingRestClient
+            ? new EmpathicBuildingRestClientIo(opts)
+            : new RestClientIo::RestClientIo(opts);
+        rv.setConnectionPath(sync_rest.getConnectionPath());
+        return rv;
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)
@@ -54,14 +125,15 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
 
     #! Update any connection used by the data provider
     /** @param conn the new AbstractConnection object
-        @param connobj the new connection object itself (ex: an AbstractRestClient for a "rest" connection)
+        @param connobj the new connection object itself (ex: an AbstractRestClient for a "rest" connection); a
+        synchronous @ref RestClient::RestClient "RestClient" is converted with @ref getAsyncClient()
     */
     updateConnectionObjects(object conn, object connobj) {
         if (!(connobj instanceof RestClient::AbstractRestClient)) {
             throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires an \"AbstractRestClient\" "
                 "object; got %y instead", self.className(), connobj.className());
         }
-        rest = cast<RestClient::AbstractRestClient>(connobj);
+        rest = EmpathicBuildingDataProviderBase::getAsyncClient(cast<RestClient::AbstractRestClient>(connobj));
         rest.setLogger(logger);
     }
 

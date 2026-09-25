@@ -192,6 +192,13 @@ public:
             @since %Qore 3.0
         */
         int64_t max_response_body_size = 0;
+
+        //! The encoding assumed for text response bodies whose encoding is not determined otherwise
+        /** nullptr means ISO-8859-1; see qore_get_http_body_charset()
+
+            @since %Qore 3.0
+        */
+        const QoreEncoding* assumed_encoding = nullptr;
     };
 
     //! Creates a new manager with the given options.

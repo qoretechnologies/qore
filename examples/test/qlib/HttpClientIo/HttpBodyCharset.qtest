@@ -1,0 +1,573 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The character encoding of HTTP response bodies: every client applies the same rules (see
+    get_http_body_encoding()) to whole, compressed, and chunked responses, over HTTP/1.1 and HTTP/2, and honors its
+    assumed encoding for text that does not declare one
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires HttpClientIo
+%requires RestClientIo
+%requires RestClient
+%requires json
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class HttpBodyCharsetTest
+
+#! the expected decoding of a response body
+hashdecl CharsetCase {
+    #! the Content-Type of the response, if any
+    *string content_type;
+    #! the body octets
+    binary body;
+    #! the encoding of the decoded string, or no value if the body is returned as binary data
+    *string encoding;
+    #! the decoded text in UTF-8, for text bodies
+    *string text;
+}
+
+#! Returns the response body of the case named in the path: /<case>/<variant>, where the variant is:
+#! - plain: the body with a Content-Length
+#! - gzip: the body compressed with gzip
+#! - chunked: the body with chunked transfer encoding
+class TestHandler inherits AbstractHttpRequestHandler {
+    public {
+        const Cases = {
+            # other text: a BOM, the charset parameter, else the assumed encoding
+            "text": <CharsetCase>{"content_type": "text/plain", "body": <e4f6fc>, "encoding": "ISO-8859-1",
+                "text": "äöü"},
+            "text-charset": <CharsetCase>{"content_type": "text/plain;charset=utf-8", "body": <c3a4>,
+                "encoding": "UTF-8", "text": "ä"},
+            "text-bom": <CharsetCase>{"content_type": "text/plain", "body": <efbbbfc3a4>, "encoding": "UTF-8",
+                "text": "ä"},
+            "text-utf16": <CharsetCase>{"content_type": "text/plain;charset=iso-8859-1", "body": <fffee400>,
+                "encoding": "UTF-16LE", "text": "ä"},
+            "custom-charset": <CharsetCase>{"content_type": "application/x-test;charset=iso-8859-2", "body": <b1>,
+                "encoding": "ISO-8859-2", "text": "ą"},
+            # JSON is always UTF-8
+            "json": <CharsetCase>{"content_type": "application/json", "body": <7b2261223a22c3a4227d>,
+                "encoding": "UTF-8", "text": "{\"a\":\"ä\"}"},
+            "json-charset": <CharsetCase>{"content_type": "application/json;charset=iso-8859-1",
+                "body": <efbbbf7b2261223a22c3a4227d>, "encoding": "UTF-8", "text": "{\"a\":\"ä\"}"},
+            "yaml": <CharsetCase>{"content_type": "application/yaml;charset=iso-8859-1", "body": <613a20c3a4>,
+                "encoding": "UTF-8", "text": "a: ä"},
+            # a byte order mark selects the encoding of YAML
+            "yaml-bom": <CharsetCase>{"content_type": "application/yaml", "body": <fffe61003a002000e400>,
+                "encoding": "UTF-16LE", "text": "a: ä"},
+            # XML: the declaration, else UTF-8
+            "xml-declaration": <CharsetCase>{"content_type": "application/xml",
+                "body": <3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d2269736f2d383835392d32223f3e3c613eb13c2f613e>,
+                "encoding": "ISO-8859-2", "text": "<?xml version=\"1.0\" encoding=\"iso-8859-2\"?><a>ą</a>"},
+            "xml": <CharsetCase>{"content_type": "text/xml", "body": <3c613ec3a43c2f613e>, "encoding": "UTF-8",
+                "text": "<a>ä</a>"},
+            # HTML: a meta element, else the assumed encoding
+            "html-meta": <CharsetCase>{"content_type": "text/html",
+                "body": <3c6d65746120636861727365743d2277696e646f77732d31323532223e80>, "encoding": "WINDOWS-1252",
+                "text": "<meta charset=\"windows-1252\">€"},
+            "html": <CharsetCase>{"content_type": "text/html", "body": <3c703ee4>, "encoding": "ISO-8859-1",
+                "text": "<p>ä"},
+            # CSS: an @charset rule, else UTF-8
+            "css-rule": <CharsetCase>{"content_type": "text/css",
+                "body": <4063686172736574202269736f2d383835392d3135223ba4>, "encoding": "ISO-8859-15",
+                "text": "@charset \"iso-8859-15\";€"},
+            "javascript": <CharsetCase>{"content_type": "text/javascript", "body": <2f2fc3a4>, "encoding": "UTF-8",
+                "text": "//ä"},
+            # binary types, with or without a charset parameter
+            "octet": <CharsetCase>{"content_type": "application/octet-stream;charset=utf-8", "body": <c3a4>},
+            "image": <CharsetCase>{"content_type": "image/png", "body": <89504e47>},
+            # no Content-Type: the data decides
+            "none-text": <CharsetCase>{"body": <e4f6fc>, "encoding": "ISO-8859-1", "text": "äöü"},
+            "none-binary": <CharsetCase>{"body": <000102c3a4>},
+        };
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        list<string> parts = hdr.path.split("/");
+        *hash<CharsetCase> c = Cases{parts[0]};
+        if (!c) {
+            return <HttpResponseInfo>{"code": 404, "hdr": {"Content-Type": MimeTypeText}, "body": "not found"};
+        }
+        hash<auto> rhdr;
+        if (c.content_type) {
+            rhdr."Content-Type" = c.content_type;
+        }
+        switch (parts[1]) {
+            case "gzip":
+                rhdr."Content-Encoding" = "gzip";
+                return <HttpResponseInfo>{"code": 200, "hdr": rhdr, "body": gzip(c.body)};
+            case "chunked":
+                rhdr."Transfer-Encoding" = "chunked";
+                return <HttpResponseInfo>{"code": 200, "hdr": rhdr, "chunked_body": new BinaryInputStream(c.body)};
+        }
+        return <HttpResponseInfo>{"code": 200, "hdr": rhdr, "body": c.body};
+    }
+}
+
+#! A minimal HTTP/1.1 server serving the cases of TestHandler, including the responses without a Content-Type that
+#! HttpServer cannot send, as it adds a default type to any response body without one
+class RawServer {
+    public {
+        int port;
+    }
+
+    private {
+        Socket listener();
+        Counter running(1);
+        bool stopping;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0", True);
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        background run();
+    }
+
+    stop() {
+        stopping = True;
+        # wake the accept call
+        Socket s();
+        s.connect("127.0.0.1:" + port, 30s);
+        running.waitForZero();
+        listener.close();
+    }
+
+    private run() {
+        on_exit running.dec();
+        while (True) {
+            Socket s = listener.accept();
+            if (stopping) {
+                break;
+            }
+            try {
+                serve(s);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client reports any failure
+            }
+            s.close();
+        }
+    }
+
+    # serves one request on the connection, which is closed afterwards
+    private serve(Socket s) {
+        hash<auto> req = s.readHTTPHeader(30s);
+        list<string> parts = req.path.substr(1).split("/");
+        hash<CharsetCase> c = TestHandler::Cases{parts[0]};
+        string hdr = "HTTP/1.1 200 OK\r\nConnection: close\r\n";
+        if (c.content_type) {
+            hdr += sprintf("Content-Type: %s\r\n", c.content_type);
+        }
+        binary body;
+        switch (parts[1]) {
+            case "gzip":
+                hdr += "Content-Encoding: gzip\r\n";
+                body = gzip(c.body);
+                break;
+            case "chunked":
+                hdr += "Transfer-Encoding: chunked\r\n";
+                body = binary(sprintf("%x\r\n", c.body.size())) + c.body + binary("\r\n0\r\n\r\n");
+                break;
+            default:
+                body = c.body;
+                break;
+        }
+        if (parts[1] != "chunked") {
+            hdr += sprintf("Content-Length: %d\r\n", body.size());
+        }
+        s.send(binary(hdr + "\r\n") + body);
+    }
+}
+
+class HttpBodyCharsetTest inherits QUnit::Test {
+    private {
+        const CertPem = "-----BEGIN CERTIFICATE-----
+MIIDCTCCAfGgAwIBAgIULwwY9Xmqwn7ZZIYgEu8otC1aRNMwDQYJKoZIhvcNAQEL
+BQAwFDESMBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MTIzMTE4MjIyOVoXDTI2MTIz
+MTE4MjIyOVowFDESMBAGA1UEAwwJbG9jYWxob3N0MIIBIjANBgkqhkiG9w0BAQEF
+AAOCAQ8AMIIBCgKCAQEA0r/nka21DXdApKWXg6yoM64+RXZ/j2afHJjnnL7IGt87
+wOow8iZDyn3+S9h/J6FP5dGKCmqItq/OKmZxpL61sfUwpcYe3axnoAjKshkfbwSi
+ZKL0oFJcmXYSk9H/qIIbxdHbBre9ztoJsPaBLHWbcoc/too/o4wDW3FUSZaCzgy2
+Lpphnwi/gXNoD2qxQodv+pfkAzn2+nN0J7Yt+cWs15E2DZCxekhISrhT1ull+Afr
+UbHlcqA08AXyyzx61nENtcWpFyuVmfwhvcSPMTgRpoZ+/P+QrcgbmCe2hjZJtgiL
+aQqtsakV7KxvHpR8AgnFeshfnjZY+w8oRMlaMIb6IwIDAQABo1MwUTAdBgNVHQ4E
+FgQUWOgm+lMoLNS8ReH7mvffWJfreREwHwYDVR0jBBgwFoAUWOgm+lMoLNS8ReH7
+mvffWJfreREwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAxBG0
+3X0YIeNaf+3XDnoiZBtgMxpsRkxMtRy+lLoQZ3XO5f58eFjDmTq9InplX4IEW0Nx
+TpWr7suU4cFwgZfe6+cHfiU0PQ/pCA7XIetZb2n3GFrQkU4U1K7DgHeZ8HZ7vQ1T
+tVaefxRR3Y8CoIWmI9kYhXs0I0imKOopzpj2iScwGYKmFuasSGyfbkEQgRvg+hAl
+8oL2f4hCFLynTLkA8bWcd3cyBbGIhPzTffuSBjfNHLRqrI4hGPvTM8Xl4WcqmrmZ
+CP3wt6EiYaxJ2zRR2kUtxdm4xntxjc+nr5sjj1pVJvoN7AVmeihS7y4Awy156UCN
+cnhHffwhNhKl6MTonQ==
+-----END CERTIFICATE-----";
+
+        const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDSv+eRrbUNd0Ck
+pZeDrKgzrj5Fdn+PZp8cmOecvsga3zvA6jDyJkPKff5L2H8noU/l0YoKaoi2r84q
+ZnGkvrWx9TClxh7drGegCMqyGR9vBKJkovSgUlyZdhKT0f+oghvF0dsGt73O2gmw
+9oEsdZtyhz+2ij+jjANbcVRJloLODLYummGfCL+Bc2gParFCh2/6l+QDOfb6c3Qn
+ti35xazXkTYNkLF6SEhKuFPW6WX4B+tRseVyoDTwBfLLPHrWcQ21xakXK5WZ/CG9
+xI8xOBGmhn78/5CtyBuYJ7aGNkm2CItpCq2xqRXsrG8elHwCCcV6yF+eNlj7DyhE
+yVowhvojAgMBAAECggEAMLi64VvmQnGyWR4LNB7DWAdNUCPAA7f2ytaynPMiMcwv
+9T5vCFw+Sd7s3j3zz4akgP37SsMsTgfAwt6iITMRsE197KUr15WW81F1As16DeFl
+ZZyirzm7PKMmUlQ3JY7Guun0F858rAiOOwISBOQ/hq+r1BiL89RXpllB4i1Qmi+8
+Y7Y4mF9j3BDfdUCY+nG8aJ9zhZHZK2/cV40G9qrafFYwQEp86mM2BhtlRr24FCFe
+nWUboADvEAiOhlj7TQl5eMnfKuOPPU9oAZX1yTRkjTPQnBSqZbLaFkcnRKkZcgyg
+dC78RDl2iOB8JclXdLu/R9Dg8SQQ8M5clcKprR+4IQKBgQD7ubtmrFpRzvVMYiGJ
++JXf5AfSRB6OeXUMDaEw31XGZU9zZALqrh/98D4GVWGPSvXVbgH8KdxEc5GN5OJj
+HKxBldRZ0sw2gJLAE6UKH/qDNmp+2qWEdrDE8YcAeCQxo6rk+Ns5qqsvmn2SR14Y
+mvtgHHS1D+9lsqea5jUTSXrc0wKBgQDWVAwsZOtah2CHvsonqOyQXotnRtBool0u
+6rtGrRXoDFvwrjRsicBv6L1kf/npD+QhkaRe3ZkOBZxPsjv9Kfc974czLBAf1zeD
+rW931aSp1YiHyBo8+PmjTvbbiOK7K/8n79CN8W+zwr9plaU+HE1nLwwp/UmaCYtM
+fArq1jHbcQKBgFWnUVkSdHk5zsX67iaga38PfInTnAIm2ekMCjkzBWDIwEwnT8bD
+ESe7Q5+sFdJIU3YYRJylMcoo+PIrW80VyJdYgDVAQTSac1TgWlwjnX5gWcRoacG1
+EVkyRhmmx8oMQu4+r3nj1PQRwYCwwBfnRHnjtOKXVYJpVBalFpJFgoT5AoGAGTUx
+aVdFRxR9CfoqlJeNmz1DcBYoFOZjx0zcUeexl+U8OwaCK/HXrFHXVKaoofy4fCpB
+BtdRVRDb3ZO88n2pEqPFZwNbsiMB6H7RiWqbP05aDH5Ad8NguRBkgFWNNS5riCrw
+gIFQ/fd9w9FR6ggyIlyqNZYQvgk5VPmR3yTqIEECgYEA0akqJwH4M2aQb3mP6FGX
+MbQ5aconCeXHrT2u80LEhF4KzwQz8k8XX2K2XRZ+4LgWq3tOfeVnkEivkJBzFEao
+/g5l2ZjftRO2yAdYhP4Sbcws88pP+cr64tWDI6qK6tlGXI93EyfCVT1FSX5CC1aq
+Do+Sl1gfqlpgpszQaOMjR4M=
+-----END PRIVATE KEY-----";
+
+        const Variants = ("plain", "gzip", "chunked");
+
+        HttpServer server;
+        RawServer raw_server;
+        int port;
+        int tls_port;
+    }
+
+    constructor() : Test("HttpBodyCharsetTest", "1.0") {
+        addTestCase("HTTPClient over HTTP/1.1", \httpClientHttp1Test());
+        addTestCase("HTTPClient over HTTP/2", \httpClientHttp2Test());
+        addTestCase("HTTPClient receive callback", \httpClientRecvCallbackTest());
+        addTestCase("HTTPClient poll operation", \httpClientPollTest());
+        addTestCase("HttpClientIo over HTTP/1.1", \httpClientIoHttp1Test());
+        addTestCase("HttpClientIo over HTTP/2", \httpClientIoHttp2Test());
+        addTestCase("HttpClientIo stream handle", \httpClientIoStreamTest());
+        addTestCase("no Content-Type", \noContentTypeTest());
+        addTestCase("RestClient", \restClientTest());
+        addTestCase("RestClientIo", \restClientIoTest());
+        addTestCase("assumed encoding", \assumedEncodingTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        TestHandler handler();
+        server.setHandler("test", "", NOTHING, handler);
+        server.setDefaultHandler("test", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        tls_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+        raw_server = new RawServer();
+    }
+
+    globalTearDown() {
+        raw_server.stop();
+        delete server;
+    }
+
+    # checks a decoded body against the expected result of the case
+    private checkBody(auto body, hash<CharsetCase> c, string label) {
+        if (c.encoding) {
+            assertEq(NT_STRING, body.typeCode(), label);
+            assertEq(c.encoding, body.encoding(), label);
+            assertEq(c.text, convert_encoding(body, "UTF-8"), label);
+        } else {
+            assertEq(NT_BINARY, body.typeCode(), label);
+            assertEq(c.body, body, label);
+        }
+    }
+
+    # checks all cases and variants with the given function returning the body for a path; the cases without a
+    # Content-Type are checked only with the raw server
+    private checkAll(code get_body, string label, bool raw = False) {
+        foreach string name in (keys TestHandler::Cases) {
+            hash<CharsetCase> c = TestHandler::Cases{name};
+            if (!raw && !c.content_type) {
+                continue;
+            }
+            foreach string variant in (Variants) {
+                string path = sprintf("/%s/%s", name, variant);
+                checkBody(get_body(path), c, sprintf("%s %s", label, path));
+            }
+        }
+    }
+
+    private string getRawUrl() {
+        return "http://127.0.0.1:" + raw_server.port;
+    }
+
+    private string getUrl() {
+        return "http://localhost:" + port;
+    }
+
+    private string getTlsUrl() {
+        return "https://localhost:" + tls_port;
+    }
+
+    private HTTPClient getHttpClient(string url, *hash<auto> opts) {
+        return new HTTPClient({
+            "url": url,
+            "ssl_verify_cert": False,
+            "timeout": 30s,
+        } + opts);
+    }
+
+    httpClientHttp1Test() {
+        HTTPClient hc = getHttpClient(getUrl(), {"http_version": "1.1"});
+        checkAll(auto sub (string path) { return hc.send(NOTHING, "GET", path).body; }, "HTTPClient h1");
+        assertEq("HTTP/1.1", hc.getHttpVersion());
+    }
+
+    httpClientHttp2Test() {
+        HTTPClient hc = getHttpClient(getTlsUrl(), {"http_version": "2.0"});
+        hc.setHttp3Mode("disabled");
+        checkAll(auto sub (string path) { return hc.send(NOTHING, "GET", path).body; }, "HTTPClient h2");
+        assertTrue(hc.isHttp2Active());
+    }
+
+    httpClientRecvCallbackTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "opts": {"http_version": "1.1"}, "label": "h1"},
+                {"url": getTlsUrl(), "opts": {"http_version": "2.0"}, "label": "h2"}) {
+            HTTPClient hc = getHttpClient(i.url, i.opts);
+            hc.setHttp3Mode("disabled");
+            checkAll(auto sub (string path) {
+                auto body;
+                code recv = sub (hash<auto> msg) {
+                    if (exists msg."data") {
+                        body = exists body ? body + msg."data" : msg."data";
+                    }
+                };
+                hc.sendWithRecvCallback(recv, NOTHING, "GET", path);
+                return body;
+            }, "HTTPClient recv callback " + i.label);
+        }
+    }
+
+    httpClientPollTest() {
+        HTTPClient hc = getHttpClient(getUrl(), {"http_version": "1.1"});
+        checkAll(auto sub (string path) {
+            AbstractPollOperation op = hc.startPollSendRecv("GET", path);
+            date deadline = now_us() + 30s;
+            while (*hash<SocketPollInfo> info = op.continuePoll()) {
+                if (now_us() > deadline) {
+                    throw "TIMEOUT", sprintf("GET %s did not complete", path);
+                }
+                Socket::poll((info,), deadline - now_us());
+            }
+            assertTrue(op.goalReached());
+            return op.getOutput()."response-body";
+        }, "HTTPClient poll");
+    }
+
+    # the cases without a Content-Type, and all others, over HTTP/1.1 from a server that does not add a type
+    noContentTypeTest() {
+        HTTPClient hc = getHttpClient(getRawUrl(), {"http_version": "1.1"});
+        checkAll(auto sub (string path) { return hc.send(NOTHING, "GET", path).body; }, "HTTPClient raw", True);
+        checkAll(auto sub (string path) {
+            auto body;
+            code recv = sub (hash<auto> msg) {
+                if (exists msg."data") {
+                    body = exists body ? body + msg."data" : msg."data";
+                }
+            };
+            hc.sendWithRecvCallback(recv, NOTHING, "GET", path);
+            return body;
+        }, "HTTPClient recv callback raw", True);
+        checkAll(auto sub (string path) {
+            AbstractPollOperation op = hc.startPollSendRecv("GET", path);
+            while (*hash<SocketPollInfo> info = op.continuePoll()) {
+                Socket::poll((info,), 30s);
+            }
+            return op.getOutput()."response-body";
+        }, "HTTPClient poll raw", True);
+
+        HttpClientConnectionManager mgr = getManager({"protocol": "h1"});
+        checkAll(auto sub (string path) { return mgr.request(getRawUrl(), "GET", path).body; }, "HttpClientIo raw",
+            True);
+
+        # the assumed encoding applies to text without a type
+        hc.setAssumedEncoding("ISO-8859-15");
+        string body = hc.send(NOTHING, "GET", "/none-text/gzip").body;
+        assertEq("ISO-8859-15", body.encoding());
+        mgr = getManager({"protocol": "h1", "assume_encoding": "ISO-8859-15"});
+        body = mgr.request(getRawUrl(), "GET", "/none-text/chunked").body;
+        assertEq("ISO-8859-15", body.encoding());
+        # binary data is not affected
+        assertEq(TestHandler::Cases."none-binary".body, mgr.request(getRawUrl(), "GET", "/none-binary/plain").body);
+    }
+
+    private HttpClientConnectionManager getManager(*hash<auto> opts) {
+        return new HttpClientConnectionManager(cast<hash<HttpClientConnectionManagerOptions>>({
+            "request_timeout": 30s,
+            "ssl_verify_mode": SSL_VERIFY_NONE,
+        } + opts));
+    }
+
+    httpClientIoHttp1Test() {
+        HttpClientConnectionManager mgr = getManager({"protocol": "h1"});
+        checkAll(auto sub (string path) { return mgr.request(getUrl(), "GET", path).body; }, "HttpClientIo h1");
+        checkAll(auto sub (string path) { return mgr.requestAsync(getUrl(), "GET", path).get(30s).body; },
+            "HttpClientIo h1 future");
+    }
+
+    httpClientIoHttp2Test() {
+        HttpClientConnectionManager mgr = getManager({"protocol": "h2"});
+        checkAll(auto sub (string path) {
+            hash<auto> resp = mgr.request(getTlsUrl(), "GET", path);
+            assertEq("h2", resp.protocol, path);
+            return resp.body;
+        }, "HttpClientIo h2");
+    }
+
+    httpClientIoStreamTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"},
+                {"url": getTlsUrl(), "protocol": "h2"}) {
+            HttpClientConnectionManager mgr = getManager({"protocol": i.protocol});
+            # a stream handle carries one request
+            checkAll(auto sub (string path) {
+                HttpClientStreamHandle stream = mgr.acquireStream(i.url);
+                return stream.submitAsync("GET", path).future.get(30s).body;
+            }, "HttpClientIo stream " + i.protocol);
+        }
+    }
+
+    # the cases that REST clients return as decoded, without deserializing them to other values
+    private list<string> getRestCases() {
+        return select keys TestHandler::Cases, TestHandler::Cases{$1}.content_type =~ /^(text\/plain|application\/octet-stream)/;
+    }
+
+    private checkRest(code get_body, string label) {
+        foreach string name in (getRestCases()) {
+            hash<CharsetCase> c = TestHandler::Cases{name};
+            foreach string variant in (Variants) {
+                string path = sprintf("/%s/%s", name, variant);
+                checkBody(get_body(path), c, sprintf("%s %s", label, path));
+            }
+        }
+        # JSON is deserialized from UTF-8 regardless of the charset parameter
+        foreach string name in ("json", "json-charset") {
+            foreach string variant in (Variants) {
+                string path = sprintf("/%s/%s", name, variant);
+                assertEq({"a": "ä"}, get_body(path), sprintf("%s %s", label, path));
+            }
+        }
+%ifndef NoYaml
+        # YAML is deserialized from its actual encoding, including one given by a byte order mark
+        foreach string name in ("yaml", "yaml-bom") {
+            foreach string variant in (Variants) {
+                string path = sprintf("/%s/%s", name, variant);
+                assertEq({"a": "ä"}, get_body(path), sprintf("%s %s", label, path));
+            }
+        }
+%endif
+    }
+
+    restClientTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "label": "h1"}, {"url": getTlsUrl(), "label": "h2"}) {
+            RestClient rest({"url": i.url, "ssl_verify_cert": False, "http3_mode": "disabled"});
+            checkRest(auto sub (string path) { return rest.get(path).body; }, "RestClient " + i.label);
+            # the response body size limit reads the body through a different path
+            rest = new RestClient({"url": i.url, "ssl_verify_cert": False, "http3_mode": "disabled",
+                "max_response_body_size": 1024});
+            checkRest(auto sub (string path) { return rest.get(path).body; }, "RestClient limited " + i.label);
+        }
+    }
+
+    restClientIoTest() {
+        foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"}, {"url": getTlsUrl(), "protocol": "h2"}) {
+            RestClientIo rest({"url": i.url, "protocol": i.protocol, "ssl_verify_mode": SSL_VERIFY_NONE});
+            checkRest(auto sub (string path) { return rest.restGet(path).body; }, "RestClientIo " + i.protocol);
+        }
+    }
+
+    # a client's assumed encoding applies to text without an encoding declaration, and to nothing else
+    assumedEncodingTest() {
+        const string Assumed = "ISO-8859-15";
+        # the cases that use the assumed encoding
+        hash<string, bool> uses_assumed = map {$1: True}, ("text", "html");
+        code check = sub (code get_body, string label) {
+            foreach string name in (keys TestHandler::Cases) {
+                hash<CharsetCase> c = TestHandler::Cases{name};
+                if (!c.content_type) {
+                    continue;
+                }
+                if (uses_assumed{name}) {
+                    c.encoding = Assumed;
+                    c.text = convert_encoding(force_encoding(c.body.toString(), Assumed), "UTF-8");
+                }
+                foreach string variant in (Variants) {
+                    string path = sprintf("/%s/%s", name, variant);
+                    checkBody(get_body(path), c, sprintf("%s %s", label, path));
+                }
+            }
+        };
+
+        HTTPClient hc = getHttpClient(getUrl(), {"assume_encoding": Assumed});
+        assertEq(Assumed, hc.getAssumedEncoding());
+        check(auto sub (string path) { return hc.send(NOTHING, "GET", path).body; }, "HTTPClient option");
+        hc = getHttpClient(getTlsUrl(), {"http_version": "2.0"});
+        hc.setHttp3Mode("disabled");
+        hc.setAssumedEncoding(Assumed);
+        check(auto sub (string path) { return hc.send(NOTHING, "GET", path).body; }, "HTTPClient h2 set");
+
+        foreach hash<auto> i in ({"url": getUrl(), "protocol": "h1"}, {"url": getTlsUrl(), "protocol": "h2"}) {
+            HttpClientConnectionManager mgr = getManager({"protocol": i.protocol, "assume_encoding": Assumed});
+            check(auto sub (string path) { return mgr.request(i.url, "GET", path).body; },
+                "HttpClientIo " + i.protocol);
+
+            RestClientIo rest({"url": i.url, "protocol": i.protocol, "ssl_verify_mode": SSL_VERIFY_NONE,
+                "assume_encoding": Assumed});
+            assertEq(Assumed, rest.getAssumedEncoding());
+            hash<CharsetCase> c = TestHandler::Cases.text;
+            string body = rest.restGet("/text/plain").body;
+            assertEq(Assumed, body.encoding(), "RestClientIo " + i.protocol);
+            assertEq(convert_encoding(force_encoding(c.body.toString(), Assumed), "UTF-8"),
+                convert_encoding(body, "UTF-8"), "RestClientIo " + i.protocol);
+        }
+
+        RestClient rest({"url": getUrl(), "assume_encoding": Assumed});
+        string body = rest.get("/text/gzip").body;
+        assertEq(Assumed, body.encoding());
+    }
+}

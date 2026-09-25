@@ -47,7 +47,7 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
     }
 
     #! Creates the object from the arguments
-    constructor(ServiceNowRestClient rest) : ServiceNowRestDataProviderBase(rest) {
+    constructor(ServiceNowRestClientIo rest) : ServiceNowRestDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -121,19 +121,12 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
             return access;
         }
 
-        hash<auto> info;
-        try {
-            access = map {$1.name: $1 + parseBools($1 - ("name", "super_class", "sys_id"))}, rest.get("table/sys_db_object?"
-                "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access,super_class", NOTHING,
-                \info).body.response.result;
-            # sort table names
-            access = access{sort(keys access)};
-            all_access = True;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response
+        access = map {$1.name: $1 + parseBools($1 - ("name", "super_class", "sys_id"))}, rest.restGet("table/sys_db_object?"
+            "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access,super_class").body.response.result;
+        # sort table names
+        access = access{sort(keys access)};
+        all_access = True;
 
         return access;
     }
@@ -161,24 +154,16 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
             return rv;
         }
 
-        hash<auto> info;
-        try {
-            rv = rest.get("table/sys_db_object?"
-                "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access,super_class&sysparm_query=name=" + name,
-                NOTHING, \info).body.response.result;
+        # the exception argument of an error response includes the response
+        rv = rest.restGet("table/sys_db_object?"
+            "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access,super_class&sysparm_query=name=" + name).body.response.result;
 
-            if (rv.super_class) {
-                string super_class;
-                getAccessIdIntern(rv.super_class.value, \super_class);
-                scmap{name} = super_class;
-            }
-            access{name} = accessid{rv.sys_id} = rv + parseBools(rv - ("name", "sys_id", "super_class"));
-        } catch (hash<ExceptionInfo> ex) {
-            printf("%s\n", get_exception_string(ex));
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
+        if (rv.super_class) {
+            string super_class;
+            getAccessIdIntern(rv.super_class.value, \super_class);
+            scmap{name} = super_class;
         }
+        access{name} = accessid{rv.sys_id} = rv + parseBools(rv - ("name", "sys_id", "super_class"));
 
         return access{name};
     }
@@ -191,23 +176,16 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
             return rv;
         }
 
-        hash<auto> info;
-        try {
-            rv = rest.get("table/sys_db_object?"
-                "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access&sysparm_query=sys_id=" + sys_id,
-                NOTHING, \info).body.response.result;
-            name = rv.name;
-            accessid{sys_id} = access{name} = rv + parseBools(rv - ("name", "sys_id"));
+        # the exception argument of an error response includes the response
+        rv = rest.restGet("table/sys_db_object?"
+            "sysparm_fields=name,sys_id,create_access,delete_access,read_access,update_access&sysparm_query=sys_id=" + sys_id).body.response.result;
+        name = rv.name;
+        accessid{sys_id} = access{name} = rv + parseBools(rv - ("name", "sys_id"));
 
-            if (rv.super_class) {
-                string super_name;
-                getAccessIdIntern(rv.super_class.value, \super_name);
-                scmap{name} = super_name;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
+        if (rv.super_class) {
+            string super_name;
+            getAccessIdIntern(rv.super_class.value, \super_name);
+            scmap{name} = super_name;
         }
 
         return accessid{sys_id};
@@ -234,20 +212,13 @@ public class ServiceNowTablesDataProvider inherits ServiceNowRestDataProviderBas
             return rv;
         }
 
-        hash<auto> info;
-        try {
-            *softlist<auto> res = rest.get("table/sys_dictionary?sysparm_query=name=" + name, NOTHING,
-                \info).body.response.result;
-            rv = map {$1.element: $1 - "element"}, res, exists $1.element;
-            meta{name} = rv;
-            *string super_class = scmap{name};
-            if (super_class) {
-                rv += getMetadataIntern(super_class);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
+        # the exception argument of an error response includes the response
+        *softlist<auto> res = rest.restGet("table/sys_dictionary?sysparm_query=name=" + name).body.response.result;
+        rv = map {$1.element: $1 - "element"}, res, exists $1.element;
+        meta{name} = rv;
+        *string super_class = scmap{name};
+        if (super_class) {
+            rv += getMetadataIntern(super_class);
         }
 
         return rv;

@@ -47,7 +47,7 @@ public class LinearProjectDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object
-    constructor(LinearRestClient::LinearRestClient rest, string projectId) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, string projectId) : LinearDataProviderBase(rest) {
         @assert(projectId.val(), "project ID cannot be empty");
         self.projectId = projectId;
     }

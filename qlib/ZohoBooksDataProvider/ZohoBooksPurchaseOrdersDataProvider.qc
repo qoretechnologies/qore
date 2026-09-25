@@ -25,7 +25,7 @@ public class ZohoBooksPurchaseOrdersDataProvider inherits ZohoBooksDataProviderB
             },
         };
     }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "purchaseorders"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksPurchaseOrderDataType().getFields(); }
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
@@ -41,7 +41,7 @@ public class ZohoBooksPurchaseOrdersDataProvider inherits ZohoBooksDataProviderB
 
 public class ZohoBooksGetPurchaseOrderDataProvider inherits ZohoBooksDataProviderBase {
     public { const ProviderInfo = <DataProviderInfo>{"name": "get-purchaseorder", "desc": "Gets a purchase order", "type": "ZohoBooksGetPurchaseOrderDataProvider", "supports_request": True}; }
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {}
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {}
     string getName() { return "get-purchaseorder"; }
     private *AbstractDataProviderType getRequestTypeImpl() { return AbstractDataProviderTypeMap."hash"; }
     private *AbstractDataProviderType getResponseTypeImpl() { return new ZohoBooksPurchaseOrderDataType(); }

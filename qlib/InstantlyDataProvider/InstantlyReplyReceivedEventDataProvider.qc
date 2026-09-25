@@ -48,7 +48,7 @@ public class InstantlyReplyReceivedEventDataProvider inherits InstantlyBaseEvent
     }
 
     #! Creates the object with a REST client
-    constructor(InstantlyRestClient::InstantlyRestClient rest, *hash<auto> options)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest, *hash<auto> options)
             : InstantlyBaseEventDataProvider(rest, options) {
     }
 

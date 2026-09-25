@@ -65,11 +65,11 @@ public class ZohoInventoryGetContactPersonDataProvider inherits ZohoInventoryDat
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.contact_person_id) {
             contact_person_id = options.contact_person_id;
         }
@@ -97,12 +97,12 @@ public class ZohoInventoryGetContactPersonDataProvider inherits ZohoInventoryDat
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.contact_person_id ?? request_options.contact_person_id ?? contact_person_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "contact_person_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/contacts/contactpersons/%s", id));
+        hash<auto> response = doGet(sprintf("/contacts/contactpersons/%s", id), NOTHING, org_id);
         return response.contact_person;
     }
 

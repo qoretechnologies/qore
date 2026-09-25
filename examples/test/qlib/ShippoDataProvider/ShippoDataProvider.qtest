@@ -38,12 +38,52 @@
 %requires ShippoRestClient
 %requires ShippoDataProvider
 
+%requires HttpServerUtil
+%requires HttpServer
+
 %exec-class ShippoDataProviderTest
+
+#! A local Shippo API server that records requests
+class FakeShippoHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.path =~ /missing/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"detail": "Not found."}),
+            };
+        }
+        auto rv;
+        if (hdr.method == "GET" && hdr.path =~ /^shipments\?/) {
+            rv = {"results": ({"object_id": "s1", "status": "SUCCESS"},)};
+        } else if (hdr.method == "GET") {
+            rv = {"object_id": (hdr.path =~ x/([^\/]+)$/)[0], "status": "SUCCESS"};
+        } else {
+            rv = {"object_id": "o1", "method": hdr.method};
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(rv),
+        };
+    }
+}
 
 public class ShippoDataProviderTest inherits QUnit::Test {
     private {
         #! Shippo REST client for integration tests
-        *ShippoRestClient::ShippoRestClient client;
+        *ShippoRestClient::ShippoRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -71,6 +111,7 @@ public class ShippoDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require SHIPPO_API_TOKEN)
         addTestCase("integration tests", \integrationTests());
@@ -102,7 +143,7 @@ public class ShippoDataProviderTest inherits QUnit::Test {
         hash<auto> opts = {
             "apikey": apikey,
         };
-        client = new ShippoRestClient::ShippoRestClient(opts);
+        client = new ShippoRestClient::ShippoRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -374,6 +415,62 @@ public class ShippoDataProviderTest inherits QUnit::Test {
         assertTrue(client2.getURL() =~ /api\.goshippo\.com$/);
     }
 
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeShippoHandler handler();
+        server.setHandler("shippo", "", NOTHING, handler);
+        server.setDefaultHandler("shippo", handler);
+
+        ShippoDataProvider::ShippoDataProvider provider({
+            "apikey": "shippo_test_key",
+            "shipporestclient_options": {
+                "url": "http://localhost:" + port,
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof ShippoRestClient::ShippoRestClientIo);
+
+        # records are retrieved with the async client
+        list<hash<auto>> shipments = map $1, provider.getChildProvider("shipments").searchRecords(NOTHING,
+            {"results": 5});
+        assertEq("s1", shipments[0].object_id);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("shipments?results=5", handler.requests[0].path);
+        assertEq("ShippoToken shippo_test_key", handler.requests[0].authorization);
+
+        # a request provider returns the parsed response
+        handler.requests = ();
+        hash<auto> shipment = provider.getChildProvider("get-shipment").doRequest({"shipment_id": "s2"});
+        assertEq("s2", shipment.object_id);
+        assertEq("shipments/s2", handler.requests[0].path);
+
+        # POST, PUT and DELETE requests send the body and return the response
+        handler.requests = ();
+        assertEq("POST", provider.doPost("/orders", {"order_number": "1"}).method);
+        assertEq("PUT", provider.doPut("/orders/o1", {"notes": "x"}).method);
+        assertEq("DELETE", provider.doDelete("/orders/o1").method);
+        assertEq(("POST", "PUT", "DELETE"), (map $1.method, handler.requests));
+        assertEq(("orders", "orders/o1", "orders/o1"), (map $1.path, handler.requests));
+        assertEq({"order_number": "1"}, handler.requests[0].body);
+        assertEq({"notes": "x"}, handler.requests[1].body);
+        assertNothing(handler.requests[2].body);
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProvider("get-shipment").doRequest({"shipment_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Not found.", ex.arg.body.detail);
+        }
+    }
+
     #! Connection tests - verify connection scheme registration
     connectionTests() {
         checkJson();
@@ -466,7 +563,7 @@ public class ShippoDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("addresses");
+        hash<auto> response = client.restGet("addresses");
         assertTrue(response.body.typeCode() == NT_HASH);
         if (m_options.verbose) {
             printf("Connected to Shippo API successfully\n");

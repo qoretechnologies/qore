@@ -32,15 +32,15 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
         const BaseConstructorOptions = {
             "customeriorestclient": <DataProviderOptionInfo>{
                 "display_name": "Customer.io REST Client",
-                "short_desc": "The CustomerIoRestClient object",
-                "type": AbstractDataProviderType::get(new Type("CustomerIoRestClient::CustomerIoRestClient")),
-                "desc": "The CustomerIoRestClient object to use for App API calls",
+                "short_desc": "The CustomerIoRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("CustomerIoRestClient::CustomerIoRestClientIo")),
+                "desc": "The `CustomerIoRestClientIo` object to use for App API calls",
             },
             "customeriorestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Customer.io REST Client Options",
-                "short_desc": "Options for creating a CustomerIoRestClient",
+                "short_desc": "Options for creating a CustomerIoRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a CustomerIoRestClient object if one is not provided directly",
+                "desc": "Options for creating a `CustomerIoRestClientIo` object if one is not provided directly",
             },
             "app_api_key": <DataProviderOptionInfo>{
                 "display_name": "App API Key",
@@ -97,13 +97,13 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
 
     private {
         #! The REST client object for App API calls (Bearer token auth)
-        CustomerIoRestClient::CustomerIoRestClient rest;
+        CustomerIoRestClient::CustomerIoRestClientIo rest;
 
         #! The connection object, if applicable
         *CustomerIoRestClient::CustomerIoRestConnection conn;
 
         #! Secondary REST client for Track API (Basic auth), lazily created
-        *RestClient::RestClient track_rest;
+        *RestClientIo::RestClientIo track_rest;
 
         #! Stored Site ID for Track API construction
         *string site_id;
@@ -120,7 +120,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(CustomerIoRestClient::CustomerIoRestClient rest) {
+    constructor(CustomerIoRestClient::CustomerIoRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -129,7 +129,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
     constructor(CustomerIoRestClient::CustomerIoRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -146,7 +146,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
             if (copts.region) {
                 client_opts.region = copts.region;
             }
-            rest = new CustomerIoRestClient::CustomerIoRestClient(client_opts);
+            rest = new CustomerIoRestClient::CustomerIoRestClientIo(client_opts);
         }
         # Store credentials for lazy Track API client construction
         if (copts.site_id) {
@@ -159,7 +159,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns the REST client
-    CustomerIoRestClient::CustomerIoRestClient getRestClient() {
+    CustomerIoRestClient::CustomerIoRestClientIo getRestClient() {
         return rest;
     }
 
@@ -205,7 +205,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -222,7 +222,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -239,7 +239,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPut: PUT %s with body: %y", path, body));
-        hash<auto> response = rest.put(path, body);
+        hash<auto> response = rest.restPut(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPut: success, response keys: %y", keys response.body));
         return response.body;
@@ -255,7 +255,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doDelete: DELETE %s", path));
-        hash<auto> response = rest.del(path);
+        hash<auto> response = rest.restDel(path, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;
@@ -266,14 +266,14 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
 
         @throw CUSTOMERIO-API-ERROR if Track API credentials are not configured
     */
-    RestClient::RestClient getTrackRestClient() {
+    RestClientIo::RestClientIo getTrackRestClient() {
         if (!track_rest) {
             if (!site_id || !tracking_api_key) {
                 throw "CUSTOMERIO-API-ERROR", "Track API credentials (site_id and tracking_api_key) are required "
                     "for Track API operations";
             }
             string base_url = TrackApiUrls{region} ?? TrackApiUrls."us";
-            track_rest = new RestClient::RestClient({
+            track_rest = new RestClientIo::RestClientIo({
                 "url": base_url,
                 "username": site_id,
                 "password": tracking_api_key,
@@ -298,9 +298,9 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
     */
     auto doTrackPost(string path, *hash<auto> body) {
         @assert(path.val(), "API path cannot be empty");
-        RestClient::RestClient tc = getTrackRestClient();
+        RestClientIo::RestClientIo tc = getTrackRestClient();
         @debug(log(LoggerLevel::DEBUG, "doTrackPost: POST %s with body: %y", path, body));
-        hash<auto> response = tc.post(path, body);
+        hash<auto> response = tc.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doTrackPost: success"));
         return response.body;
@@ -315,9 +315,9 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
     */
     auto doTrackPut(string path, *hash<auto> body) {
         @assert(path.val(), "API path cannot be empty");
-        RestClient::RestClient tc = getTrackRestClient();
+        RestClientIo::RestClientIo tc = getTrackRestClient();
         @debug(log(LoggerLevel::DEBUG, "doTrackPut: PUT %s with body: %y", path, body));
-        hash<auto> response = tc.put(path, body);
+        hash<auto> response = tc.restPut(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doTrackPut: success"));
         return response.body;
@@ -331,9 +331,9 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
     */
     auto doTrackDelete(string path) {
         @assert(path.val(), "API path cannot be empty");
-        RestClient::RestClient tc = getTrackRestClient();
+        RestClientIo::RestClientIo tc = getTrackRestClient();
         @debug(log(LoggerLevel::DEBUG, "doTrackDelete: DELETE %s", path));
-        hash<auto> response = tc.del(path);
+        hash<auto> response = tc.restDel(path, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doTrackDelete: success"));
         return response.body;
@@ -347,7 +347,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
                 "for Track API v2 operations";
         }
         string base_url = TrackApiV2Urls{region} ?? TrackApiV2Urls."us";
-        RestClient::RestClient v2 = new RestClient::RestClient({
+        RestClientIo::RestClientIo v2 = new RestClientIo::RestClientIo({
             "url": base_url,
             "username": site_id,
             "password": tracking_api_key,
@@ -360,7 +360,7 @@ public class CustomerIoDataProviderBase inherits DataProvider::AbstractDataProvi
             }
         }
         @debug(log(LoggerLevel::DEBUG, "doTrackV2Post: POST %s with body: %y", path, body));
-        hash<auto> response = v2.post(path, body);
+        hash<auto> response = v2.restPost(path, body);
         checkResponse(response);
         return response.body;
     }

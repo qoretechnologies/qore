@@ -36,31 +36,86 @@
 
 %requires SquareRestClient
 %requires SquareDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class SquareDataProviderTest
 
 #! Records the request body without contacting the Square API
-class FakeSquareRestClient inherits SquareRestClient::SquareRestClient {
+class FakeSquareRestClient inherits SquareRestClient::SquareRestClientIo {
     public {
+        string last_method;
         string last_path;
         auto last_body;
         hash<auto> response_body = {"invoice": {"id": "inv_1"}};
     }
 
-    constructor() : SquareRestClient({"token": "fake-token"}, True) {
+    constructor() : SquareRestClientIo({"token": "fake-token"}) {
     }
 
-    hash<auto> post(string path, auto body, *reference<hash<auto>> info, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
         last_path = path;
         last_body = body;
-        return {"body": response_body};
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "headers": {},
+            "body": response_body,
+        };
+    }
+}
+
+#! A local Square API server that records requests
+class FakeSquareHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"errors": ({"category": "RATE_LIMIT_ERROR", "code": "RATE_LIMITED"},)}),
+            };
+        }
+        if (hdr.path =~ /customers\/missing/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"errors": ({"category": "INVALID_REQUEST_ERROR", "code": "NOT_FOUND",
+                    "detail": "customer not found"},)}),
+            };
+        }
+        if (hdr.method == "POST" && hdr.path =~ /invoices$/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"invoice": {"id": "inv_2"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"customers": ({"id": "c1", "given_name": "Jane"},)}),
+        };
     }
 }
 
 public class SquareDataProviderTest inherits QUnit::Test {
     private {
         #! Square REST client for integration tests
-        *SquareRestClient::SquareRestClient client;
+        *SquareRestClient::SquareRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -96,6 +151,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         addTestCase("create invoice request body", \createInvoiceBodyTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require Square credentials)
         addTestCase("integration tests", \integrationTests());
@@ -164,7 +220,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
             if (url) {
                 opts.url = url;
             }
-            client = new SquareRestClient::SquareRestClient(opts);
+            client = new SquareRestClient::SquareRestClientIo(opts);
             return;
         }
 
@@ -179,7 +235,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         if (url) {
             opts.url = url;
         }
-        client = new SquareRestClient::SquareRestClient(opts);
+        client = new SquareRestClient::SquareRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -526,6 +582,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
             "delivery_method": "EMAIL",
         });
         assertEq("inv_1", resp.id);
+        assertEq("POST", rest.last_method);
         assertEq("invoices", rest.last_path);
         hash<auto> invoice = rest.last_body.invoice;
         assertEq("loc_1", invoice.location_id);
@@ -812,6 +869,70 @@ public class SquareDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Warning: cleanup failed: %s: %s\n", ex.err, ex.desc);
             }
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeSquareHandler handler();
+        server.setHandler("square", "", NOTHING, handler);
+        server.setDefaultHandler("square", handler);
+
+        SquareDataProvider::SquareDataProvider provider({
+            "squarerestclient_options": {
+                "url": "http://localhost:" + port + "/v2",
+                "token": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof SquareRestClient::SquareRestClientIo);
+        AbstractDataProvider customers = provider.getChildProviderEx("customers");
+
+        # a GET request is sent with the async client and the response is returned
+        list<hash<auto>> recs = map $1, customers.searchRecords();
+        assertEq(({"id": "c1", "given_name": "Jane"},), recs);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("v2/customers", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+
+        # a POST request sends the body
+        handler.requests = ();
+        SquareDataProvider::SquareCreateInvoiceDataProvider create_invoice(provider.getRestClient());
+        hash<auto> invoice = create_invoice.doRequest({
+            "location_id": "loc_1",
+            "order_id": "ord_1",
+            "customer_id": "cust_1",
+            "payment_request_type": "BALANCE",
+        });
+        assertEq("inv_2", invoice.id);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("v2/invoices", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+        assertEq("loc_1", handler.requests[0].body.invoice.location_id);
+        assertEq("ord_1", handler.requests[0].body.invoice.order_id);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        recs = map $1, customers.searchRecords();
+        assertEq(({"id": "c1", "given_name": "Jane"},), recs);
+        assertEq(2, handler.requests.size());
+        assertEq("v2/customers", handler.requests[1].path);
+
+        # an error response is raised with the response
+        try {
+            customers.searchRecords(NOTHING, {"customer_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("customer not found", ex.arg.body.errors[0].detail);
         }
     }
 }

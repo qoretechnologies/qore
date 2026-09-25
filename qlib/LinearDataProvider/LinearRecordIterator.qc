@@ -32,7 +32,7 @@ public namespace LinearDataProvider {
 public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client for API calls
-        LinearRestClient::LinearRestClient rest;
+        LinearRestClient::LinearRestClientIo rest;
 
         #! The GraphQL query template
         string query;
@@ -70,7 +70,7 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
         @param pageSize the number of records per page (default: 50)
         @param recordType optional record type definition
     */
-    constructor(LinearRestClient::LinearRestClient rest, string query, string dataPath,
+    constructor(LinearRestClient::LinearRestClientIo rest, string query, string dataPath,
             *hash<auto> variables, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType) {
         @assert(rest, "REST client cannot be null");
@@ -94,7 +94,7 @@ public class LinearRecordIterator inherits DataProvider::AbstractDataProviderRec
         @param pageSize the number of records per page (default: 50)
         @param recordType optional record type definition
     */
-    constructor(LinearRestClient::LinearRestClient rest, string query, string dataPath,
+    constructor(LinearRestClient::LinearRestClientIo rest, string query, string dataPath,
             string nestedDataPath, *hash<auto> variables, int pageSize = DefaultPageSize,
             *hash<string, AbstractDataField> recordType) {
         @assert(rest, "REST client cannot be null");

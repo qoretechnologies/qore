@@ -28,26 +28,34 @@ public namespace ZohoInvoiceDataProvider {
 #! Base class for Zoho Invoice data providers
 public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Zoho Invoice data providers
         const BaseConstructorOptions = {
             "zohoinvoicerestclient": <DataProviderOptionInfo>{
                 "display_name": "Zoho Invoice REST Client",
-                "short_desc": "The ZohoInvoiceRestClient object",
-                "type": AbstractDataProviderType::get(new Type("ZohoInvoiceRestClient::ZohoInvoiceRestClient")),
-                "desc": "The ZohoInvoiceRestClient object to use for API calls",
+                "short_desc": "The ZohoInvoiceRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("ZohoInvoiceRestClient::ZohoInvoiceRestClientIo")),
+                "desc": "The `ZohoInvoiceRestClientIo` object to use for API calls",
             },
             "zohoinvoicerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Zoho Invoice REST Client Options",
-                "short_desc": "Options for creating a ZohoInvoiceRestClient",
+                "short_desc": "Options for creating a ZohoInvoiceRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a ZohoInvoiceRestClient object if one is not provided directly",
+                "desc": "Options for creating a `ZohoInvoiceRestClientIo` object if one is not provided directly",
             },
             "subdomain": <DataProviderOptionInfo>{
                 "display_name": "Sub Domain",
                 "short_desc": "Zoho subdomain",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Zoho subdomain for your account (zoho or zohocloud)",
-                "default_value": ZohoInvoiceRestClient::ZohoInvoiceRestClient::DefaultSubdomain,
+                "default_value": ZohoInvoiceRestClient::ZohoInvoiceRestClientBase::DefaultSubdomain,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "zoho",
@@ -64,7 +72,7 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
                 "short_desc": "Zoho domain",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Zoho domain for your data center region",
-                "default_value": ZohoInvoiceRestClient::ZohoInvoiceRestClient::DefaultDomain,
+                "default_value": ZohoInvoiceRestClient::ZohoInvoiceRestClientBase::DefaultDomain,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": ".com",
@@ -101,7 +109,7 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
 
     private {
         #! The REST client object for API calls
-        ZohoInvoiceRestClient::ZohoInvoiceRestClient rest;
+        ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest;
 
         #! The connection object, if applicable
         *ZohoInvoiceRestClient::ZohoInvoiceRestConnection conn;
@@ -112,14 +120,14 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest) {
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(ZohoInvoiceRestClient::ZohoInvoiceRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -135,12 +143,12 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
             if (copts.domain) {
                 client_opts.domain = copts.domain;
             }
-            rest = new ZohoInvoiceRestClient::ZohoInvoiceRestClient(client_opts);
+            rest = new ZohoInvoiceRestClient::ZohoInvoiceRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ZohoInvoiceRestClient::ZohoInvoiceRestClient getRestClient() {
+    ZohoInvoiceRestClient::ZohoInvoiceRestClientIo getRestClient() {
         return rest;
     }
 
@@ -213,28 +221,15 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "ZOHOINVOICE-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "ZOHOINVOICE-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 # Check for rate limiting
-                if (info."response-headers"."X-Rate-Limit-Remaining" == "0") {
-                    *string reset = info."response-headers"."X-Rate-Limit-Reset";
+                if (response.headers."x-rate-limit-remaining" == "0") {
+                    *string reset = response.headers."x-rate-limit-reset";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
@@ -371,7 +366,7 @@ public class ZohoInvoiceDataProviderBase inherits DataProvider::AbstractDataProv
         list<hash<AllowedValueInfo>> rv = ();
         try {
             # Note: /organizations endpoint doesn't require organization_id
-            hash<auto> response = rest.get("/organizations");
+            hash<auto> response = rest.restGet("/organizations");
             if (response.body.organizations) {
                 foreach hash<auto> org in (response.body.organizations) {
                     string display_name = org.name ?? sprintf("Organization %s", org.organization_id);

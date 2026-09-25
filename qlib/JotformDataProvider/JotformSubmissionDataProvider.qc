@@ -61,7 +61,7 @@ public class JotformSubmissionDataProvider inherits JotformDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(JotformRestClient::JotformRestClient rest, string submissionID) : JotformDataProviderBase(rest) {
+    constructor(JotformRestClient::JotformRestClientIo rest, string submissionID) : JotformDataProviderBase(rest) {
         @assert(submissionID.val(), "submission ID cannot be empty");
         self.submissionID = submissionID;
     }

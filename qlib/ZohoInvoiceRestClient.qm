@@ -106,6 +106,9 @@ public class ZohoInvoiceRestClientBase {
         #! Default domain
         const DefaultDomain = ".com";
 
+        #! Default API path; appended to the API URL
+        const DefaultApiPath = "/invoice/v3";
+
         #! Allowed subdomains
         const AllowedSubdomains = ("zoho", "zohocloud");
 
@@ -176,8 +179,8 @@ public class ZohoInvoiceRestClientBase {
             throw "ZOHOINVOICE-ERROR", sprintf("invalid domain %y; allowed values: %y", domain, AllowedDomains);
         }
 
-        # Build API URL from domain
-        rv.url = sprintf("https://www.zohoapis%s/invoice/v3", domain);
+        # Build the API URL from the domain unless given explicitly; an explicit URL takes precedence
+        rv.url = ZohoInvoiceRestClientBase::getApiUrl(opts.url, domain);
 
         # Check if token-only mode (token provided without OAuth2 credentials)
         bool token_only = opts.token && !opts.oauth2_client_id && !opts.oauth2_client_secret
@@ -201,12 +204,28 @@ public class ZohoInvoiceRestClientBase {
             }
         }
 
-        # Remove custom options that RestClient doesn't understand
-        remove rv.organization_id;
-        remove rv.subdomain;
-        remove rv.domain;
-
+        # the organization_id, subdomain, and domain options are kept in the returned hash (they are ignored by the
+        # base classes), so that the options saved in the base class can be used to create a copy of the object with
+        # copyWithUrl(); this method must return the same result when called with its own output
         return rv;
+    }
+
+    #! Returns the API URL for the given URL and domain
+    /** @param url the URL given in the constructor options, if any; takes precedence over the domain; if the URL
+        has no path, then @ref DefaultApiPath is appended to it
+        @param domain the Zoho domain
+
+        @return the API URL
+    */
+    static string getApiUrl(*string url, string domain) {
+        if (!url.val()) {
+            return sprintf("https://www.zohoapis%s%s", domain, DefaultApiPath);
+        }
+        *string path = parse_url(url).path;
+        if (!path.val() || path == "/") {
+            return regex_subst(url, "/+$", "") + DefaultApiPath;
+        }
+        return url;
     }
 }
 
@@ -214,8 +233,11 @@ public class ZohoInvoiceRestClientBase {
 /** Zoho Invoice uses a REST API with OAuth2 authentication.
 
     @par URL Construction:
-    The API URL is constructed from the domain option:
+    The API URL is constructed from the domain option unless the \c url option is given:
     - API: https://www.zohoapis{domain}/invoice/v3
+
+    If the \c url option is given (for example for a proxy or a regional endpoint), it takes precedence over the
+    \c domain option; if the URL given has no path, then \c /invoice/v3 is appended to it.
 
     The OAuth2 URLs are constructed from the subdomain and domain options:
     - Auth: https://accounts.{subdomain}{domain}/oauth/v2/auth
@@ -269,6 +291,8 @@ ZohoInvoiceRestClient zoho({
         - \c organization_id: the Zoho Invoice organization ID (required for most operations)
         - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
         - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+        - \c url: the API URL; takes precedence over the \c domain option; if the URL has no path, then
+          \c /invoice/v3 is appended to it
 
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
@@ -337,7 +361,7 @@ ZohoInvoiceRestClient zoho({
 public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
     public {
         #! Default connection URL
-        const DefaultConnectionUrl = "zohoinvoice://www.zohoapis.com";
+        const DefaultConnectionUrl = "zohoinvoice://www.zohoapis.com/invoice/v3";
 
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
@@ -527,7 +551,7 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
         string domain = config.opts.domain ?? ZohoInvoiceRestClientBase::DefaultDomain;
 
         # Build URL from domain
-        string url = sprintf("zohoinvoice://www.zohoapis%s", domain);
+        string url = sprintf("zohoinvoice://www.zohoapis%s/invoice/v3", domain);
         return config + {
             "url": url,
         };
@@ -605,7 +629,7 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
             # Build correct URLs from subdomain and domain options instead of hardcoded defaults
             string subdomain = opts.subdomain ?? ZohoInvoiceRestClientBase::DefaultSubdomain;
             string domain = opts.domain ?? ZohoInvoiceRestClientBase::DefaultDomain;
-            string correct_url = sprintf("zohoinvoice://www.zohoapis%s", domain);
+            string correct_url = sprintf("zohoinvoice://www.zohoapis%s/invoice/v3", domain);
             string correct_auth_url = sprintf("https://accounts.%s%s/oauth/v2/auth", subdomain, domain);
             string correct_token_url = sprintf("https://accounts.%s%s/oauth/v2/token", subdomain, domain);
             # NOTE: do not update the URL or real URL values here, or the external update will fail, because it
@@ -657,12 +681,112 @@ public class ZohoInvoiceRestConnection inherits RestClient::RestConnection {
 /** @see ZohoInvoiceRestClient for more information
 */
 public class ZohoInvoiceRestClientIo inherits RestClientIo::RestClientIo, ZohoInvoiceRestClientBase {
+    private {
+        #! The organization ID - required for all API calls except /organizations
+        *string organization_id;
+
+        #! Subdomain for Zoho URLs (zoho or zohocloud)
+        string subdomain;
+
+        #! Domain for Zoho URLs (.com, .eu, .in, .com.au, .ca, .sa, .jp)
+        string domain;
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo"
+        class plus:
+        - \c organization_id: the Zoho Invoice organization ID (required for most operations); it is added
+          to the query string of every request except requests for \c /organizations
+        - \c subdomain: the Zoho subdomain ("zoho" or "zohocloud")
+        - \c domain: the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+        - \c url: the API URL; takes precedence over the \c domain option; if the URL has no path, then
+          \c /invoice/v3 is appended to it
         @param shared_mgr optional shared connection manager
+
+        @throw RESTCLIENTIO-ERROR invalid option passed to the constructor
+        @throw ZOHOINVOICE-ERROR invalid subdomain or domain specified
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(ZohoInvoiceRestClientBase::getOptions(opts), shared_mgr) {
+        if (opts.organization_id) {
+            organization_id = opts.organization_id;
+        }
+        subdomain = opts.subdomain ?? DefaultSubdomain;
+        domain = opts.domain ?? DefaultDomain;
+    }
+
+    #! Returns the organization ID, if any
+    /** @return the organization ID added to requests, if any
+    */
+    *string getOrganizationId() {
+        return organization_id;
+    }
+
+    #! Sets the organization ID
+    /** @param org_id the organization ID to add to all subsequent requests except requests for
+        \c /organizations
+    */
+    setOrganizationId(string org_id) {
+        organization_id = org_id;
+    }
+
+    #! Returns the subdomain
+    /** @return the Zoho subdomain ("zoho" or "zohocloud")
+    */
+    string getSubdomain() {
+        return subdomain;
+    }
+
+    #! Returns the domain
+    /** @return the Zoho domain (".com", ".eu", ".in", ".com.au", ".ca", ".sa", ".jp")
+    */
+    string getDomain() {
+        return domain;
+    }
+
+    #! Prepares a request, adding the \c organization_id query parameter to the path
+    /** The organization ID is added to all paths except for \c /organizations, which is used to retrieve the
+        list of available organizations.
+    */
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        path = addOrganizationId(path);
+        return RestClientIo::prepareRequest(method, \path, body, \hdr);
+    }
+
+    #! Prepares a request with a pre-serialized body, adding the \c organization_id query parameter to the path
+    /** The organization ID is added to all paths except for \c /organizations, which is used to retrieve the
+        list of available organizations.
+    */
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        path = addOrganizationId(path);
+        return RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+    }
+
+    #! Returns the path with the \c organization_id query parameter added if required
+    /** A request can be prepared more than once (ex: when retried after an authentication error), in which case
+        the path already has the parameter and the connection path; the parameter is only added once.
+
+        @param path the request path
+
+        @return the path with the \c organization_id query parameter added if required
+    */
+    private string addOrganizationId(string path) {
+        *string org_id = organization_id;
+        if (!org_id || path =~ /[?&]organization_id=/) {
+            return path;
+        }
+        # the path relative to the connection path, if any, for the /organizations check
+        string rel_path = path;
+        *string conn_path = getConnectionPath();
+        if (conn_path.val() && rel_path.substr(0, conn_path.length()) == conn_path) {
+            rel_path = rel_path.substr(conn_path.length());
+        }
+        if (rel_path =~ /^\/?organizations($|\?)/) {
+            return path;
+        }
+        return path + (path =~ /\?/ ? "&" : "?") + "organization_id=" + org_id;
     }
 }
 }

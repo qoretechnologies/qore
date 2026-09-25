@@ -1,0 +1,563 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    FileLocationHandler http(s):// and rest(s):// tests against a local server: requests are made with HttpClientIo
+    and RestClientIo (issue 5469)
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires Mime
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServer
+%requires FileLocationHandler
+%requires HttpClientIo
+%requires RestClient
+%requires RestClientIo
+
+%exec-class FileLocationHandlerHttpIoTest
+
+#! A request received by the test server
+hashdecl HttpIoTestRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string content_type;
+    *string transfer_encoding;
+    *string custom;
+    *binary body;
+}
+
+#! Test server handler with fixed routes that records every request
+class HttpIoTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! Requests to "/block" wait until this counter is zero
+        Counter block();
+        #! Signaled when a request to "/block" arrives
+        Queue blocked();
+        #! A large body, sent in chunks
+        const LargeSize = 1024 * 1024 + 17;
+    }
+
+    private {
+        list<hash<HttpIoTestRequest>> requests;
+        Mutex m();
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<HttpIoTestRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    static binary getLargeBody() {
+        binary rv;
+        for (int i = 0; rv.size() < LargeSize; ++i) {
+            rv += binary(sprintf("%08d|", i));
+        }
+        return rv.substr(0, LargeSize);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock al(m);
+            requests += <HttpIoTestRequest>{
+                "method": hdr.method,
+                "target": cx.raw_path,
+                "authorization": hdr.authorization,
+                "content_type": hdr."content-type",
+                "transfer_encoding": hdr."transfer-encoding",
+                "custom": hdr."x-custom",
+                "body": exists body ? binary(body) : NOTHING,
+            };
+        }
+        string path = cx.raw_path;
+        switch (path) {
+            case "/text":
+                return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary("text body"));
+            case "/latin1":
+                return makeResponse({"Content-Type": "text/plain"}, 200, <e4f6fc>);
+            case "/utf8-bom":
+                return makeResponse({"Content-Type": "text/plain"}, 200, <efbbbfc3a4c3b6c3bc>);
+            case "/latin2":
+                return makeResponse({"Content-Type": "text/plain;charset=iso-8859-2"}, 200, <b1>);
+            case "/html-meta":
+                return makeResponse({"Content-Type": "text/html"}, 200,
+                    binary("<meta charset=\"windows-1252\">") + <80>);
+            case "/json":
+                return makeResponse({"Content-Type": "application/json;charset=iso-8859-1"}, 200,
+                    binary("{\"a\":\"äöü\"}"));
+            case "/gzip-text": {
+                hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "text/plain;charset=utf-8",
+                    "Content-Encoding": "gzip"}, 200, gzip(binary("äöü")));
+                rv.no_content_encoding = True;
+                return rv;
+            }
+            case "/large-text":
+                return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary(strmul("äb", 2000)));
+            case "/gzip": {
+                hash<HttpResponseInfo> rv = makeResponse({"Content-Type": "application/octet-stream",
+                    "Content-Encoding": "gzip"}, 200, gzip(getLargeBody()));
+                rv.no_content_encoding = True;
+                return rv;
+            }
+            case "/large":
+                return makeResponse({"Content-Type": "application/octet-stream"}, 200, getLargeBody());
+            case "/missing":
+                return makeResponse({"Content-Type": "text/plain"}, 404, binary("not here"));
+            case "/to-text":
+                return makeResponse({"Location": "/text"}, 302, binary());
+            case "/post-307":
+                return makeResponse({"Location": "/echo/307"}, 307, binary());
+            case "/post-303":
+                return makeResponse({"Location": "/echo/303"}, 303, binary());
+            case "/post-302":
+                return makeResponse({"Location": "/echo/302"}, 302, binary());
+            case "/block":
+                blocked.push(path);
+                block.waitForZero();
+                return makeResponse({"Content-Type": "text/plain"}, 200, binary("released"));
+        }
+        if (path =~ /^\/echo/) {
+            string rv = hdr.method + " " + path;
+            if (exists body) {
+                rv += ":" + binary(body).toString();
+            }
+            return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary(rv));
+        }
+        return makeResponse({"Content-Type": "text/plain"}, 200, binary(path));
+    }
+}
+
+public class FileLocationHandlerHttpIoTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        HttpIoTestHandler handler();
+        int port;
+        string url;
+        string rest_url;
+    }
+
+    constructor() : Test("FileLocationHandler HttpClientIo test", "1.0") {
+        addTestCase("text and binary reads", \readTest());
+        addTestCase("writes", \writeTest());
+        addTestCase("write redirects", \writeRedirectTest());
+        addTestCase("streaming reads", \streamReadTest());
+        addTestCase("streaming writes", \streamWriteTest());
+        addTestCase("non-blocking reads", \pollTest());
+        addTestCase("errors", \errorTest());
+        addTestCase("timeouts", \timeoutTest());
+        addTestCase("bound connection manager", \boundManagerTest());
+        addTestCase("REST locations", \restTest());
+        addTestCase("bound sync REST client", \boundSyncRestTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            if (handler.block.getCount()) {
+                handler.block.dec();
+            }
+            server.stop();
+        }
+        server.setHandler("test", "", NOTHING, handler);
+        server.setDefaultHandler("test", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url = sprintf("http://127.0.0.1:%d", port);
+        rest_url = sprintf("rest://127.0.0.1:%d", port);
+
+        set_return_value(main());
+    }
+
+    readTest() {
+        assertEq("text body", FileLocationHandler::getTextFileFromLocation(url + "/text"));
+        assertEq(binary("text body"), FileLocationHandler::getBinaryFileFromLocation(url + "/to-text"));
+        # text without a charset is ISO-8859-1 by default, as with HTTPClient
+        string str = FileLocationHandler::getTextFileFromLocation(url + "/latin1");
+        assertEq("äöü", str);
+        assertEq("ISO-8859-1", str.encoding());
+        # the encoding option is used for text without a charset
+        str = FileLocationHandler::getTextFileFromLocation(url + "/latin1{encoding=ISO-8859-15}");
+        assertEq("äöü", str);
+        assertEq("ISO-8859-15", str.encoding());
+        # a content encoding is decoded
+        assertEq(HttpIoTestHandler::getLargeBody(), FileLocationHandler::getBinaryFileFromLocation(url + "/gzip"));
+        # unless it is passed through
+        assertEq(gzip(HttpIoTestHandler::getLargeBody()),
+            FileLocationHandler::getBinaryFileFromLocation(url + "/gzip{encoding_passthru=true}"));
+        # user information is sent with basic authentication, and invalid characters in the path are encoded
+        handler.clear();
+        FileLocationHandler::getTextFileFromLocation(sprintf("http://user:pass@127.0.0.1:%d/echo/a b", port));
+        hash<HttpIoTestRequest> req = handler.getRequests()[0];
+        assertEq("/echo/a%20b", req.target);
+        assertEq("Basic dXNlcjpwYXNz", req.authorization);
+        # percent-encoded octets are kept
+        handler.clear();
+        FileLocationHandler::getTextFileFromLocation(url + "/echo/a%2Fb?x=%20");
+        assertEq("/echo/a%2Fb?x=%20", handler.getRequests()[0].target);
+        # the method option
+        handler.clear();
+        assertEq("DELETE /echo/del", FileLocationHandler::getTextFileFromLocation(url + "/echo/del{method=delete}"));
+        assertEq("DELETE", handler.getRequests()[0].method);
+    }
+
+    writeTest() {
+        handler.clear();
+        FileLocationHandler::writeFileToLocation(url + "/echo/post", "string data");
+        FileLocationHandler::writeFileToLocation(url + "/echo/put{method=put}", <0001ff>);
+        FileLocationHandler::writeFileToLocation(url + "/echo/patch{method=patch,encoding=ISO-8859-1}", "äö");
+        list<hash<HttpIoTestRequest>> reqs = handler.getRequests();
+        assertEq(("POST", "PUT", "PATCH"), (map $1.method, reqs));
+        assertEq(binary("string data"), reqs[0].body);
+        assertEq("text/plain", reqs[0].content_type);
+        assertEq(<0001ff>, reqs[1].body);
+        assertEq("application/octet-stream", reqs[1].content_type);
+        # the string was converted to the requested encoding
+        assertEq(<e4f6>, reqs[2].body);
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "404", \FileLocationHandler::writeFileToLocation(),
+            (url + "/missing", "x"));
+        # error_passthru
+        FileLocationHandler::writeFileToLocation(url + "/missing{error_passthru=true}", "x");
+    }
+
+    writeRedirectTest() {
+        # 307 repeats the request with its body
+        handler.clear();
+        FileLocationHandler::writeFileToLocation(url + "/post-307", "repeated");
+        list<hash<HttpIoTestRequest>> reqs = handler.getRequests();
+        assertEq(("POST", "POST"), (map $1.method, reqs));
+        assertEq(binary("repeated"), reqs[1].body);
+        assertEq("/echo/307", reqs[1].target);
+        # 303 and a POST redirected with 302 are retrieved with GET without the body
+        foreach string path in (("/post-303", "/post-302")) {
+            handler.clear();
+            FileLocationHandler::writeFileToLocation(url + path, "dropped");
+            reqs = handler.getRequests();
+            assertEq(("POST", "GET"), (map $1.method, reqs), path);
+            assertNothing(reqs[1].body, path);
+        }
+        # a PUT redirected with 302 is repeated
+        handler.clear();
+        FileLocationHandler::writeFileToLocation(url + "/post-302{method=put}", "put body");
+        reqs = handler.getRequests();
+        assertEq(("PUT", "PUT"), (map $1.method, reqs));
+        assertEq(binary("put body"), reqs[1].body);
+    }
+
+    streamReadTest() {
+        binary large = HttpIoTestHandler::getLargeBody();
+        InputStream is = FileLocationHandler::getBinaryStreamFromLocation(url + "/large");
+        assertEq(large, readAll(is));
+        assertNothing(is.read(10), "the end of the stream is repeated");
+        assertEq(-1, is.peek());
+        # the content encoding is decoded as the stream is read
+        is = FileLocationHandler::getBinaryStreamFromLocation(url + "/gzip");
+        assertEq(large, readAll(is));
+        is = FileLocationHandler::getBinaryStreamFromLocation(url + "/gzip{encoding_passthru=true}");
+        assertEq(gzip(large), readAll(is));
+        # redirects are followed
+        is = FileLocationHandler::getBinaryStreamFromLocation(url + "/to-text");
+        assertEq(ord("t"), is.peek());
+        assertEq(binary("text body"), readAll(is));
+        # a stream reader
+        StreamReader sr = FileLocationHandler::getStreamReaderFromLocation(url + "/latin1{encoding=ISO-8859-1}");
+        assertEq("äöü", sr.readString());
+        # the encoding of the text is determined from the response like for a text read; the encoding option is
+        # the assumed encoding
+        hash<string, list<string>> stream_cases = {
+            "/latin1": ("äöü", "ISO-8859-1"),
+            "/utf8-bom": ("äöü", "UTF-8"),
+            "/latin2": ("ą", "ISO-8859-2"),
+            "/html-meta": ("<meta charset=\"windows-1252\">€", "WINDOWS-1252"),
+            "/json": ("{\"a\":\"äöü\"}", "UTF-8"),
+            "/gzip-text": ("äöü", "UTF-8"),
+            "/large-text": (strmul("äb", 2000), "UTF-8"),
+        };
+        foreach hash<auto> i in (stream_cases.pairIterator()) {
+            sr = FileLocationHandler::getStreamReaderFromLocation(url + i.key);
+            string str = sr.readString();
+            assertEq(i.value[1], sr.getEncoding(), i.key);
+            assertEq(i.value[0], convert_encoding(str, "UTF-8"), i.key);
+            # the same text as a text read
+            assertEq(i.value[0], convert_encoding(FileLocationHandler::getTextFileFromLocation(url + i.key),
+                "UTF-8"), i.key);
+        }
+        # the encoding option is the assumed encoding
+        sr = FileLocationHandler::getStreamReaderFromLocation(url + "/latin1{encoding=ISO-8859-15}");
+        assertEq("ISO-8859-15", sr.getEncoding());
+        # it does not override a declared encoding
+        sr = FileLocationHandler::getStreamReaderFromLocation(url + "/latin2{encoding=ISO-8859-15}");
+        assertEq("ISO-8859-2", sr.getEncoding());
+        # small reads
+        is = FileLocationHandler::getBinaryStreamFromLocation(url + "/text");
+        assertEq(binary("te"), is.read(2));
+        assertEq(binary("xt body"), readAll(is));
+        # an error response is raised when the stream is opened
+        try {
+            FileLocationHandler::getBinaryStreamFromLocation(url + "/missing");
+            fail("expected HTTP-CLIENT-RECEIVE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq(binary("not here"), ex.arg.body);
+        }
+        # unless errors are passed through
+        is = FileLocationHandler::getBinaryStreamFromLocation(url + "/missing{error_passthru=true}");
+        assertEq(binary("not here"), readAll(is));
+        # a stream that is not read to the end is canceled when it is released, and later requests work
+        is = FileLocationHandler::getBinaryStreamFromLocation(url + "/large");
+        assertEq(10, is.read(10).size());
+        delete is;
+        assertEq("text body", FileLocationHandler::getTextFileFromLocation(url + "/text"));
+    }
+
+    streamWriteTest() {
+        binary large = HttpIoTestHandler::getLargeBody();
+        handler.clear();
+        OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation(url + "/echo/stream{method=put}");
+        for (int i = 0; i < large.size(); i += 100000) {
+            os.write(large.substr(i, 100000));
+        }
+        os.close();
+        os.waitForIo();
+        hash<HttpIoTestRequest> req = handler.getRequests()[0];
+        assertEq("PUT", req.method);
+        assertEq("chunked", req.transfer_encoding);
+        assertEq(large, req.body);
+        assertEq("application/octet-stream", req.content_type);
+
+        # an error response is raised by waitForIo()
+        os = FileLocationHandler::getOutputStreamForLocation(url + "/missing");
+        os.write(binary("x"));
+        os.close();
+        try {
+            os.waitForIo();
+            fail("expected HTTP-CLIENT-RECEIVE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+        }
+        # unless errors are passed through
+        os = FileLocationHandler::getOutputStreamForLocation(url + "/missing{error_passthru=true}");
+        os.close();
+        os.waitForIo();
+    }
+
+    pollTest() {
+        # the legacy poller returns the body, decoded unless encoding_passthru is set
+        binary large = HttpIoTestHandler::getLargeBody();
+        auto output = runPoller(FileLocationHandler::getIoPollerForLocation(url + "/gzip"));
+        assertEq(large, output);
+        output = runPoller(FileLocationHandler::getIoPollerForLocation(url + "/gzip{encoding_passthru=true}"));
+        assertEq(gzip(large), output);
+        output = runPoller(FileLocationHandler::getIoPollerForLocation(url + "/to-text"));
+        assertEq("text body", output);
+        # a HEAD request
+        hash<FileResourceResult> r = runPoller(FileLocationHandler::getResourcePollerForLocation(url
+            + "/large{method=head}"));
+        assertEq(binary(), r.data);
+        assertEq(200, r.info.http.status_code);
+        # the REST poller
+        output = runPoller(FileLocationHandler::getIoPollerForLocation(rest_url + "/to-text"));
+        assertEq("text body", output);
+        # no I/O is performed before the poller is driven
+        handler.clear();
+        AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation(url + "/text");
+        assertEq((), handler.getRequests());
+        assertFalse(op.goalReached());
+        runPoller(op);
+        assertEq(1, handler.getRequests().size());
+    }
+
+    errorTest() {
+        # a refused connection is reported by both APIs
+        Socket s();
+        s.bind("127.0.0.1:0");
+        string closed_url = sprintf("http://127.0.0.1:%d/x", s.getSocketInfo().port);
+        s.close();
+        hash<ExceptionInfo> sync_ex;
+        try {
+            FileLocationHandler::getBinaryFileFromLocation(closed_url);
+            fail("expected an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            sync_ex = ex;
+        }
+        assertThrows(sync_ex.err, \runPoller(), FileLocationHandler::getIoPollerForLocation(closed_url));
+        assertThrows(sync_ex.err, \FileLocationHandler::getBinaryStreamFromLocation(), closed_url);
+        # invalid options
+        assertThrows("LOCATION-ERROR", "invalid http_version", \FileLocationHandler::getTextFileFromLocation(),
+            url + "/text{http_version=9}");
+        assertThrows("LOCATION-ERROR", "missing URI path", \FileLocationHandler::getTextFileFromLocation(),
+            sprintf("http://user:secret@127.0.0.1:%d", port));
+        try {
+            FileLocationHandler::getTextFileFromLocation(sprintf("http://user:secret@127.0.0.1:%d", port));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(-1, ex.desc.find("secret"), "credentials are not reported");
+        }
+    }
+
+    timeoutTest() {
+        handler.block.inc();
+        on_exit {
+            if (handler.block.getCount()) {
+                handler.block.dec();
+            }
+        }
+        # the documented error of the synchronous client is raised
+        assertThrows("SOCKET-TIMEOUT", \FileLocationHandler::getTextFileFromLocation(), url + "/block{timeout=200}");
+        assertEq("/block", handler.blocked.get());
+        assertThrows("SOCKET-TIMEOUT", \FileLocationHandler::getBinaryStreamFromLocation(),
+            url + "/block{timeout=200}");
+        assertEq("/block", handler.blocked.get());
+        handler.block.dec();
+    }
+
+    boundManagerTest() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        AbstractFileLocationHandler h = FileLocationHandler::getHttpHandlerForClient(mgr,
+            sprintf("http://u:p@127.0.0.1:%d/ignored", port), {"headers": {"X-Custom": "default"}});
+        assertTrue(h.isBound());
+        handler.clear();
+        assertEq("GET /echo/bound", h.getTextFile("http", "echo/bound"));
+        hash<HttpIoTestRequest> req = handler.getRequests()[0];
+        assertEq("Basic dTpw", req.authorization);
+        assertEq("default", req.custom);
+        # per-request headers
+        handler.clear();
+        h.getTextFile("http", "/echo/bound", {"headers": {"X-Custom": "request"}});
+        assertEq("request", handler.getRequests()[0].custom);
+        # writes and resources
+        handler.clear();
+        h.writeFile("http", "/echo/bound-write", "w");
+        assertEq(binary("w"), handler.getRequests()[0].body);
+        hash<FileResourceResult> r = h.getResource("http", "/to-text");
+        assertEq(url + "/to-text", r.info.requested_location);
+        assertEq(url + "/text", r.info.effective_location);
+        assertEq(binary("text body"), runPoller(h.getResourcePoller("http", "/to-text")).data);
+        assertEq(binary("text body"), readAll(h.getBinaryStream("http", "/text")));
+        # the shared connection manager is not closed by the handler
+        delete h;
+        assertEq(200, mgr.request(url, "GET", "/text").status_code);
+
+        # max_redirects and error_passthru
+        h = FileLocationHandler::getHttpHandlerForClient(mgr, url, {"max_redirects": 0, "error_passthru": True});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \h.getTextFile(), ("http", "/to-text"));
+        assertEq("not here", h.getTextFile("http", "/missing"));
+
+        # invalid arguments
+        assertThrows("LOCATION-ERROR", "cannot bind", \FileLocationHandler::getHttpHandlerForClient(), mgr);
+        assertThrows("LOCATION-ERROR", "cannot bind", \FileLocationHandler::getHttpHandlerForClient(),
+            (new Mutex(), url));
+        assertThrows("LOCATION-ERROR", "unsupported request option",
+            \FileLocationHandler::getHttpHandlerForClient(), (mgr, url, {"proxy": "x"}));
+    }
+
+    restTest() {
+        # writes are serialized with the data option
+        handler.clear();
+        FileLocationHandler::writeFileToLocation(rest_url + "/echo/rest{data=json}", "value");
+        hash<HttpIoTestRequest> req = handler.getRequests()[0];
+        assertEq("POST", req.method);
+        assertEq(binary("\"value\""), req.body);
+        assertEq("application/json", req.content_type);
+        # redirects are followed for reads
+        assertEq("text body", FileLocationHandler::getTextFileFromLocation(rest_url + "/to-text"));
+        assertEq(binary("text body"), FileLocationHandler::getBinaryFileFromLocation(rest_url + "/to-text"));
+        # user information is sent with basic authentication
+        handler.clear();
+        FileLocationHandler::getTextFileFromLocation(sprintf("rest://user:pass@127.0.0.1:%d/echo/auth", port));
+        assertEq("Basic dXNlcjpwYXNz", handler.getRequests()[0].authorization);
+        # errors
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "404", \FileLocationHandler::getTextFileFromLocation(),
+            rest_url + "/missing");
+        assertEq("not here", FileLocationHandler::getTextFileFromLocation(rest_url + "/missing{error_passthru=true}"));
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \FileLocationHandler::getTextFileFromLocation(),
+            rest_url + "/to-text{max_redirects=0}");
+        # redirect_passthru with error_passthru returns the redirect
+        hash<FileResourceResult> r = FileLocationHandler::getResourceFromLocation(rest_url
+            + "/to-text{redirect_passthru=true,error_passthru=true}");
+        assertEq(302, r.info.http.status_code);
+        # streams read the whole body
+        assertEq(binary("text body"), readAll(FileLocationHandler::getBinaryStreamFromLocation(rest_url + "/text")));
+    }
+
+    boundSyncRestTest() {
+        # a synchronous REST client is converted to an asynchronous client with its options and connection path
+        RestClient rest({"url": sprintf("http://user:pass@127.0.0.1:%d/echo", port)}, True);
+        AbstractFileLocationHandler h = FileLocationHandler::getRestHandlerForClient(rest);
+        handler.clear();
+        assertEq("GET /echo/sync", h.getTextFile("rest", "sync"));
+        assertEq("Basic dXNlcjpwYXNz", handler.getRequests()[0].authorization);
+        # writes are serialized with the client's data serialization
+        handler.clear();
+        h.writeFile("rest", "sync-write", "v");
+        hash<HttpIoTestRequest> req = handler.getRequests()[0];
+        assertEq("/echo/sync-write", req.target);
+        # output streams are buffered and sent when closed
+        handler.clear();
+        OutputStreamWrapper os = h.getOutputStream("rest", "sync-stream");
+        os.write(binary("streamed"));
+        os.close();
+        os.waitForIo();
+        assertEq("/echo/sync-stream", handler.getRequests()[0].target);
+        # the client is not changed
+        assertEq(sprintf("http://user:pass@127.0.0.1:%d/echo", port), rest.getURL());
+    }
+
+    #! Reads a stream to the end
+    static binary readAll(InputStream is) {
+        binary rv;
+        while (*binary b = is.read(65536)) {
+            rv += b;
+        }
+        return rv;
+    }
+
+    #! Drives a poll operation on this thread until it completes and returns its output
+    static auto runPoller(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            if (op.goalReached()) {
+                break;
+            }
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
+    }
+}

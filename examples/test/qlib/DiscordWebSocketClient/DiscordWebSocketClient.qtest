@@ -11,6 +11,7 @@
 %requires ConnectionProvider
 %requires WebSocketClient
 %requires DiscordWebSocketClient
+%requires HttpServer
 
 %requires json
 
@@ -100,6 +101,25 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     }
 }
 
+#! Serves the gateway discovery endpoint for the gateway discovery tests
+class GatewayDiscoveryHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # the discovery request must ask for JSON
+        if (hdr.accept != MimeTypeJson) {
+            return makeResponse(406, "JSON required", {"Content-Type": MimeTypeText});
+        }
+        switch (cx.raw_path) {
+            case "/api/gateway": return makeResponse(200, make_json({"url": "wss://gateway.test/"}),
+                {"Content-Type": MimeTypeJson});
+            case "/moved": return makeResponse(301, "", {"Location": "/api/gateway"});
+            case "/nourl": return makeResponse(200, make_json({"x": 1}), {"Content-Type": MimeTypeJson});
+            case "/invalid": return makeResponse(200, "{not json", {"Content-Type": MimeTypeJson});
+            case "/error": return makeResponse(503, "unavailable", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(404, "not found", {"Content-Type": MimeTypeText});
+    }
+}
+
 public class Main inherits QUnit::Test {
     constructor() : Test("DiscordWebSocketClientTest", "1.0") {
         addTestCase("discord tests", \discordTests());
@@ -108,6 +128,7 @@ public class Main inherits QUnit::Test {
         addTestCase("resume watchdog tests", \resumeWatchdogTests());
         addTestCase("hello identify/resume decision tests", \helloIdentifyResumeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("gateway discovery tests", \gatewayDiscoveryTests());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -269,6 +290,45 @@ public class Main inherits QUnit::Test {
             # and the watchdog must be armed waiting for RESUMED/INVALID_SESSION
             assertTrue(c.testResumeWatchdogActive());
         }
+    }
+
+    #! the gateway URL is discovered with a GET request to the discovery endpoint
+    gatewayDiscoveryTests() {
+        checkModule();
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        HttpServer http(<HttpServerOptionInfo>{"logger": logger});
+        on_exit delete http;
+        GatewayDiscoveryHandler handler();
+        http.setHandler("gateway", "", NOTHING, handler);
+        http.setDefaultHandler("gateway", handler);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        string base = sprintf("http://localhost:%d", port);
+
+        assertEq("wss://gateway.test/", DiscordWebSocketConnection::discoverUrl(base + "/api/gateway"));
+        # redirects are followed
+        assertEq("wss://gateway.test/", DiscordWebSocketConnection::discoverUrl(base + "/moved"));
+
+        # error responses raise HTTP-CLIENT-RECEIVE-ERROR with the response in the argument
+        try {
+            DiscordWebSocketConnection::discoverUrl(base + "/error");
+            assertTrue(False, "no exception raised");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq(503, ex.arg.status_code);
+            assertEq("unavailable", ex.arg.body);
+        }
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "404", \DiscordWebSocketConnection::discoverUrl(),
+            base + "/missing");
+
+        # a response without a gateway URL raises DISCORD-ERROR
+        assertThrows("DISCORD-ERROR", "no gateway URL", \DiscordWebSocketConnection::discoverUrl(), base + "/nourl");
+        assertThrows("DISCORD-ERROR", "invalid gateway discovery response",
+            \DiscordWebSocketConnection::discoverUrl(), base + "/invalid");
+
+        # connection errors are raised
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \DiscordWebSocketConnection::discoverUrl(),
+            sprintf("http://localhost:%d/api/gateway", get_free_port()));
     }
 
     connectionTests() {

@@ -65,11 +65,11 @@ public class ZohoInventoryGetPackageDataProvider inherits ZohoInventoryDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.package_id) {
             package_id = options.package_id;
         }
@@ -97,12 +97,12 @@ public class ZohoInventoryGetPackageDataProvider inherits ZohoInventoryDataProvi
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.package_id ?? request_options.package_id ?? package_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "package_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/packages/%s", id));
+        hash<auto> response = doGet(sprintf("/packages/%s", id), NOTHING, org_id);
         return response."package";
     }
 

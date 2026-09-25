@@ -230,6 +230,9 @@ public:
     //! Pushes the maximum size of a response body received into memory down to the socket of the H2 session
     DLLEXPORT void setMaxResponseBodySizeHook(int64_t max_size) override;
 
+    //! Pushes the encoding assumed for text response bodies down to the socket of the H2 session
+    DLLEXPORT void setAssumedEncodingHook(const QoreEncoding* enc) override;
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 

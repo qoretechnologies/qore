@@ -82,11 +82,6 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
         form_id = options.form_id ?? ctx.form_id ?? "";
     }
 
-    #! Cancels in-flight REST operations for graceful shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! Polls for new submissions
     #! Tally returns submissions newest-first with no monotonic position to checkpoint against
     /** Submissions are deduplicated by ID rather than ordered, so no ordering guarantee can be

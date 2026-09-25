@@ -42,6 +42,8 @@
 
 #include <exception>
 
+DLLLOCAL extern QoreClass* QC_HTTP3SERVERPOLLOPERATION;
+
 /** @cond INTERNAL */
 
 static int materializeHttp3ServerDataBodyNode(const QoreValue& body, ValueHolder& holder,

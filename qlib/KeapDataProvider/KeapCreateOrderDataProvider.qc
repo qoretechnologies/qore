@@ -128,7 +128,7 @@ public class KeapCreateOrderDataProvider inherits KeapDataProviderBase {
         static *AbstractDataProviderType RequestType = new KeapCreateOrderRequestDataType();
     }
 
-    constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
+    constructor(KeapRestClient::KeapRestClientIo rest) : KeapDataProviderBase(rest) {
     }
 
     string getName() {

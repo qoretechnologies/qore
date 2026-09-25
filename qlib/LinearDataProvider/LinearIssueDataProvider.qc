@@ -54,7 +54,7 @@ public class LinearIssueDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object
-    constructor(LinearRestClient::LinearRestClient rest, string issueId) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, string issueId) : LinearDataProviderBase(rest) {
         @assert(issueId.val(), "issue ID cannot be empty");
         self.issueId = issueId;
     }

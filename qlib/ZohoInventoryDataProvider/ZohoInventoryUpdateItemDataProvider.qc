@@ -55,11 +55,11 @@ public class ZohoInventoryUpdateItemDataProvider inherits ZohoInventoryDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.item_id) {
             item_id = options.item_id;
         }
@@ -87,13 +87,13 @@ public class ZohoInventoryUpdateItemDataProvider inherits ZohoInventoryDataProvi
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = remove req.item_id ?? request_options.item_id ?? item_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "item_id is required for update operation";
         }
         hash<auto> body = req - "item_id";
-        hash<auto> response = doPut(sprintf("/items/%s", id), body);
+        hash<auto> response = doPut(sprintf("/items/%s", id), body, org_id);
         return response.item;
     }
 

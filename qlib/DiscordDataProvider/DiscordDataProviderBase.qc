@@ -31,6 +31,8 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
         const RetrySet = {
             "SOCKET-SSL-ERROR": True,
             "SOCKET-CLOSED": True,
+            "HTTPCLIENT-CONNECT-ERROR": True,
+            "HTTPCLIENT-STREAM-CLOSED": True,
         };
 
         #! Max retries
@@ -42,7 +44,7 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
         *DiscordRestConnection conn;
 
         #! The REST client object for API calls
-        *DiscordRestClient rest;
+        *DiscordRestClientIo rest;
     }
 
     #! Creates the object
@@ -50,8 +52,25 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Creates the object
-    constructor(DiscordRestClient rest, *Logger::LoggerInterface logger) {
+    /** @param rest the REST client for API calls
+        @param logger an optional logger
+
+        @since DiscordDataProvider 2.1
+    */
+    constructor(DiscordRestClientIo rest, *Logger::LoggerInterface logger) {
         self.rest = rest;
+        if (logger) {
+            setLogger(logger);
+        }
+    }
+
+    #! Creates the object
+    /** @param rest a synchronous REST client; API calls are made with a @ref DiscordRestClient::DiscordRestClientIo
+        "DiscordRestClientIo" created from it with @ref getAsyncClient()
+        @param logger an optional logger
+    */
+    constructor(DiscordRestClient rest, *Logger::LoggerInterface logger) {
+        self.rest = DiscordDataProviderBase::getAsyncClient(rest);
         if (logger) {
             setLogger(logger);
         }
@@ -60,10 +79,30 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     #! Creates the object
     constructor(DiscordRestConnection conn, *Logger::LoggerInterface logger) {
         self.conn = conn;
-        rest = conn.get();
+        rest = conn.getAsync();
         if (logger) {
             setLogger(logger);
         }
+    }
+
+    #! Returns the REST client for API calls
+    /** @since DiscordDataProvider 2.1
+    */
+    *DiscordRestClientIo getRestClient() {
+        return rest;
+    }
+
+    #! Returns an asynchronous REST client created with the options and the connection path of a synchronous one
+    /** @param rest the synchronous REST client
+
+        @return an asynchronous REST client created with the options and the connection path of \a rest
+
+        @since DiscordDataProvider 2.1
+    */
+    static DiscordRestClientIo getAsyncClient(DiscordRestClient rest) {
+        DiscordRestClientIo rv(rest.getConstructorOptions());
+        rv.setConnectionPath(rest.getConnectionPath());
+        return rv;
     }
 
     #! Accepts a LoggerInterface object for logging (or clears it)
@@ -89,16 +128,9 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     #! Retrieves info for the given guild; must be accessible to the calling user
     private hash<auto> getGuild(string id) {
         # get guild info; note that users cannot request info for a specific guild directly (AFAIK), only bots can for
-        # some reason; so we request all guilds accessible for the user and try to find the one we want
-        *hash<auto> guilds;
-        hash<auto> info;
-        try {
-            guilds = map {$1.id: $1}, doRestCommand("GET", "users/@me/guilds", NOTHING, \info).body;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # some reason; so we request all guilds accessible for the user and try to find the one we want; the
+        # exception argument of an error response includes the response body
+        *hash<auto> guilds = map {$1.id: $1}, doRestCommand("GET", "users/@me/guilds").body;
 
         *hash<auto> guild = guilds{id};
         if (!guild) {
@@ -109,17 +141,31 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
     }
 
     #! Makes a REST call and returns the response; handles rate limit responses
-    private hash<auto> doRestCommand(string method, string path, auto body, reference<hash<auto>> info) {
+    /** @param method the HTTP method
+        @param path the request path
+        @param body the optional request body
+
+        @return the response
+
+        @throw REST-RESPONSE-ERROR an error response was received; the exception argument contains the response
+        @throw RATE-LIMIT-ERROR the rate limit resets more than a minute in the future
+    */
+    private hash<RestResponseInfo> doRestCommand(string method, string path, auto body) {
         int retries = 0;
         while (True) {
             try {
                 debug("REST %y %y (%y) body: %y", method, rest.getUrl(), path, body);
-                return rest.doRequest(method, path, body, \info);
+                return rest.restDoRequest(method, path, body);
             } catch (hash<ExceptionInfo> ex) {
+                # the status code and headers of an error response
+                *hash<auto> resp;
+                if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
+                    resp = ex.arg{"status_code", "headers"};
+                }
                 # handle rate limit errors immediately
-                if (info."response-headers".status_code == 429
-                    && (info."response-headers"."x-ratelimit-remaining" == "0")
-                    && (*softfloat r = info."response-headers"."x-ratelimit-reset")) {
+                if (resp.status_code == 429
+                    && (resp.headers."x-ratelimit-remaining" == "0")
+                    && (*softfloat r = resp.headers."x-ratelimit-reset")) {
                     int lt = r.toInt(); softint us = (r - lt) * 1000000;
                     date reset = localtime(lt, us);
                     date diff = reset - now_us();
@@ -138,18 +184,17 @@ public class DiscordDataProviderBase inherits DataProvider::AbstractDataProvider
                     continue;
                 }
                 # only append response info that is actually present; on non-response errors (ex: OAuth2 token
-                # refresh failures) there are no response headers, so the bare exception is rethrown unchanged
+                # refresh failures) there is no response, so the bare exception is rethrown unchanged
                 # instead of a useless "(HTTP response code: null x-ratelimit-remaining: null ...)" suffix
-                *hash<auto> rh = info."response-headers";
                 list<string> parts;
-                if (exists rh.status_code) {
-                    parts += sprintf("HTTP response code: %y", rh.status_code);
+                if (exists resp.status_code) {
+                    parts += sprintf("HTTP response code: %y", resp.status_code);
                 }
-                if (exists rh."x-ratelimit-remaining") {
-                    parts += sprintf("x-ratelimit-remaining: %y", rh."x-ratelimit-remaining");
+                if (exists resp.headers."x-ratelimit-remaining") {
+                    parts += sprintf("x-ratelimit-remaining: %y", resp.headers."x-ratelimit-remaining");
                 }
-                if (exists rh."x-ratelimit-reset") {
-                    parts += sprintf("x-ratelimit-reset: %y", rh."x-ratelimit-reset");
+                if (exists resp.headers."x-ratelimit-reset") {
+                    parts += sprintf("x-ratelimit-reset: %y", resp.headers."x-ratelimit-reset");
                 }
                 if (parts) {
                     rethrow ex.err, sprintf("%s (%s)", ex.desc, join(" ", parts));

@@ -61,14 +61,14 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         *RestClientIo::RestClientIo rest;
 
         #! Cached SendCloud credentials (\c {public_key, secret_key}) used to lazily
-        #! build separate synchronous clients for cross-host or cross-prefix endpoints
+        #! build separate clients for cross-host or cross-prefix endpoints
         #! (service points, v3).  NOTHING when constructed from a raw RestClientIo
         #! without access to the original options.
         *hash<auto> sc_creds;
 
-        #! Lazy synchronous REST clients keyed by base URL (origin or origin+prefix).
+        #! Lazy REST clients keyed by base URL (origin or origin+prefix).
         #! Used for cross-host endpoints (servicepoints subdomain) and v3 prefix calls.
-        hash<string, RestClient::RestClient> sync_clients;
+        hash<string, RestClientIo::RestClientIo> base_url_clients;
 
         #! Cached shipping-method-id → shipping-option-code translations from the v3
         #! compatibility endpoint (process-local; safe to cache as IDs are stable).
@@ -255,16 +255,20 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     auto doAbsoluteGet(string absolute_url, *hash<auto> params) {
         # The async RestClientIo passed in `rest` is bound to panel.sendcloud.sc/api/v2;
         # cross-host endpoints (servicepoints.sendcloud.sc) and cross-prefix endpoints
-        # (panel.sendcloud.sc/api/v3) need separate sync clients built with the same
-        # credentials.  Split the absolute URL into origin (scheme://host) and path, then
+        # (panel.sendcloud.sc/api/v3) need separate clients built with the same
+        # credentials.  Split the absolute URL into origin (scheme://host[:port]) and path, then
         # call the path on a cached client bound to that origin.
         hash<UrlInfo> ui = parse_url(absolute_url);
         string origin = sprintf("%s://%s", ui.protocol ?? "https", ui.host);
+        # a non-default port is part of the origin
+        if (ui.port) {
+            origin += sprintf(":%d", ui.port);
+        }
         string path = ui.path ?? "/";
         if (params) {
             path += "?" + buildQueryString(params);
         }
-        RestClient::RestClient client = getSyncClient(origin);
+        RestClientIo::RestClientIo client = getBaseUrlClient(origin);
         try {
             hash<auto> response = client.restGet(path);
             return response.body;
@@ -284,7 +288,7 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        RestClient::RestClient client = getSyncClient(V3BaseUrl);
+        RestClientIo::RestClientIo client = getBaseUrlClient(V3BaseUrl);
         try {
             hash<auto> response = client.restGet(url);
             return response.body;
@@ -301,7 +305,7 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
     */
     auto doV3Post(string path, hash<auto> body) {
         string url = "/" + path;
-        RestClient::RestClient client = getSyncClient(V3BaseUrl);
+        RestClientIo::RestClientIo client = getBaseUrlClient(V3BaseUrl);
         try {
             hash<auto> response = client.restPost(url, body);
             return response.body;
@@ -342,25 +346,28 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
         return code;
     }
 
-    #! Returns a cached synchronous RestClient bound to the given base URL
+    #! Returns a cached REST client bound to the given base URL
     /** @param base_url the URL the client should treat as its base (origin or origin+prefix)
+
+        @throw SENDCLOUD-ERROR no credentials are available
     */
-    private RestClient::RestClient getSyncClient(string base_url) {
-        if (sync_clients{base_url}) {
-            return sync_clients{base_url};
+    private RestClientIo::RestClientIo getBaseUrlClient(string base_url) {
+        *RestClientIo::RestClientIo c = base_url_clients{base_url};
+        if (c) {
+            return c;
         }
         if (!sc_creds) {
             throw "SENDCLOUD-ERROR",
-                "cannot build a synchronous SendCloud client: no credentials are available "
+                "cannot build a SendCloud client for another base URL: no credentials are available "
                 "(the data provider was constructed without access to the SendCloud public_key/secret_key)";
         }
-        RestClient::RestClient c = new RestClient::RestClient({
+        c = new RestClientIo::RestClientIo({
             "url": base_url,
             "username": sc_creds.public_key,
             "password": sc_creds.secret_key,
             "data": "json",
         });
-        sync_clients{base_url} = c;
+        base_url_clients{base_url} = c;
         return c;
     }
 

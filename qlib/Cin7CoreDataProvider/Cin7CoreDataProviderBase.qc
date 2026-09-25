@@ -32,15 +32,15 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
         const BaseConstructorOptions = {
             "cin7corerestclient": <DataProviderOptionInfo>{
                 "display_name": "Cin7Core REST Client",
-                "short_desc": "The Cin7CoreRestClient object",
-                "type": AbstractDataProviderType::get(new Type("Cin7CoreRestClient::Cin7CoreRestClient")),
-                "desc": "The Cin7CoreRestClient object to use for API calls",
+                "short_desc": "The Cin7CoreRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("Cin7CoreRestClient::Cin7CoreRestClientIo")),
+                "desc": "The `Cin7CoreRestClientIo` object to use for API calls",
             },
             "cin7corerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Cin7Core REST Client Options",
-                "short_desc": "Options for creating a Cin7CoreRestClient",
+                "short_desc": "Options for creating a Cin7CoreRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a Cin7CoreRestClient object if one is not provided directly",
+                "desc": "Options for creating a `Cin7CoreRestClientIo` object if one is not provided directly",
             },
             "account_id": <DataProviderOptionInfo>{
                 "display_name": "Account ID",
@@ -61,7 +61,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
 
     private {
         #! The REST client object for API calls
-        Cin7CoreRestClient::Cin7CoreRestClient rest;
+        Cin7CoreRestClient::Cin7CoreRestClientIo rest;
 
         #! The connection object, if applicable
         *Cin7CoreRestClient::Cin7CoreRestConnection conn;
@@ -72,7 +72,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(Cin7CoreRestClient::Cin7CoreRestClient rest) {
+    constructor(Cin7CoreRestClient::Cin7CoreRestClientIo rest) {
         @assert(rest, "REST client cannot be null");
         self.rest = rest;
     }
@@ -81,7 +81,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
     constructor(Cin7CoreRestClient::Cin7CoreRestConnection conn) {
         @assert(conn, "connection cannot be null");
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
         @assert(rest, "REST client from connection cannot be null");
     }
 
@@ -98,12 +98,12 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
             if (copts.apikey) {
                 client_opts.apikey = copts.apikey;
             }
-            rest = new Cin7CoreRestClient::Cin7CoreRestClient(client_opts);
+            rest = new Cin7CoreRestClient::Cin7CoreRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    Cin7CoreRestClient::Cin7CoreRestClient getRestClient() {
+    Cin7CoreRestClient::Cin7CoreRestClientIo getRestClient() {
         return rest;
     }
 
@@ -132,7 +132,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.get(url);
+        hash<auto> response = rest.restGet(url);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doGet: success, response keys: %y", keys response.body));
         return response.body;
@@ -165,7 +165,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPost: POST %s with body: %y", path, body));
-        hash<auto> response = rest.post(path, body);
+        hash<auto> response = rest.restPost(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPost: success, response keys: %y", keys response.body));
         return response.body;
@@ -182,7 +182,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
         @assert(path.val(), "API path cannot be empty");
         @assert(rest, "REST client must be initialized before making API calls");
         @debug(log(LoggerLevel::DEBUG, "doPut: PUT %s with body: %y", path, body));
-        hash<auto> response = rest.put(path, body);
+        hash<auto> response = rest.restPut(path, body);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doPut: success, response keys: %y", keys response.body));
         return response.body;
@@ -203,7 +203,7 @@ public class Cin7CoreDataProviderBase inherits DataProvider::AbstractDataProvide
         if (params) {
             url += "?" + buildQueryString(params);
         }
-        hash<auto> response = rest.del(url);
+        hash<auto> response = rest.restDel(url, NOTHING);
         checkResponse(response);
         @debug(log(LoggerLevel::DEBUG, "doDelete: success"));
         return response.body;
