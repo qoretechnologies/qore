@@ -3889,6 +3889,9 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         ? nullptr
         : new QoreStringNode(s->getEncoding()));
 
+    // the total size of the chunk data read; the body is not accumulated in callback or output stream mode, so
+    // the limit is applied to this total
+    int64 body_size = 0;
     unsigned cancel_check = 0;
     while (true) {
         if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
@@ -3946,6 +3949,15 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
             return nullptr;
         }
 
+        // apply the limit before the chunk is read, so no data over the limit is read, written, or delivered
+        int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+        if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+            return nullptr;
+        }
+        body_size += chunk_size;
+
         SimpleRefHolder<BinaryNode> chunk(qore_socket_object_exec_recv_bytes(s, static_cast<size_t>(chunk_size),
             timeout_ms, xsink));
         if (*xsink) {
@@ -3963,18 +3975,6 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
             body_bin->append(chunk->getPtr(), chunk->size());
         } else if (!recv_callback) {
             body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
-        }
-
-        if (!os) {
-            int64 body_size = recv_callback
-                ? static_cast<int64>(chunk->size())
-                : binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
-            int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
-            if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
-                xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
-                    body_size, max_chunked_body_size);
-                return nullptr;
-            }
         }
 
         SimpleRefHolder<BinaryNode> crlf(qore_socket_object_exec_recv_bytes(s, 2, timeout_ms, xsink));

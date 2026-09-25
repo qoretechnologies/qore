@@ -1,0 +1,294 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    The maximum request body size applies to the total size of an HTTP/1.1 chunked body read by a stream handler
+    (an AbstractStreamRequest), and not only to the size of each chunk:
+    - a body over the limit is answered with 413 and the connection is closed
+    - the handler receives no data over the limit, and it is not told that an oversized body ended, so it cannot take
+      the part it received for the complete body
+    - a body at the limit is delivered in full
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Logger
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+
+%exec-class HttpServerChunkedStreamBodyLimitTest
+
+#! records what a stream request received
+class CountingRequest inherits AbstractStreamRequest {
+    public {
+        #! the number of data bytes received
+        int total = 0;
+        #! the number of data calls
+        int data_calls = 0;
+        #! the number of times the request was told that the body ended
+        int eod = 0;
+        #! True if the response was made, which happens only after the complete body was received
+        bool responded = False;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s, hash<auto> cx,
+            hash<auto> hdr, auto body) : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (v.hasKey("data")) {
+            total += v.data.size();
+            ++data_calls;
+        } else if (v.hasKey("hdr")) {
+            ++eod;
+        }
+    }
+
+    private hash<auto> getResponseHeaderMessageImpl() {
+        responded = True;
+        return {"code": 200, "body": sprintf("received %d bytes", total)};
+    }
+}
+
+#! a stream handler that keeps the requests it creates
+class CountingHandler inherits AbstractHttpRequestHandler {
+    private {
+        list<CountingRequest> requests = ();
+        Mutex m();
+    }
+
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {
+    }
+
+    #! returns and removes the requests created
+    list<CountingRequest> takeRequests() {
+        m.lock();
+        on_exit m.unlock();
+        list<CountingRequest> rv = requests;
+        requests = ();
+        return rv;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s, hash<auto> cx,
+            hash<auto> hdr, *data body) {
+        CountingRequest rv(listener, self, s, cx, hdr, body);
+        m.lock();
+        on_exit m.unlock();
+        requests += rv;
+        return rv;
+    }
+}
+
+class HttpServerChunkedStreamBodyLimitTest inherits QUnit::Test {
+    private {
+        #! the limit of the listener that sets its own limit
+        const ListenerLimit = 4096;
+
+        #! the limit of the server, used by the listener that sets no limit
+        const ServerLimit = 8192;
+
+        #! the size of the chunks that stay under the limit one at a time
+        const SmallChunk = 256;
+
+        const Timeout = 10s;
+
+        HttpServer server;
+        CountingHandler handler();
+
+        #! the port of the listener with its own limit
+        int listener_port;
+        #! the port of the listener that uses the server's limit
+        int server_port;
+    }
+
+    constructor() : Test("HttpServerChunkedStreamBodyLimitTest", "1.0") {
+        addTestCase("many small chunks one byte over the limit", \manySmallChunksOverLimitTest());
+        addTestCase("many small chunks far over the limit", \manySmallChunksFarOverLimitTest());
+        addTestCase("chunks exactly at the limit", \chunksAtLimitTest());
+        addTestCase("one chunk over the limit", \oneChunkOverLimitTest());
+        addTestCase("server limit", \serverLimitTest());
+        addTestCase("binary chunked read with Content-Encoding", \contentEncodingTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("chunked-stream-limit", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "max_request_body_size": ServerLimit,
+        });
+        server.setHandler("count", "", NOTHING, handler);
+        server.setDefaultHandler("count", handler);
+        listener_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "max_request_body_size": ListenerLimit,
+        }).port;
+        server_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete server;
+    }
+
+    setUp() {
+        # discard the requests of a test that failed before it took them
+        handler.takeRequests();
+    }
+
+    manySmallChunksOverLimitTest() {
+        list<int> chunks = map SmallChunk, xrange(ListenerLimit / SmallChunk);
+        chunks += 1;
+        checkTooLarge(listener_port, chunks, ListenerLimit, "one byte over");
+    }
+
+    manySmallChunksFarOverLimitTest() {
+        # the case that was not limited: the total is 16 times the limit, and every chunk is far under it
+        list<int> chunks = map SmallChunk, xrange(ListenerLimit / SmallChunk * 16);
+        checkTooLarge(listener_port, chunks, ListenerLimit, "far over");
+    }
+
+    chunksAtLimitTest() {
+        list<int> chunks = map SmallChunk, xrange(ListenerLimit / SmallChunk);
+        Socket s = connect(listener_port);
+        hash<auto> resp = exchange(s, chunks);
+        assertEq(200, resp.status_code);
+        assertEq(sprintf("received %d bytes", ListenerLimit), resp.body);
+
+        CountingRequest req = takeRequest();
+        assertEq(ListenerLimit, req.total);
+        assertEq(chunks.size(), req.data_calls);
+        assertEq(1, req.eod);
+        assertTrue(req.responded);
+
+        # the connection stays open after a complete body
+        resp = exchange(s, (1,));
+        assertEq(200, resp.status_code);
+        assertEq("received 1 bytes", resp.body);
+        assertEq(1, takeRequest().total);
+    }
+
+    oneChunkOverLimitTest() {
+        checkTooLarge(listener_port, (ListenerLimit + 1,), ListenerLimit, "one chunk");
+    }
+
+    serverLimitTest() {
+        # the listener without a limit of its own uses the server's limit
+        list<int> chunks = map SmallChunk, xrange(ServerLimit / SmallChunk);
+        Socket s = connect(server_port);
+        hash<auto> resp = exchange(s, chunks);
+        assertEq(200, resp.status_code);
+        assertEq(ServerLimit, takeRequest().total);
+
+        chunks += 1;
+        checkTooLarge(server_port, chunks, ServerLimit, "server limit");
+    }
+
+    contentEncodingTest() {
+        # a request with Content-Encoding is read with readHTTPChunkedBodyBinaryWithCallback()
+        list<int> chunks = map SmallChunk, xrange(ListenerLimit / SmallChunk * 2);
+        checkTooLarge(listener_port, chunks, ListenerLimit, "content-encoding", {"Content-Encoding": "gzip"});
+    }
+
+    #! sends a chunked body over the limit and checks the 413 response and what the handler received
+    private checkTooLarge(int port, list<int> chunks, int limit, string label, *hash<auto> hdr) {
+        Socket s = connect(port);
+        hash<auto> resp = exchange(s, chunks, hdr);
+        assertEq(413, resp.status_code, label);
+        assertEq("close", resp.connection, label);
+        assertClosed(s, label);
+
+        CountingRequest req = takeRequest();
+        # no data over the limit reached the handler: it got every whole chunk under the limit
+        int expected = 0;
+        int expected_calls = 0;
+        foreach int size in (chunks) {
+            if (expected + size > limit) {
+                break;
+            }
+            expected += size;
+            ++expected_calls;
+        }
+        assertEq(expected, req.total, label);
+        assertEq(expected_calls, req.data_calls, label);
+        # the handler is not told that the body ended, and no response was made from the partial body
+        assertEq(0, req.eod, label);
+        assertFalse(req.responded, label);
+    }
+
+    #! returns the only request the handler created since the last call
+    private CountingRequest takeRequest() {
+        list<CountingRequest> reqs = handler.takeRequests();
+        assertEq(1, reqs.size());
+        return reqs[0];
+    }
+
+    private Socket connect(int port) {
+        Socket s();
+        s.connect("127.0.0.1:" + port, Timeout);
+        return s;
+    }
+
+    #! sends a chunked request made of the given chunks and returns the response with the body in \c "body"
+    private hash<auto> exchange(Socket s, list<int> chunks, *hash<auto> hdr) {
+        string req = "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n";
+        foreach string key in (keys hdr) {
+            req += sprintf("%s: %s\r\n", key, hdr{key});
+        }
+        req += "\r\n";
+        foreach int size in (chunks) {
+            req += sprintf("%x\r\n%s\r\n", size, strmul("X", size));
+        }
+        req += "0\r\n\r\n";
+        # the server may answer and close the connection before it reads the whole body
+        try {
+            s.send(req, Timeout);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "SOCKET-SEND-ERROR" && ex.err != "SOCKET-CLOSED") {
+                rethrow;
+            }
+        }
+        hash<auto> resp = s.readHTTPHeader(Timeout);
+        resp.body = resp."content-length" ? s.recv(resp."content-length".toInt(), Timeout) : "";
+        return resp;
+    }
+
+    #! the server closes the connection after the response: the next read returns end of stream at once
+    private assertClosed(Socket s, string label) {
+        string err;
+        try {
+            *string data = s.recv(1, Timeout);
+            err = sprintf("received %y", data);
+        } catch (hash<ExceptionInfo> ex) {
+            # a timeout means that the server kept the connection open
+            err = ex.err;
+        }
+        assertEq("SOCKET-CLOSED", err, label + ": the server must close the connection");
+    }
+}

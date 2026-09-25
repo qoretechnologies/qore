@@ -1198,9 +1198,10 @@ struct qore_socket_private : public QoreReferenceCounter {
     bool h2_receiving_frames = false;
 
     //! Maximum size for chunked HTTP body reads (0 = unlimited)
-    /** When set, controller-backed chunked body readers will
-        raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds
-        this limit.
+    /** When set, chunked body readers raise an HTTP-BODY-TOO-LARGE exception
+        if the total size of the chunk data received exceeds this limit, also
+        when the body is passed to a callback or written to an output stream
+        instead of being accumulated.
     */
     std::atomic<int64> max_chunked_body_size{0};
 

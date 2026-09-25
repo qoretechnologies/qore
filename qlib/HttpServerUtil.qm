@@ -2334,6 +2334,10 @@ public class AbstractStreamRequest {
                             timeout_ms);
                     }
                 } catch (hash<ExceptionInfo> ex) {
+                    # any other error, including HTTP-BODY-TOO-LARGE when the total size of the chunks exceeds the
+                    # maximum request body size, ends the request without an end-of-data signal, as for HTTP/2 and
+                    # HTTP/3: a handler told that the body ended would take the part it received for the complete
+                    # body; the server answers the exception and closes the connection
                     if (ex.err != "HTTP1-STREAM-RECV-ERROR") {
                         rethrow;
                     }

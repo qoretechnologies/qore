@@ -1,0 +1,270 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Socket::setMaxChunkedBodySize(): the limit applies to the total size of a chunked body in every chunked body
+    reader, including the callback and output stream readers, which do not accumulate the body; no data over the
+    limit is passed to a callback or written to a stream.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires Util
+%requires QUnit
+
+%exec-class SocketChunkedBodyLimitTest
+
+#! the chunked body readers
+enum Reader {
+    String = "string",
+    Binary = "binary",
+    OutputStream = "output-stream",
+    Callback = "callback",
+    BinaryCallback = "binary-callback",
+}
+
+#! the result of reading a chunked body
+hashdecl ChunkedReadResult {
+    #! the body data returned, written to the stream, or passed to the callback
+    binary data = binary();
+    #! the number of data calls to the callback
+    int data_calls = 0;
+    #! True if the callback was told that the body ended
+    bool eod = False;
+    #! the exception raised by the reader, if any
+    *hash<ExceptionInfo> ex;
+}
+
+class SocketChunkedBodyLimitTest inherits QUnit::Test {
+    private {
+        #! the maximum chunked body size set in most tests
+        const Limit = 4096;
+
+        #! the size of the chunks that stay under the limit one at a time
+        const SmallChunk = 256;
+
+        #! the chunk data readers
+        const Readers = (
+            Reader::String,
+            Reader::Binary,
+            Reader::OutputStream,
+            Reader::Callback,
+            Reader::BinaryCallback,
+        );
+    }
+
+    constructor() : Test("SocketChunkedBodyLimitTest", "1.0") {
+        addTestCase("many small chunks over the limit", \manySmallChunksOverLimitTest());
+        addTestCase("chunks exactly at the limit", \chunksAtLimitTest());
+        addTestCase("one chunk over the limit", \oneChunkOverLimitTest());
+        addTestCase("chunk crossing the limit", \chunkCrossingLimitTest());
+        addTestCase("no limit", \noLimitTest());
+        addTestCase("readHTTPChunk() limit", \readHttpChunkLimitTest());
+        addTestCase("limit accessor", \limitAccessorTest());
+        set_return_value(main());
+    }
+
+    manySmallChunksOverLimitTest() {
+        # the total is one byte over the limit, and no chunk is over it
+        list<int> chunks = map SmallChunk, xrange(Limit / SmallChunk);
+        chunks += 1;
+        foreach Reader reader in (Readers) {
+            hash<ChunkedReadResult> res = readBody(reader, chunks, Limit);
+            assertEq("HTTP-BODY-TOO-LARGE", res.ex.err, reader);
+            assertRegex("4097 exceeds maximum 4096", res.ex.desc, reader);
+            # everything up to the limit was read before the exception, and nothing more
+            checkReceived(reader, res, Limit, Limit / SmallChunk);
+            assertFalse(res.eod, reader);
+        }
+    }
+
+    chunksAtLimitTest() {
+        list<int> chunks = map SmallChunk, xrange(Limit / SmallChunk);
+        foreach Reader reader in (Readers) {
+            hash<ChunkedReadResult> res = readBody(reader, chunks, Limit);
+            assertNothing(res.ex, reader);
+            assertEq(Limit, res.data.size(), reader);
+            assertEq(makeBody(chunks), res.data, reader);
+            if (isCallback(reader)) {
+                assertEq(chunks.size(), res.data_calls, reader);
+                assertTrue(res.eod, reader);
+            }
+        }
+    }
+
+    oneChunkOverLimitTest() {
+        foreach Reader reader in (Readers) {
+            hash<ChunkedReadResult> res = readBody(reader, (Limit + 1,), Limit);
+            assertEq("HTTP-BODY-TOO-LARGE", res.ex.err, reader);
+            checkReceived(reader, res, 0, 0);
+            assertFalse(res.eod, reader);
+        }
+    }
+
+    chunkCrossingLimitTest() {
+        # the second chunk crosses the limit; its data is not passed on
+        list<int> chunks = (Limit - 100, 200, 50);
+        foreach Reader reader in (Readers) {
+            hash<ChunkedReadResult> res = readBody(reader, chunks, Limit);
+            assertEq("HTTP-BODY-TOO-LARGE", res.ex.err, reader);
+            assertRegex(sprintf("%d exceeds maximum %d", Limit + 100, Limit), res.ex.desc, reader);
+            checkReceived(reader, res, Limit - 100, 1);
+            assertFalse(res.eod, reader);
+        }
+    }
+
+    noLimitTest() {
+        # 0 means no limit
+        list<int> chunks = map SmallChunk, xrange(Limit / SmallChunk * 4);
+        foreach Reader reader in (Readers) {
+            hash<ChunkedReadResult> res = readBody(reader, chunks, 0);
+            assertNothing(res.ex, reader);
+            assertEq(makeBody(chunks), res.data, reader);
+            if (isCallback(reader)) {
+                assertTrue(res.eod, reader);
+            }
+        }
+    }
+
+    readHttpChunkLimitTest() {
+        # readHTTPChunk() reads one chunk per call and applies the limit to that chunk
+        list<int> chunks = (Limit, Limit, Limit + 1);
+        hash<auto> client = startClient(chunks);
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        conn.setMaxChunkedBodySize(Limit);
+        assertEq(Limit, conn.readHTTPChunk(5s).body.size());
+        assertEq(Limit, conn.readHTTPChunk(5s).body.size());
+        assertThrows("HTTP-BODY-TOO-LARGE", \conn.readHTTPChunk(), 5s);
+    }
+
+    limitAccessorTest() {
+        Socket s();
+        assertEq(0, s.getMaxChunkedBodySize());
+        s.setMaxChunkedBodySize(Limit);
+        assertEq(Limit, s.getMaxChunkedBodySize());
+        s.setMaxChunkedBodySize(0);
+        assertEq(0, s.getMaxChunkedBodySize());
+    }
+
+    #! checks the data received before the exception
+    private checkReceived(Reader reader, hash<ChunkedReadResult> res, int size, int data_calls) {
+        if (reader == Reader::String || reader == Reader::Binary) {
+            # the accumulated body is not returned with the exception
+            assertEq(0, res.data.size(), reader);
+            return;
+        }
+        assertEq(size, res.data.size(), reader);
+        if (isCallback(reader)) {
+            assertEq(data_calls, res.data_calls, reader);
+        }
+    }
+
+    private static bool isCallback(Reader reader) {
+        return reader == Reader::Callback || reader == Reader::BinaryCallback;
+    }
+
+    #! returns the body made of the given chunks
+    private static binary makeBody(list<int> chunks) {
+        binary rv;
+        foreach int size in (chunks) {
+            rv += binary(strmul(chr(ord("a") + $# % 26), size));
+        }
+        return rv;
+    }
+
+    #! starts a client that sends a chunked body made of the given chunks and keeps the connection open until done
+    /** @return a hash with the listening socket in \c server and a Counter in \c done that the caller decrements
+        when it has finished reading
+    */
+    private hash<auto> startClient(list<int> chunks) {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        hash<auto> info = server.getSocketInfo(False);
+
+        Counter done(1);
+        background sub () {
+            try {
+                Socket client();
+                client.connectINET(info.address, info.port, 10s, info.family);
+                string msg;
+                foreach int size in (chunks) {
+                    msg += sprintf("%x\r\n%s\r\n", size, strmul(chr(ord("a") + $# % 26), size));
+                }
+                msg += "0\r\n\r\n";
+                client.send(msg, 5s);
+                # keep the connection open until the reader has finished
+                done.waitForZero();
+            } catch (hash<ExceptionInfo> ex) {
+                printf("client error: %s\n", get_exception_string(ex));
+            }
+        }();
+        return {"server": server, "done": done};
+    }
+
+    #! reads a chunked body made of the given chunks with the given reader and limit
+    private hash<ChunkedReadResult> readBody(Reader reader, list<int> chunks, int limit) {
+        hash<auto> client = startClient(chunks);
+        on_exit client.done.dec();
+        Socket conn = client.server.accept(5s);
+        conn.setMaxChunkedBodySize(limit);
+
+        hash<ChunkedReadResult> res();
+        code recv = sub (hash<auto> v) {
+            if (v.hasKey("data")) {
+                res.data += binary(v.data);
+                ++res.data_calls;
+            } else if (v.hasKey("hdr")) {
+                res.eod = True;
+            }
+        };
+        BinaryOutputStream os();
+        try {
+            switch (reader) {
+                case Reader::String:
+                    res.data = binary(conn.readHTTPChunkedBody(5s).body);
+                    break;
+                case Reader::Binary:
+                    res.data = conn.readHTTPChunkedBodyBinary(5s).body;
+                    break;
+                case Reader::OutputStream:
+                    conn.readHTTPChunkedBodyToOutputStream(os, 5s);
+                    break;
+                case Reader::Callback:
+                    conn.readHTTPChunkedBodyWithCallback(recv, 5s);
+                    break;
+                case Reader::BinaryCallback:
+                    conn.readHTTPChunkedBodyBinaryWithCallback(recv, 5s);
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            res.ex = ex;
+        }
+        if (reader == Reader::OutputStream) {
+            res.data = os.getData();
+        }
+        return res;
+    }
+}

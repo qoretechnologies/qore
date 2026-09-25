@@ -1944,6 +1944,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c cx."header-info".max_request_body_size, so a handler that reads the request body as a stream can enforce
         the configured limit on the total body size; the server limits only the data it buffers ahead of such a
         handler
+      - fixed the \c max_request_body_size not being applied to the total size of an HTTP/1.1 chunked request body
+        read by a stream handler (@ref HttpServer::AbstractStreamRequest "AbstractStreamRequest"): only a single
+        chunk over the limit was rejected, so a body of any size sent in small chunks was delivered to the handler;
+        such a body now receives HTTP 413 (Content Too Large), and the handler receives no data over the limit
       - fixed HTTP/1.x clients sometimes receiving a connection reset instead of the response when the server
         closed the connection after the response while the client was still sending data that the server did not
         read, such as the rest of a request body answered with an error, a pipelined request, or the remainder of

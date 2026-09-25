@@ -1638,6 +1638,9 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
     SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
     SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback ? nullptr : new QoreStringNode(s->getEncoding()));
 
+    // the total size of the chunk data read; the body is not accumulated in callback or output stream mode, so
+    // the limit is applied to this total
+    int64 body_size = 0;
     unsigned cancel_check = 0;
     while (true) {
         if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
@@ -1694,6 +1697,15 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             return nullptr;
         }
 
+        // apply the limit before the chunk is read, so no data over the limit is read, written, or delivered
+        int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+        if (max_chunked_body_size > 0 && chunk_size > max_chunked_body_size - body_size) {
+            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                body_size + static_cast<int64>(chunk_size), max_chunked_body_size);
+            return nullptr;
+        }
+        body_size += chunk_size;
+
         SimpleRefHolder<BinaryNode> chunk(socket_exec_recv_bytes(self, s, static_cast<size_t>(chunk_size),
             timeout_ms, xsink));
         if (*xsink) {
@@ -1710,18 +1722,6 @@ static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSo
             body_bin->append(chunk->getPtr(), chunk->size());
         } else if (!recv_callback) {
             body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
-        }
-
-        if (!os) {
-            int64 body_size = recv_callback
-                ? static_cast<int64>(chunk->size())
-                : binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
-            int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
-            if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
-                xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
-                    body_size, max_chunked_body_size);
-                return nullptr;
-            }
         }
 
         SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
@@ -5619,6 +5619,7 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
 */
 hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false, "readHTTPChunkedBody", xsink);
@@ -5645,6 +5646,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize()
 */
 hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false, "readHTTPChunkedBodyBinary", xsink);
@@ -5676,6 +5678,7 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw HTTP-BODY-TOO-LARGE the chunk exceeds the limit set with setMaxChunkedBodySize()
 */
 hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, true, "readHTTPChunk", xsink);
@@ -5703,6 +5706,8 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
+    no data over the limit is written to the stream
     @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
 */
 hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] output_stream,
@@ -5737,6 +5742,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
+    no data over the limit is passed to the callback
 
     @since %Qore 0.8.10
 */
@@ -5775,6 +5782,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw HTTP-BODY-TOO-LARGE the body exceeds the limit set with setMaxChunkedBodySize();
+    no data over the limit is passed to the callback
 
     @since %Qore 0.8.10
 */
@@ -6761,8 +6770,12 @@ int Socket::getConnectionId() [flags=CONSTANT] {
 }
 
 //! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
-/** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
-    raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
+/** When set, readHTTPChunkedBody(), readHTTPChunkedBodyBinary(), readHTTPChunkedBodyToOutputStream(),
+    readHTTPChunkedBodyWithCallback(), and readHTTPChunkedBodyBinaryWithCallback() raise an
+    \c HTTP-BODY-TOO-LARGE exception if the total size of the chunk data received exceeds this limit, and
+    readHTTPChunk() raises it if the chunk exceeds this limit.  With an output stream or a callback, the body is not
+    accumulated, but the limit is applied in the same way, and the exception is raised before any data over the limit
+    is written to the stream or passed to the callback.
 
     @param max_body_size maximum body size in bytes; 0 means unlimited
 
