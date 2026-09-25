@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    A TCP socket bound to a name with addresses in more than one address family, such as "localhost", holds its port
+    on the name's addresses in the other address families, so that a client connecting to the name, which tries the
+    IPv6 address first, cannot reach another listener with the same port number in the other address family.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class SocketBindNameReservationTest
+
+class SocketBindNameReservationTest inherits QUnit::Test {
+    constructor() : Test("SocketBindNameReservationTest", "1.0") {
+        addTestCase("the port is held in the other address family", \reservationTest());
+        addTestCase("a client of the name reaches the socket", \connectByNameTest());
+        addTestCase("closing the socket releases the port", \closeTest());
+        addTestCase("rebinding the socket moves the reservation", \rebindTest());
+        addTestCase("a given port in use in the other address family", \givenPortTest());
+        addTestCase("an address family given for the bind", \familyTest());
+        addTestCase("an IP address", \ipAddressTest());
+        addTestCase("datagram sockets", \udpTest());
+        set_return_value(main());
+    }
+
+    #! skips the test unless "localhost" has an IPv4 and an IPv6 loopback address that can both be bound
+    private checkLocalhost() {
+        hash<string, bool> families;
+        foreach hash<auto> ai in (getaddrinfo("localhost", NOTHING, AF_UNSPEC)) {
+            families{ai.family} = True;
+        }
+        if (!families{AF_INET} || !families{AF_INET6}) {
+            testSkip("\"localhost\" does not resolve to addresses in both address families");
+        }
+        Socket s6();
+        on_exit s6.close();
+        try {
+            s6.bindINET("::1", 0, False, AF_INET6);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("the IPv6 loopback address cannot be bound: %s: %s", ex.err, ex.desc));
+        }
+    }
+
+    #! returns the loopback address and family other than the family given
+    private static list<auto> otherLoopback(int family) {
+        return family == AF_INET ? ("::1", AF_INET6) : ("127.0.0.1", AF_INET);
+    }
+
+    #! binds and listens on "localhost" with an ephemeral port and returns the socket's info
+    private hash<auto> listenLocalhost(Socket s) {
+        s.bind("localhost:0", True);
+        s.listen();
+        hash<auto> info = s.getSocketInfo(False);
+        assertTrue(info.port > 0, "an ephemeral port was bound");
+        return info;
+    }
+
+    #! asserts that the port can or cannot be bound on the other loopback address
+    private assertOtherBindable(hash<auto> info, bool bindable, string msg) {
+        (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
+        Socket other();
+        on_exit other.close();
+        # SO_REUSEADDR does not allow binding a port that the reservation holds
+        if (bindable) {
+            other.bindINET(addr, info.port, True, family);
+            assertEq(info.port, other.getSocketInfo(False).port, msg);
+        } else {
+            assertThrows("SOCKET-BIND-ERROR", \other.bindINET(), (addr, info.port, True, family), msg);
+        }
+    }
+
+    reservationTest() {
+        checkLocalhost();
+        Socket s();
+        on_exit s.close();
+        hash<auto> info = listenLocalhost(s);
+        assertOtherBindable(info, False, "the port is held in the other address family");
+
+        # a connection to the other loopback address is refused, as no socket listens there
+        (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
+        Socket c();
+        assertThrows("SOCKET-CONNECT-ERROR", \c.connectINET(), (addr, info.port, 10s, family));
+    }
+
+    connectByNameTest() {
+        checkLocalhost();
+        Socket s();
+        on_exit s.close();
+        hash<auto> info = listenLocalhost(s);
+        Socket c();
+        on_exit c.close();
+        c.connect("localhost:" + info.port, 10s);
+        Socket a = s.accept(10s);
+        on_exit a.close();
+        c.send("ping");
+        assertEq("ping", a.recv(4, 10s), "the client reached the socket bound to the name");
+        assertEq(info.family, c.getPeerInfo(False).family, "the client connected in the socket's address family");
+    }
+
+    closeTest() {
+        checkLocalhost();
+        Socket s();
+        hash<auto> info = listenLocalhost(s);
+        s.close();
+        assertOtherBindable(info, True, "the port can be bound in the other address family after the close");
+    }
+
+    rebindTest() {
+        checkLocalhost();
+        Socket s();
+        on_exit s.close();
+        hash<auto> info1 = listenLocalhost(s);
+        # binding the socket again closes it first, which releases the port in both address families
+        hash<auto> info2 = listenLocalhost(s);
+        assertOtherBindable(info2, False, "the new port is held in the other address family");
+        if (info1.port != info2.port) {
+            assertOtherBindable(info1, True, "the previous port is released in the other address family");
+        }
+    }
+
+    givenPortTest() {
+        checkLocalhost();
+        # find the address family that "localhost" is bound in
+        Socket probe();
+        hash<auto> info = listenLocalhost(probe);
+        probe.close();
+        (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
+
+        # another socket holds a port in the other address family; a bind to the name with that port as before
+        # binds the name's first address that can be bound
+        Socket holder();
+        on_exit holder.close();
+        holder.bindINET(addr, 0, False, family);
+        holder.listen();
+        int port = holder.getSocketInfo(False).port;
+        Socket s();
+        on_exit s.close();
+        s.bind("localhost:" + port, True);
+        s.listen();
+        assertEq(port, s.getSocketInfo(False).port, "the given port was bound");
+        assertEq(info.family, s.getSocketInfo(False).family, "the name's first address was bound");
+    }
+
+    familyTest() {
+        checkLocalhost();
+        # with an address family given for the bind, the name is bound in that family only, and the port is still
+        # held on the name's addresses in the other family, so that a client connecting to the name does not reach
+        # another listener there
+        foreach int family in ((AF_INET, AF_INET6)) {
+            Socket s();
+            on_exit s.close();
+            s.bindINET("localhost", 0, True, family);
+            s.listen();
+            hash<auto> info = s.getSocketInfo(False);
+            assertEq(family, info.family);
+            assertOtherBindable(info, False, sprintf("the port is held in the other address family (%d)", family));
+        }
+    }
+
+    ipAddressTest() {
+        checkLocalhost();
+        # an IP address has no addresses in other address families
+        Socket s();
+        on_exit s.close();
+        s.bind("127.0.0.1:0", True);
+        s.listen();
+        assertOtherBindable(s.getSocketInfo(False), True, "no port is held for an IP address");
+    }
+
+    udpTest() {
+        checkLocalhost();
+        # a datagram to an address that is bound but never read would be lost instead of refused, so no port is held
+        Socket s();
+        on_exit s.close();
+        s.bindINET("localhost", 0, True, AF_UNSPEC, SOCK_DGRAM);
+        hash<auto> info = s.getSocketInfo(False);
+        (string addr, int family) = SocketBindNameReservationTest::otherLoopback(info.family);
+        Socket other();
+        on_exit other.close();
+        other.bindINET(addr, info.port, True, family, SOCK_DGRAM);
+        assertEq(info.port, other.getSocketInfo(False).port, "no port is held for a datagram socket");
+    }
+}

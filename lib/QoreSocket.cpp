@@ -1471,6 +1471,12 @@ private:
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     std::vector<SocketResolvedAddrInfo> bind_inet_addrs;
     bool bind_inet_resolved = false;
+    //! true once the socket is bound and the name is resolved in all address families to hold the port on them
+    bool bind_inet_reserving = false;
+    //! the bound address, while the name is resolved to hold the port on its other addresses
+    SocketResolvedAddrInfo bind_inet_bound;
+    //! true if the bound port was assigned by the system
+    bool bind_inet_ephemeral = false;
     bool done = false;
     //! The sandbox that governs a bind, resolved on the thread that requests it (the bind runs on an I/O thread)
     SimpleRefHolder<QoreSandboxManager> sandbox_manager;
@@ -11447,9 +11453,199 @@ static bool qore_socket_ipv6_unavailable(int err) {
 #endif
 }
 
+//! The maximum number of ephemeral ports tried for a TCP socket bound to a name whose port is in use in another family
+static constexpr unsigned QORE_BIND_RESERVATION_MAX_PORTS = 64;
+
+//! Holds the port of a TCP socket bound to one address of a name on the name's addresses in other address families
+/** A client that connects to the name tries the name's addresses in turn (IPv6 first, RFC 8305), and a port number
+    is allocated per address family, so another listener with the same port number on an address of another family
+    would receive the connection instead of the bound socket.  A socket bound to such an address, but not
+    listening, refuses the connection, and the client falls back to the address of the bound socket.
+
+    @param addrs the addresses of the name
+    @param bound_family the address family of the bound address
+    @param port the bound port
+    @param sandbox_manager the sandbox manager checking binds, if any
+    @param fds the reserving sockets; the caller owns them
+
+    @return 0 if the port is held on every address of another family that can be bound, -1 if the port is in use on
+    one of them, in which case no socket is left in @a fds
+*/
+static int qore_socket_reserve_bind_port(const std::vector<SocketResolvedAddrInfo>& addrs, int bound_family,
+        int port, QoreSandboxManager* sandbox_manager, std::vector<int>& fds) {
+    assert(fds.empty());
+    for (size_t i = 0, e = addrs.size(); i < e; ++i) {
+        const SocketResolvedAddrInfo& ai = addrs[i];
+        if (ai.family == bound_family || ai.socktype != SOCK_STREAM
+                || (ai.family != AF_INET && ai.family != AF_INET6)) {
+            continue;
+        }
+        struct sockaddr_storage addr = ai.addr;
+        if (ai.family == AF_INET) {
+            reinterpret_cast<struct sockaddr_in*>(&addr)->sin_port = htons(port);
+        } else {
+            reinterpret_cast<struct sockaddr_in6*>(&addr)->sin6_port = htons(port);
+        }
+        if (sandbox_manager) {
+            ExceptionSink check_xsink;
+            if (!sandbox_manager->checkNetworkBind(reinterpret_cast<const struct sockaddr*>(&addr), ai.addrlen,
+                    qore_socket_sandbox_proto(ai.family, ai.socktype), &check_xsink)) {
+                check_xsink.clear();
+                continue;
+            }
+        }
+        // without SO_REUSEADDR, so that no other socket can bind the port on the address while it is held
+        int fd = socket(ai.family, ai.socktype, ai.protocol);
+        if (fd == QORE_INVALID_SOCKET) {
+            continue;
+        }
+#ifdef IPV6_V6ONLY
+        if (ai.family == AF_INET6) {
+            // only the IPv6 address itself is held, not the IPv4 address that a dual-stack socket would also hold
+            int opt = 1;
+            setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+        }
+#endif
+        if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), ai.addrlen) == QORE_SOCKET_ERROR) {
+            int err = sock_get_raw_error();
+            qore_socket_private::closeDescriptor(fd);
+#ifdef _Q_WINDOWS
+            bool in_use = err == WSAEADDRINUSE;
+#else
+            bool in_use = err == EADDRINUSE;
+#endif
+            if (in_use) {
+                for (int rfd : fds) {
+                    qore_socket_private::closeDescriptor(rfd);
+                }
+                fds.clear();
+                return -1;
+            }
+            // an address that cannot be bound, such as an IPv6 address on a system without IPv6, needs no reservation
+            continue;
+        }
+        fds.push_back(fd);
+    }
+    return 0;
+}
+
+//! Holds the port of a TCP socket bound to a name on the name's addresses in other address families
+/** See qore_socket_reserve_bind_port().  If the socket's ephemeral port is in use in another address family, a
+    socket bound to another ephemeral port of the same address replaces the socket's descriptor; each rejected port
+    stays bound until a port is found, so that it is not allocated again.  A port given by the caller is kept even if
+    it is in use in another address family, and so is the socket's port if no other ephemeral port can be bound or
+    every port tried is in use.
+
+    @param priv the socket, bound to @a bound_ai and not yet used otherwise
+    @param addrs the addresses of the name in all address families
+    @param bound_ai the bound address
+    @param ephemeral true if the port was assigned by the system
+    @param reuseaddr the reuse address option of the bind
+    @param sandbox_manager the sandbox manager checking binds, if any
+*/
+static void qore_socket_bind_reserve_port(qore_socket_private* priv, const std::vector<SocketResolvedAddrInfo>& addrs,
+        const SocketResolvedAddrInfo& bound_ai, bool ephemeral, bool reuseaddr, QoreSandboxManager* sandbox_manager) {
+    if (priv->sock == QORE_INVALID_SOCKET || priv->port <= 0) {
+        return;
+    }
+    std::vector<int> fds;
+    if (!qore_socket_reserve_bind_port(addrs, bound_ai.family, priv->port, sandbox_manager, fds)) {
+        priv->setBindReservations(std::move(fds));
+        return;
+    }
+    if (!ephemeral) {
+        return;
+    }
+
+    // sockets bound to rejected ephemeral ports, which keep the ports allocated until a port is found
+    struct RejectedPorts {
+        std::vector<int> fds;
+        ~RejectedPorts() {
+            for (int fd : fds) {
+                qore_socket_private::closeDescriptor(fd);
+            }
+        }
+    } rejected_ports;
+    std::vector<int>& rejected = rejected_ports.fds;
+    for (unsigned n = 1; n < QORE_BIND_RESERVATION_MAX_PORTS; ++n) {
+        int fd = socket(bound_ai.family, bound_ai.socktype, bound_ai.protocol);
+        if (fd == QORE_INVALID_SOCKET) {
+            return;
+        }
+        rejected.push_back(fd);
+        int opt = reuseaddr ? 1 : 0;
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (SETSOCKOPT_ARG_4)&opt, sizeof(int));
+        struct sockaddr_storage addr = bound_ai.addr;
+        if (bound_ai.family == AF_INET) {
+            reinterpret_cast<struct sockaddr_in*>(&addr)->sin_port = 0;
+        } else {
+            reinterpret_cast<struct sockaddr_in6*>(&addr)->sin6_port = 0;
+        }
+        socklen_t len = bound_ai.addrlen;
+        if (::bind(fd, reinterpret_cast<const struct sockaddr*>(&addr), bound_ai.addrlen) == QORE_SOCKET_ERROR
+                || getsockname(fd, reinterpret_cast<struct sockaddr*>(&addr), &len)) {
+            return;
+        }
+        int port = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&addr));
+        if (qore_socket_reserve_bind_port(addrs, bound_ai.family, port, sandbox_manager, fds)) {
+            continue;
+        }
+        // the new socket replaces the socket's descriptor, which keeps its port allocated until this returns
+        int old_fd = priv->sock;
+        if (!priv->replaceDescriptor(old_fd, fd)) {
+            for (int rfd : fds) {
+                qore_socket_private::closeDescriptor(rfd);
+            }
+            return;
+        }
+        rejected.back() = old_fd;
+        priv->port = port;
+        priv->setBindReservations(std::move(fds));
+        return;
+    }
+}
+
+//! Returns true if a socket bound to the name holds its port on the name's addresses in other address families
+/** Only a TCP socket bound to a host name, not to an IP address; see qore_socket_reserve_bind_port().  A datagram
+    sent to an address that is bound but never read would be lost instead of refused, so no port is held for other
+    socket types.
+*/
+static bool qore_socket_bind_needs_reservation(bool has_name, const std::string& name, int socktype) {
+    if (!has_name || name.empty() || socktype != SOCK_STREAM) {
+        return false;
+    }
+    struct in6_addr a6;
+    struct in_addr a4;
+    return inet_pton(AF_INET, name.c_str(), &a4) != 1 && inet_pton(AF_INET6, name.c_str(), &a6) != 1;
+}
+
+//! Continues resolving a bound name in all address families to hold the bound port on its other addresses
+/** A failure to resolve the name only means that no port is held, so it is not an error of the bind.
+
+    @return true if the resolver must be polled again, false once it is done
+*/
+static bool qore_socket_bind_continue_reservation(qore_socket_private* priv,
+        std::unique_ptr<QoreCaresAddrInfoResolver>& resolver, const SocketResolvedAddrInfo& bound_ai, bool ephemeral,
+        bool reuseaddr, QoreSandboxManager* sandbox_manager) {
+    assert(resolver);
+    ExceptionSink resolve_xsink;
+    int rrc = resolver->continuePoll(&resolve_xsink);
+    if (rrc > 0 && !resolve_xsink) {
+        return true;
+    }
+    if (!rrc && !resolve_xsink) {
+        qore_socket_bind_reserve_port(priv, resolver->getAddresses(), bound_ai, ephemeral, reuseaddr,
+            sandbox_manager);
+    }
+    resolve_xsink.clear();
+    resolver.reset();
+    return false;
+}
+
 static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name, const char* service,
         bool reuseaddr, int family, int protocol, std::vector<SocketResolvedAddrInfo>& addrs,
-        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink) {
+        QoreSandboxManager* sandbox_manager, ExceptionSink* xsink, size_t* bound = nullptr,
+        bool* ephemeral = nullptr) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     qore_socket_close_private_from_controller(priv);
 
@@ -11503,6 +11699,12 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr)) {
             // an allowed address was bound; a denial of another address is not an error
             denied_xsink.clear();
+            if (bound) {
+                *bound = i;
+            }
+            if (ephemeral) {
+                *ephemeral = !prt;
+            }
             return 0;
         }
         en = sock_get_raw_error();
@@ -11567,9 +11769,31 @@ QoreHashNode* QoreSocketControllerSetupPollOperation::continueBindInet(Exception
         bind_inet_resolved = true;
     }
 
-    rc = qore_socket_bind_inet_resolved_direct(sock, has_name ? name.c_str() : nullptr,
-        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs,
-        *sandbox_manager, xsink);
+    if (!bind_inet_reserving) {
+        size_t bound = 0;
+        rc = qore_socket_bind_inet_resolved_direct(sock, has_name ? name.c_str() : nullptr,
+            has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs,
+            *sandbox_manager, xsink, &bound, &bind_inet_ephemeral);
+        if (rc || !qore_socket_bind_needs_reservation(has_name, name, q_get_sock_type(socktype))) {
+            done = true;
+            return nullptr;
+        }
+        bind_inet_bound = bind_inet_addrs[bound];
+        if (q_get_af(family) == AF_UNSPEC) {
+            qore_socket_bind_reserve_port(qore_socket_private::get(*sock), bind_inet_addrs, bind_inet_bound,
+                bind_inet_ephemeral, reuseaddr, *sandbox_manager);
+            done = true;
+            return nullptr;
+        }
+        // the name was resolved in one address family only; resolve it in all of them to hold the port
+        bind_inet_reserving = true;
+        resolver = std::make_unique<QoreCaresAddrInfoResolver>(name.c_str(), nullptr, AF_UNSPEC, SOCK_STREAM,
+            protocol, AI_PASSIVE);
+    }
+    if (qore_socket_bind_continue_reservation(qore_socket_private::get(*sock), resolver, bind_inet_bound,
+            bind_inet_ephemeral, reuseaddr, *sandbox_manager)) {
+        return getResolverPollInfo(xsink);
+    }
     done = true;
     return nullptr;
 }
@@ -11614,9 +11838,33 @@ QoreHashNode* SocketSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
         bind_inet_resolved = true;
     }
 
-    rc = qore_socket_bind_inet_resolved_direct(sock->priv->socket, has_name ? name.c_str() : nullptr,
-        has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs,
-        *sandbox_manager, xsink);
+    if (!bind_inet_reserving) {
+        size_t bound = 0;
+        rc = qore_socket_bind_inet_resolved_direct(sock->priv->socket, has_name ? name.c_str() : nullptr,
+            has_service ? service.c_str() : nullptr, reuseaddr, q_get_af(family), protocol, bind_inet_addrs,
+            *sandbox_manager, xsink, &bound, &bind_inet_ephemeral);
+        if (rc || !qore_socket_bind_needs_reservation(has_name, name, q_get_sock_type(socktype))) {
+            clearNonBlockLocked();
+            done = true;
+            return nullptr;
+        }
+        bind_inet_bound = bind_inet_addrs[bound];
+        if (q_get_af(family) == AF_UNSPEC) {
+            qore_socket_bind_reserve_port(qore_socket_private::get(*sock->priv->socket), bind_inet_addrs,
+                bind_inet_bound, bind_inet_ephemeral, reuseaddr, *sandbox_manager);
+            clearNonBlockLocked();
+            done = true;
+            return nullptr;
+        }
+        // the name was resolved in one address family only; resolve it in all of them to hold the port
+        bind_inet_reserving = true;
+        resolver = std::make_unique<QoreCaresAddrInfoResolver>(name.c_str(), nullptr, AF_UNSPEC, SOCK_STREAM,
+            protocol, AI_PASSIVE);
+    }
+    if (qore_socket_bind_continue_reservation(qore_socket_private::get(*sock->priv->socket), resolver,
+            bind_inet_bound, bind_inet_ephemeral, reuseaddr, *sandbox_manager)) {
+        return getResolverPollInfo(xsink);
+    }
     clearNonBlockLocked();
     done = true;
     return nullptr;

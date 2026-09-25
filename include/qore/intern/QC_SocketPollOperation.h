@@ -359,6 +359,12 @@ private:
     bool done = false;
     bool initialized = false;
     bool bind_inet_resolved = false;
+    //! true once the socket is bound and the name is resolved in all address families to hold the port on them
+    bool bind_inet_reserving = false;
+    //! the bound address, while the name is resolved to hold the port on its other addresses
+    SocketResolvedAddrInfo bind_inet_bound;
+    //! true if the bound port was assigned by the system
+    bool bind_inet_ephemeral = false;
     int controller_deferred_tid = -1;
     //! The sandbox that governs a bind, resolved on the thread that requests it (the bind runs on an I/O thread)
     SimpleRefHolder<QoreSandboxManager> sandbox_manager;

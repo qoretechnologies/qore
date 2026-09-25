@@ -3742,6 +3742,8 @@ nothing Socket::connectUNIXSSL(string path, softint socket_type = SOCK_STREAM,
 
     Internally, bind addresses are resolved by the socket async I/O controller; internal \c bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
 
+    A host name whose addresses are in more than one address family, such as \c "localhost", is bound on one address, and the socket holds its port on the name's addresses in the other address families, as described for @ref Qore::Socket::bindINET() "Socket::bindINET()".
+
     @par Example:
     @code{.py} # bind to a UNIX socket on the local system and reuse the address, check return code
 if (sock.bind("/tmp/my-socket", True))
@@ -3811,6 +3813,14 @@ nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
     Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an exception is thrown.
 
     A stream socket without a bind address and with @ref Qore::AF_UNSPEC "AF_UNSPEC" is bound on all interfaces with one dual-stack socket on the IPv6 wildcard address \c "::", which serves both IPv4 and IPv6 clients (RFC 3493 section 5.3), so a client reaches it through any address of the local host, including the IPv6 loopback address \c ::1 that \c "localhost" resolves to first; when the port is assigned by the system (port \c 0), the port is free in both address families.  If the port is in use in either address family, the bind fails.  Only on a system without IPv6 or without dual-stack sockets is the socket bound on the IPv4 wildcard address \c "0.0.0.0" instead.  A datagram socket without a bind address is bound on the IPv4 wildcard address, and an explicit address family binds the wildcard address of that family only.
+
+    A stream socket bound to a host name, such as \c "localhost", whose addresses are in more than one address
+    family, is bound on one address and holds its port on the name's addresses in the other address families with
+    sockets that are bound but not listening, until the socket is closed.  A client that connects to the name tries
+    its IPv6 addresses first (RFC 8305), and a port number is allocated per address family, so without this, another
+    listener with the same port number on such an address would receive the connection.  A connection to such an
+    address is refused instead, and the client falls back to the bound address.  When the port is assigned by the
+    system (port \c 0), a port that is free in all of the name's address families is chosen.
 
     If any errors occur, an exception is thrown.
 

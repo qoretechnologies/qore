@@ -910,6 +910,13 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     int sock, sfamily, port, stype, sprot;
 
+    //! Sockets that hold the port of a TCP socket bound to a name on the name's addresses in other address families
+    /** Bound but not listening, so a connection to such an address is refused and a client connecting to the name
+        falls back to the bound address instead of reaching another listener on the same port number; closed with
+        the socket.  See qore_socket_bind_inet_resolved_direct().
+    */
+    std::vector<int> bind_reservations;
+
     // issue #3558: connection sequence to show when a connection has been reestablished
     int64 connection_id = 0;
 
@@ -1608,9 +1615,38 @@ struct qore_socket_private : public QoreReferenceCounter {
         return true;
     }
 
+    //! Closes a socket descriptor that is not the socket's own descriptor
+    DLLLOCAL static void closeDescriptor(int fd) {
+        while (true) {
+#ifdef _Q_WINDOWS
+            int rc = ::closesocket(fd);
+#else
+            int rc = ::close(fd);
+#endif
+            if (!rc || sock_get_error() != EINTR) {
+                break;
+            }
+        }
+    }
+
+    //! Replaces the sockets that hold the bound port on other address families; see @ref bind_reservations
+    DLLLOCAL void setBindReservations(std::vector<int>&& fds) {
+        closeBindReservations();
+        bind_reservations = std::move(fds);
+    }
+
+    //! Closes the sockets that hold the bound port on other address families; see @ref bind_reservations
+    DLLLOCAL void closeBindReservations() {
+        for (int fd : bind_reservations) {
+            closeDescriptor(fd);
+        }
+        bind_reservations.clear();
+    }
+
     //! Closes the descriptor and resets the connection state; @ref close_m must be held
     DLLLOCAL int close_and_reset_locked() {
         assert(sock != QORE_INVALID_SOCKET);
+        closeBindReservations();
         int rc;
         while (true) {
 #ifdef _Q_WINDOWS

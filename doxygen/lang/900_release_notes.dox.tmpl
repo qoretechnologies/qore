@@ -268,6 +268,20 @@
     @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" with a service only.
     @endparblock
 
+    @par Stream Sockets Bound to a Host Name Hold Their Port in Every Address Family
+    @parblock
+    A stream socket bound to a host name whose addresses are in more than one address family, such as
+    \c "localhost" with @ref Qore::Socket::bind() "Socket::bind()" (\c "localhost:0") or
+    @ref Qore::Socket::bindINET() "Socket::bindINET()", is bound on one address as before and now also holds its
+    port on the name's addresses in the other address families, with sockets that are bound but not listening,
+    until it is closed.  A client that connects to the name tries its IPv6 address first (RFC 8305), and a port
+    number is allocated per address family, so another listener with the same port number on the IPv6 address, such
+    as a system service, received such connections, which then failed or were reset.  A connection to such an
+    address is now refused, and the client falls back to the bound address.  A port assigned by the system (port
+    \c 0) is chosen to be free in all of the name's address families; other programs can no longer bind the port on
+    the name's other addresses while the socket is open.
+    @endparblock
+
     @par The Initial Thread Keeps the Process Name on Linux
     @parblock
     The library no longer names a process's initial thread <tt>qore/1</tt> on Linux.  There, the initial
