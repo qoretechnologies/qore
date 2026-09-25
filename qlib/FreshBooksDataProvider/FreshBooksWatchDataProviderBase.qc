@@ -50,24 +50,27 @@ public class FreshBooksWatchDataProviderBase inherits FreshBooksDataProviderBase
         };
     }
 
+    private {
+        #! The account ID for the watched resource; if not set, the account ID configured in the REST client is used
+        /** The ID is kept in the provider and passed to @ref accountPath() for each request, because the REST client
+            can be shared with other providers
+        */
+        *string watch_account_id;
+    }
+
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest, *hash<auto> options)
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest, *hash<auto> options)
             : FreshBooksDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
-        if (options.account_id) {
-            rest.setAccountId(options.account_id);
+        if (options.account_id.val()) {
+            watch_account_id = options.account_id.toString();
         }
     }
 
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not relied on; records are ordered by timestamp before delivery

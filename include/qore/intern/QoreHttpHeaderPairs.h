@@ -118,36 +118,4 @@ DLLLOCAL inline std::string qore_http_media_type(const char* content_type) {
     return rv;
 }
 
-//! Returns true if a media type carries text, so a message body with it is delivered as a string
-/** The media type decides how a message body is delivered: a text type becomes a string in the character
-    encoding the message declares, and any other type stays binary, because its octets are not text and
-    converting them would corrupt them.
-
-    An empty media type is not text.  A message that declares no type has no media type to judge, which is a
-    different question from a type that is not text, and each caller answers it for itself.
-
-    @param media_type a media type from qore_http_media_type()
-*/
-DLLLOCAL inline bool qore_http_media_type_is_text(const std::string& media_type) {
-    return (media_type.size() >= 5 && !media_type.compare(0, 5, "text/"))
-        || media_type == "application/json"
-        || media_type == "application/xml"
-        || media_type == "application/javascript"
-        || media_type == "application/x-www-form-urlencoded"
-        || media_type == "application/x-yaml"
-        || media_type == "application/yaml"
-        || (media_type.size() > 5 && !media_type.compare(media_type.size() - 5, 5, "+json"))
-        || (media_type.size() > 4 && !media_type.compare(media_type.size() - 4, 4, "+xml"));
-}
-
-//! Returns true if a media type is always UTF-8, whatever charset parameter it carries
-/** JSON is UTF-8 by RFC 8259 section 8.1, and YAML by the YAML specification
-*/
-DLLLOCAL inline bool qore_http_media_type_is_utf8(const std::string& media_type) {
-    return media_type == "application/json"
-        || (media_type.size() > 5 && !media_type.compare(media_type.size() - 5, 5, "+json"))
-        || media_type == "application/x-yaml" || media_type == "text/yaml"
-        || media_type == "text/x-yaml" || media_type == "application/yaml";
-}
-
 #endif

@@ -85,7 +85,7 @@ public class FreshBooksDataProvider inherits FreshBooksDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) : FreshBooksDataProviderBase(rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) : FreshBooksDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

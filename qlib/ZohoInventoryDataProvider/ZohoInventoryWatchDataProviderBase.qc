@@ -51,7 +51,7 @@ public class ZohoInventoryWatchDataProviderBase inherits ZohoInventoryDataProvid
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options)
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options)
             : ZohoInventoryDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -60,11 +60,6 @@ public class ZohoInventoryWatchDataProviderBase inherits ZohoInventoryDataProvid
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The API is queried newest-first; records are reversed into delivery order

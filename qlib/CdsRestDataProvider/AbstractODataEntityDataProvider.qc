@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractODataEntityDataProvider class definition
 
-/** AbstractODataEntityDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** AbstractODataEntityDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -67,7 +67,7 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(CdsRestClient::CdsRestClient rest, string name) : CdsRestDataProviderBase(rest) {
+    constructor(CdsRestClient::CdsRestClientIo rest, string name) : CdsRestDataProviderBase(rest) {
         self.name = name;
         record_info.entity_name = name;
     }
@@ -126,31 +126,32 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
     private *hash<auto> createRecordImpl(hash<auto> rec, *hash<auto> create_options) {
         checkRecordInit();
         string url = getEntityUri();
-        hash<auto> info;
-        hash<auto> resp;
+        hash<RestClient::RestResponseInfo> resp;
         try {
-            resp = rest.post(url, rec, \info);
+            resp = rest.restPost(url, rec);
         } catch (hash<ExceptionInfo> ex) {
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            # Check for duplicate record error
-            if (rec{record_info.key} && isDuplicateError(ex, info)) {
-                ex.desc = sprintf("%s: %s", ex.err, ex.desc);
-                ex.err = "DUPLICATE-RECORD";
-                ex_arg.id = {record_info.key: rec{record_info.key}};
+            # Check for duplicate record error; the exception argument of an error response includes the response
+            if (rec{record_info.key} && isDuplicateError(ex)) {
+                hash<auto> ex_arg = ex.arg.typeCode() == NT_HASH ? ex.arg : {};
+                throw "DUPLICATE-RECORD", sprintf("%s: %s", ex.err, ex.desc),
+                    ex_arg + {"id": {record_info.key: rec{record_info.key}}};
             }
-            throw ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow;
         }
-        return processCreateResponse(rec, resp, info);
+        return processCreateResponse(rec, resp);
     }
 
     #! Template method: check if error is a duplicate record error
-    private bool isDuplicateError(hash<ExceptionInfo> ex, hash<auto> info) {
+    /** @param ex the exception raised for the create request; the argument of an exception for an error response
+        includes the response (\c status_code, \c headers, and \c body)
+    */
+    private bool isDuplicateError(hash<ExceptionInfo> ex) {
         # Default implementation - subclasses can override
         return False;
     }
 
     #! Template method: process create response to extract new record ID
-    private *hash<auto> processCreateResponse(hash<auto> rec, hash<auto> resp, hash<auto> info) {
+    private *hash<auto> processCreateResponse(hash<auto> rec, hash<RestClient::RestResponseInfo> resp) {
         # Default: return response body or original record
         return resp.body ?? rec;
     }
@@ -171,20 +172,19 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
         date now = now_us();
 
         string url = getEntityUri(id_value);
-        hash<auto> info;
-        hash<auto> resp;
+        hash<RestClient::RestResponseInfo> resp;
         try {
             hash<auto> hdr = getUpsertHeaders(id_value);
-            resp = rest.patch(url, rec, \info, hdr + {"Prefer": "return=representation"});
+            resp = rest.restPatch(url, rec, hdr + {"Prefer": "return=representation"});
         } catch (hash<ExceptionInfo> ex) {
-            # If record doesn't exist (404), try to create it
-            if (info."response-code" == 404) {
+            # If record doesn't exist (404), try to create it; the exception argument of an error response
+            # includes the response
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.status_code == 404) {
                 rec{record_info.key} = id_value;
                 createRecordImpl(rec);
                 return UpsertResultInserted;
             }
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow;
         }
 
         return checkUpsertResult(resp, now);
@@ -196,7 +196,7 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Template method: check if upsert resulted in insert or update
-    private string checkUpsertResult(hash<auto> resp, date now) {
+    private string checkUpsertResult(hash<RestClient::RestResponseInfo> resp, date now) {
         # Check creation time of record to see if we created or updated
         # Subclasses can override for API-specific logic
         return UpsertResultUpdated;
@@ -245,14 +245,9 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
     private updateSingleRecord(string id, hash<auto> set) {
         checkRecordInit();
         string url = getEntityUri(id);
-        hash<auto> info;
-        try {
-            hash<auto> hdr = getUpdateHeaders(id);
-            rest.patch(url, set, \info, hdr);
-        } catch (hash<ExceptionInfo> ex) {
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        hash<auto> hdr = getUpdateHeaders(id);
+        # the exception argument of an error response includes the response
+        rest.restPatch(url, set, hdr);
     }
 
     #! Template method: get headers for update operation (e.g., ETag for BC)
@@ -264,13 +259,8 @@ public class AbstractODataEntityDataProvider inherits CdsRestDataProviderBase {
     private deleteSingleRecord(string id) {
         checkRecordInit();
         string url = getEntityUri(id);
-        hash<auto> info;
-        try {
-            rest.del(url, NOTHING, \info);
-        } catch (hash<ExceptionInfo> ex) {
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            throw ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response
+        rest.restDel(url, NOTHING);
     }
 }
 }

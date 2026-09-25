@@ -48,6 +48,9 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
 
         #! Default maximum notification queue size (0 = unlimited)
         const DefaultMaxNotificationQueueSize = 10000;
+
+        #! Connect and response timeout for delivering a notification to a subscriber's callback URL
+        const NotificationDeliveryTimeout = 10s;
     }
 
     private {
@@ -86,6 +89,16 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
 
         #! Notification receive callback
         *code notification_handler;
+
+        #! Connection manager delivering notifications to subscriber callback URLs
+        /** Connections are reused across deliveries to the same host; cookies are not kept
+        */
+        HttpClientIo::HttpClientConnectionManager notification_mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "connect_timeout": NotificationDeliveryTimeout,
+                "request_timeout": NotificationDeliveryTimeout,
+                "enable_cookies": False,
+            });
     }
 
     #! Creates the ONE Record server handler
@@ -1369,19 +1382,26 @@ public class OneRecordServerHandler inherits AbstractHttpRequestHandler, Logger:
             }
 
             try {
-                Qore::HTTPClient push_client({
-                    "url": s.callbackUrl,
-                    "timeout": 10000,
-                    "error_passthru": True,
-                });
-
-                push_client.send(make_json(notification), "POST", NOTHING, {
+                hash<auto> hdr = {
                     "Content-Type": MimeTypeOneRecord,
-                });
+                };
+                # user information in the callback URL is sent as basic authentication
+                hash<UrlInfo> url_info = parse_url(s.callbackUrl);
+                if (url_info.username.val()) {
+                    hdr.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", url_info.username,
+                        url_info.password ?? ""));
+                }
+                hash<auto> resp = notification_mgr.request(s.callbackUrl, "POST",
+                    get_http_request_target(s.callbackUrl), hdr, make_json(notification));
+                if (resp.status_code < 200 || resp.status_code >= 300) {
+                    log(Logger::LoggerLevel::ERROR,
+                        "Notification delivery failed to %y: HTTP status code %d received: message: %s",
+                        get_safe_url(s.callbackUrl), resp.status_code, resp.status_message ?? "<no message>");
+                }
             } catch (hash<ExceptionInfo> ex) {
                 log(Logger::LoggerLevel::ERROR,
                     "Notification delivery failed to %y: %s: %s",
-                    s.callbackUrl, ex.err, ex.desc);
+                    get_safe_url(s.callbackUrl), ex.err, ex.desc);
             }
         }
     }

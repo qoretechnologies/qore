@@ -87,6 +87,7 @@ public class RestClientDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("RestClientDataProvider Test", "1.0") {
         addTestCase("test", \httpClientDataProviderTest());
+        addTestCase("connection data provider", \connectionDataProviderTest());
 
         Logger logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -109,8 +110,34 @@ public class RestClientDataProviderTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    tearDown() {
+    # the server is used by all test cases
+    globalTearDown() {
         delete m_http;
+    }
+
+    connectionDataProviderTest() {
+        # the provider is created without any I/O, so a server that is not running does not prevent it
+        {
+            RestConnection conn("test", "test", "http://localhost:1", {"monitor": False});
+            AbstractDataProvider prov = conn.getDataProvider();
+            assertEq("RestClientDataProvider", prov.className());
+        }
+        # the provider sends requests with an asynchronous client
+        {
+            RestConnection conn("test", "test", "http://localhost:" + port, {"monitor": False});
+            AbstractDataProvider prov = conn.getDataProvider().getChildProviderEx("get");
+            hash<auto> h = prov.doRequest({"path": "/api_json"});
+            assertEq(200, h."status-code");
+            assertEq(VALUE_JSON.output, h."response-body");
+        }
+        # with a schema, the schema's provider is returned
+        {
+            RestConnection conn("test", "test", "http://localhost:" + port, {"monitor": False}, {
+                "openapi3": get_script_dir() + "/../OpenApi3/PetStore.openapi3.yaml",
+            });
+            AbstractDataProvider prov = conn.getDataProvider();
+            assertEq("OpenApi3DataProvider", prov.className());
+        }
     }
 
     httpClientDataProviderTest() {

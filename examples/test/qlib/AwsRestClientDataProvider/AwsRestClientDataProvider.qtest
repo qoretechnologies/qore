@@ -18,12 +18,27 @@
 public class AwsRestClientDataProviderTest inherits QUnit::Test {
     constructor() : Test("AwsRestClientDataProvider Test", "1.0") {
         addTestCase("test", \httpClientDataProviderTest());
+        addTestCase("connection data provider", \connectionDataProviderTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
     }
 
     private checkModule() {
+    }
+
+    connectionDataProviderTest() {
+        checkModule();
+        # the provider is created without any I/O, so a server that is not running does not prevent it
+        AwsRestConnection conn("test", "test", "awsrests://localhost:1", {"monitor": False}, {
+            "aws_keyid": "test",
+            "aws_secret": "test",
+            "aws_region": "us-east-1",
+            "aws_service": "s3",
+        });
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("AwsRestClientDataProvider", prov.className());
+        assertEq("get", prov.getChildProviderEx("get").getName());
     }
 
     httpClientDataProviderTest() {

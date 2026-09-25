@@ -46,7 +46,7 @@ public class LemlistLeadNotInterestedEventDataProvider inherits LemlistBaseEvent
     }
 
     #! Creates the object with a REST client
-    constructor(LemlistRestClient::LemlistRestClient rest, *hash<auto> options)
+    constructor(LemlistRestClient::LemlistRestClientIo rest, *hash<auto> options)
             : LemlistBaseEventDataProvider(rest, options) {
     }
 

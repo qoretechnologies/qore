@@ -48,7 +48,7 @@ public class ZohoInvoiceWatchDataProviderBase inherits ZohoInvoiceDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -57,11 +57,6 @@ public class ZohoInvoiceWatchDataProviderBase inherits ZohoInvoiceDataProviderBa
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The API is queried newest-first; records are reversed into delivery order

@@ -37,7 +37,7 @@ public class FhirCapabilityStatementDataProvider inherits FhirRestDataProviderBa
     }
 
     #! Creates the object with the given FHIR REST client
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     #! Returns the data provider name
@@ -79,7 +79,7 @@ public class FhirSmartConfigurationDataProvider inherits FhirRestDataProviderBas
     }
 
     #! Creates the object with the given FHIR REST client
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     #! Returns the data provider name

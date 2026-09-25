@@ -79,11 +79,11 @@ public class ZohoInventoryDeleteSalesOrderDataProvider inherits ZohoInventoryDat
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.salesorder_id) {
             salesorder_id = options.salesorder_id;
         }
@@ -111,12 +111,12 @@ public class ZohoInventoryDeleteSalesOrderDataProvider inherits ZohoInventoryDat
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.salesorder_id ?? request_options.salesorder_id ?? salesorder_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "salesorder_id is required for delete operation";
         }
-        return doDelete(sprintf("/salesorders/%s", id));
+        return doDelete(sprintf("/salesorders/%s", id), org_id);
     }
 
     #! Returns static provider info

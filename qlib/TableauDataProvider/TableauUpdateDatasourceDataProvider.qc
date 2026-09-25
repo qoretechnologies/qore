@@ -92,7 +92,7 @@ public class TableauUpdateDatasourceDataProvider inherits TableauDataProviderBas
         static TableauDatasourceDataType ResponseType();
     }
 
-    constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProviderBase(rest) {
     }
 
     string getName() {

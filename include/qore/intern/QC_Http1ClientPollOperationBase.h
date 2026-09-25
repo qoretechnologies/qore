@@ -309,6 +309,13 @@ public:
         max_response_body_size = max_size;
     }
 
+    //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
+    /** @param enc the assumed encoding; nullptr means ISO-8859-1; see qore_get_http_body_charset()
+    */
+    DLLLOCAL void setAssumedEncoding(const QoreEncoding* enc) {
+        assumed_encoding.store(enc, std::memory_order_relaxed);
+    }
+
     //! Sets the connect-phase timeout for this connection (microseconds)
     /** Bounds the time the connection may spend establishing itself — TCP connect,
         TLS handshake and proxy \c CONNECT tunnel — independently of the caller's
@@ -508,6 +515,11 @@ private:
     // atomic: setMaxResponseBodySize() is called from the thread configuring the connection while the I/O thread
     // reads it for each response
     std::atomic<int64_t> max_response_body_size{0};
+
+    //! The encoding assumed for text response bodies whose encoding is not determined otherwise; nullptr = ISO-8859-1
+    // atomic: setAssumedEncoding() is called from the thread configuring the connection while the I/O thread reads it
+    // for each response; encodings are never freed
+    std::atomic<const QoreEncoding*> assumed_encoding{nullptr};
 
     //! Deadline for the current idle period (epoch us); 0 = not yet in idle wait
     /** Set on first handleIdle entry with no pending request; cleared when a
@@ -753,7 +765,6 @@ private:
     DLLLOCAL QoreValue convertBodyEncoding(ExceptionSink* xsink);
 
     //! Check if Content-Type indicates a text-based body
-    DLLLOCAL static bool isTextContentType(const char* ct);
 };
 
 DLLLOCAL QoreClass* initHttp1ClientPollOperationBaseClass(QoreNamespace& qorens);

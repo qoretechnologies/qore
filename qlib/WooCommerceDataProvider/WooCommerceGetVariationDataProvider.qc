@@ -74,7 +74,7 @@ public class WooCommerceGetVariationDataProvider inherits WooCommerceDataProvide
         static WooCommerceVariationDataType ResponseType();
     }
 
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

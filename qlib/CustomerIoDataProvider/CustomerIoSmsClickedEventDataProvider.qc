@@ -38,7 +38,7 @@ public class CustomerIoSmsClickedEventDataProvider inherits CustomerIoBaseEventD
     }
 
     #! Creates the object with a REST client
-    constructor(CustomerIoRestClient::CustomerIoRestClient rest)
+    constructor(CustomerIoRestClient::CustomerIoRestClientIo rest)
             : CustomerIoBaseEventDataProvider(rest) {
     }
 

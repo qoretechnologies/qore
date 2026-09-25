@@ -143,6 +143,9 @@ RestHandler handler(NOTHING, swagger);
     @section swagger_relnotes Swagger Module Release Notes
 
     @subsection swagger_2_6 Swagger v2.6
+    - JSON and YAML bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed, instead of
+      being relabeled as UTF-8, which corrupted correctly labeled text such as YAML with a UTF-16 byte order mark;
+      HTTP bodies are decoded with their actual encoding (see @ref Qore::decode_http_body() "decode_http_body()")
     - URI path parameters are percent-decoded once after matching path boundaries and before
       type conversion and schema validation
     - fixed YAML MIME type equivalence: \c "application/yaml" (RFC 9512), \c "text/x-yaml",
@@ -1393,7 +1396,9 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 } else {
                     *code ds = conf.deserialize;
                     if ((conf."module" == "json" || conf."module" == "yaml") && http_body.encoding() != "UTF-8") {
-                        http_body = force_encoding(http_body, "UTF-8");
+                        # the parsers need UTF-8; HTTP bodies are decoded with their actual encoding (see
+                        # decode_http_body()), so text in another encoding is converted
+                        http_body = convert_encoding(http_body, "UTF-8");
                     }
                     try {
                         auto any_body = ds(http_body);
@@ -1501,7 +1506,9 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
                 # the validity of the type is checked below in any case
                 try {
                     if ((conf."module" == "json" || conf."module" == "yaml") && response_body.encoding() != "UTF-8") {
-                        response_body = force_encoding(response_body, "UTF-8");
+                        # the parsers need UTF-8; HTTP bodies are decoded with their actual encoding (see
+                        # decode_http_body()), so text in another encoding is converted
+                        response_body = convert_encoding(response_body, "UTF-8");
                     }
                     rv.body = ds ? ds(response_body) : response_body;
                 } catch (hash<ExceptionInfo> ex) {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcCompaniesDataProvider class definition
 
-/** BcCompaniesDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcCompaniesDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,6 +58,18 @@ public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
+    /** @param rest the REST client for API calls
+
+        @since CdsRestDataProvider 2.2
+    */
+    constructor(CdsRestClient::CdsRestClientIo rest) : CdsRestDataProviderBase(rest) {
+    }
+
+    #! Creates the object from the arguments
+    /** @param rest a synchronous REST client; API calls are made with a
+        @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo" created with its options and connection path by
+        @ref CdsRestDataProviderBase::getAsyncClient()
+    */
     constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
     }
 
@@ -69,9 +81,11 @@ public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", BaseConstructorOptions, options);
-        rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {
-            "api_profile": CdsRestClient::BusinessCentralProfile.name,
-        });
+        if (copts.cdsrestclient) {
+            rest = CdsRestDataProviderBase::getClientFromOption(copts.cdsrestclient);
+        } else {
+            rest = new BusinessCentralRestClientIo(getClientOptions(copts));
+        }
     }
 
     #! Returns the data provider name
@@ -137,17 +151,11 @@ public class BcCompaniesDataProvider inherits CdsRestDataProviderBase {
             return companies;
         }
 
-        hash<auto> info;
-        try {
-            hash<auto> resp = rest.get("companies", NOTHING, \info);
-            list<hash<auto>> company_list = resp.body.value ?? ();
-            companies = map {$1.id: $1}, company_list;
-            companies_by_name = map {($1.displayName ?? $1.name): $1}, company_list;
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response
+        hash<auto> resp = rest.restGet("companies");
+        list<hash<auto>> company_list = resp.body.value ?? ();
+        companies = map {$1.id: $1}, company_list;
+        companies_by_name = map {($1.displayName ?? $1.name): $1}, company_list;
 
         return companies;
     }

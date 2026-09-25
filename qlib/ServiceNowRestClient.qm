@@ -92,6 +92,14 @@ printf("%Y\n", ans.body);
     @section ServiceNowrestclientrelnotes Release Notes
 
     @subsection ServiceNowrestclientv1_3 ServiceNowRestClient v1.3
+    - @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo" supports the \c api, \c apikey, and
+      \c apikey_header options and raises the ServiceNow errors of error responses, as
+      @ref ServiceNowRestClient::ServiceNowRestClient "ServiceNowRestClient" does
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - @ref ServiceNowRestClient::ServiceNowRestConnection "ServiceNowRestConnection" data providers make API calls
+      with a @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo"
+    - @ref ServiceNowRestClient::ServiceNowRestConnection "ServiceNowRestConnection" polling pings are made with a
+      @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3)
     - added \c processAsyncResponse() override for ServiceNow-specific error handling in async REST
       requests
 
@@ -503,7 +511,7 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
         # to avoid circular dependencies, this object loads the ServiceNowRestDataProvider and creates the data provider
         # object dynamically
         load_module("ServiceNowRestDataProvider");
-        return create_object("ServiceNowRestDataProvider", get());
+        return create_object("ServiceNowRestDataProvider", getAsync());
     }
 
     #! Returns the OAuth2 option name for this connection
@@ -522,22 +530,6 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
             rv{i.value} = real_opts{i.key};
         }
         return rv;
-    }
-
-    #! Called to start a non-blocking polling ping operation on the ServiceNow REST server
-    /**
-        @return a socket poll operation object that will allow the connection goal to be reached with polling
-
-        @see supportsPollingApi()
-    */
-    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        ServiceNowRestClient client = getPollImpl();
-        if (logger) {
-            client.setLogger(logger);
-        }
-
-        # start the polling operation manually using the full request path
-        return new RestPingPollOperation(self, client, real_opts);
     }
 
     #! Sets the auth code feature if supported
@@ -577,12 +569,69 @@ public class ServiceNowRestConnection inherits RestClient::RestConnection {
 
 #! ServiceNow REST client for non-blocking I/O
 public class ServiceNowRestClientIo inherits RestClientIo::RestClientIo, ServiceNowRestClientBase {
+    private:internal {
+        #! The API version, if set
+        *string api;
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts constructor options; the options of @ref ServiceNowRestClient::constructor() are supported,
+        including:
+        - \c api: the API version for ServiceNow; the connection path is \c "/api/" followed by the API version
+          (default: @ref DefaultApiVersion)
+        - \c apikey: an API key, sent in the \c apikey_header header
+        - \c apikey_header: the header for the API key (default: @ref DefaultApiKeyHeader)
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(ServiceNowRestClientBase::getOptions(opts), shared_mgr) {
+        if (opts.api.val()) {
+            api = ConnectionProvider::OptionHelper::getString(opts, "api");
+        }
+        if (opts.apikey.val()) {
+            addDefaultHeaders({opts.apikey_header ?? DefaultApiKeyHeader: opts.apikey});
+        }
+        setConnectionPath(RequestUriPathPrefix + (api ?? DefaultApiVersion));
+    }
+
+    #! Returns the ServiceNow REST API version currently in use
+    /** @return the ServiceNow REST API version currently in use
+
+        @since ServiceNowRestClient 1.3
+    */
+    string getApi() {
+        return api ?? DefaultApiVersion;
+    }
+
+    #! Builds the response and raises ServiceNow errors
+    /** An error response with a ServiceNow error message raises \c SERVICENOW-REST-RESPONSE-ERROR, and an OAuth2
+        error response raises the OAuth2 error code, as with @ref ServiceNowRestClient
+    */
+    private hash<RestClient::RestResponseInfo> buildResponse(hash<auto> raw, bool req_error_passthru,
+            bool req_allow_any_response, string method, string path, *hash<auto> request_headers,
+            *data request_body) {
+        try {
+            return RestClientIo::buildResponse(raw, req_error_passthru, req_allow_any_response, method, path,
+                request_headers, request_body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
+                auto body = ex.arg.body;
+                # XML error responses have a "response" element, JSON error responses do not
+                auto error = body.response.error ?? body.error;
+                if (error.message.typeCode() == NT_STRING) {
+                    hash<auto> error_info = error;
+                    throw "SERVICENOW-REST-RESPONSE-ERROR", remove error_info.message, error_info + ex.arg
+                        + {"decoded_body": body};
+                }
+                if (body.error_description.typeCode() == NT_STRING && body.error.typeCode() == NT_STRING) {
+                    hash<auto> error_info = body;
+                    string errcode = remove error_info.error;
+                    string msg = remove error_info.error_description;
+                    throw errcode, msg, error_info + ex.arg;
+                }
+            }
+            rethrow;
+        }
     }
 }
 }

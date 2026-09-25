@@ -56,11 +56,11 @@ public class DiscordGuildsByNameDataProvider inherits DiscordDataProviderBase {
     #! Creates the object from constructor options
     constructor(*hash<auto> options) {
         checkOptions("CONSTRUCTOR-ERROR", DiscordDataProvider::ConstructorOptions, options);
-        rest = DiscordDataProvider::getRestConnection(options);
+        rest = DiscordDataProvider::getAsyncRestConnection(options);
     }
 
     #! Creates the object from a REST connection
-    constructor(DiscordRestClient::DiscordRestClient rest) : DiscordDataProviderBase(rest) {
+    constructor(DiscordRestClient::DiscordRestClientIo rest) : DiscordDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -70,7 +70,7 @@ public class DiscordGuildsByNameDataProvider inherits DiscordDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Discord data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("Discord data %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Return data provider summary info
@@ -121,15 +121,9 @@ public class DiscordGuildsByNameDataProvider inherits DiscordDataProviderBase {
             return guilds;
         }
 
-        hash<auto> info;
-        try {
-            guilds = cast<*hash<string, hash<auto>>>(map {$1.name: $1}, doRestCommand("GET", "users/@me/guilds",
-                NOTHING, \info).body) ?? {};
-        } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
-        }
+        # the exception argument of an error response includes the response body
+        guilds = cast<*hash<string, hash<auto>>>(map {$1.name: $1}, doRestCommand("GET", "users/@me/guilds").body)
+            ?? {};
 
         return guilds;
     }

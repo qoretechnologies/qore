@@ -72,20 +72,28 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
             },
         };
 
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for FreshBooks data providers
         const BaseConstructorOptions = {
             "freshbooksrestclient": <DataProviderOptionInfo>{
                 "display_name": "FreshBooks REST Client",
-                "short_desc": "The FreshBooksRestClient object",
+                "short_desc": "The FreshBooksRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("FreshBooksRestClient::FreshBooksRestClient")),
-                "desc": "The FreshBooksRestClient object to use for API calls",
+                    new Type("FreshBooksRestClient::FreshBooksRestClientIo")),
+                "desc": "The `FreshBooksRestClientIo` object to use for API calls",
             },
             "freshbooksrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "FreshBooks REST Client Options",
-                "short_desc": "Options for creating a FreshBooksRestClient",
+                "short_desc": "Options for creating a FreshBooksRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a FreshBooksRestClient object if one is not provided "
+                "desc": "Options for creating a `FreshBooksRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -93,7 +101,7 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
 
     private {
         #! The REST client object for API calls
-        FreshBooksRestClient::FreshBooksRestClient rest;
+        FreshBooksRestClient::FreshBooksRestClientIo rest;
 
         #! The connection object, if applicable
         *FreshBooksRestClient::FreshBooksRestConnection conn;
@@ -104,14 +112,14 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(FreshBooksRestClient::FreshBooksRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -121,12 +129,12 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
             rest = copts.freshbooksrestclient;
         } else {
             hash<auto> client_opts = copts.freshbooksrestclient_options ?? {};
-            rest = new FreshBooksRestClient::FreshBooksRestClient(client_opts);
+            rest = new FreshBooksRestClient::FreshBooksRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    FreshBooksRestClient::FreshBooksRestClient getRestClient() {
+    FreshBooksRestClient::FreshBooksRestClientIo getRestClient() {
         return rest;
     }
 
@@ -140,28 +148,60 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
         rest.setLogger(logger);
     }
 
-    #! Returns the accounting API path prefix for the configured account
+    #! Returns the accounting API path for the given or configured account
     /** @param path the path suffix (e.g., "/users/clients")
+        @param account_id the account ID for this request; if not set, the account ID configured in the REST client
+        is used; the REST client is never modified, so concurrent requests for different accounts do not interfere
+        with each other
+
         @return the full path (e.g., "/accounting/account/ABC123/users/clients")
+
+        @throw FRESHBOOKS-ERROR no account ID given and none configured in the REST client
     */
-    string accountPath(string path) {
-        return sprintf("/accounting/account/%s%s", rest.getAccountId(), path);
+    string accountPath(string path, *string account_id) {
+        return sprintf("/accounting/account/%s%s", getId("account_id", account_id, rest.getAccountId()), path);
     }
 
-    #! Returns the time tracking API path prefix for the configured business
+    #! Returns the time tracking API path for the given or configured business
     /** @param path the path suffix (e.g., "/services")
+        @param business_id the business ID for this request; if not set, the business ID configured in the REST
+        client is used; the REST client is never modified, so concurrent requests for different businesses do not
+        interfere with each other
+
         @return the full path (e.g., "/timetracking/business/123456/services")
+
+        @throw FRESHBOOKS-ERROR no business ID given and none configured in the REST client
     */
-    string businessPath(string path) {
-        return sprintf("/timetracking/business/%s%s", rest.getBusinessId(), path);
+    string businessPath(string path, *string business_id) {
+        return sprintf("/timetracking/business/%s%s", getId("business_id", business_id, rest.getBusinessId()),
+            path);
     }
 
-    #! Returns the events API path prefix for the configured account
+    #! Returns the events API path for the given or configured account
     /** @param path the path suffix (e.g., "/events/callbacks")
+        @param account_id the account ID for this request; if not set, the account ID configured in the REST client
+        is used
+
         @return the full path (e.g., "/events/account/ABC123/events/callbacks")
+
+        @throw FRESHBOOKS-ERROR no account ID given and none configured in the REST client
     */
-    string eventsPath(string path) {
-        return sprintf("/events/account/%s%s", rest.getAccountId(), path);
+    string eventsPath(string path, *string account_id) {
+        return sprintf("/events/account/%s%s", getId("account_id", account_id, rest.getAccountId()), path);
+    }
+
+    #! Returns the ID given for a request, or the ID configured in the REST client, if any
+    /** @throw FRESHBOOKS-ERROR neither ID is set
+    */
+    private static string getId(string name, *string req_id, *string client_id) {
+        if (req_id.val()) {
+            return req_id;
+        }
+        if (client_id.val()) {
+            return client_id;
+        }
+        throw "FRESHBOOKS-ERROR", sprintf("no %s was provided in the request, and none is configured in the REST "
+            "client", name);
     }
 
     #! Makes a GET request to the FreshBooks API
@@ -232,28 +272,15 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "FRESHBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "FRESHBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting (headers are lowercase in RestClient)
-                if (info."response-headers"."x-ratelimit-remaining" == "0") {
-                    *string reset = info."response-headers"."retry-after";
+                # Check for rate limiting (response header names are lowercase in RestClientIo)
+                if (response.headers."x-ratelimit-remaining" == "0") {
+                    *string reset = response.headers."retry-after";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
@@ -373,28 +400,39 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
         return rv;
     }
 
-    #! Extracts account_id from a request hash, sets it on the REST client, and returns the cleaned request
-    private hash<auto> setAccountIdFromReq(hash<auto> req) {
-        string aid = remove req.account_id;
-        rest.setAccountId(aid);
-        return req;
+    #! Removes the account_id from a request hash and returns it
+    /** The account ID must be passed to @ref accountPath() so that it is used for the current request only; the
+        shared REST client is never modified
+
+        @param req a reference to the request hash; the \c account_id key is removed from the hash
+
+        @return the account ID from the request, if any; if not set, the account ID configured in the REST client is
+        used by @ref accountPath()
+    */
+    private *string getAccountIdFromReq(reference<auto> req) {
+        return FreshBooksDataProviderBase::removeId(\req, "account_id");
     }
 
-    #! Extracts business_id from a request hash, sets it on the REST client, and returns the cleaned request
-    private hash<auto> setBusinessIdFromReq(hash<auto> req) {
-        string bid = remove req.business_id;
-        rest.setBusinessId(bid);
-        return req;
+    #! Removes the business_id from a request hash and returns it
+    /** The business ID must be passed to @ref businessPath() so that it is used for the current request only; the
+        shared REST client is never modified
+
+        @param req a reference to the request hash; the \c business_id key is removed from the hash
+
+        @return the business ID from the request, if any; if not set, the business ID configured in the REST client
+        is used by @ref businessPath()
+    */
+    private *string getBusinessIdFromReq(reference<auto> req) {
+        return FreshBooksDataProviderBase::removeId(\req, "business_id");
     }
 
-    #! Sets the account ID from search options on the REST client
-    private setAccountIdFromSearchOpts(*hash<auto> search_options) {
-        rest.setAccountId(search_options.account_id);
-    }
-
-    #! Sets the business ID from search options on the REST client
-    private setBusinessIdFromSearchOpts(*hash<auto> search_options) {
-        rest.setBusinessId(search_options.business_id);
+    #! Removes the given ID key from a request hash and returns its value, if any
+    private static *string removeId(reference<auto> req, string key) {
+        if (req.typeCode() != NT_HASH) {
+            return;
+        }
+        auto id = remove req{key};
+        return id.val() ? id.toString() : NOTHING;
     }
 
     #! Returns information on supported reference data
@@ -423,24 +461,20 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
         @return a list of allowed values for this data
     */
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
-        # Set account/business IDs from action options if provided
-        if (action_opts.account_id.val()) {
-            rest.setAccountId(action_opts.account_id);
-        }
-        if (action_opts.business_id.val()) {
-            rest.setBusinessId(action_opts.business_id);
-        }
+        # use the account/business IDs from the action options for this call only, if provided
+        *string account_id = action_opts.account_id.val() ? action_opts.account_id.toString() : NOTHING;
+        *string business_id = action_opts.business_id.val() ? action_opts.business_id.toString() : NOTHING;
         switch (type) {
             case "accounts": return getReferenceAccounts();
             case "businesses": return getReferenceBusinesses();
-            case "categories": return getReferenceCategories();
-            case "clients": return getReferenceClients();
-            case "invoices": return getReferenceInvoices();
-            case "expenses": return getReferenceExpenses();
-            case "estimates": return getReferenceEstimates();
-            case "items": return getReferenceItems();
-            case "payments": return getReferencePayments();
-            case "services": return getReferenceServices();
+            case "categories": return getReferenceCategories(account_id);
+            case "clients": return getReferenceClients(account_id);
+            case "invoices": return getReferenceInvoices(account_id);
+            case "expenses": return getReferenceExpenses(account_id);
+            case "estimates": return getReferenceEstimates(account_id);
+            case "items": return getReferenceItems(account_id);
+            case "payments": return getReferencePayments(account_id);
+            case "services": return getReferenceServices(business_id);
         }
     }
 
@@ -499,10 +533,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available expense categories for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceCategories() {
+    private *list<hash<AllowedValueInfo>> getReferenceCategories(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/expenses/categories"));
+            hash<auto> response = doGet(accountPath("/expenses/categories", account_id));
             if (response.categories) {
                 foreach hash<auto> category in (response.categories) {
                     string display_name = category.category ?? sprintf("Category %s", category.id);
@@ -521,10 +555,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available clients for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceClients() {
+    private *list<hash<AllowedValueInfo>> getReferenceClients(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/users/clients"));
+            hash<auto> response = doGet(accountPath("/users/clients", account_id));
             if (response.clients) {
                 foreach hash<auto> client in (response.clients) {
                     string display_name;
@@ -551,10 +585,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available invoices for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceInvoices() {
+    private *list<hash<AllowedValueInfo>> getReferenceInvoices(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/invoices/invoices"));
+            hash<auto> response = doGet(accountPath("/invoices/invoices", account_id));
             if (response.invoices) {
                 foreach hash<auto> invoice in (response.invoices) {
                     string display_name = invoice.invoice_number
@@ -575,10 +609,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available expenses for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceExpenses() {
+    private *list<hash<AllowedValueInfo>> getReferenceExpenses(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/expenses/expenses"));
+            hash<auto> response = doGet(accountPath("/expenses/expenses", account_id));
             if (response.expenses) {
                 foreach hash<auto> expense in (response.expenses) {
                     string display_name = expense.notes
@@ -599,10 +633,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available estimates for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceEstimates() {
+    private *list<hash<AllowedValueInfo>> getReferenceEstimates(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/estimates/estimates"));
+            hash<auto> response = doGet(accountPath("/estimates/estimates", account_id));
             if (response.estimates) {
                 foreach hash<auto> estimate in (response.estimates) {
                     string display_name = estimate.estimate_number
@@ -623,10 +657,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available items for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceItems() {
+    private *list<hash<AllowedValueInfo>> getReferenceItems(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/items/items"));
+            hash<auto> response = doGet(accountPath("/items/items", account_id));
             if (response.items) {
                 foreach hash<auto> item in (response.items) {
                     string display_name = item.name ?? sprintf("Item %s", item.id);
@@ -645,10 +679,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available payments for reference data
-    private *list<hash<AllowedValueInfo>> getReferencePayments() {
+    private *list<hash<AllowedValueInfo>> getReferencePayments(*string account_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(accountPath("/payments/payments"));
+            hash<auto> response = doGet(accountPath("/payments/payments", account_id));
             if (response.payments) {
                 foreach hash<auto> payment in (response.payments) {
                     string display_name = sprintf("Payment %s", payment.paymentid ?? payment.id);
@@ -668,10 +702,10 @@ public class FreshBooksDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Returns available services for reference data
-    private *list<hash<AllowedValueInfo>> getReferenceServices() {
+    private *list<hash<AllowedValueInfo>> getReferenceServices(*string business_id) {
         list<hash<AllowedValueInfo>> rv = ();
         try {
-            hash<auto> response = doGet(businessPath("/services"));
+            hash<auto> response = doGet(businessPath("/services", business_id));
             if (response.services) {
                 foreach hash<auto> service in (response.services) {
                     string display_name = service.name ?? sprintf("Service %s", service.id);

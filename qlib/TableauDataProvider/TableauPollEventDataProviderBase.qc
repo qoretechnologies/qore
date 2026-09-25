@@ -56,7 +56,7 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(TableauPollEventDataProviderBase::getPollInterval(options),
                   options.start_date) {
@@ -74,11 +74,6 @@ public class TableauPollEventDataProviderBase inherits TableauDataProviderBase,
     #! Returns the effective poll interval in seconds
     private static int getPollInterval(*hash<auto> options) {
         return max(options.poll_interval ?? DefaultPollInterval, MinPollInterval);
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not relied on; records are ordered by timestamp before delivery

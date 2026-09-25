@@ -127,5 +127,5 @@ int StringInputStream::peek() {
     @return the @ref character_encoding "character encoding" for the @ref StringInputStream
  */
 string StringInputStream::getEncoding() [flags=CONSTANT] {
-   return new QoreStringNode(is->getEncoding());
+   return new QoreStringNode(is->getEncoding()->getCode());
 }

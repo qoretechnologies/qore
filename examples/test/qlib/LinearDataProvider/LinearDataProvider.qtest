@@ -36,13 +36,76 @@
 
 %requires LinearRestClient
 %requires LinearDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class LinearDataProviderTest
+
+#! A local Linear GraphQL API server that records requests
+class FakeLinearHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> req = body ? parse_json(body.toString()) : NOTHING;
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": req,
+        };
+        if (req.query =~ /unauthorized/) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"message": "authentication required"}),
+            };
+        }
+        if (req.query =~ /invalidField/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"errors": ({"message": "Cannot query field invalidField"},)}),
+            };
+        }
+        if (req.query =~ /commentCreate/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"data": {"commentCreate": {
+                    "success": True,
+                    "comment": {"id": "c1", "body": req.variables.input.body},
+                }}}),
+            };
+        }
+        if (req.query =~ /teams\(/) {
+            # two pages to verify cursor-based pagination
+            bool first_page = !req.variables.after;
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"data": {"teams": {
+                    "pageInfo": {"hasNextPage": first_page, "endCursor": first_page ? "cursor1" : NOTHING},
+                    "nodes": first_page
+                        ? ({"id": "t1", "name": "Engineering", "key": "ENG"},)
+                        : ({"id": "t2", "name": "Sales", "key": "SAL"},),
+                }}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"data": {"viewer": {"id": "u1"}}}),
+        };
+    }
+}
 
 public class LinearDataProviderTest inherits QUnit::Test {
     private {
         #! Linear REST client for integration tests
-        *LinearRestClient::LinearRestClient client;
+        *LinearRestClient::LinearRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -67,6 +130,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require LINEAR_TOKEN environment variable or -t option)
         addTestCase("integration tests", \integrationTests());
@@ -111,7 +175,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
             }
             return;
         }
-        client = new LinearRestClient::LinearRestClient({"token": token});
+        client = new LinearRestClient::LinearRestClientIo({"token": token});
     }
 
     #! Check if json module is available
@@ -596,6 +660,77 @@ public class LinearDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("Action catalog tests passed - all actions have proper options with ref_data\n");
             printf("Found %d actions for Linear app\n", actions.size());
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeLinearHandler handler();
+        server.setHandler("linear", "", NOTHING, handler);
+        server.setDefaultHandler("linear", handler);
+
+        LinearDataProvider::LinearDataProvider provider({
+            "token": "lin_api_test",
+            "linearrestclient_options": {
+                "url": "http://localhost:" + port + "/graphql",
+            },
+        });
+        LinearRestClient::LinearRestClientIo rest = provider.getRestClient();
+
+        # records are retrieved with the async client, following the pagination cursor
+        list<hash<auto>> teams = map $1, provider.getChildProvider("teams").searchRecords();
+        assertEq(("t1", "t2"), (map $1.id, teams));
+        assertEq(("Engineering", "Sales"), (map $1.name, teams));
+        assertEq(2, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("graphql", handler.requests[0].path);
+        # Linear API keys are sent without the "Bearer" prefix
+        assertEq("lin_api_test", handler.requests[0].authorization);
+        assertEq(ListTeamsQuery, handler.requests[0].body.query);
+        assertNothing(handler.requests[0].body.variables.after);
+        assertEq("cursor1", handler.requests[1].body.variables.after);
+
+        # a mutation is sent by a request provider and the result is returned
+        handler.requests = ();
+        hash<auto> comment = provider.getChildProvider("create-comment").doRequest({
+            "issueId": "i1",
+            "body": "a comment",
+        });
+        assertEq("c1", comment.id);
+        assertEq("a comment", comment.body);
+        assertEq(1, handler.requests.size());
+        assertEq(CreateCommentMutation, handler.requests[0].body.query);
+        assertEq({"issueId": "i1", "body": "a comment"}, handler.requests[0].body.variables.input);
+
+        # query() and mutate() send the GraphQL request with the given variables and headers
+        handler.requests = ();
+        hash<auto> response = rest.query("query { viewer { id } }", {"v": 1});
+        assertEq(200, response.status_code);
+        assertEq("u1", response.body.data.viewer.id);
+        response = rest.mutate("mutation commentCreate { x }", {"input": {"body": "b"}}, {"X-Test": "1"});
+        assertEq("b", response.body.data.commentCreate.comment.body);
+        assertEq(2, handler.requests.size());
+        assertEq({"query": "query { viewer { id } }", "variables": {"v": 1}}, handler.requests[0].body);
+        assertEq("mutation commentCreate { x }", handler.requests[1].body.query);
+
+        # GraphQL errors are raised
+        assertThrows("GRAPHQL-ERROR", \rest.query(), "query { invalidField }");
+        assertThrows("GRAPHQL-ERROR", \rest.mutate(), "mutation { invalidField }");
+        assertThrows("GRAPHQL-ERROR", \provider.doGraphQL(), "query { invalidField }");
+
+        # an HTTP error response is raised with the response
+        try {
+            provider.doGraphQL("query { unauthorized }");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+            assertEq("authentication required", ex.arg.body.message);
         }
     }
 

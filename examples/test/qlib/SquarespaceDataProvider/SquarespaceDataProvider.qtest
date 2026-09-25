@@ -36,13 +36,60 @@
 
 %requires SquarespaceRestClient
 %requires SquarespaceDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class SquarespaceDataProviderTest
+
+#! A local Squarespace API server that records requests
+class FakeSquarespaceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"type": "RATE_LIMITED", "message": "too many requests"}),
+            };
+        }
+        if (hdr.path =~ /transactions\/missing/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"type": "NOT_FOUND", "message": "transaction not found"}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 204,
+                "hdr": {},
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"documents": ({"id": "t1", "total": 10},), "pagination": {}}),
+        };
+    }
+}
 
 public class SquarespaceDataProviderTest inherits QUnit::Test {
     private {
         #! Squarespace REST client for integration tests
-        *SquarespaceRestClient::SquarespaceRestClient client;
+        *SquarespaceRestClient::SquarespaceRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -72,6 +119,7 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         addTestCase("child provider tests", \childProviderTests());
         addTestCase("data type tests", \dataTypeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require Squarespace credentials)
         addTestCase("integration tests", \integrationTests());
@@ -122,7 +170,7 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Using token-only mode (no OAuth2 refresh)\n");
             }
-            client = new SquarespaceRestClient::SquarespaceRestClient({
+            client = new SquarespaceRestClient::SquarespaceRestClientIo({
                 "token": token,
             });
             return;
@@ -136,7 +184,7 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         if (token) {
             opts.token = token;
         }
-        client = new SquarespaceRestClient::SquarespaceRestClient(opts);
+        client = new SquarespaceRestClient::SquarespaceRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -856,6 +904,63 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("  Warning: cleanup failed: %s: %s\n", ex.err, ex.desc);
             }
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeSquarespaceHandler handler();
+        server.setHandler("squarespace", "", NOTHING, handler);
+        server.setDefaultHandler("squarespace", handler);
+
+        SquarespaceDataProvider::SquarespaceDataProvider provider({
+            "squarespacerestclient_options": {
+                "url": "http://localhost:" + port,
+                "token": "test-token",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof SquarespaceRestClient::SquarespaceRestClientIo);
+        AbstractDataProvider transactions = provider.getChildProviderEx("transactions");
+
+        # a GET request is sent with the async client and the response is returned
+        list<hash<auto>> recs = map $1, transactions.searchRecords();
+        assertEq(({"id": "t1", "total": 10},), recs);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("1.0/commerce/transactions", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+
+        # a POST request sends the body; an empty response is accepted
+        handler.requests = ();
+        SquarespaceDataProvider::SquarespaceFulfillOrderDataProvider fulfill(provider.getRestClient());
+        assertEq({}, fulfill.doRequest({"order_id": "o1", "shouldSendNotification": False}));
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("1.0/commerce/orders/o1/fulfillments", handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+        assertEq({"shouldSendNotification": False}, handler.requests[0].body);
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        recs = map $1, transactions.searchRecords();
+        assertEq(({"id": "t1", "total": 10},), recs);
+        assertEq(2, handler.requests.size());
+        assertEq("1.0/commerce/transactions", handler.requests[1].path);
+
+        # an error response is raised with the response
+        try {
+            transactions.searchRecords(NOTHING, {"transaction_id": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("transaction not found", ex.arg.body.message);
         }
     }
 }

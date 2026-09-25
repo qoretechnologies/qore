@@ -126,7 +126,7 @@ public class PdfCoAddTextImagesDataProvider inherits PdfCoDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(PdfCoRestClient::PdfCoRestClient rest) : PdfCoDataProviderBase(rest) {
+    constructor(PdfCoRestClient::PdfCoRestClientIo rest) : PdfCoDataProviderBase(rest) {
     }
 
     #! Returns the provider name

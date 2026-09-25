@@ -221,14 +221,17 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
 
     private {
         #! The REST client used for API calls
-        *CdsRestClient::CdsRestClient rest;
+        *CdsRestClient::CdsRestClientIo rest;
 
         #! The watch condition; selects the column the feed is positioned by
         string condition;
     }
 
     #! Creates the object
-    constructor(*CdsRestClient::CdsRestClient rest, *hash<auto> options)
+    /** @param rest the REST client for API calls, which may be shared with other data providers
+        @param options the subscription options
+    */
+    constructor(*CdsRestClient::CdsRestClientIo rest, *hash<auto> options)
             : AbstractTimestampWatchDataProvider(max(options.poll_interval ?? CdsDefaultPollInterval,
                 CdsMinPollInterval), options.since) {
         self.rest = rest;
@@ -244,13 +247,6 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
         stopEventsIntern();
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.disconnect();
-        }
-    }
-
     #! Returns the Dataverse column this event positions a record by
     private string getTimestampField() {
         return CdsConditionTimestampField{condition};
@@ -263,8 +259,8 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
     */
     private list<hash<auto>> fetchRecords(date since) {
         string field = getTimestampField();
-        string uri = sprintf("%s?$filter=%s ge %s&$orderby=%s asc", getEntitySetName(), field,
-            CdsEntityWatchDataProviderBase::formatODataTimestamp(since), field);
+        string uri = CdsRestDataProviderBase::encodeRequestPath(sprintf("%s?$filter=%s ge %s&$orderby=%s asc",
+            getEntitySetName(), field, CdsEntityWatchDataProviderBase::formatODataTimestamp(since), field));
 
         # Dataverse pages with a Prefer header and @odata.nextLink; $top would cap the result
         # instead of paging it, and would suppress the next link entirely
@@ -277,14 +273,12 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
         int pages = 0;
 
         while (True) {
-            hash<auto> info;
-            hash<auto> resp;
-            try {
-                resp = rest.get(next ?? uri, NOTHING, \info, hdr);
-            } catch (hash<ExceptionInfo> ex) {
-                # ensure that any error response body is included in the exception
-                rethrow ex.err, ex.desc, ex.arg + info{"request-uri", "response-code", "response-body"};
-            }
+            # the next link is an absolute URL; requests take its path; the exception argument of an error
+            # response includes the response; stopping the provider cancels the polling thread, which aborts an
+            # in-flight request
+            hash<RestClient::RestResponseInfo> resp = rest.restGet(next
+                ? CdsRestDataProviderBase::getRequestPath(next)
+                : uri, hdr);
 
             foreach auto rec in (resp.body.value ?? ()) {
                 if (rec.typeCode() == NT_HASH) {
@@ -321,10 +315,9 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
         if (rest) {
             try {
                 string field = getTimestampField();
-                hash<auto> info;
                 # the newest row, which is the one most likely to be populated
-                hash<auto> resp = rest.get(sprintf("%s?$orderby=%s desc&$top=1", getEntitySetName(),
-                    field), NOTHING, \info);
+                hash<RestClient::RestResponseInfo> resp = rest.restGet(CdsRestDataProviderBase::encodeRequestPath(
+                    sprintf("%s?$orderby=%s desc&$top=1", getEntitySetName(), field)));
                 *list<auto> rows = resp.body.value;
                 if (rows && rows[0].typeCode() == NT_HASH) {
                     return rows[0];
@@ -377,9 +370,7 @@ public class CdsEntityWatchDataProviderBase inherits DataProvider::AbstractTimes
 
     #! Returns the entity's description from the service document, if it can be read
     private *hash<auto> getEntityMetadata() {
-        hash<auto> info;
-        auto schema = rest.get("$metadata?annotations=true", NOTHING, \info).body."edmx:Edmx"
-            ."edmx:DataServices".Schema;
+        auto schema = rest.restGet("$metadata?annotations=true").body."edmx:Edmx"."edmx:DataServices".Schema;
         string logical = getEntityLogicalName();
         foreach auto et in (schema.EntityType) {
             if (et."^attributes^".Name == logical) {
@@ -417,7 +408,7 @@ public class CdsEntityWatchDataProvider inherits CdsEntityWatchDataProviderBase 
         @param event_name the event to raise for each record, which is also this provider's name
         @param info the entity descriptor, as held in @ref CdsEntityEvents
     */
-    constructor(*CdsRestClient::CdsRestClient rest, *hash<auto> options, string event_name,
+    constructor(*CdsRestClient::CdsRestClientIo rest, *hash<auto> options, string event_name,
             hash<auto> info) : CdsEntityWatchDataProviderBase(rest, options) {
         self.event_name = event_name;
         self.info = info;
@@ -539,7 +530,10 @@ public class CdsCustomEntityWatchDataProvider inherits CdsEntityWatchDataProvide
     }
 
     #! Creates the object
-    constructor(*CdsRestClient::CdsRestClient rest, *hash<auto> options)
+    /** @param rest the REST client for API calls, which may be shared with other data providers
+        @param options the subscription options
+    */
+    constructor(*CdsRestClient::CdsRestClientIo rest, *hash<auto> options)
             : CdsEntityWatchDataProviderBase(rest, options) {
         logical_name = options.entityName;
     }
@@ -597,15 +591,10 @@ public class CdsCustomEntityWatchDataProvider inherits CdsEntityWatchDataProvide
             throw "CDS-EVENT-ERROR", "no connection is available to resolve entity " + logical_name;
         }
 
-        hash<auto> info;
-        hash<auto> resp;
-        string uri = sprintf("EntityDefinitions(LogicalName='%s')?$select=EntitySetName,PrimaryIdAttribute",
-            logical_name);
-        try {
-            resp = rest.get(uri, NOTHING, \info);
-        } catch (hash<ExceptionInfo> ex) {
-            rethrow ex.err, ex.desc, ex.arg + info{"request-uri", "response-code", "response-body"};
-        }
+        string uri = CdsRestDataProviderBase::encodeRequestPath(
+            sprintf("EntityDefinitions(LogicalName='%s')?$select=EntitySetName,PrimaryIdAttribute", logical_name));
+        # the exception argument of an error response includes the response
+        hash<RestClient::RestResponseInfo> resp = rest.restGet(uri);
 
         if (!resp.body.EntitySetName.val()) {
             throw "CDS-EVENT-ERROR", sprintf("entity %y has no entity set name in this organisation; "
@@ -645,11 +634,13 @@ public class CdsEventsDataProvider inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client used for API calls
-        *CdsRestClient::CdsRestClient rest;
+        *CdsRestClient::CdsRestClientIo rest;
     }
 
     #! Creates the object
-    constructor(*CdsRestClient::CdsRestClient rest) {
+    /** @param rest the REST client for API calls, if any
+    */
+    constructor(*CdsRestClient::CdsRestClientIo rest) {
         self.rest = rest;
     }
 

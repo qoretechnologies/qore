@@ -47,7 +47,7 @@ public class ChargebeeEventsDataProvider inherits ChargebeeDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(ChargebeeRestClient::ChargebeeRestClient rest) : ChargebeeDataProviderBase(rest) {
+    constructor(ChargebeeRestClient::ChargebeeRestClientIo rest) : ChargebeeDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

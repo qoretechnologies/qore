@@ -164,13 +164,6 @@ public class BitbucketWatchDataProviderBase inherits DataProvider::AbstractTimes
         }
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! Returns the configuration that defines which scan this provider follows
     /** The repository scopes the feed, so watching a different one is a different scan and the previous
         cursor must not be resumed against it.

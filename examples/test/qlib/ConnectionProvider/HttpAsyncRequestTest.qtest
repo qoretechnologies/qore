@@ -36,11 +36,149 @@ class EchoRequestHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that echoes the request headers used by the data provider test
+class HeaderEchoRequestHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/hdr/missing") {
+            return makeResponse(404, "missing", {"Content-Type": "text/plain"});
+        }
+        return makeResponse(200, make_json({
+            "method": hdr.method,
+            "path": cx.raw_path,
+            "authorization": hdr.authorization,
+            "conn": hdr."x-conn",
+            "extra": hdr."x-extra",
+            "body": body.typeCode() == NT_BINARY ? body.toString() : body,
+        }), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Handler for the ping and request tests
+/** Paths:
+    - \c /route/redirect: redirects to \c /route/target
+    - \c /route/status/<code>: returns the given status code
+    - \c /route/block: blocks until @ref release() is called
+    - any other path: echoes the request
+*/
+class RoutingHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! Signaled when a request is blocked in the handler
+        Queue entered();
+    }
+
+    private {
+        #! Blocked requests wait on this queue
+        Queue gate();
+    }
+
+    #! Releases a blocked request
+    release() {
+        gate.push(True);
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = cx.raw_path;
+        if (path == "/route/redirect") {
+            return makeResponse(302, "", {"Location": "/route/target"});
+        }
+        if (*string code = (path =~ x/^\/route\/status\/([0-9]+)$/)[0]) {
+            return makeResponse(code.toInt(), "status " + code, {"Content-Type": MimeTypeText});
+        }
+        if (path == "/route/block") {
+            entered.push(True);
+            # bounded so that a failing test cannot leave the server thread blocked forever
+            gate.get(60s);
+            return makeResponse(200, "released", {"Content-Type": MimeTypeText});
+        }
+        return makeResponse(200, make_json({
+            "method": hdr.method,
+            "path": path,
+            "authorization": hdr.authorization,
+            "x-ping": hdr."x-ping",
+            "body": body.typeCode() == NT_BINARY ? body.toString() : body,
+        }), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! An HTTP-based connection whose client object does not support the polling API
+class TestHttpBasedConnection inherits HttpBasedConnection {
+    public {
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Test HTTP-Based Connection",
+            "short_desc": "A test connection",
+            "desc": "A test connection",
+            "cls": Class::forName("TestHttpBasedConnection"),
+            "schemes": {
+                "testhttp": True,
+                "testhttps": True,
+            },
+            "base_scheme_map": {
+                "http": "testhttp",
+                "https": "testhttps",
+            },
+            "options": HttpConnection::ConnectionScheme.options,
+        };
+    }
+
+    constructor(string name, string desc, string url, hash<auto> attributes = {}, hash<auto> options = {})
+            : HttpBasedConnection(name, desc, url, attributes, options) {
+    }
+
+    string getType() {
+        return "testhttp";
+    }
+
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+
+    #! Returns an object that has no startPollConnect() method
+    private object getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new Mutex();
+    }
+}
+
+#! Polling connection monitor that reports results on a queue
+class ResultPollingConnectionMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue msgq();
+    }
+
+    constructor() : PollingConnectionMonitor() {
+        ping_timeout = 20s;
+    }
+
+    hash<auto> waitForResult() {
+        return msgq.get(30s);
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        msgq.push({"name": name, "result": "OK"});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        msgq.push({"name": name, "result": "timeout"});
+    }
+}
+
 public class HttpAsyncRequestTest inherits QUnit::Test {
     private {
         HttpServer m_server;
         int port;
         Logger logger;
+        RoutingHandler route_handler;
     }
 
     constructor() : Test("HttpAsyncRequestTest", "1.0") {
@@ -51,6 +189,19 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         addTestCase("HttpBasedConnection async request", \httpBasedConnectionTest());
         addTestCase("HttpRequestPollOperation error handling", \asyncErrorTest());
         addTestCase("HttpConnection getAsync", \asyncConnectionTest());
+        addTestCase("HttpConnection getDataProvider", \dataProviderTest());
+        addTestCase("HttpPingPollOperation success", \pingSuccessTest());
+        addTestCase("HttpPingPollOperation HTTP error status", \pingErrorStatusTest());
+        addTestCase("HttpPingPollOperation connection refused", \pingConnectionRefusedTest());
+        addTestCase("HttpPingPollOperation timeout", \pingTimeoutTest());
+        addTestCase("HttpRequestPollOperation redirects", \requestRedirectTest());
+        addTestCase("HttpRequestPollOperation credentials and headers", \requestCredentialsTest());
+        addTestCase("HttpRequestPollOperation invalid input", \requestInvalidInputTest());
+        addTestCase("HttpRequestPollOperation abort", \requestAbortTest());
+        addTestCase("HttpRequestPollOperation HTTP/2", \requestHttp2Test());
+        addTestCase("HttpConnectPollOperation", \connectPollTest());
+        addTestCase("HttpBasedConnection polling ping", \httpBasedConnectionPingTest());
+        addTestCase("PollingConnectionMonitor HTTP pings", \monitorPingTest());
 
         set_return_value(main());
     }
@@ -68,6 +219,8 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         m_server = new HttpServer(http_opts);
         m_server.setHandler("/api", "/api", MimeTypeJson, new EchoRequestHandler());
         m_server.setDefaultHandler("default", new EchoRequestHandler());
+        route_handler = new RoutingHandler();
+        m_server.setHandler("route", "/route", NOTHING, route_handler);
         port = m_server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
@@ -100,6 +253,17 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         hash<auto> result = drivePoll(poller);
         assertTrue(poller.goalReached());
         assertEq(200, result.code);
+        assertEq(200, result.status_code);
+        assertEq("OK", result.status_message);
+        assertEq("h1", result.protocol);
+        assertEq("HTTP/1.1 200 OK", result.info."response-uri");
+        assertEq("GET /api/test HTTP/1.1", result.info."request-uri");
+        assertEq(MimeTypeJson, result.info."body-content-type");
+        assertEq(200, result.info."response-headers".status_code);
+        assertEq("http://127.0.0.1:" + port + "/api/test", result.effective_url);
+        hash<auto> body = parse_json(result."response-body");
+        assertEq("GET", body.method);
+        assertEq(result."response-body", result.info."response-body");
     }
 
     asyncPostTest() {
@@ -108,17 +272,21 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
 
         hash<auto> result = drivePoll(poller);
         assertEq(200, result.code);
+        hash<auto> body = parse_json(result."response-body");
+        assertEq("POST", body.method);
+        assertEq("test body", body.body);
     }
 
     asyncPollStateTest() {
         HttpRequestPollOperation poller("http://127.0.0.1:" + port, "GET", "/api/state");
 
-        # check initial state — PollPipeline reports step type ("delegate")
-        string initial_state = poller.getState();
-        assertTrue(initial_state.find("delegate") >= 0, "initial state contains 'delegate'");
+        # no I/O is performed until the operation is polled
+        assertEq("connecting", poller.getState());
 
         drivePoll(poller);
         assertEq("completed", poller.getState());
+        # a completed operation needs no more I/O
+        assertNothing(poller.continuePoll());
     }
 
     abstractConnectionApiTest() {
@@ -159,6 +327,9 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         # test connection to a port that will reject
         HttpRequestPollOperation poller("http://127.0.0.1:1", "GET", "/");
         assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+        assertEq("aborted", poller.getState());
+        assertFalse(poller.goalReached());
+        assertNothing(poller.getOutput());
     }
 
     asyncConnectionTest() {
@@ -178,5 +349,378 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         hash<auto> body = parse_json(result.body);
         assertEq("GET", body.method);
         assertEq("api/async", body.path);
+    }
+
+    dataProviderTest() {
+        m_server.setHandler("hdr", "/hdr", NOTHING, new HeaderEchoRequestHandler());
+        string url = "http://127.0.0.1:" + port;
+        HttpConnection conn("test-http-dp", "test HTTP data provider connection", url, {}, {
+            "headers": {"X-Conn": "conn"},
+            "username": "user",
+            "password": "pass",
+        });
+        # the data provider API is consistent: one data provider, no subtypes
+        assertTrue(conn.hasDataProvider());
+        assertNothing(conn.getDataProviderSubtypes());
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("HttpClientDataProvider", prov.className());
+        AbstractDataProvider post = prov.getChildProviderEx("post");
+        hash<auto> resp = post.doRequest({"path": "/hdr/post", "body": "hi"});
+        assertEq(200, resp."status-code");
+        hash<auto> echo = parse_json(resp."response-body");
+        assertEq("POST", echo.method);
+        assertEq("/hdr/post", echo.path);
+        assertEq("hi", echo.body);
+        assertEq("conn", echo.conn, "the connection's headers are sent");
+        assertEq("Basic dXNlcjpwYXNz", echo.authorization, "the connection's credentials are sent");
+
+        # the requests are made with the connection's async connection manager
+        object mgr = call_object_method(prov, "getConnectionManager");
+        assertTrue(mgr instanceof HttpClientIo::HttpClientConnectionManager);
+
+        # the subtype API returns the same data provider
+        assertEq("HttpClientDataProvider", conn.getDataProvider("http").className());
+
+        # constructor options override the connection's options, and headers are merged
+        prov = conn.getDataProvider({"error_passthru": True, "headers": {"X-Extra": "extra"}});
+        AbstractDataProvider get = prov.getChildProviderEx("get");
+        resp = get.doRequest({"path": "/hdr/get"});
+        echo = parse_json(resp."response-body");
+        assertEq("conn", echo.conn);
+        assertEq("extra", echo.extra);
+        resp = get.doRequest({"path": "/hdr/missing"});
+        assertEq(404, resp."status-code");
+
+        # errors are raised by default
+        get = conn.getDataProvider().getChildProviderEx("get");
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \get.doRequest(), {"path": "/hdr/missing"});
+
+        assertThrows("CONSTRUCTOR-ERROR", "unsupported request option", \conn.getDataProvider(), {"bogus": True});
+
+        # a connection without options
+        HttpConnection plain("test-http-plain", "test", url);
+        resp = plain.getDataProvider().getChildProviderEx("get").doRequest({"path": "/hdr/plain"});
+        echo = parse_json(resp."response-body");
+        assertEq("/hdr/plain", echo.path);
+        assertNothing(echo.authorization);
+
+        # Kerberos/SPNEGO authentication is not supported by the data provider
+        HttpConnection neg("test-http-neg", "test", url, {}, {"negotiate_auth": True});
+        assertThrows("HTTP-NEGOTIATE-AUTH-ERROR", \neg.getDataProvider());
+    }
+
+    pingSuccessTest() {
+        string url = "http://127.0.0.1:" + port;
+        HttpConnection conn("test-ping", "test", url, {}, {
+            "ping_method": "POST",
+            "ping_path": "/route/ping",
+            "ping_body": "ping body",
+            "ping_headers": {"X-Ping": "1"},
+        });
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        assertEq("http-ping", poller.getGoal());
+        assertTrue(poller instanceof HttpPingPollOperation);
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.code);
+        hash<auto> body = parse_json(result."response-body");
+        assertEq("POST", body.method);
+        assertEq("/route/ping", body.path);
+        assertEq("ping body", body.body);
+        assertEq("1", body."x-ping");
+
+        # a GET ping sends no body; a relative path is appended to the path of the URL
+        HttpPingPollOperation ping(url + "/route/base", "GET", "rel", NOTHING, NOTHING, "ignored");
+        result = drivePoll(ping);
+        body = parse_json(result."response-body");
+        assertEq("GET", body.method);
+        assertEq("/route/base/rel", body.path);
+        assertNothing(body.body);
+
+        # an absolute URL as the path is used as the request URL
+        ping = new HttpPingPollOperation("http://127.0.0.1:1", "GET", url + "/route/abs");
+        result = drivePoll(ping);
+        assertEq("/route/abs", parse_json(result."response-body").path);
+    }
+
+    pingErrorStatusTest() {
+        string url = "http://127.0.0.1:" + port;
+        HttpConnection conn("test-ping-err", "test", url, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/status/503",
+        });
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        assertThrows("HTTP-PING-ERROR", "request failed with HTTP code 503 \\(expected 200-299\\)", \drivePoll(),
+            poller);
+        assertEq("aborted", poller.getState());
+
+        # the error code is configurable
+        HttpPingPollOperation ping(url, "GET", "/route/status/404", NOTHING, NOTHING, NOTHING, NOTHING,
+            "MY-PING-ERROR");
+        assertThrows("MY-PING-ERROR", "HTTP code 404", \drivePoll(), ping);
+
+        # a redirect to an error is followed
+        ping = new HttpPingPollOperation(url, "GET", "/route/status/302");
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "no redirect location", \drivePoll(), ping);
+    }
+
+    pingConnectionRefusedTest() {
+        HttpConnection conn("test-ping-refused", "test", "http://127.0.0.1:1", {}, {
+            "ping_method": "GET",
+            "ping_path": "/",
+        });
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+    }
+
+    pingTimeoutTest() {
+        HttpConnection conn("test-ping-timeout", "test", "http://127.0.0.1:" + port, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/block",
+            "timeout": 250ms,
+        });
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        # the handler never answers until released, so the operation must time out by itself
+        on_exit route_handler.release();
+        date start = now_us();
+        assertThrows("SOCKET-TIMEOUT", \drivePoll(), poller);
+        assertTrue(route_handler.entered.get(10s));
+        assertLt(20s, now_us() - start, "the timeout is raised before the test deadline");
+        assertEq("aborted", poller.getState());
+    }
+
+    requestRedirectTest() {
+        string url = "http://127.0.0.1:" + port;
+        HttpRequestPollOperation poller(url, "GET", "/route/redirect");
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.code);
+        assertEq("/route/target", parse_json(result."response-body").path);
+        assertEq(1, result.redirects.size());
+        assertEq(302, result.redirects[0].status_code);
+        assertEq(url + "/route/target", result.redirects[0].target_url);
+        assertEq(url + "/route/target", result.effective_url);
+        assertEq(result.redirects, result.info.redirects);
+
+        # redirects are returned with redirect_passthru
+        poller = new HttpRequestPollOperation(url, "GET", "/route/redirect", NOTHING, {"redirect_passthru": True});
+        result = drivePoll(poller);
+        assertEq(302, result.code);
+        assertEq("/route/target", result.headers.location);
+
+        # the maximum number of redirects is enforced
+        poller = new HttpRequestPollOperation(url, "GET", "/route/redirect", NOTHING, {"max_redirects": 0});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", \drivePoll(), poller);
+
+        # error responses are returned
+        poller = new HttpRequestPollOperation(url, "GET", "/route/status/404");
+        result = drivePoll(poller);
+        assertEq(404, result.code);
+        assertEq("status 404", result."response-body");
+    }
+
+    requestCredentialsTest() {
+        string url = "http://127.0.0.1:" + port;
+        HttpRequestPollOperation poller(url, "GET", "/route/auth", NOTHING, {
+            "username": "user",
+            "password": "pass",
+            "headers": {"X-Ping": "opt"},
+        });
+        hash<auto> body = parse_json(drivePoll(poller)."response-body");
+        assertEq("Basic dXNlcjpwYXNz", body.authorization);
+        assertEq("opt", body."x-ping");
+
+        # credentials in the URL take precedence; explicit headers override the option headers
+        poller = new HttpRequestPollOperation("http://u2:p2@127.0.0.1:" + port, "GET", "/route/auth", NOTHING, {
+            "username": "user",
+            "password": "pass",
+            "headers": {"X-Ping": "opt"},
+        }, {"X-Ping": "arg"});
+        body = parse_json(drivePoll(poller)."response-body");
+        assertEq("Basic " + make_base64_string("u2:p2"), body.authorization);
+        assertEq("arg", body."x-ping");
+
+        # an explicit Authorization header is not replaced
+        poller = new HttpRequestPollOperation(url, "GET", "/route/auth", NOTHING, {
+            "username": "user",
+            "password": "pass",
+        }, {"Authorization": "Bearer token"});
+        body = parse_json(drivePoll(poller)."response-body");
+        assertEq("Bearer token", body.authorization);
+
+        # the connection's options are used by startPollRequest()
+        HttpConnection conn("test-cred", "test", url, {}, {
+            "username": "user",
+            "password": "pass",
+        });
+        body = parse_json(drivePoll(conn.startPollRequest("PUT", "/route/put", "data", NOTHING, logger))
+            ."response-body");
+        assertEq("PUT", body.method);
+        assertEq("data", body.body);
+        assertEq("Basic dXNlcjpwYXNz", body.authorization);
+    }
+
+    requestInvalidInputTest() {
+        assertThrows("HTTP-CLIENT-URL-ERROR", "has no host", sub () {
+            new HttpRequestPollOperation("http://", "GET", "/");
+        });
+        assertThrows("HTTP-CLIENT-URL-ERROR", "unsupported scheme", sub () {
+            new HttpRequestPollOperation("ftp://127.0.0.1", "GET", "/");
+        });
+        assertThrows("HTTP-CLIENT-BODY-ERROR", sub () {
+            new HttpRequestPollOperation("http://127.0.0.1:" + port, "POST", "/", {"a": 1});
+        });
+        assertThrows("HTTPCLIENT-OPTION-ERROR", "invalid http_version", sub () {
+            new HttpRequestPollOperation("http://127.0.0.1:" + port, "GET", "/", NOTHING, {"http_version": "9"});
+        });
+    }
+
+    requestAbortTest() {
+        HttpRequestPollOperation poller("http://127.0.0.1:" + port, "GET", "/route/block");
+        on_exit route_handler.release();
+        # drive the operation until the request is blocked in the server
+        date start = now_us();
+        while (!route_handler.entered.size()) {
+            *hash<SocketPollInfo> info = poller.continuePoll();
+            assertTrue(exists info, "the request is in progress");
+            if (now_us() - start > 20s) {
+                throw "TIMEOUT", "the request did not reach the server";
+            }
+            Socket::poll((info,), 250ms);
+        }
+        route_handler.entered.get();
+        assertEq("receiving", poller.getState());
+        poller.abort();
+        assertEq("aborted", poller.getState());
+        assertFalse(poller.goalReached());
+        assertNothing(poller.continuePoll());
+    }
+
+    requestHttp2Test() {
+        int h2_port = m_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(ReadOnlyFile::readTextFile(get_script_dir() + "/mycert.pem")),
+            "key": new SSLPrivateKey(ReadOnlyFile::readTextFile(get_script_dir() + "/mykey.pem"), "password"),
+            "http_version": "2.0",
+        }).port;
+        string url = "https://127.0.0.1:" + h2_port;
+
+        HttpRequestPollOperation poller(url, "POST", "/route/h2", "h2 body", {"http_version": "2.0"});
+        hash<auto> result = drivePoll(poller);
+        assertEq(200, result.code);
+        assertEq("h2", result.protocol);
+        hash<auto> body = parse_json(result."response-body");
+        assertEq("POST", body.method);
+        assertEq("h2 body", body.body);
+
+        # an HTTP/2 ping through the connection
+        HttpConnection conn("test-h2-ping", "test", url, {}, {
+            "http_version": "2.0",
+            "ping_method": "GET",
+            "ping_path": "/route/status/200",
+        });
+        result = drivePoll(conn.startPollConnect(logger));
+        assertEq(200, result.code);
+        assertEq("h2", result.protocol);
+
+        conn = new HttpConnection("test-h2-ping-err", "test", url, {}, {
+            "http_version": "2.0",
+            "ping_method": "GET",
+            "ping_path": "/route/status/500",
+        });
+        assertThrows("HTTP-PING-ERROR", "HTTP code 500", \drivePoll(), conn.startPollConnect(logger));
+
+        # automatic protocol selection establishes an HTTP/2 or HTTP/3 connection with a server that supports it
+        HttpConnectPollOperation connect(url, {"http_version": "auto"});
+        string protocol = drivePoll(connect).protocol;
+        assertTrue(protocol == "h2" || protocol == "h3", sprintf("protocol: %y", protocol));
+    }
+
+    connectPollTest() {
+        string url = "http://127.0.0.1:" + port;
+        HttpConnectPollOperation poller(url);
+        assertEq("connect", poller.getGoal());
+        assertEq("connecting", poller.getState());
+        hash<auto> result = drivePoll(poller);
+        assertEq("connected", poller.getState());
+        assertEq(url, result.url);
+        assertEq("h1", result.protocol);
+
+        poller = new HttpConnectPollOperation("http://127.0.0.1:1");
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+        assertEq("aborted", poller.getState());
+    }
+
+    httpBasedConnectionPingTest() {
+        # ping options: HttpPingPollOperation
+        TestHttpBasedConnection conn("test-based", "test", "testhttp://127.0.0.1:" + port, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/based",
+        });
+        AbstractPollOperation poller = conn.startPollConnect(logger);
+        assertEq("http-ping", poller.getGoal());
+        assertEq("/route/based", parse_json(drivePoll(poller)."response-body").path);
+
+        # the async request API
+        hash<auto> result = drivePoll(conn.startPollRequest("POST", "/route/req", "x", {"X-Ping": "req"}, logger));
+        hash<auto> body = parse_json(result."response-body");
+        assertEq("POST", body.method);
+        assertEq("req", body."x-ping");
+
+        # no ping options and a client object without the polling API: HttpConnectPollOperation
+        conn = new TestHttpBasedConnection("test-based-connect", "test", "testhttp://127.0.0.1:" + port);
+        poller = conn.startPollConnect(logger);
+        assertTrue(poller instanceof HttpConnectPollOperation);
+        drivePoll(poller);
+        assertEq("connected", poller.getState());
+
+        conn = new TestHttpBasedConnection("test-based-refused", "test", "testhttp://127.0.0.1:1");
+        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), conn.startPollConnect(logger));
+
+        # without ping options, an HttpConnection is checked with HTTPClient::startPollConnect()
+        HttpConnection hc("test-http-connect", "test", "http://127.0.0.1:" + port);
+        poller = hc.startPollConnect(logger);
+        assertEq("connect", poller.getGoal());
+        drivePoll(poller);
+        assertEq("connected", poller.getState());
+    }
+
+    monitorPingTest() {
+        string url = "http://127.0.0.1:" + port;
+        ResultPollingConnectionMonitor pcm();
+        on_exit delete pcm;
+
+        HttpConnection ok_conn("mon-ok", "test", url, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/ok",
+        });
+        pcm.add(ok_conn);
+        hash<auto> result = pcm.waitForResult();
+        assertEq("mon-ok", result.name);
+        assertEq("OK", result.result);
+        pcm.removeConnection("mon-ok");
+
+        HttpConnection err_conn("mon-err", "test", url, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/status/500",
+        });
+        pcm.add(err_conn);
+        result = pcm.waitForResult();
+        assertEq("mon-err", result.name);
+        assertEq("error", result.result);
+        assertEq("HTTP-PING-ERROR", result.ex.err);
+        pcm.removeConnection("mon-err");
+
+        HttpConnection timeout_conn("mon-timeout", "test", url, {}, {
+            "ping_method": "GET",
+            "ping_path": "/route/block",
+            "timeout": 250ms,
+        });
+        on_exit route_handler.release();
+        pcm.add(timeout_conn);
+        # the ping operation raises SOCKET-TIMEOUT when the connection's timeout expires
+        result = pcm.waitForResult();
+        assertEq("mon-timeout", result.name);
+        assertEq("timeout", result.result);
+        pcm.removeConnection("mon-timeout");
     }
 }

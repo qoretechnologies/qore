@@ -91,7 +91,7 @@ public class SquarespaceCreateProductVariantDataProvider inherits SquarespaceDat
         const ConstructorOptions = BaseConstructorOptions;
     }
 
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest) : SquarespaceDataProviderBase(rest) {
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest) : SquarespaceDataProviderBase(rest) {
     }
 
     string getName() {

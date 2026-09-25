@@ -110,13 +110,6 @@ public class KlaviyoWatchDataProviderBase inherits DataProvider::AbstractTimesta
         stopEventsIntern();
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! Returns the record's position in the feed
     /** @note This must not throw: an unusable timestamp skips one record, where an exception would abort
         the whole cycle and stall every other record with it.

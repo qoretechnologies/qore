@@ -6309,6 +6309,10 @@ void QoreSocketObject::setMaxResponseBodySize(int64 size) {
     priv->socket->priv->max_response_body_size.store(size, std::memory_order_relaxed);
 }
 
+void QoreSocketObject::setHttpAssumedEncoding(const QoreEncoding* enc) {
+    priv->socket->priv->http_assumed_encoding.store(enc, std::memory_order_relaxed);
+}
+
 void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
     ExceptionSink xsink;
     qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,

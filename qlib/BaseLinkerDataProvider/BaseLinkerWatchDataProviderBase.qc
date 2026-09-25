@@ -97,11 +97,6 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
         stopEventsIntern();
     }
 
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! The BaseLinker journal is returned in ascending `log_id` order
     string getSourceOrdering() {
         return WSO_ASCENDING;

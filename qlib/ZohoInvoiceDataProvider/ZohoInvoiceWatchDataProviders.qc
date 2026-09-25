@@ -36,7 +36,7 @@ public class ZohoInvoiceNewInvoiceWatchDataProvider inherits ZohoInvoiceWatchDat
         };
     }
 
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-invoice"; }
@@ -72,7 +72,7 @@ public class ZohoInvoiceNewContactWatchDataProvider inherits ZohoInvoiceWatchDat
         };
     }
 
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-contact"; }
@@ -105,7 +105,7 @@ public class ZohoInvoiceNewEstimateWatchDataProvider inherits ZohoInvoiceWatchDa
         };
     }
 
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-estimate"; }
@@ -140,7 +140,7 @@ public class ZohoInvoiceNewExpenseWatchDataProvider inherits ZohoInvoiceWatchDat
         };
     }
 
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-expense"; }
@@ -173,7 +173,7 @@ public class ZohoInvoiceNewItemWatchDataProvider inherits ZohoInvoiceWatchDataPr
         };
     }
 
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-item"; }
@@ -206,7 +206,7 @@ public class ZohoInvoiceNewProjectWatchDataProvider inherits ZohoInvoiceWatchDat
         };
     }
 
-    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClient rest, *hash<auto> options)
+    constructor(ZohoInvoiceRestClient::ZohoInvoiceRestClientIo rest, *hash<auto> options)
             : ZohoInvoiceWatchDataProviderBase(rest, options) {}
 
     string getName() { return "new-project"; }

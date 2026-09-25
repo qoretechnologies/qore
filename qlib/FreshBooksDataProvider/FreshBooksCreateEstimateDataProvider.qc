@@ -42,7 +42,7 @@ public class FreshBooksCreateEstimateDataProvider inherits FreshBooksDataProvide
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) : FreshBooksDataProviderBase(rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) : FreshBooksDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -67,8 +67,8 @@ public class FreshBooksCreateEstimateDataProvider inherits FreshBooksDataProvide
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
-        return doPost(accountPath("/estimates/estimates"), {"estimate": req}).estimate;
+        *string account_id = getAccountIdFromReq(\req);
+        return doPost(accountPath("/estimates/estimates", account_id), {"estimate": req}).estimate;
     }
 
     #! Returns static provider info

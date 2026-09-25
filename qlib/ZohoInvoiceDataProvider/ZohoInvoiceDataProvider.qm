@@ -3003,7 +3003,7 @@ module ZohoInvoiceDataProvider {
 %requires ZohoInvoiceRestClient
 
 # Create a REST client with credentials
-ZohoInvoiceRestClient rest({
+ZohoInvoiceRestClientIo rest({
     "oauth2_client_id": ENV.ZOHOINVOICE_CLIENT_ID,
     "oauth2_client_secret": ENV.ZOHOINVOICE_CLIENT_SECRET,
     "oauth2_refresh_token": ENV.ZOHOINVOICE_REFRESH_TOKEN,

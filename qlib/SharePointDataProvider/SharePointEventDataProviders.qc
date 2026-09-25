@@ -55,11 +55,6 @@ public class SharePointWatchDataProviderBase inherits SharePointDataProviderBase
                   max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
     }
 
-    #! Cancels in-flight REST operations for graceful shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! The Graph delta feed returns changes in ascending change order
     /** The delta link is an opaque cursor, so this provider is a documented exemption from the
         shared ordered template (@ref DataProvider::AbstractOrderedWatchDataProvider): there is no

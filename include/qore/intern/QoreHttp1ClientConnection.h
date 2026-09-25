@@ -316,6 +316,9 @@ public:
     //! Pushes the maximum size of a response body received into memory down to the H1 poll op priv
     DLLEXPORT void setMaxResponseBodySizeHook(int64_t max_size) override;
 
+    //! Pushes the encoding assumed for text response bodies down to the H1 poll op priv
+    DLLEXPORT void setAssumedEncodingHook(const QoreEncoding* enc) override;
+
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 

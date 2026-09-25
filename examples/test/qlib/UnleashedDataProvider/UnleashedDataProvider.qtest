@@ -37,13 +37,53 @@
 
 %requires UnleashedRestClient
 %requires UnleashedDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class UnleashedDataProviderTest
+
+#! A local Unleashed API server that records requests
+class FakeUnleashedHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "api_id": hdr."api-auth-id",
+            "signature": hdr."api-auth-signature",
+            "client_type": hdr."client-type",
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.path =~ /Customers\/missing$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"Description": "Customer not found"}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"Customer": {"Guid": "g2", "CustomerCode": "C2"}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json({"Items": ({"Guid": "g1", "CustomerCode": "C1", "CustomerName": "Acme Co"},)}),
+        };
+    }
+}
 
 public class UnleashedDataProviderTest inherits QUnit::Test {
     private {
         #! Unleashed REST client for integration tests
-        *UnleashedRestClient::UnleashedRestClient client;
+        *UnleashedRestClient::UnleashedRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -77,6 +117,7 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
         addTestCase("action catalog tests", \actionCatalogTests());
 
         # Integration tests (require UNLEASHED_API_ID and UNLEASHED_API_KEY)
@@ -112,7 +153,7 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
             "api_id": api_id,
             "apikey": apikey,
         };
-        client = new UnleashedRestClient::UnleashedRestClient(opts);
+        client = new UnleashedRestClient::UnleashedRestClientIo(opts);
     }
 
     #! Creates an UnleashedDataProvider for unit tests
@@ -519,7 +560,7 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
     #! Test API connectivity
     private testApiConnectivity() {
         # Test that we can connect to the API
-        hash<auto> response = client.get("Customers?pageSize=1");
+        hash<auto> response = client.restGet("Customers?pageSize=1");
         assertTrue(response.body.typeCode() == NT_HASH);
         if (m_options.verbose) {
             printf("Connected to Unleashed API successfully\n");
@@ -923,6 +964,80 @@ public class UnleashedDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("\n--- Polling Trigger tests completed ---\n");
+        }
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeUnleashedHandler handler();
+        server.setHandler("unleashed", "", NOTHING, handler);
+        server.setDefaultHandler("unleashed", handler);
+
+        UnleashedDataProvider::UnleashedDataProvider provider({
+            "unleashedrestclient_options": {
+                "url": "http://localhost:" + port,
+                "api_id": "test-id",
+                "apikey": "test-key",
+            },
+        });
+        assertTrue(provider.getRestClient() instanceof UnleashedRestClient::UnleashedRestClientIo);
+
+        # a GET request is signed with the HMAC-SHA256 of the query string
+        list<hash<auto>> recs = map $1, provider.getChildProviderEx("customers").searchRecords(NOTHING,
+            {"customerName": "Acme Co"});
+        assertEq(1, recs.size());
+        assertEq("g1", recs[0].Guid);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("Customers?customerName=Acme%20Co&pageSize=200", handler.requests[0].path);
+        assertEq("test-id", handler.requests[0].api_id);
+        assertEq(hmac("sha256", "customerName=Acme%20Co&pageSize=200", "test-key").toBase64(),
+            handler.requests[0].signature);
+        assertEq(UnleashedRestClient::UnleashedRestClientBase::DefaultClientType, handler.requests[0].client_type);
+
+        # a POST request without a query string is signed with the HMAC-SHA256 of an empty string and sends the
+        # body
+        handler.requests = ();
+        hash<auto> customer = provider.getChildProviderEx("create-customer").doRequest({
+            "CustomerCode": "C2",
+            "CustomerName": "Beta Ltd",
+            "Currency": {"CurrencyCode": "USD"},
+            "Addresses": ({"AddressType": "Postal", "AddressName": "Head Office"},),
+        });
+        assertEq({"Guid": "g2", "CustomerCode": "C2"}, customer);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("Customers", handler.requests[0].path);
+        assertEq("test-id", handler.requests[0].api_id);
+        assertEq(hmac("sha256", "", "test-key").toBase64(), handler.requests[0].signature);
+        assertEq("C2", handler.requests[0].body.CustomerCode);
+        assertEq("Beta Ltd", handler.requests[0].body.CustomerName);
+        assertEq({"CurrencyCode": "USD"}, handler.requests[0].body.Currency);
+        assertEq("Head Office", handler.requests[0].body.Addresses[0].AddressName);
+
+        # a request with a pre-serialized body is signed too
+        handler.requests = ();
+        UnleashedRestClient::UnleashedRestClientIo rest = provider.getRestClient();
+        rest.restDoRawRequest("POST", "Customers?serialized=1", make_json({"CustomerCode": "C3"}),
+            {"Content-Type": MimeTypeJson});
+        assertEq("Customers?serialized=1", handler.requests[0].path);
+        assertEq("test-id", handler.requests[0].api_id);
+        assertEq(hmac("sha256", "serialized=1", "test-key").toBase64(), handler.requests[0].signature);
+        assertEq({"CustomerCode": "C3"}, handler.requests[0].body);
+
+        # an error response is raised with the response
+        try {
+            provider.getChildProviderEx("get-customer").doRequest({"guid": "missing"});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Customer not found", ex.arg.body.Description);
         }
     }
 }

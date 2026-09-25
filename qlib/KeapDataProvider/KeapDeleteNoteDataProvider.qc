@@ -65,7 +65,7 @@ public class KeapDeleteNoteDataProvider inherits KeapDataProviderBase {
         const ConstructorOptions = BaseConstructorOptions;
     }
 
-    constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
+    constructor(KeapRestClient::KeapRestClientIo rest) : KeapDataProviderBase(rest) {
     }
 
     string getName() {

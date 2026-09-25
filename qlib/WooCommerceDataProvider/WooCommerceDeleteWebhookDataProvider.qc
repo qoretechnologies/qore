@@ -75,7 +75,7 @@ public class WooCommerceDeleteWebhookDataProvider inherits WooCommerceDataProvid
     }
 
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

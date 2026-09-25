@@ -159,125 +159,27 @@ PerplexityRestClient rest({"apikey": api_key});
 }
 
 #! SSE connection for Perplexity chat completion streams
-public class PerplexityChatSseStream {
-    private {
-        PerplexityRestClient rest;
-        *string content_encoding;
-        timeout timeout_ms = 15s;
-        bool closed;
+/** The stream is opened and read with an asynchronous @ref PerplexityRestClientIo created with the options of the
+    client; see @ref RestClientIo::RestClientSyncSseStream "RestClientSyncSseStream".  New code should use
+    @ref PerplexityChatSseStreamIo instead.
+*/
+public class PerplexityChatSseStream inherits RestClientIo::RestClientSyncSseStream {
+    #! Opens the stream
+    /** @param rest the client; its default headers and connection path are used
+        @param path the request path, relative to the connection path
+        @param body an optional request body; a string is sent as-is, and any other value is serialized as JSON
+        @param hdr optional additional request headers
+        @param to an optional timeout of an event wait; the default is 15 seconds
 
-        const SseMimeType = "text/event-stream";
-    }
-
-    #! Creates the stream connection
-    constructor(PerplexityRestClient rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
-        self.rest = rest;
-        if (to) {
-            timeout_ms = to;
-        }
-        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
-        headers.Accept = SseMimeType;
-        data payload;
-        if (exists body) {
-            payload = getSerializedBody(body, \headers);
-        }
-        string full_path = buildPath(path);
-        hash<auto> info;
-        # the response body is left on the connection to be read incrementally as events
-        hash<auto> resp = rest.sendAndStream("POST", full_path, payload, headers, \info);
-        # an unusable response is abandoned
-        on_error close();
-        if (resp.status_code != 200) {
-            throw "SSE-ERROR", sprintf("unexpected status code %d %s", resp.status_code, resp.status_message);
-        }
-        string content_type = normalizeContentType(resp."content-type");
-        if (content_type != SseMimeType) {
-            throw "SSE-ERROR", sprintf("expected Content-Type %y but got %y", SseMimeType, resp."content-type");
-        }
-        if (resp."content-encoding".val()) {
-            content_encoding = tolower(resp."content-encoding");
-        }
-        if (resp."transfer-encoding".val() && tolower(resp."transfer-encoding") != "chunked") {
-            throw "SSE-ERROR", sprintf("unsupported Transfer-Encoding: %y", resp."transfer-encoding");
-        }
-    }
-
-    #! Reads the next SSE event
-    /** The stream is decoded according to its content encoding; an event is limited to the maximum response body
-        size of the client if set, and otherwise to 128 MiB (see Qore::HTTPClient::readServerSentEvent()).
-
-        @param to an optional timeout; if not set, the timeout given in the constructor is used
-
-        @return the parsed SSE event, or NOTHING at the end of the stream
-
-        @throw SOCKET-TIMEOUT no event was received in the timeout
-        @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size; the stream is abandoned
+        @throw HTTP-CLIENT-RECEIVE-ERROR the server returned an error response; the exception argument contains the
+        response headers, the \c status_code, and the response \c body
+        @throw SSE-ERROR the server returned a successful response that is not an event stream
+        @throw SOCKET-TIMEOUT no response was received in the timeout of the client
+        @throw HTTPCLIENT-CONNECT-ERROR the connection cannot be established
     */
-    *hash<SseMessageInfo> readEvent(*timeout to) {
-        if (closed) {
-            return;
-        }
-        # the client decodes the stream, including chunked transfer encoding and the content encoding, and
-        # limits the size of an event
-        *hash<SseMessageInfo> rv = rest.readServerSentEvent(content_encoding, to ?? timeout_ms);
-        if (!rv) {
-            # the stream has ended
-            closed = True;
-        }
-        return rv;
-    }
-
-    #! Returns True if the stream has ended
-    bool isDone() {
-        return closed;
-    }
-
-    #! Closes the stream connection
-    close() {
-        if (!closed) {
-            closed = True;
-            rest.disconnect();
-        }
-    }
-
-    # returns the request path with the connection path prepended, like the regular requests of the client
-    private string buildPath(string path) {
-        string rv = path;
-        rv =~ s/^\/+//;
-        rv = "/" + rv;
-        *string base = rest.getConnectionPath();
-        if (base.val() && base != "/") {
-            base =~ s/\/+$//;
-            if (base !~ /^\//) {
-                base = "/" + base;
-            }
-            rv = base + rv;
-        }
-        return rv;
-    }
-
-    private data getSerializedBody(auto body, reference<hash<auto>> headers) {
-        if (body.typeCode() == NT_STRING) {
-            if (!headers."Content-Type") {
-                headers."Content-Type" = "application/json";
-            }
-            return body;
-        }
-        if (!headers."Content-Type") {
-            headers."Content-Type" = "application/json";
-        }
-        return make_json(body);
-    }
-
-    private static string normalizeContentType(*string content_type) {
-        if (!content_type.val()) {
-            return "";
-        }
-        string rv = content_type;
-        rv =~ s/\s*;.*$//;
-        rv =~ s/^\s+//;
-        rv =~ s/\s+$//;
-        return tolower(rv);
+    constructor(PerplexityRestClient rest, string path, *auto body, *hash<auto> hdr, *timeout to)
+            : RestClientSyncSseStream(rest, new PerplexityRestClientIo(rest.getConstructorOptions()), "POST",
+                path, body, hdr, to) {
     }
 }
 

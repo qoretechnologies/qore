@@ -149,6 +149,17 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
 
         #! Protocol extensions this agent supports, keyed by URI
         hash<string, hash<A2aAgentExtension>> extension_map;
+
+        #! Connection manager delivering push notifications to webhooks
+        /** Connections are reused across deliveries to the same webhook host; cookies are not kept
+
+            @since A2aServerHandler 1.0
+        */
+        HttpClientIo::HttpClientConnectionManager push_mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "connect_timeout": PushNotificationTimeoutMs,
+            "request_timeout": PushNotificationTimeoutMs,
+            "enable_cookies": False,
+        });
     }
 
     #! Creates the handler with a logger, agent card, and authenticator
@@ -1342,7 +1353,6 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
                         make_json(makePushNotificationPayload(task_id, event_type, event_data, version));
                 }
                 # Deliver push notification via HTTP POST
-                Qore::HTTPClient push_client({"url": config.url, "timeout": PushNotificationTimeoutMs});
                 hash<auto> hdr = {
                     "Content-Type": version == A2aVersionV10 ? MimeTypeA2aJson : MimeTypeJson,
                 };
@@ -1350,10 +1360,22 @@ public class A2aServerHandler inherits JsonRpcHandler, ServerSentEventHandler {
                 if (config.token.val()) {
                     hdr{A2aNotificationTokenHeader} = config.token;
                 }
-                push_client.send(body_cache{version}, "POST", NOTHING, hdr);
+                # user information in the webhook URL is sent as basic authentication
+                hash<UrlInfo> url_info = parse_url(config.url);
+                if (url_info.username.val()) {
+                    hdr.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", url_info.username,
+                        url_info.password ?? ""));
+                }
+                hash<auto> resp = push_mgr.request(config.url, "POST", get_http_request_target(config.url), hdr,
+                    body_cache{version});
+                if (resp.status_code < 200 || resp.status_code >= 300) {
+                    error("Push notification delivery failed for task %y to %y: HTTP status code %d received: "
+                        "message: %s", task_id, get_safe_url(config.url), resp.status_code,
+                        resp.status_message ?? "<no message>");
+                }
             } catch (hash<ExceptionInfo> ex) {
                 error("Push notification delivery failed for task %y to %y: %s: %s",
-                    task_id, config.url, ex.err, ex.desc);
+                    task_id, get_safe_url(config.url), ex.err, ex.desc);
             }
         }
     }

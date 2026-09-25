@@ -28,20 +28,28 @@ public namespace SquareDataProvider {
 #! Base class for Square data providers
 public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Square data providers
         const BaseConstructorOptions = {
             "squarerestclient": <DataProviderOptionInfo>{
                 "display_name": "Square REST Client",
-                "short_desc": "The SquareRestClient object",
+                "short_desc": "The SquareRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("SquareRestClient::SquareRestClient")),
-                "desc": "The SquareRestClient object to use for API calls",
+                    new Type("SquareRestClient::SquareRestClientIo")),
+                "desc": "The `SquareRestClientIo` object to use for API calls",
             },
             "squarerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Square REST Client Options",
-                "short_desc": "Options for creating a SquareRestClient",
+                "short_desc": "Options for creating a SquareRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a SquareRestClient object if one is not provided "
+                "desc": "Options for creating a `SquareRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        SquareRestClient::SquareRestClient rest;
+        SquareRestClient::SquareRestClientIo rest;
 
         #! The connection object, if applicable
         *SquareRestClient::SquareRestConnection conn;
@@ -60,14 +68,14 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest) {
+    constructor(SquareRestClient::SquareRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(SquareRestClient::SquareRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
             rest = copts.squarerestclient;
         } else {
             hash<auto> client_opts = copts.squarerestclient_options ?? {};
-            rest = new SquareRestClient::SquareRestClient(client_opts);
+            rest = new SquareRestClient::SquareRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    SquareRestClient::SquareRestClient getRestClient() {
+    SquareRestClient::SquareRestClientIo getRestClient() {
         return rest;
     }
 
@@ -234,24 +242,11 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "SQUARE-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "SQUARE-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

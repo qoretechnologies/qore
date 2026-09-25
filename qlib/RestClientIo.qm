@@ -321,6 +321,15 @@ hash<RestResponseInfo> resp = f.get(30s);
           \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; see
           @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size
           "HttpClientConnectionManagerOptions::max_response_body_size"
+        - \c assume_encoding: the character encoding assumed for text response bodies whose encoding is not
+          determined otherwise (default: ISO-8859-1); see @ref Qore::get_http_body_encoding()
+          "get_http_body_encoding()"
+        - \c pre_encoded_urls: if \c True, request paths are already percent-encoded: they are only validated,
+          and a character that must be encoded raises \c URL-ENCODING-ERROR; otherwise the characters that a request
+          target may not contain are percent-encoded (see @ref HttpClientIo::encode_http_request_target()
+          "encode_http_request_target()"), as with the synchronous @ref RestClient::RestClient "RestClient", except
+          that percent-encoded octets are kept
+        - \c encode_chars: additional characters to percent-encode in request paths
         - \c ssl_verify_mode: SSL verification mode
         - \c accept_all_certs: if \c True, accept all certificates including self-signed
         - \c no_charset: if \c True, do not add charset to Content-Type header
@@ -345,7 +354,8 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c oauth2_auth_args: additional authorization arguments
         - \c oauth2_token_args: additional token request arguments
         - \c oauth2_auth_url: OAuth2 authorization URL
-        - \c oauth2_redirect_url: OAuth2 redirect URL
+        - \c oauth2_redirect_url: OAuth2 redirect URL (default: \c "auto", as with
+          @ref RestClient::RestClient "RestClient")
         - \c oauth2_auto_refresh: if \c True (default), automatically refresh expired tokens
         - \c oauth2_token_use_basic_auth: if \c True, use HTTP Basic auth for token requests
         - \c oauth2_token_auth_secret_only: if \c True, use only the secret for Basic auth
@@ -482,6 +492,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string oauth2_auth_url;
             #! OAuth2 redirect URL
             *string oauth2_redirect_url;
+            #! The encoding assumed for text response bodies whose encoding is not determined otherwise
+            string assume_encoding = "ISO-8859-1";
+            #! True if request paths are already percent-encoded and are only validated
+            bool pre_encoded_urls;
+            #! Additional characters to percent-encode in request paths
+            *string encode_chars;
             #! OAuth2 token URL
             *string oauth2_token_url;
             #! Alternate OAuth2 token URL; if set, token requests are routed here and oauth2_token_url is sent as a body arg
@@ -734,6 +750,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "max_streams_per_connection": True,
                 "max_redirects": True,
                 "max_response_body_size": True,
+                "assume_encoding": True,
+                "pre_encoded_urls": True,
+                "encode_chars": True,
                 "redirect_passthru": True,
                 "enable_cookies": True,
                 "cookie": True,
@@ -841,11 +860,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # preserves the caller's original intent for sibling construction
             saved_opts = opts;
 
-            # Strip HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
-            # and any unknown keys (e.g., service-specific options already
-            # consumed by subclass getOptions() calls like "api_profile",
-            # "encode_chars", "tenant", etc.)
-            opts -= keys RestClient::AbstractRestClient::Http1OnlyOptions;
+            # Strip unknown keys (e.g., service-specific options already consumed by subclass getOptions() calls
+            # like "api_profile", "tenant", etc.)
             opts -= keys (opts - (keys KnownOptions));
 
             # Normalize http_version (RestClient legacy) → protocol (RestClientIo/HttpClientIo)
@@ -951,6 +967,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 }
             }
 
+            if (opts.assume_encoding) {
+                assume_encoding = opts.assume_encoding;
+            }
+            pre_encoded_urls = opts.pre_encoded_urls.toBool();
+            if (opts.encode_chars) {
+                encode_chars = opts.encode_chars;
+            }
             if (opts.cookie) {
                 headers.cookie = opts.cookie;
             }
@@ -1014,9 +1037,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.oauth2_auth_url) {
                 oauth2_auth_url = opts.oauth2_auth_url;
             }
-            if (opts.oauth2_redirect_url) {
-                oauth2_redirect_url = opts.oauth2_redirect_url;
+            # the redirect URL has the same default as with RestClient, so that the same options are accepted
+            if (!opts.oauth2_redirect_url) {
+                opts.oauth2_redirect_url = RestClient::RestClient::DefaultOAuth2RedirectUrl;
             }
+            oauth2_redirect_url = opts.oauth2_redirect_url;
             if (exists opts.oauth2_auto_refresh) {
                 oauth2_auto_refresh = opts.oauth2_auto_refresh.toBool();
             }
@@ -1064,7 +1089,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             # Option update callback for notifying the connection about token changes
             update_options = remove opts.update_options;
-            checkOAuth2Options(opts);
+            if (!checkOAuth2Options(opts)) {
+                # the token given is used; the grant cannot be used to acquire a new one
+                oauth2_grant_type = NOTHING;
+            }
 
             # HTTP Basic auth: set if username provided and no OAuth2 grant type configured
             if (opts.username && (!oauth2_grant_type || oauth2_grant_type == "none")) {
@@ -1452,6 +1480,15 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
             connection_path = path;
         }
 
+        #! Returns the encoding assumed for text response bodies whose encoding is not determined otherwise
+        /** @return the \c assume_encoding option; ISO-8859-1 by default
+
+            @see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"
+        */
+        string getAssumedEncoding() {
+            return assume_encoding;
+        }
+
         #! Returns the current connection path
         *string getConnectionPath() {
             AutoReadLock al(config_lock);
@@ -1586,7 +1623,8 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             timeout from the end of the stream
 
             @note the reader decodes the stream according to the \c Content-Encoding of the response, and limits an
-            event, and the data decompressed from one received chunk, to
+            event, and the data decompressed from one received chunk, to the \c max_response_body_size option of the
+            client if set, and otherwise to
             @ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize"
 
             @see restSseStream()
@@ -1668,8 +1706,10 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                         response_start.response_timeout, deadline);
                     # the reader replays the data consumed while validating the response, and decodes the stream
                     # according to its content encoding
+                    # an event is limited to the maximum response body size of the client if set
+                    int max_size = stream.getMaxResponseBodySize();
                     return new HttpClientStreamingIo::SseStreamReader(stream,
-                        response.headers."content-encoding", initial_data);
+                        response.headers."content-encoding", initial_data, max_size > 0 ? max_size : 0);
                 } catch (hash<ExceptionInfo> ex) {
                     stream.cancel();
                     rethrow;
@@ -2857,6 +2897,10 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 path = "/";
             }
 
+            # the characters that a request target may not contain are percent-encoded, as with the synchronous
+            # client; a pre-encoded path is only validated
+            path = HttpClientIo::encode_http_request_target(path, pre_encoded_urls, encode_chars);
+
             # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
             hdr = map {$1.key.lwr(): $1.value}, hdr.pairIterator();
 
@@ -2959,11 +3003,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # single value is what this needs, and assigning the list would raise a type error instead of
             # returning the response
             *string content_type = RestClient::getSingleHeaderValue(raw.headers."content-type");
-            if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
-                if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
-                        || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {
-                    resp_body = resp_body.toString();
-                }
+            # a binary text body is decoded by the rules shared by all HTTP clients
+            if (resp_body && resp_body.typeCode() == NT_BINARY) {
+                resp_body = decode_http_body(content_type, resp_body, assume_encoding);
             }
             *data response_body_raw = raw.body;
             if (exists resp_body && content_type) {
@@ -3344,10 +3386,13 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @throw OAUTH2-ERROR if the options are invalid
         */
         setOAuth2Options(hash<auto> new_opts) {
-            checkOAuth2Options(new_opts);
+            bool grant_usable = checkOAuth2Options(new_opts);
             {
                 AutoWriteLock al(config_lock);
-                if (new_opts.oauth2_grant_type) {
+                if (!grant_usable) {
+                    # the token is used; the grant cannot be used to acquire a new one
+                    oauth2_grant_type = NOTHING;
+                } else if (new_opts.oauth2_grant_type) {
                     oauth2_grant_type = new_opts.oauth2_grant_type;
                 }
                 if (new_opts.oauth2_client_id) {
@@ -3515,14 +3560,21 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         }
 
         #! Validates OAuth2 options
-        /** @param opts the options hash to validate
+        /** A token that is given can be used without the options needed to acquire a new one with the grant type;
+            the grant type is then not usable, and the token is not refreshed, as with
+            @ref RestClient::RestClient "RestClient".
+
+            @param opts the options hash to validate
+
+            @return @ref False if a token is given and options required by the grant type are missing, so the grant
+            type cannot be used to acquire a new token; @ref True otherwise
 
             @throw OAUTH2-ERROR if the options are invalid
         */
-        private checkOAuth2Options(hash<auto> opts) {
+        private bool checkOAuth2Options(hash<auto> opts) {
             *string grant_type = opts.oauth2_grant_type ?? oauth2_grant_type;
             if (!exists grant_type || grant_type == "none") {
-                return;
+                return True;
             }
             hash<auto> effective = getOAuth2Options() + opts;
             *list<string> req_opts = OAuth2GrantOptions{grant_type};
@@ -3532,6 +3584,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             foreach string req_opt in (req_opts) {
                 if (!effective.hasKey(req_opt) || !effective{req_opt}.val()) {
+                    if (effective.token.val() || token_val.val()) {
+                        log(LoggerLevel::DEBUG, "OAuth2 grant type %y requires option %y, which is not set; the "
+                            "token given is used and cannot be refreshed", grant_type, req_opt);
+                        return False;
+                    }
                     throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y requires option %y, but this "
                         "option is not set; options provided: %y", grant_type, req_opt, keys opts);
                 }
@@ -3552,6 +3609,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         "password; no password is set";
                 }
             }
+            return True;
         }
 
         #! Returns True if OAuth2 client assertion authentication is configured
@@ -4184,6 +4242,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             if (exists opts.max_response_body_size) {
                 mgr_opts.max_response_body_size = opts.max_response_body_size;
+            }
+            if (opts.assume_encoding) {
+                mgr_opts.assume_encoding = opts.assume_encoding;
             }
             if (opts.redirect_passthru) {
                 mgr_opts.redirect_passthru = opts.redirect_passthru.toBool();
@@ -5794,13 +5855,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     # Run schema validation if configured (mirrors buildResponse() logic)
                     if (schema_validator) {
                         auto resp_body = resp.body;
-                        *string content_type = resp.headers."content-type";
-                        # Convert binary body to string for text-based content types
-                        if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
-                            if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
-                                    || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {
-                                resp_body = resp_body.toString();
-                            }
+                        *string content_type = RestClient::getSingleHeaderValue(resp.headers."content-type");
+                        # a binary text body is decoded by the rules shared by all HTTP clients
+                        if (resp_body && resp_body.typeCode() == NT_BINARY) {
+                            resp_body = decode_http_body(content_type, resp_body, rcio.getAssumedEncoding());
                         }
                         on_error {
                             conn.authFailure();
@@ -6267,4 +6325,141 @@ public class RestPersistentSession {
     }
 }
 
+#! Base class of the synchronous server-sent event streams of REST clients
+/** A synchronous stream, like the \c OpenAiResponseSseStream stream of the \c OpenAiRestClient module, is opened
+    with a synchronous @ref RestClient::RestClient "RestClient" and is read with its API, but its I/O is done with
+    an asynchronous @ref RestClientIo created with the options of the synchronous client.  The asynchronous client
+    has its own connection and is closed with the stream.
+
+    The stream keeps the API of the synchronous streams:
+    - the default headers and the connection path of the synchronous client are used, including any changed after
+      the client was created
+    - an error response raises \c HTTP-CLIENT-RECEIVE-ERROR, and a successful response that is not an event stream
+      raises \c SSE-ERROR
+    - @ref readEvent() raises \c SOCKET-TIMEOUT when no event is received in the timeout, and returns
+      @ref nothing only at the end of the stream
+
+    @note This class is \b not thread-safe.  Use from a single reader thread.
+
+    @since %RestClientIo 1.0
+*/
+public class RestClientSyncSseStream {
+    private {
+        #! The asynchronous client, which owns the connection of the stream
+        RestClientIo rest;
+
+        #! The event reader; not set if the stream could not be opened
+        *HttpClientStreamingIo::SseStreamReader reader;
+
+        #! The timeout of an event wait
+        timeout timeout_ms = 15s;
+
+        #! True if the stream has been closed
+        bool closed;
+
+        #! Event stream MIME type
+        const SseMimeType = "text/event-stream";
+    }
+
+    #! Opens the stream
+    /** @param sync_rest the synchronous client whose default headers and connection path are used
+        @param rest the asynchronous client created with the options of \a sync_rest; it is closed with the stream
+        @param method the HTTP method
+        @param path the request path, relative to the connection path
+        @param body an optional request body; a string is sent as-is, and any other value is serialized as JSON
+        @param hdr optional additional request headers
+        @param to an optional timeout of an event wait; the default is 15 seconds
+
+        @throw HTTP-CLIENT-RECEIVE-ERROR the server returned an error response; the exception argument contains the
+        response headers, the \c status_code, and the response \c body
+        @throw SSE-ERROR the server returned a successful response that is not an event stream
+        @throw SOCKET-TIMEOUT no response was received in the timeout of the client
+        @throw HTTPCLIENT-CONNECT-ERROR the connection cannot be established
+    */
+    constructor(RestClient::RestClient sync_rest, RestClientIo rest, string method, string path, *auto body,
+            *hash<auto> hdr, *timeout to) {
+        self.rest = rest;
+        if (to) {
+            timeout_ms = to;
+        }
+        # the stream is closed if it cannot be opened
+        on_error rest.close();
+        rest.setConnectionPath(sync_rest.getConnectionPath());
+        hash<auto> headers = sync_rest.getDefaultHeaders() + (hdr ?? {});
+        # only an event stream is accepted
+        headers -= (select keys headers, $1.lwr() == "accept");
+        headers.Accept = SseMimeType;
+        *data payload;
+        if (exists body) {
+            payload = body.typeCode() == NT_STRING ? body : make_json(body);
+            if (!(select keys headers, $1.lwr() == "content-type")) {
+                headers."Content-Type" = MimeTypeJson;
+            }
+        }
+        try {
+            reader = rest.restSseReader(method, path, headers, payload);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH && ex.arg.status_code) {
+                if (ex.arg.status_code >= 300) {
+                    throw "HTTP-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: %s",
+                        ex.arg.status_code, ex.desc), (ex.arg.headers ?? {}) + {
+                        "status_code": ex.arg.status_code,
+                        "body": ex.arg.body,
+                    };
+                }
+                throw "SSE-ERROR", ex.desc, ex.arg;
+            }
+            if (ex.err == "FUTURE-TIMEOUT" || ex.err == "HTTPCLIENT-TIMEOUT") {
+                throw "SOCKET-TIMEOUT", ex.desc, ex.arg;
+            }
+            rethrow;
+        }
+    }
+
+    #! Closes the stream
+    destructor() {
+        close();
+    }
+
+    #! Reads the next event
+    /** The stream is decoded according to its content encoding; an event is limited to the maximum response body
+        size of the client if set, and otherwise to
+        @ref HttpClientStreamingIo::DefaultMaxEventSize "DefaultMaxEventSize".
+
+        @param to an optional timeout; if not set, the timeout given in the constructor is used
+
+        @return the parsed event, or @ref nothing at the end of the stream or if the stream has been closed
+
+        @throw SOCKET-TIMEOUT no event was received in the timeout; the stream remains open
+        @throw SSE-EVENT-TOO-LARGE the event exceeds the maximum event size; the stream is abandoned
+        @throw SSE-STREAM-ERROR the stream reported an error
+    */
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return;
+        }
+        timeout wait_ms = to ?? timeout_ms;
+        *hash<SseMessageInfo> rv = reader.readEvent(wait_ms);
+        if (!rv && !reader.isDone()) {
+            throw "SOCKET-TIMEOUT", sprintf("no server-sent event was received in %d ms", wait_ms);
+        }
+        return rv;
+    }
+
+    #! Returns @ref True if the stream has ended or has been closed
+    bool isDone() {
+        return closed || reader.isDone();
+    }
+
+    #! Closes the stream and its connection
+    close() {
+        if (!closed) {
+            closed = True;
+            if (reader) {
+                reader.cancel();
+            }
+            rest.close();
+        }
+    }
+}
 } # namespace RestClientIo

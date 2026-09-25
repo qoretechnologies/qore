@@ -47,7 +47,7 @@ public class LinearCycleDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object
-    constructor(LinearRestClient::LinearRestClient rest, string cycleId) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, string cycleId) : LinearDataProviderBase(rest) {
         @assert(cycleId.val(), "cycle ID cannot be empty");
         self.cycleId = cycleId;
     }

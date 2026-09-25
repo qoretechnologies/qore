@@ -13,7 +13,60 @@
 %requires JsonLd
 %requires OneRecordClient
 %requires OneRecordServerHandler
+%requires Util
 %exec-class OneRecordTest
+
+#! Receives notifications delivered to subscriber callback URLs
+class CallbackCapture inherits AbstractHttpRequestHandler {
+    public {
+        #! a hash for each request received
+        Queue requests();
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests.push({
+            "method": hdr.method,
+            "path": cx.raw_path,
+            "content_type": hdr."content-type",
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body) : NOTHING,
+        });
+        if (cx.raw_path =~ /^\/cb\/fail/) {
+            return makeResponse(500, "refused", {"Content-Type": MimeTypeText});
+        }
+        if (cx.raw_path =~ /^\/cb\/redirect/) {
+            return makeResponse(307, "", {"Location": "/cb/target"});
+        }
+        return makeResponse(204, NOTHING);
+    }
+}
+
+#! Queues log messages so that errors logged by notification workers can be awaited
+class LogCapture inherits LoggerAppenderWithLayout {
+    public {
+        Queue messages();
+    }
+
+    constructor() : LoggerAppenderWithLayout("capture", new LoggerLayoutPattern("%m")) {
+        open();
+    }
+
+    processEventImpl(int type, auto params) {
+        if (type == EVENT_LOG) {
+            messages.push(params);
+        }
+    }
+
+    #! returns the next message matching the regular expression, waiting up to 10 seconds for each message
+    string waitForMessage(string pattern) {
+        while (True) {
+            string msg = messages.get(10000);
+            if (regex(msg, pattern)) {
+                return msg;
+            }
+        }
+    }
+}
 
 class OneRecordTest inherits QUnit::Test {
     private {
@@ -25,6 +78,10 @@ class OneRecordTest inherits QUnit::Test {
         int port;
         string base_url;
         OneRecordClient::OneRecordClient client;
+        HttpServer::HttpServer callback_http;
+        CallbackCapture callback;
+        string callback_url;
+        LogCapture log_capture;
     }
 
     constructor() : Test("OneRecord test", "1.0") {
@@ -52,12 +109,15 @@ class OneRecordTest inherits QUnit::Test {
         addTestCase("round trip data test", \roundTripDataTest());
         addTestCase("negative validation test", \negativeValidationTest());
         addTestCase("method not allowed test", \methodNotAllowedTest());
+        addTestCase("notification delivery test", \notificationDeliveryTest());
 
         set_return_value(main());
     }
 
     globalSetUp() {
         logger = new Logger::Logger("test", LoggerLevel::getLevelInfo());
+        log_capture = new LogCapture();
+        logger.addAppender(log_capture);
         storage = new InMemoryOneRecordStorage();
         authorizer = new PermissiveOneRecordAuthorizer();
         handler = new OneRecordServerHandler(logger, "http://localhost", storage, authorizer);
@@ -77,6 +137,14 @@ class OneRecordTest inherits QUnit::Test {
         handler.setBaseUrl(base_url);
 
         client = new OneRecordClient(base_url);
+
+        # server receiving notifications delivered to subscriber callback URLs
+        callback = new CallbackCapture();
+        callback_http = new HttpServer::HttpServer(http_opts);
+        callback_http.setHandler("callback", "", NOTHING, callback);
+        callback_http.setDefaultHandler("callback", callback);
+        callback_url = sprintf("http://localhost:%d",
+            callback_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port);
     }
 
     globalTearDown() {
@@ -84,6 +152,8 @@ class OneRecordTest inherits QUnit::Test {
         handler.stopNotificationWorkers();
         http.stop();
         delete http;
+        callback_http.stop();
+        delete callback_http;
     }
 
     # ========================================================================
@@ -500,6 +570,66 @@ class OneRecordTest inherits QUnit::Test {
         hash<auto> list_result = client.listSubscriptions();
         assertEq(200, list_result.headers.status_code);
         assertTrue(list_result.body."api:hasTotalItems" > 0, "has subscriptions");
+    }
+
+    #! subscribes to the creation of objects of the given type with the given callback URL
+    private subscribeToType(string type, string url) {
+        hash<auto> result = client.createSubscription({
+            "@context": OneRecordContext,
+            "@type": "api:Subscription",
+            "api:hasTopicType": {"@id": OneRecordTopicType::LogisticsObjectType},
+            "api:hasTopic": type,
+            "api:includeSubscriptionEventType": (
+                {"@id": OneRecordSubscriptionEventType::ObjectCreated},
+            ),
+            "api:hasCallbackUrl": url,
+            "api:sendLogisticsObjectBody": False,
+        });
+        assertEq(201, result.headers.status_code);
+    }
+
+    #! notifications are delivered to the callback URLs of matching subscriptions; failures are logged
+    notificationDeliveryTest() {
+        # the path and query of the callback URL are requested, and user information is sent as basic
+        # authentication
+        string type = CARGO_NS + "NotifyDeliveryOk";
+        subscribeToType(type, replace(callback_url, "http://", "http://user:pass@") + "/cb/ok?x=1");
+        string object_uri = client.createLogisticsObject({"@type": type}).headers.location;
+        hash<auto> req = callback.requests.get(10000);
+        assertEq("POST", req.method);
+        assertEq("/cb/ok?x=1", req.path);
+        assertEq(MimeTypeOneRecord, trim((req.content_type.split(";"))[0]));
+        assertEq("Basic " + make_base64_string("user:pass"), req.authorization);
+        assertEq("api:Notification", req.body."@type");
+        assertEq(object_uri, req.body."api:hasTopic");
+        assertEq("api:" + OneRecordNotificationEventType::LogisticsObjectCreated,
+            req.body."api:hasEventType"."@id");
+
+        # a 307 redirect repeats the POST with its body at the new location
+        type = CARGO_NS + "NotifyDeliveryRedirect";
+        subscribeToType(type, callback_url + "/cb/redirect");
+        object_uri = client.createLogisticsObject({"@type": type}).headers.location;
+        req = callback.requests.get(10000);
+        assertEq("/cb/redirect", req.path);
+        req = callback.requests.get(10000);
+        assertEq("/cb/target", req.path);
+        assertEq("POST", req.method);
+        assertEq(object_uri, req.body."api:hasTopic");
+
+        # an error response is logged
+        type = CARGO_NS + "NotifyDeliveryFail";
+        subscribeToType(type, callback_url + "/cb/fail");
+        client.createLogisticsObject({"@type": type});
+        req = callback.requests.get(10000);
+        assertEq("/cb/fail", req.path);
+        assertRegex("HTTP status code 500", log_capture.waitForMessage("Notification delivery failed.*/cb/fail"));
+
+        # a connection failure is logged
+        type = CARGO_NS + "NotifyDeliveryRefused";
+        string refused_url = sprintf("http://localhost:%d/refused", get_free_port());
+        subscribeToType(type, refused_url);
+        client.createLogisticsObject({"@type": type});
+        assertRegex("HTTPCLIENT-CONNECT-ERROR", log_capture.waitForMessage("Notification delivery failed.*/refused"));
     }
 
     errorResponsesTest() {

@@ -42,107 +42,117 @@ public class AbstractJsonLdDocumentLoader {
 }
 
 #! HTTP-based JSON-LD document loader
-/** Loads documents via HTTP(S) with proper content negotiation for JSON-LD.
+/** Loads documents via HTTP(S) with proper content negotiation for JSON-LD; the requests are sent with an
+    <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> connection manager owned by the loader, so
+    connections are reused across documents.
+
+    Up to @ref MaxRedirects redirects are followed; the \c documentUrl of the loaded document is the URL of the
+    retrieved resource, except that a \c 303 \c "See Other" redirect does not change it (JSON-LD 1.1 API section
+    9.4.1).
 
     @since json 1.12
 */
 public class HttpJsonLdDocumentLoader inherits AbstractJsonLdDocumentLoader {
+    public {
+        #! Maximum number of HTTP redirects to follow
+        const MaxRedirects = 10;
+    }
+
     private {
-        #! HTTP client options
-        hash<auto> httpOpts;
+        #! The connection manager for the HTTP requests
+        HttpClientIo::HttpClientConnectionManager mgr;
 
-        #! Connection timeout (ms)
-        int connectTimeout;
-
-        #! Read timeout (ms)
-        int readTimeout;
+        #! Read timeout
+        timeout readTimeout;
     }
 
     #! Creates a new HTTP document loader
-    /** @param opts optional HTTP client options
+    /** @param opts optional options for the
+        <a href="../../HttpClientIo/html/index.html">HttpClientIo</a> connection manager (ex: TLS and proxy options);
+        the timeout and redirect options are set by this class
         @param connect_timeout connection timeout in ms (default 30000)
         @param read_timeout read timeout in ms (default 30000)
     */
-    constructor(*hash<auto> opts, int connect_timeout = 30000, int read_timeout = 30000) {
-        httpOpts = opts ?? {};
-        connectTimeout = connect_timeout;
+    constructor(*hash<HttpClientIo::HttpClientConnectionManagerOptions> opts, int connect_timeout = 30000,
+            int read_timeout = 30000) {
         readTimeout = read_timeout;
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> mgr_opts = opts
+            ?? <HttpClientIo::HttpClientConnectionManagerOptions>{};
+        mgr_opts.connect_timeout = connect_timeout;
+        mgr_opts.request_timeout = read_timeout;
+        mgr_opts.max_redirects = MaxRedirects;
+        mgr_opts.redirect_passthru = False;
+        mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
     }
-
-    #! Maximum number of HTTP redirects to follow
-    public const MaxRedirects = 10;
 
     #! Loads a document from an HTTP(S) URL
-    hash<JsonLdRemoteDocument> loadDocument(string url, *hash<JsonLdLoadDocumentOptions> opts) {
-        return loadDocumentWithRedirects(url, opts, 0);
-    }
+    /** @param url the URL to load
+        @param opts optional load options
 
-    #! Internal: loads a document with redirect tracking
-    private hash<JsonLdRemoteDocument> loadDocumentWithRedirects(string url,
-            *hash<JsonLdLoadDocumentOptions> opts, int redirect_count) {
-        if (url !~ /^https?:\/\//) {
+        @return the loaded document
+
+        @throw JSON-LD-ERROR if loading fails: the URL scheme is not \c http or \c https, the request fails, too
+        many redirects, an error response, or the response is not valid JSON; a Link header with more than one
+        JSON-LD context raises the \c "multiple context link headers" error
+    */
+    hash<JsonLdRemoteDocument> loadDocument(string url, *hash<JsonLdLoadDocumentOptions> opts) {
+        if (url !~ /^https?:\/\//i) {
             throwJsonLdError(JSONLD_ERR_LOADING_DOCUMENT_FAILED,
                 sprintf("unsupported URL scheme: %y", url));
         }
 
-        hash<auto> client_opts = httpOpts + {
-            "url": url,
-            "connect_timeout": connectTimeout,
-            "timeout": readTimeout,
-            "error_passthru": True,
+        # Build Accept header for content negotiation
+        hash<auto> hdr = {
+            "Accept": MimeTypeJsonLd + ", " + MimeTypeJson + ";q=0.9, */*;q=0.1",
         };
+        # user information in the URL is sent as basic authentication
+        hash<UrlInfo> url_info = parse_url(url);
+        if (url_info.username.val()) {
+            hdr.Authorization = "Basic " + make_base64_string(sprintf("%s:%s", url_info.username,
+                url_info.password ?? ""));
+        }
 
         hash<auto> resp;
         try {
-            Qore::HTTPClient client(client_opts);
-            client.connect();
-
-            # Build Accept header for content negotiation
-            string accept = MimeTypeJsonLd + ", " + MimeTypeJson + ";q=0.9, */*;q=0.1";
-            resp = client.send("", "GET", NOTHING, {"Accept": accept});
+            resp = mgr.request(url, "GET", get_http_request_target(url), hdr, NOTHING, readTimeout);
         } catch (hash<ExceptionInfo> ex) {
             throwJsonLdError(JSONLD_ERR_LOADING_DOCUMENT_FAILED,
-                sprintf("HTTP request failed for %y: %s: %s", url, ex.err, ex.desc));
+                sprintf("HTTP request failed for %y: %s: %s", get_safe_url(url), ex.err, ex.desc));
+        }
+
+        # the URL of the retrieved resource; a 303 "See Other" redirect does not change the document URL
+        string retrieved_url = resp.effective_url ?? url;
+        string document_url = url;
+        foreach hash<auto> redirect in (resp.redirects) {
+            if (redirect.status_code != 303) {
+                document_url = redirect.target_url;
+            }
         }
 
         int status_code = resp.status_code;
-        if (status_code >= 300 && status_code < 400) {
-            # Handle redirects
-            *string redirect_url = resp."location";
-            if (exists redirect_url) {
-                if (redirect_count >= MaxRedirects) {
-                    throwJsonLdError(JSONLD_ERR_LOADING_DOCUMENT_FAILED,
-                        sprintf("too many redirects (max %d) loading %y", MaxRedirects, url));
-                }
-                if (!isAbsoluteIri(redirect_url)) {
-                    redirect_url = resolveIri(url, redirect_url);
-                }
-                return loadDocumentWithRedirects(redirect_url, opts, redirect_count + 1);
-            }
-        }
         if (status_code < 200 || status_code >= 300) {
             throwJsonLdError(JSONLD_ERR_LOADING_DOCUMENT_FAILED,
-                sprintf("HTTP %d loading %y", status_code, url));
+                sprintf("HTTP %d loading %y", status_code, get_safe_url(retrieved_url)));
         }
 
-        string content_type = resp."content-type" ?? MimeTypeJson;
+        string content_type = resp.headers."content-type" ?? MimeTypeJson;
         # Strip parameters from content type for comparison
         string base_content_type = (content_type =~ x/^([^;]+)/)[0] ?? content_type;
         base_content_type = trim(base_content_type);
 
         auto document;
-        string body = resp.body ?? "";
+        *data body = resp.body;
         try {
-            document = parse_json(body);
+            document = parse_json(body.typeCode() == NT_BINARY ? body.toString("UTF-8") : body ?? "");
         } catch (hash<ExceptionInfo> ex) {
             throwJsonLdError(JSONLD_ERR_LOADING_DOCUMENT_FAILED,
-                sprintf("failed to parse JSON from %y: %s: %s", url, ex.err, ex.desc));
+                sprintf("failed to parse JSON from %y: %s: %s", get_safe_url(retrieved_url), ex.err, ex.desc));
         }
 
-        # Check for Link header with context
+        # Check for Link header with context; a relative reference is resolved against the retrieved resource
         *string context_url;
         if (base_content_type != MimeTypeJsonLd) {
-            context_url = parseLinkHeader(resp, url);
+            context_url = parseLinkHeader(resp.headers, retrieved_url);
         }
 
         # Extract profile from content type
@@ -153,7 +163,7 @@ public class HttpJsonLdDocumentLoader inherits AbstractJsonLdDocumentLoader {
         }
 
         return <JsonLdRemoteDocument>{
-            "documentUrl": url,
+            "documentUrl": document_url,
             "document": document,
             "contextUrl": context_url,
             "contentType": base_content_type,
@@ -162,11 +172,18 @@ public class HttpJsonLdDocumentLoader inherits AbstractJsonLdDocumentLoader {
     }
 
     #! Parses Link headers for JSON-LD context references
-    private *string parseLinkHeader(hash<auto> resp, string url) {
-        *string link_header = resp."link";
-        if (!exists link_header) {
+    /** @param headers the response headers with lower-case names
+        @param url the URL of the retrieved resource, against which relative references are resolved
+
+        @return the context URL or @ref nothing if there is none
+    */
+    private *string parseLinkHeader(*hash<auto> headers, string url) {
+        *softlist<string> link_values = headers.link;
+        if (!link_values) {
             return NOTHING;
         }
+        # multiple Link header fields are equivalent to one field with the values separated by commas
+        string link_header = link_values.join(",");
 
         # Parse Link header for rel="http://www.w3.org/ns/json-ld#context"
         list<string> links = link_header.split(",");

@@ -292,15 +292,19 @@ public class GoogleDocumentAiRestClientIo inherits RestClientIo::RestClientIo,
 
     private hash<auto> prepareRequest(string method, reference<string> path, auto body,
             reference<*hash<auto>> hdr) {
+        # the request target given by the caller is validated before the base class percent-encodes it
+        string target = path;
         hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
-        hdr = authenticate(getUrl(), path, hdr);
+        hdr = authenticate(getUrl(), target, hdr);
         return rv;
     }
 
     private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
             reference<*hash<auto>> hdr) {
+        # the request target given by the caller is validated before the base class percent-encodes it
+        string target = path;
         hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
-        hdr = authenticate(getUrl(), path, hdr);
+        hdr = authenticate(getUrl(), target, hdr);
         return rv;
     }
 

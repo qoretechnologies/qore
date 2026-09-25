@@ -68,7 +68,7 @@ public class InstantlyCreateEmailVerificationDataProvider inherits InstantlyData
     }
 
     #! Creates the object with a REST client
-    constructor(InstantlyRestClient::InstantlyRestClient rest)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest)
             : InstantlyDataProviderBase(rest) {
     }
 

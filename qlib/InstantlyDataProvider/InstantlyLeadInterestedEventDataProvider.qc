@@ -43,7 +43,7 @@ public class InstantlyLeadInterestedEventDataProvider inherits InstantlyBaseEven
         static InstantlyLeadInterestedEventDataType eventDataType();
     }
 
-    constructor(InstantlyRestClient::InstantlyRestClient rest, *hash<auto> options)
+    constructor(InstantlyRestClient::InstantlyRestClientIo rest, *hash<auto> options)
             : InstantlyBaseEventDataProvider(rest, options) {
     }
 

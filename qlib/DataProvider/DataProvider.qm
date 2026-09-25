@@ -1354,6 +1354,13 @@ fetch
     @section dataprovider_relnotes Release Notes
 
     @subsection dataprovider_v3_8 DataProvider v3.8
+    - stopping a watch data provider cancels its polling thread, which ends a blocking operation in it, such as an
+      HTTP request, at once; observer notifications and checkpoint persistence run with cancellation deferred, so
+      they are not interrupted.  The watch data providers of the REST-based modules no longer close their REST
+      client to cancel an in-flight request: the client is shared with the other data providers of the connection,
+      and closing a <a href="../../RestClientIo/html/index.html">RestClientIo</a> shuts down its connection manager
+      for good, so every later request failed with \c HTTPCLIENT-SHUTDOWN once a watch data provider had been
+      stopped or destroyed (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - added @ref DataProvider::DataProviderStaticMetadataHelper "DataProviderStaticMetadataHelper", which marks the
       current thread as reading static metadata, so that fields do not run context-dependent dynamic type, default
       value, or example value callbacks

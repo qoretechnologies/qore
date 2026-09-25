@@ -147,6 +147,14 @@ rc.bulkJobClose(h.id);
     @section salesforcerestclientrelnotes Release Notes
 
     @subsection salesforcerestclientv2_1 SalesforceRestClient v2.1
+    - the API list of a polling ping is decoded by the rules shared by all HTTP clients instead of as ISO-8859-1
+      without a charset (see @ref Qore::decode_http_body() "decode_http_body()")
+    - @ref SalesforceRestClient::SalesforceRestConnection "SalesforceRestConnection" polling pings are made with a
+      @ref SalesforceRestClient::SalesforceRestClientIo "SalesforceRestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3)
+      against the identity service URL, as the synchronous and asynchronous pings are; the
+      @ref SalesforceRestClient::SalesforceRestPingPollOperation "SalesforceRestPingPollOperation" class is no
+      longer used by the connection
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
       @ref SalesforceRestClient::SalesforceRestClientBase::getIdServiceUrl() "getIdServiceUrl()" and
       @ref SalesforceRestClient::SalesforceRestClientBase::getOrgId() "getOrgId()", so that APIs outside the REST
@@ -1633,32 +1641,6 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
             ? (real_opts.id_service_url ?? "https://login.salesforce.com/id/unknown/unknown")
             : opts.ping_path;
     }
-
-    #! Called to start a non-blocking polling ping operation on the remote REST server
-    /**
-        @return a socket poll operation object that will allow the connection goal to be reached with polling
-
-        @see supportsPollingApi()
-    */
-    Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
-        if (!opts.ping_method || !exists opts.ping_path) {
-            return HttpBasedConnection::startPollConnect();
-        }
-
-        hash<auto> poll_opts = real_opts + {"data": "json"};
-        if (poll_opts.ping_path == "auto") {
-            poll_opts.ping_path = real_opts.id_service_url;
-        }
-
-        SalesforceRestClient rc = getPollImpl();
-        if (logger) {
-            rc.setLogger(logger);
-        }
-        rc.setSerialization("json");
-
-        # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new SalesforceRestPingPollOperation(self, rc, poll_opts);
-    }
 }
 
 #! REST ping polling I/O class with OAuth2 authentication
@@ -1683,9 +1665,7 @@ public class SalesforceRestPingPollOperation inherits RestClient::RestPingPollOp
                 AbstractRestSchemaValidator validator = rc.getValidator();
                 on_error rethrow $1.err, sprintf("%s: info: %y", $1.desc, resp.info{"request-uri",
                     "response-uri"});
-                string body = resp."response-body"
-                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                    : "";
+                string body = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
                 hash<RestResponseClientInfo> info = validator.parseResponse(method, path, resp."code", body,
                     resp.info."response-headers" + {"content-type": resp.info."body-content-type"});
                 cast<SalesforceRestClient>(rc).processApis(info.body);

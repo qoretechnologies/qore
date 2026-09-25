@@ -25,7 +25,7 @@
 #! the %FhirRestClient namespace holds all public definitions in the %FhirRestClient module
 public namespace FhirRestClient {
 
-#! Class for FHIR REST connections; returns @ref FhirRestClient objects
+#! Class for FHIR REST connections; returns @ref FhirRestClient and (from \c getAsync()) @ref FhirRestClientIo objects
 /** This class implements all options of @ref RestClient::RestConnection
 
     @see @ref FhirRestClient::FhirRestClient::constructor() for more information
@@ -124,6 +124,15 @@ public class FhirRestConnection inherits RestClient::RestConnection {
     */
     private FhirRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new FhirRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! returns a @ref FhirRestClientIo object
+    /** @param connect ignored; \c RestClientIo connections are established when requests are made
+        @param rtopts optional runtime option overrides
+        @return asynchronous FHIR REST client implementation for this connection
+    */
+    private FhirRestClientIo getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new FhirRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

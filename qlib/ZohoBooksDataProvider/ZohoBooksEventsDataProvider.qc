@@ -57,7 +57,7 @@ public class ZohoBooksEventsDataProvider inherits ZohoBooksDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) : ZohoBooksDataProviderBase(rest) {
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) : ZohoBooksDataProviderBase(rest) {
     }
 
     #! Returns the provider name

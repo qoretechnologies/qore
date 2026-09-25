@@ -1556,14 +1556,15 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                 return nullptr;
             }
 
+            QoreString source_path;
+            QoreString separated_path;
+            bool source_available = qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path);
             ExceptionSink binary_xsink;
             mi = loadBinaryModuleFromPath(binary_xsink, raw_path, name, reexport, pholder.release(), p,
-                load_opt, mod_desc_func);
+                load_opt, mod_desc_func, source_available,
+                &wsink == &xsink ? nullptr : &wsink, warning_mask);
             if (binary_xsink) {
-                QoreString source_path;
-                QoreString separated_path;
-                if (qore_binary_load_error_can_fallback_to_source(binary_xsink)
-                        && qore_find_explicit_qmod_source(raw_path, name, source_path, separated_path)) {
+                if (qore_binary_load_error_can_fallback_to_source(binary_xsink) && source_available) {
                     if (separated_path.size()) {
                         mi = loadSeparatedModule(xsink, wsink, separated_path.c_str(), name, pgm, reexport, nullptr,
                             load_opt & QMLO_REINJECT ? mpgm : path_pgm, load_opt, warning_mask);
@@ -1694,9 +1695,17 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     // which is more informative than "binary + Program" here.
                     break;
                 }
+                // only a binary module without an API suffix falls back to the source module
+                bool source_available = false;
+                if (ai == qore_mod_api_list_len) {
+                    QoreString source_path;
+                    bool separated = false;
+                    source_available = qore_find_user_module_source(dir, name, source_path, separated);
+                }
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
-                    ctx_pgm, load_opt, mod_desc_func);
+                    ctx_pgm, load_opt, mod_desc_func, source_available,
+                    &wsink == &xsink ? nullptr : &wsink, warning_mask);
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -1747,9 +1756,17 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
                     // search.
                     break;
                 }
+                // only a binary module without an API suffix falls back to the source module
+                bool source_available = false;
+                if (ai == qore_mod_api_list_len) {
+                    QoreString source_path;
+                    bool separated = false;
+                    source_available = qore_find_user_module_source(dir, name, source_path, separated);
+                }
                 ExceptionSink binary_xsink;
                 mi = loadBinaryModuleFromPath(binary_xsink, str.c_str(), name, reexport, pholder.release(),
-                    ctx_pgm, load_opt, mod_desc_func);
+                    ctx_pgm, load_opt, mod_desc_func, source_available,
+                    &wsink == &xsink ? nullptr : &wsink, warning_mask);
                 if (binary_xsink) {
                     if (ai == qore_mod_api_list_len && qore_binary_load_error_can_fallback_to_source(binary_xsink)) {
                         bool source_found = false;
@@ -2069,6 +2086,84 @@ static int qore_parse_module_spec(const char* spec, QoreString& name, mod_op_e& 
     }
 
     return 0;
+}
+
+bool QoreModuleManager::findAvailableOptionalModule(const std::vector<std::string>& specs, QoreProgram* path_pgm,
+        std::string& available) {
+    for (size_t i = 0; i < specs.size(); ++i) {
+        if (i && !(i % 10) && qore_check_cancel(nullptr, "AOT optional module check")) {
+            return false;
+        }
+        ExceptionSink tmp;
+        QoreString name;
+        mod_op_e op;
+        version_list_t version;
+        if (qore_parse_module_spec(specs[i].c_str(), name, op, version, tmp)) {
+            tmp.clear();
+            continue;
+        }
+        loadModuleIntern(tmp, tmp, name.c_str(), nullptr, false, op, op == MOD_OP_NONE ? nullptr : &version,
+            nullptr, nullptr, QMLO_NONE, 0, nullptr, path_pgm);
+        if (!tmp) {
+            available = specs[i];
+            return true;
+        }
+        tmp.clear();
+    }
+    return false;
+}
+
+void QoreModuleManager::getModuleCandidateFiles(const char* name, QoreProgram* pgm,
+        std::vector<std::string>& files) {
+    std::vector<std::string> dirs;
+    {
+        AutoLocker al(mutex);
+        const qore_program_private* priv_pgm = pgm ? qore_program_private::get(*pgm) : nullptr;
+        if (priv_pgm) {
+            dirs.insert(dirs.end(), priv_pgm->prepended_module_paths.begin(),
+                priv_pgm->prepended_module_paths.end());
+        }
+        for (const std::string& dir : moduleDirList) {
+            dirs.push_back(dir);
+        }
+        if (priv_pgm) {
+            dirs.insert(dirs.end(), priv_pgm->appended_module_paths.begin(),
+                priv_pgm->appended_module_paths.end());
+        }
+    }
+
+    auto add = [&files](const QoreString& path) {
+        struct stat sb;
+        if (!stat(path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+            char* resolved = realpath(path.c_str(), nullptr);
+            files.emplace_back(resolved ? resolved : path.c_str());
+            free(resolved);
+        }
+    };
+    for (size_t i = 0; i < dirs.size(); ++i) {
+        if (i && !(i % 10) && qore_check_cancel(nullptr, "module candidate file search")) {
+            return;
+        }
+        // the flat and split module forms
+        for (const char* sub : {"", name}) {
+            QoreString base(dirs[i]);
+            if (*sub) {
+                base.sprintf(QORE_DIR_SEP_STR "%s", sub);
+            }
+            for (unsigned ai = 0; ai < qore_mod_api_list_len; ++ai) {
+                QoreString path(base);
+                path.sprintf(QORE_DIR_SEP_STR "%s-api-%d.%d.qmod", name, qore_mod_api_list[ai].major,
+                    qore_mod_api_list[ai].minor);
+                add(path);
+            }
+            QoreString path(base);
+            path.sprintf(QORE_DIR_SEP_STR "%s.qmod", name);
+            add(path);
+            path = base;
+            path.sprintf(QORE_DIR_SEP_STR "%s.qm", name);
+            add(path);
+        }
+    }
 }
 
 int QoreModuleManager::parseLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
@@ -2918,7 +3013,8 @@ static int qore_check_module_file_integrity(const char* path, QoreString& err) {
 
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
         const char* feature, bool reexport, QoreProgram* mpgm, QoreProgram* path_pgm,
-        unsigned load_opt, qore_binary_module_desc_t mod_desc) {
+        unsigned load_opt, qore_binary_module_desc_t mod_desc, bool source_available, ExceptionSink* wsink,
+        int warning_mask) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     QoreModuleInfo mod_info;
 
@@ -2943,6 +3039,39 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
             xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
                 "cannot load qore module '%s': %s", path, integrity_err.c_str());
             return nullptr;
+        }
+    }
+
+    // an AOT module compiled when a module requested with %try-module was unavailable takes the branch for the
+    // module being unavailable, so it is stale once the module can be loaded
+    {
+        std::vector<std::string> optional_modules;
+        std::string optional_error;
+        int optional_status = qoreAOTReadOptionalModulesTrailer(path, optional_modules, optional_error);
+        if (optional_status < 0) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+                "cannot read AOT optional module metadata from module '%s': %s", path, optional_error.c_str());
+            return nullptr;
+        }
+        std::string available;
+        if (optional_status > 0 && findAvailableOptionalModule(optional_modules, path_pgm, available)) {
+            if (source_available) {
+                xsink.raiseExceptionArg("AOT-MODULE-STALE", new QoreStringNode(path), "AOT module '%s' was "
+                    "compiled when optional module '%s' was not available, but it is available now; rebuild the "
+                    "binary module", path, available.c_str());
+                return nullptr;
+            }
+            // without the source module, the binary module is loaded, but the missing functionality is always
+            // reported, as for a broken %try-child-module
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker("AOT module '%s' was compiled when "
+                "optional module '%s' was not available, but it is available now, and no source module was "
+                "found; the binary module is loaded without the functionality that requires the optional module; "
+                "rebuild the binary module", path, available.c_str()));
+            if (wsink && warning_mask && wsink != &xsink) {
+                wsink->raiseExceptionArg("BINARY-MODULE-STALE", new QoreStringNode(feature), desc.release());
+            } else {
+                printe("warning: %s\n", desc->c_str());
+            }
         }
     }
 

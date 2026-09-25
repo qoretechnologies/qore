@@ -62,7 +62,7 @@ public class SquarespaceDataProvider inherits SquarespaceDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(SquarespaceRestClient::SquarespaceRestClient rest) : SquarespaceDataProviderBase(rest) {
+    constructor(SquarespaceRestClient::SquarespaceRestClientIo rest) : SquarespaceDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

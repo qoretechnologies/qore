@@ -82,7 +82,7 @@ public class KeapTagsDataProvider inherits KeapDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
+    constructor(KeapRestClient::KeapRestClientIo rest) : KeapDataProviderBase(rest) {
     }
 
     #! Returns the provider name

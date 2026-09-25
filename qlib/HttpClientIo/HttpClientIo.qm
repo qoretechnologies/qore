@@ -622,10 +622,84 @@ public namespace HttpClientIo {
         */
         int max_response_body_size = 0;
 
+        #! The character encoding assumed for text response bodies whose encoding is not determined otherwise
+        /** Response bodies are decoded by the rules documented for @ref Qore::get_http_body_encoding()
+            "get_http_body_encoding()", the same for all HTTP clients: the assumed encoding applies to text types
+            without a default encoding of their own and without an encoding declaration.  The default is ISO-8859-1,
+            the default character set of text media types in HTTP/1.1 (RFC 2616).
+        */
+        string assume_encoding = "ISO-8859-1";
+
         #! Pass redirect responses to the caller instead of following them
         /** When True, 3xx responses are returned as-is without following
             the Location header.  Overrides \c max_redirects.
         */
         bool redirect_passthru = False;
+    }
+
+    #! Returns the given request target (a path with an optional query) with the characters percent-encoded that it may not contain
+    /** A request target may only contain the characters of a URI (RFC 3986, RFC 9112 section 3.2); the following are
+        percent-encoded:
+        - control characters, space, and octets outside of ASCII (non-ASCII text is encoded in UTF-8)
+        - the characters <tt>&quot; &lt; &gt; \\ ^ &#96; { | }</tt>
+        - \c #, as a request target cannot carry a fragment
+        - a \c % that does not start a percent-encoded octet; percent-encoded octets are kept, so a target that is
+          already encoded is not encoded again
+        - the characters in \a encode_chars
+
+        @param target the request target
+        @param pre_encoded if @ref True, the target must already be encoded: it is only validated, and a character
+        that must be encoded raises an exception
+        @param encode_chars additional characters to encode
+
+        @return the encoded request target
+
+        @throw URL-ENCODING-ERROR \a pre_encoded is @ref True and the target contains a character that must be
+        encoded
+
+        @par Example:
+        @code{.py}
+string target = encode_http_request_target("/files/my report.txt?q=a|b");
+# target is "/files/my%20report.txt?q=a%7Cb"
+        @endcode
+
+        @since HttpClientIo 1.0
+    */
+    public string sub encode_http_request_target(string target, bool pre_encoded = False, *string encode_chars) {
+        if (target !~ /[^\x21-\x7e]|["<>\\^`{|}#%]/ && !encode_chars) {
+            return target;
+        }
+        if (target.encoding() != "UTF-8") {
+            target = convert_encoding(target, "UTF-8");
+        }
+        hash<string, bool> extra = map {$1: True}, (encode_chars ?? "").split("");
+        binary octets = target.toBinary();
+        string rv;
+        for (int i = 0; i < octets.size(); ++i) {
+            int c = octets[i];
+            bool encode;
+            if (c == 0x25) {
+                # a percent-encoded octet is kept
+                encode = !(i + 2 < octets.size() && is_hex_digit(octets[i + 1]) && is_hex_digit(octets[i + 2]));
+            } else {
+                encode = c <= 0x20 || c >= 0x7f || c == 0x22 || c == 0x23 || c == 0x3c || c == 0x3e || c == 0x5c
+                    || c == 0x5e || c == 0x60 || c == 0x7b || c == 0x7c || c == 0x7d || extra{chr(c)};
+            }
+            if (encode) {
+                if (pre_encoded) {
+                    throw "URL-ENCODING-ERROR", sprintf("request target %y contains character %y at offset %d, "
+                        "which must be percent-encoded", target, c < 0x80 ? chr(c) : sprintf("\\x%02x", c), i);
+                }
+                rv += sprintf("%%%02X", c);
+            } else {
+                rv += chr(c);
+            }
+        }
+        return rv;
+    }
+
+    #! Returns True if the given octet is a hexadecimal digit
+    bool sub is_hex_digit(int c) {
+        return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
     }
 }

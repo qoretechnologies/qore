@@ -180,17 +180,69 @@ public class BigCommerceRestClientBase {
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Build URL from store_hash
-        if (opts.store_hash) {
-            rv.url = sprintf("%s/stores/%s", DefaultApiHost, opts.store_hash);
-            remove rv.store_hash;
+        # Build the URL from the store hash unless a URL with a path is given explicitly; an explicit URL takes
+        # precedence; the store_hash option is kept in the returned hash (it is ignored by the base classes), so that
+        # the options saved in the base class can be used to create a copy of the object with copyWithUrl(); this
+        # method must return the same result when called with its own output
+        if (opts.url) {
+            if (opts.store_hash) {
+                *string path = parse_url(opts.url).path;
+                if (!path.val() || path == "/") {
+                    rv.url = BigCommerceRestClientBase::getStoreUrl(opts.url, opts.store_hash);
+                }
+            }
+        } else if (opts.store_hash) {
+            rv.url = BigCommerceRestClientBase::getStoreUrl(DefaultApiHost, opts.store_hash);
         }
 
         if (opts.oauth2_client_id) {
-            # OAuth2 mode: merge OAuth2 options
-            rv += OAuth2Options;
+            # OAuth2 mode: add the default OAuth2 options; OAuth2 options given explicitly take precedence
+            rv = OAuth2Options + rv;
         }
         return rv;
+    }
+
+    #! Returns the store hash from the \c context value of a BigCommerce OAuth2 token response, if any
+    /** @param ctx the \c context value from the OAuth2 token response (ex: \c "stores/g5cd38")
+
+        @return the store hash, if any
+    */
+    static *string getStoreHashFromContext(auto ctx) {
+        # Use .val() to handle empty strings (a proxy may return context: "")
+        if (ctx.typeCode() != NT_STRING || !ctx.val()) {
+            return;
+        }
+        return (ctx =~ x/stores\/([^\/]+)/)[0];
+    }
+
+    #! Returns the store API path for the given store hash
+    /** @param path the current path, if any; if it ends with a <tt>/stores/&lt;hash&gt;</tt> component, the store
+        hash is replaced, otherwise the <tt>/stores/&lt;hash&gt;</tt> component is appended
+        @param store_hash the store hash
+
+        @return the new path
+    */
+    static string getStorePath(*string path, string store_hash) {
+        string p = path ?? "";
+        if (p =~ /\/stores\/[^\/]+\/?$/) {
+            return regex_subst(p, "/stores/[^/]+/?$", "/stores/" + store_hash);
+        }
+        return regex_subst(p, "/+$", "") + "/stores/" + store_hash;
+    }
+
+    #! Returns the store API URL for the given URL and store hash
+    /** @param url the URL
+        @param store_hash the store hash
+
+        @return the given URL with its path set with @ref getStorePath()
+    */
+    static string getStoreUrl(string url, string store_hash) {
+        # separate the scheme and authority from the path
+        *list<auto> parts = (url =~ x/^([^:\/]+:\/\/[^\/?#]*)([^?#]*)/);
+        if (!parts) {
+            return getStorePath(url, store_hash);
+        }
+        return parts[0] + getStorePath(parts[1] ?? "", store_hash);
     }
 }
 
@@ -211,6 +263,14 @@ public class BigCommerceRestClientBase {
     - The base URL includes /stores/{store_hash} but no version prefix
 */
 public class BigCommerceRestClient inherits RestClient::RestClient, BigCommerceRestClientBase {
+    private {
+        #! True while an OAuth2 login request is in progress
+        bool in_oauth2_auth;
+
+        #! A store hash received in the token response while an OAuth2 login request is in progress
+        *string pending_store_hash;
+    }
+
     #! creates the object with the given options
     /**
         @par Example (OAuth2):
@@ -231,7 +291,10 @@ BigCommerceRestClient bc({
         @endcode
 
         @param opts valid options are:
-        - \c store_hash: the BigCommerce store hash
+        - \c store_hash: the BigCommerce store hash; used to build the URL
+          (<tt>https://api.bigcommerce.com/stores/&lt;store_hash&gt;</tt>) if no \c url option is given; if the
+          \c url option is given without a path, then <tt>/stores/&lt;store_hash&gt;</tt> is appended to it
+        - \c url: the API URL; takes precedence over the URL built from the \c store_hash option
         - \c token: the API access token (sets \c X-Auth-Token header)
         - \c oauth2_client_id: OAuth2 client ID (OAuth2 mode)
         - \c oauth2_client_secret: OAuth2 client secret (OAuth2 mode)
@@ -257,7 +320,8 @@ BigCommerceRestClient bc({
         \c "Authorization: Bearer", as required by the BigCommerce API.
 
         Also extracts the \c store_hash from the OAuth2 response \c context field
-        (e.g., \c "stores/g5cd38") and updates the URL if needed.
+        (e.g., \c "stores/g5cd38") and updates the URL and the saved constructor options (see
+        @ref RestClient::RestClient::getConstructorOptions() "getConstructorOptions()") if needed.
 
         @param h the OAuth2 login response hash
         @param refresh used to distinguish an initial login from a token refresh
@@ -276,15 +340,49 @@ BigCommerceRestClient bc({
         addDefaultHeaders({"X-Auth-Token": h.access_token, "Authorization": NOTHING});
 
         # Extract store_hash from context field (e.g., "stores/g5cd38")
-        # Use .val() to handle empty strings (proxy may return context: "")
-        if (h.context.val()) {
-            *string store_hash = (h.context =~ x/stores\/(.+)/)[0];
-            if (store_hash) {
-                setURL(sprintf("%s/stores/%s", DefaultApiHost, store_hash));
+        *string store_hash = BigCommerceRestClientBase::getStoreHashFromContext(h.context);
+        if (store_hash) {
+            if (in_oauth2_auth) {
+                # the URL is set to the token URL during the login request and restored afterwards, so the store
+                # is set when the login request has completed; see oauth2Auth()
+                pending_store_hash = store_hash;
+            } else {
+                setStore(store_hash);
             }
         }
 
         return rv;
+    }
+
+    #! Performs OAuth2 authentication and sets the store from the token response, if any
+    /** The URL is changed temporarily to the token URL for the login request, therefore a store hash received in
+        the token response is applied after the login request has completed
+    */
+    private hash<auto> oauth2Auth(hash<auto> login, *reference<hash<auto>> info, *bool refresh) {
+        remove pending_store_hash;
+        hash<auto> rv;
+        {
+            in_oauth2_auth = True;
+            on_exit in_oauth2_auth = False;
+            rv = RestClient::oauth2Auth(login, \info, refresh);
+        }
+        if (*string store_hash = remove pending_store_hash) {
+            setStore(store_hash);
+        }
+        return rv;
+    }
+
+    #! Sets the URL for the given store and updates the saved constructor options
+    private setStore(string store_hash) {
+        string new_url = BigCommerceRestClientBase::getStoreUrl(getURL(), store_hash);
+        if (new_url != getURL()) {
+            setURL(new_url);
+        }
+        # update the saved constructor options, so that a copy made with copyWithUrl() uses the same store
+        saved_opts += {
+            "url": new_url,
+            "store_hash": store_hash,
+        };
     }
 }
 
@@ -560,13 +658,54 @@ public class BigCommerceRestConnection inherits RestClient::RestConnection {
 }
 
 #! BigCommerce REST client for non-blocking I/O
+/** Like @ref BigCommerceRestClient, tokens are sent in the \c X-Auth-Token header as required by the
+    BigCommerce API
+*/
 public class BigCommerceRestClientIo inherits RestClientIo::RestClientIo, BigCommerceRestClientBase {
     #! Creates the object with the given options
     /** @param opts constructor options
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(BigCommerceRestClientBase::getOptions(opts), shared_mgr) {
+            : RestClientIo(BigCommerceRestClientIo::getIoOptions(opts), shared_mgr) {
+    }
+
+    #! Returns the options for the RestClientIo constructor
+    /** Tokens are sent in the \c X-Auth-Token header instead of \c "Authorization: Bearer"
+    */
+    private static hash<auto> getIoOptions(hash<auto> opts) {
+        return BigCommerceRestClientBase::getOptions(opts) + {"token_api_key_header": "X-Auth-Token"};
+    }
+
+    #! Called when OAuth2 login information has been received
+    /** BigCommerce may not return the \c token_type in the token response, so \c "Bearer" is assumed in this
+        case; the token is sent in the \c X-Auth-Token header
+
+        Also extracts the \c store_hash from the OAuth2 response \c context field (e.g., \c "stores/g5cd38") and
+        updates the connection path and the saved constructor options (see
+        @ref RestClientIo::RestClientIo::getConstructorOptions() "getConstructorOptions()") if needed.
+
+        @param h the OAuth2 login response hash
+    */
+    private hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+        if (!h.token_type) {
+            h.token_type = "Bearer";
+        }
+        hash<auto> rv = RestClientIo::gotOAuth2LoginInfo(h);
+
+        # Extract store_hash from context field (e.g., "stores/g5cd38"); the target URL of this object cannot be
+        # changed, but the store API is on the same host, so the connection path is updated instead
+        *string store_hash = BigCommerceRestClientBase::getStoreHashFromContext(h.context);
+        if (store_hash) {
+            string new_path = BigCommerceRestClientBase::getStorePath(getConnectionPath(), store_hash);
+            setConnectionPath(new_path);
+            # update the saved constructor options, so that a copy made with copyWithUrl() uses the same store
+            saved_opts += {
+                "url": BigCommerceRestClientBase::getStoreUrl(saved_opts.url ?? getUrl(), store_hash),
+                "store_hash": store_hash,
+            };
+        }
+        return rv;
     }
 }
 }

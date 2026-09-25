@@ -75,14 +75,6 @@ public class AwsS3WatchDataProviderBase inherits AwsS3DataProviderBase,
                   max(options.poll_interval ?? DefaultPollInterval, MinPollInterval), options.start_date) {
     }
 
-    #! Cancels an in-flight request so that a stop does not wait out the poll
-    /** @note \c close() rather than \c disconnect(): the async client owns pooled multiplexed connections
-        rather than one socket, and closing them is what aborts a request already on the wire
-    */
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! The upstream ordering is not relied on
     /** A listing is returned in key order rather than in timestamp order, so the shared template sorts each
         cycle's candidates by timestamp before dispatching them

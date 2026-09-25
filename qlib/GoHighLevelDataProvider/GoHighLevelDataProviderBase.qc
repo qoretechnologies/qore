@@ -28,20 +28,28 @@ public namespace GoHighLevelDataProvider {
 #! Base class for GoHighLevel data providers
 public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for GoHighLevel data providers
         const BaseConstructorOptions = {
             "gohighlevelrestclient": <DataProviderOptionInfo>{
                 "display_name": "GoHighLevel REST Client",
-                "short_desc": "The GoHighLevelRestClient object",
+                "short_desc": "The GoHighLevelRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("GoHighLevelRestClient::GoHighLevelRestClient")),
-                "desc": "The GoHighLevelRestClient object to use for API calls",
+                    new Type("GoHighLevelRestClient::GoHighLevelRestClientIo")),
+                "desc": "The `GoHighLevelRestClientIo` object to use for API calls",
             },
             "gohighlevelrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "GoHighLevel REST Client Options",
-                "short_desc": "Options for creating a GoHighLevelRestClient",
+                "short_desc": "Options for creating a GoHighLevelRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a GoHighLevelRestClient object if one is not provided "
+                "desc": "Options for creating a `GoHighLevelRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
 
     private {
         #! The REST client object for API calls
-        GoHighLevelRestClient::GoHighLevelRestClient rest;
+        GoHighLevelRestClient::GoHighLevelRestClientIo rest;
 
         #! The connection object, if applicable
         *GoHighLevelRestClient::GoHighLevelRestConnection conn;
@@ -60,14 +68,14 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(GoHighLevelRestClient::GoHighLevelRestClient rest) {
+    constructor(GoHighLevelRestClient::GoHighLevelRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(GoHighLevelRestClient::GoHighLevelRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
             rest = copts.gohighlevelrestclient;
         } else {
             hash<auto> client_opts = copts.gohighlevelrestclient_options ?? {};
-            rest = new GoHighLevelRestClient::GoHighLevelRestClient(client_opts);
+            rest = new GoHighLevelRestClient::GoHighLevelRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    GoHighLevelRestClient::GoHighLevelRestClient getRestClient() {
+    GoHighLevelRestClient::GoHighLevelRestClientIo getRestClient() {
         return rest;
     }
 
@@ -306,24 +314,11 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "GOHIGHLEVEL-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "GOHIGHLEVEL-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

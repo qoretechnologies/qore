@@ -124,11 +124,6 @@ public class LinkedInNewPostDataProvider inherits LinkedInOrganizationsDataProvi
     string getName() { return ProviderInfo.name; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
-    #! Cancels in-flight REST operations for graceful shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! Events are raised oldest first
     /** The feed is read newest-first and reversed before delivery, so a consumer sees a burst of
         posts in the order they were published.

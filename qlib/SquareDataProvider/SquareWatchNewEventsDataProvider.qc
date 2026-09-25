@@ -56,7 +56,7 @@ public class SquareWatchNewEventsDataProvider inherits SquareWatchDataProviderBa
     }
 
     #! Creates the object with a REST client
-    constructor(SquareRestClient::SquareRestClient rest, *hash<auto> options)
+    constructor(SquareRestClient::SquareRestClientIo rest, *hash<auto> options)
             : SquareWatchDataProviderBase(rest, options) {
         if (options.event_types) {
             event_types = options.event_types;

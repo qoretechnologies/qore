@@ -473,13 +473,67 @@ public class UnleashedRestConnection inherits RestClient::RestConnection {
 #! REST client for Unleashed REST API using multiplexed HTTP connections
 /** @see UnleashedRestClient for more information
 */
+/** All requests are signed with HMAC-SHA256 as with @ref UnleashedRestClient::UnleashedRestClient
+    "UnleashedRestClient"
+*/
 public class UnleashedRestClientIo inherits RestClientIo::RestClientIo, UnleashedRestClientBase {
+    private {
+        #! API ID for authentication
+        string api_id;
+
+        #! API Key for HMAC signature computation
+        string apikey;
+    }
+
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo"
+        class plus:
+        - \c api_id: (required) the Unleashed API ID
+        - \c apikey: (required) the Unleashed API Key for HMAC signature computation
         @param shared_mgr optional shared connection manager
+
+        @throw RESTCLIENTIO-ERROR invalid option passed to the constructor
+        @throw UNLEASHED-AUTH-ERROR missing required authentication credentials
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(UnleashedRestClientBase::getOptions(opts), shared_mgr) {
+        # Store credentials for signature computation
+        api_id = opts.api_id;
+        apikey = opts.apikey;
+    }
+
+    #! Prepares a request and signs it with HMAC-SHA256 authentication
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        hash<auto> rv = RestClientIo::prepareRequest(method, \path, body, \hdr);
+        signRequest(path, \hdr);
+        return rv;
+    }
+
+    #! Prepares a request with a pre-serialized body and signs it with HMAC-SHA256 authentication
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        hash<auto> rv = RestClientIo::prepareRawRequest(method, \path, body, \hdr);
+        signRequest(path, \hdr);
+        return rv;
+    }
+
+    #! Adds the authentication headers for the given final request path
+    /** The signature is the base64-encoded HMAC-SHA256 of the query string of the path (without the leading
+        \c "?"; an empty string if there is no query string) computed with the API key.
+
+        @param path the final request path, possibly with a query string
+        @param hdr the prepared request headers (with lowercase names), updated with the authentication
+        headers
+    */
+    private signRequest(string path, reference<*hash<auto>> hdr) {
+        int qmark = path.find("?");
+        string query_string = qmark >= 0 ? path.substr(qmark + 1) : "";
+        hdr += {
+            ApiIdHeader: api_id,
+            SignatureHeader: hmac("sha256", query_string, apikey).toBase64(),
+            ClientTypeHeader: DefaultClientType,
+        };
     }
 }
 }

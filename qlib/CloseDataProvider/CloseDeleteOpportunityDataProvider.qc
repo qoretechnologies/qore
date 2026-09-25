@@ -63,7 +63,7 @@ public class CloseDeleteOpportunityDataProvider inherits CloseDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest) : CloseDataProviderBase(rest) {
+    constructor(CloseRestClient::CloseRestClientIo rest) : CloseDataProviderBase(rest) {
     }
 
     #! Returns the provider name

@@ -81,6 +81,10 @@ module ConnectionProvider {
     - @ref ConnectionProvider::FtpConnection "FtpConnection"
     - @ref ConnectionProvider::HttpConnection "HttpConnection"
     - @ref ConnectionProvider::HttpBasedConnection "HttpBasedConnection"
+    - @ref ConnectionProvider::HttpClientIoPollOperation "HttpClientIoPollOperation"
+    - @ref ConnectionProvider::HttpConnectPollOperation "HttpConnectPollOperation"
+    - @ref ConnectionProvider::HttpPingPollOperation "HttpPingPollOperation"
+    - @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation"
     - @ref ConnectionProvider::InvalidConnection "InvalidConnection"
     - @ref ConnectionProvider::PollingConnectionMonitor "PollingConnectionMonitor"
     - @ref ConnectionProvider::RestartableIoHelper "RestartableIoHelper"
@@ -90,6 +94,7 @@ module ConnectionProvider {
     - @ref ConnectionProvider::ConnectionInfo "ConnectionInfo"
     - @ref ConnectionProvider::ConnectionOptionInfo "ConnectionOptionInfo"
     - @ref ConnectionProvider::ConnectionSchemeInfo "ConnectionSchemeInfo"
+    - @ref ConnectionProvider::HttpClientIoPollOptions "HttpClientIoPollOptions"
     - @ref ConnectionProvider::PingInfo "PingInfo"
 
     Functions:
@@ -167,6 +172,30 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - the HTTP connection \c negotiate_keytab option is no longer marked
       \c sensitive; it is a keytab file location (not secret material, which lives
       in the keytab file itself), consistent with the other file-location options
+    - fixed @ref ConnectionProvider::HttpConnection::getDataProvider() "HttpConnection::getDataProvider()", which
+      loaded a nonexistent \c HttpDataProvider module and always failed; it returns an \c HttpClientDataProvider
+      object that makes its requests with the connection's asynchronous
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - @ref ConnectionProvider::HttpPingPollOperation "HttpPingPollOperation" and
+      @ref ConnectionProvider::HttpRequestPollOperation "HttpRequestPollOperation" (used by the polling pings and
+      the async request API of @ref ConnectionProvider::HttpConnection "HttpConnection" and
+      @ref ConnectionProvider::HttpBasedConnection "HttpBasedConnection") make their requests with non-blocking
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" I/O instead of the HTTP/1.1-only
+      \c HTTPClient poll operations, supporting HTTP/2 and HTTP/3; the goals, output, and errors are unchanged
+      (a connection refused is still \c SOCKET-CONNECT-ERROR), the connection's \c timeout option now raises
+      \c SOCKET-TIMEOUT, and the states are \c "connecting", \c "receiving", \c "completed", and \c "aborted"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - added @ref ConnectionProvider::HttpClientIoPollOperation "HttpClientIoPollOperation" (with
+      @ref ConnectionProvider::HttpClientIoPollOptions "HttpClientIoPollOptions"), a non-blocking HTTP request poll
+      operation following redirects, and @ref ConnectionProvider::HttpConnectPollOperation
+      "HttpConnectPollOperation"; @ref ConnectionProvider::HttpBasedConnection::startPollConnect()
+      "HttpBasedConnection::startPollConnect()" uses the latter for connections without ping options whose client
+      object has no \c startPollConnect() method, which raised an error before
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - added @ref ConnectionProvider::HttpConnection::getAsyncConnectionManager()
+      "HttpConnection::getAsyncConnectionManager()"; timeout options given as relative dates are accepted
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection connectionprovider_3_0 ConnectionProvider 3.0
     - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()

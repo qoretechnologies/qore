@@ -45,7 +45,7 @@ public class WooCommercePaymentCompleteEventDataProvider inherits WooCommerceCus
     }
 
     #! Creates the object with a REST client
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest) : WooCommerceCustomActionEventDataProvider(rest) {
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest) : WooCommerceCustomActionEventDataProvider(rest) {
     }
 
     #! Creates the object with a connection

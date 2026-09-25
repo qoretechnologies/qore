@@ -158,13 +158,6 @@ public class UnstructuredJobWatchDataProvider inherits DataProvider::AbstractDat
         return ProviderInfo;
     }
 
-    #! Cancels any in-flight request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! The job listing is not ordered, so the watch orders the records itself
     string getSourceOrdering() {
         return WSO_UNKNOWN;

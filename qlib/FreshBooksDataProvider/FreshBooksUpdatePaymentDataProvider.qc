@@ -42,7 +42,7 @@ public class FreshBooksUpdatePaymentDataProvider inherits FreshBooksDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) : FreshBooksDataProviderBase(rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) : FreshBooksDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -67,12 +67,12 @@ public class FreshBooksUpdatePaymentDataProvider inherits FreshBooksDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setAccountIdFromReq(req);
+        *string account_id = getAccountIdFromReq(\req);
         int id = remove req.id;
         if (!id) {
             throw "FRESHBOOKS-ERROR", "id is required for update operation";
         }
-        return doPut(accountPath(sprintf("/payments/payments/%d", id)), {"payment": req}).payment;
+        return doPut(accountPath(sprintf("/payments/payments/%d", id), account_id), {"payment": req}).payment;
     }
 
     #! Returns static provider info

@@ -1,0 +1,436 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseClientDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+/*  ServerSentEventClientDataProvider tests against local servers: event delivery, deserialization, reconnection
+    with the last event ID, request options, error responses, and stopping the event stream
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires QUnit
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServer
+%requires ServerSentEventClient
+%requires ServerSentEventHandler
+
+%requires json
+
+%exec-class Main
+
+#! A server that answers each request with a complete event stream
+class FakeSseHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        Queue requests();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests.push({
+            "method": hdr.method,
+            "path": hdr.path,
+            "accept": hdr.accept,
+            "authorization": hdr.authorization,
+            "content-type": hdr."content-type",
+            "last-event-id": hdr."last-event-id",
+            "body": body ? body.toString() : NOTHING,
+        });
+        if (hdr.path == "error") {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeText},
+                "body": "not found",
+            };
+        }
+        if (hdr.path == "notsse") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"a": 1}),
+            };
+        }
+        string body_str;
+        switch (hdr."last-event-id") {
+            case NOTHING:
+                body_str = "id: 1\nevent: msg\ndata: {\"a\": 1}\n\n: comment\n\nid: 2\ndata: {\"a\": 2}\n\n";
+                break;
+            case "2":
+                body_str = "id: 3\ndata: {\"a\": 3}\n\n";
+                break;
+            default:
+                body_str = sprintf("id: %d\ndata: {\"last\": %y}\n\n", hdr."last-event-id".toInt() + 1,
+                    hdr."last-event-id");
+                break;
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeSse},
+            "body": body_str,
+        };
+    }
+}
+
+#! An SSE server that reports registered connections
+class TestSseHandler inherits ServerSentEventHandler {
+    public {
+        #! registered connections
+        Queue registered();
+    }
+
+    constructor(*hash<auto> opts) : ServerSentEventHandler(opts) {
+    }
+
+    connectionRegisteredImpl(ServerSentEventHandler::ServerSentEventConnection conn) {
+        registered.push(conn);
+    }
+}
+
+#! Disconnects the client from the event thread when the first data event is received
+class DisconnectingObserver inherits DataProvider::Observer {
+    public {
+        Queue q();
+        ServerSentEventClientIo client;
+    }
+
+    constructor(ServerSentEventClientIo client) {
+        self.client = client;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push({"event_id": event_id, "data": data_});
+        if (event_id == EVENT_SSE_DATA) {
+            client.disconnect();
+        }
+    }
+
+    #! Returns the next event
+    hash<auto> next() {
+        return q.get(30s);
+    }
+}
+
+#! Records the events raised
+class EventObserver inherits DataProvider::Observer {
+    public {
+        Queue q();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        q.push({"event_id": event_id, "data": data_});
+    }
+
+    #! Returns the next event
+    hash<auto> next() {
+        return q.get(30s);
+    }
+}
+
+public class Main inherits QUnit::Test {
+    private {
+        HttpServer http;
+        FakeSseHandler handler();
+        int port;
+    }
+
+    constructor() : Test("SseClientDataProviderTest", "1.0") {
+        addTestCase("events and reconnect", \eventsTest());
+        addTestCase("request options", \requestOptionsTest());
+        addTestCase("error responses", \errorTest());
+        addTestCase("sync client conversion", \syncClientTest());
+        addTestCase("connection data provider", \connectionTest());
+        addTestCase("live stream and stop", \stopTest());
+        addTestCase("disconnect from the event thread", \eventThreadDisconnectTest());
+
+        http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit http.stop();
+        http.setHandler("sse", "", NOTHING, handler);
+        http.setDefaultHandler("sse", handler);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+    }
+
+    #! Events are deserialized, and the stream is reopened with the last event ID
+    eventsTest() {
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + port + "/events",
+            "data": "json",
+            "reconnect": True,
+            "reconnect_delay": 1ms,
+        });
+        ServerSentEventClientDataProvider prov(client);
+        assertTrue(prov.getClient() == client);
+        EventObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+
+        hash<auto> req = handler.requests.get(30s);
+        assertEq("GET", req.method);
+        assertEq("events", req.path);
+        assertEq(MimeTypeSse, req.accept);
+        assertNothing(req."last-event-id");
+
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        hash<auto> evt = observer.next();
+        assertEq(EVENT_SSE_DATA, evt.event_id);
+        assertEq(1, evt.data.id);
+        assertEq("msg", evt.data.event);
+        assertEq({"a": 1}, evt.data.data);
+        evt = observer.next();
+        assertEq(EVENT_SSE_DATA, evt.event_id);
+        assertEq(2, evt.data.id);
+        assertEq({"a": 2}, evt.data.data);
+
+        # the server closes the stream; the client reconnects with the last event ID
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        req = handler.requests.get(30s);
+        assertEq("2", req."last-event-id");
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        evt = observer.next();
+        assertEq(3, evt.data.id);
+        assertEq({"a": 3}, evt.data.data);
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+
+        # stopping events ends the reconnect loop
+        prov.stopEvents();
+        assertFalse(prov.isConnected());
+        assertFalse(client.isReconnecting());
+        assertFalse(client.getReconnect());
+        assertEq("3", client.getLastEventId());
+        assertTrue(client.getConnectionInfo().num_connects >= 2);
+        assertEq(-1, client.getConnectionInfo().cid);
+        # drain the requests made by the reconnect loop before it was stopped
+        while (handler.requests.size()) {
+            handler.requests.get();
+        }
+    }
+
+    #! Request options are sent
+    requestOptionsTest() {
+        ServerSentEventClientDataProvider prov({
+            "url": "sse://localhost:" + port + "/post",
+            "method": "POST",
+            "body": {"q": "x"},
+            "data": "json",
+            "token": "secret",
+            "last_event_id": "41",
+        });
+        assertTrue(prov.getClient() instanceof ServerSentEventClientIo);
+        EventObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+
+        hash<auto> req = handler.requests.get(30s);
+        assertEq("POST", req.method);
+        assertEq("post", req.path);
+        assertEq("Bearer secret", req.authorization);
+        assertEq(MimeTypeJson, req."content-type");
+        assertEq({"q": "x"}, parse_json(req.body));
+        assertEq("41", req."last-event-id");
+
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        hash<auto> evt = observer.next();
+        assertEq(42, evt.data.id);
+        assertEq({"last": "41"}, evt.data.data);
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        # without the reconnect option, the event thread terminates when the stream ends
+        prov.stopEvents();
+        assertFalse(prov.isConnected());
+        assertEq(0, handler.requests.size());
+
+        # basic authentication from the URL
+        prov = new ServerSentEventClientDataProvider({
+            "url": "sse://user:pass@localhost:" + port + "/auth",
+            "data": "none",
+        });
+        observer = new EventObserver();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        req = handler.requests.get(30s);
+        assertEq("Basic " + make_base64_string("user:pass"), req.authorization);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        # no deserialization
+        assertEq("{\"a\": 1}", observer.next().data.data);
+        prov.stopEvents();
+        while (handler.requests.size()) {
+            handler.requests.get();
+        }
+    }
+
+    #! Error responses are raised when the stream is opened
+    errorTest() {
+        ServerSentEventClientDataProvider prov({"url": "sse://localhost:" + port + "/error"});
+        try {
+            prov.observersReady();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("SSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+        }
+        assertFalse(prov.isConnected());
+        handler.requests.get(30s);
+
+        prov = new ServerSentEventClientDataProvider({"url": "sse://localhost:" + port + "/notsse"});
+        assertThrows("SSE-ERROR", \prov.observersReady());
+        assertFalse(prov.isConnected());
+        handler.requests.get(30s);
+
+        # a closed port
+        HttpServer tmp(<HttpServerOptionInfo>{});
+        int closed_port = tmp.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        tmp.stop();
+        prov = new ServerSentEventClientDataProvider({"url": "sse://localhost:" + closed_port});
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \prov.observersReady());
+        assertEq(0, handler.requests.size());
+    }
+
+    #! A synchronous client passed to the data provider is converted
+    syncClientTest() {
+        ServerSentEventClient sync_client({
+            "url": "sse://localhost:" + port + "/sync",
+            "data": "json",
+        });
+        assertEq("sse://localhost:" + port + "/sync", sync_client.getConstructorOptions().url);
+        ServerSentEventClientDataProvider prov({"sseclient": sync_client});
+        ServerSentEventClientIo client = prov.getClient();
+        assertEq("http://localhost:" + port + "/sync", client.getUrl());
+        assertEq("json", client.getSerialization());
+
+        EventObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        assertEq("sync", handler.requests.get(30s).path);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq({"a": 1}, observer.next().data.data);
+        prov.stopEvents();
+        while (handler.requests.size()) {
+            handler.requests.get();
+        }
+    }
+
+    #! The data provider of a connection receives events
+    connectionTest() {
+        ServerSentEventConnection conn("sse", "", "sse://localhost:" + port + "/conn", {}, {
+            "token": "conn-token",
+        });
+        ServerSentEventClientDataProvider prov = conn.getDataProvider();
+        assertTrue(prov.getClient() instanceof ServerSentEventClientIo);
+        EventObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        hash<auto> req = handler.requests.get(30s);
+        assertEq("conn", req.path);
+        assertEq("Bearer conn-token", req.authorization);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        assertEq(EVENT_SSE_DATA, observer.next().event_id);
+        prov.stopEvents();
+        while (handler.requests.size()) {
+            handler.requests.get();
+        }
+    }
+
+    #! Events on a stream that stays open, and stopping it
+    stopTest() {
+        TestSseHandler sse({"logger": new Logger("sse", LoggerLevel::getLevelError())});
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        server.setHandler("sse-handler", "", NOTHING, sse);
+        server.setDefaultHandler("sse-handler", sse);
+        int sse_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        ServerSentEventClientDataProvider prov({
+            "url": "sse://localhost:" + sse_port,
+            "data": "json",
+            "reconnect": True,
+        });
+        EventObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        assertTrue(prov.isConnected());
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        hash<DataProviderConnectionInfo> info = prov.getConnectionInfo();
+        assertTrue(info.connected);
+        assertFalse(info.reconnecting);
+        assertTrue(info.auto_reconnect);
+
+        # wait for the server to register the connection before sending; the server serializes the data with JSON
+        sse.registered.get(30s);
+        sse.sendAll(<SseMessageInfo>{"id": 7, "data": {"x": "y"}});
+        hash<auto> evt = observer.next();
+        assertEq(EVENT_SSE_DATA, evt.event_id);
+        assertEq(7, evt.data.id);
+        assertEq({"x": "y"}, evt.data.data);
+
+        # an immediate reconnect sends the last event ID
+        assertTrue(prov.getClient().reconnect());
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        sse.registered.get(30s);
+
+        # stopping events cancels the open stream at once and ends the event thread
+        prov.stopEvents();
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        assertFalse(prov.isConnected());
+        assertFalse(prov.getClient().isReconnecting());
+        assertEq(0, observer.q.size());
+    }
+
+    #! A disconnect from an observer in the event thread stops the event thread without reading further events
+    eventThreadDisconnectTest() {
+        ServerSentEventClientIo client({
+            "url": "sse://localhost:" + port + "/events",
+            "data": "json",
+            "reconnect": True,
+            "reconnect_delay": 1ms,
+        });
+        ServerSentEventClientDataProvider prov(client);
+        DisconnectingObserver observer(client);
+        prov.registerObserver(observer);
+        prov.observersReady();
+        assertEq("events", handler.requests.get(30s).path);
+
+        assertEq(EVENT_SSE_CONNECTED, observer.next().event_id);
+        hash<auto> evt = observer.next();
+        assertEq(EVENT_SSE_DATA, evt.event_id);
+        assertEq(1, evt.data.id);
+        # the second event is not read after the disconnect
+        assertEq(EVENT_SSE_CLOSED, observer.next().event_id);
+        # waits for the event thread to terminate
+        prov.stopEvents();
+        assertFalse(client.getReconnect());
+        assertFalse(client.isReconnecting());
+        assertEq(0, observer.q.size());
+        # no reconnect was made
+        assertEq(0, handler.requests.size());
+    }
+}

@@ -39,7 +39,7 @@ public class DeelWatchContractStatusUpdatedDataProvider inherits DeelWatchDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(DeelRestClient::DeelRestClient rest, *hash<auto> options)
+    constructor(DeelRestClient::DeelRestClientIo rest, *hash<auto> options)
             : DeelWatchDataProviderBase(rest, options) {
     }
 

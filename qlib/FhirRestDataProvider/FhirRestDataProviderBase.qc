@@ -32,8 +32,10 @@ public class FhirRestDataProviderBase inherits DataProvider::AbstractDataProvide
             "fhir": <DataProviderOptionInfo>{
                 "display_name": "FHIR Client",
                 "short_desc": "FHIR REST client object",
-                "type": AbstractDataProviderType::get(new Type("FhirRestClient::FhirRestClient")),
-                "desc": "Existing `FhirRestClient::FhirRestClient` object to use for API calls",
+                "type": AbstractDataProviderType::get(new Type("RestClient::AbstractRestClient")),
+                "desc": "Existing `FhirRestClient::FhirRestClientIo` object to use for API calls; a synchronous "
+                    "`FhirRestClient::FhirRestClient` is also accepted, and a `FhirRestClientIo` is created with its "
+                    "options",
             },
             "fhirconnection": <DataProviderOptionInfo>{
                 "display_name": "FHIR Connection",
@@ -68,30 +70,41 @@ public class FhirRestDataProviderBase inherits DataProvider::AbstractDataProvide
                 "display_name": "Client Options",
                 "short_desc": "Additional REST client options",
                 "type": AbstractDataProviderType::get(AutoHashOrNothingType),
-                "desc": "Additional `FhirRestClient` constructor options when creating a client from `url`.\n\n"
+                "desc": "Additional `FhirRestClientIo` constructor options when creating a client from `url`.\n\n"
                     "**Example**: `{\"no_charset\": True}`",
             },
         };
     }
 
     private {
-        #! The FHIR REST client
-        FhirRestClient::FhirRestClient fhir;
+        #! The FHIR REST client for API calls
+        FhirRestClient::FhirRestClientIo fhir;
     }
 
     #! Creates the object with the given FHIR REST client
-    constructor(FhirRestClient::FhirRestClient fhir) {
+    /** @param fhir the FHIR REST client for API calls
+    */
+    constructor(FhirRestClient::FhirRestClientIo fhir) {
         @assert(fhir);
         self.fhir = fhir;
+    }
+
+    #! Creates the object with the given synchronous FHIR REST client
+    /** @param fhir a synchronous FHIR REST client; API calls are made with a
+        @ref FhirRestClient::FhirRestClientIo "FhirRestClientIo" created from it with @ref getAsyncClient()
+    */
+    constructor(FhirRestClient::FhirRestClient fhir) {
+        self.fhir = FhirRestDataProviderBase::getAsyncClient(fhir);
     }
 
     #! Creates the object from constructor options
     /** @param options constructor options; provide one of `fhir`, `fhirconnection`, or `url`
 
-        @throw FHIR-DATA-PROVIDER-ERROR if no FHIR client source is provided
+        @throw FHIR-DATA-PROVIDER-ERROR if no FHIR client source is provided, or if the `fhir` option is not a FHIR
+        REST client
     */
     constructor(*hash<auto> options) {
-        *FhirRestClient::FhirRestClient fhir = FhirRestDataProviderBase::getFhirClient(options);
+        *FhirRestClient::FhirRestClientIo fhir = FhirRestDataProviderBase::getFhirClient(options);
         if (!fhir) {
             fhir = FhirRestDataProviderBase::getFhirClientFromConnection(options);
         }
@@ -101,36 +114,86 @@ public class FhirRestDataProviderBase inherits DataProvider::AbstractDataProvide
         self.fhir = fhir;
     }
 
-    #! Returns the FHIR REST client
-    FhirRestClient::FhirRestClient getFhirClient() {
+    #! Returns the FHIR REST client used for API calls
+    /** @return the FHIR REST client used for API calls
+    */
+    FhirRestClient::FhirRestClientIo getFhirClient() {
         return fhir;
     }
 
     #! Returns the FHIR REST client from direct options
-    static *FhirRestClient::FhirRestClient getFhirClient(*hash<auto> options) {
+    /** @param options constructor options
+
+        @return the client given with the `fhir` option (a synchronous client is converted with
+        @ref getAsyncClient()), a client created for the `url` option, or no value if neither option is set
+
+        @throw FHIR-DATA-PROVIDER-ERROR if the `fhir` option is not a FHIR REST client
+    */
+    static *FhirRestClient::FhirRestClientIo getFhirClient(*hash<auto> options) {
         if (options.fhir) {
-            return options.fhir;
+            if (options.fhir instanceof FhirRestClient::FhirRestClientIo) {
+                return options.fhir;
+            }
+            if (options.fhir instanceof FhirRestClient::FhirRestClient) {
+                return FhirRestDataProviderBase::getAsyncClient(options.fhir);
+            }
+            throw "FHIR-DATA-PROVIDER-ERROR", sprintf("the `fhir` option must be a FhirRestClientIo or a "
+                "FhirRestClient object; got %y", options.fhir.fullType());
         }
         if (options.url) {
-            hash<auto> client_options = options.client_options ?? {};
+            # the options have values of different types
+            hash<auto!> client_options = {"skip_login": True} + options.client_options;
             if (options.headers) {
                 client_options.headers = options.headers;
             }
             if (options.token) {
                 client_options.token = options.token;
             }
-            return new FhirRestClient::FhirRestClient(client_options + {"url": options.url}, True);
+            return new FhirRestClient::FhirRestClientIo(client_options + {"url": options.url});
         }
         return NOTHING;
     }
 
     #! Returns the FHIR REST client from a connection
-    static *FhirRestClient::FhirRestClient getFhirClientFromConnection(*hash<auto> options) {
+    /** @param options constructor options
+
+        @return the asynchronous client of the connection given with the `fhirconnection` option (from the
+        connection's \c getAsync() method), or no value if the option is not set
+
+        @throw FHIR-DATA-PROVIDER-ERROR if the connection does not provide a FHIR REST client
+    */
+    static *FhirRestClient::FhirRestClientIo getFhirClientFromConnection(*hash<auto> options) {
         if (options.fhirconnection) {
             AbstractConnection conn = get_connection(options.fhirconnection);
-            return conn.get();
+            object client = conn.getAsync();
+            if (!(client instanceof FhirRestClient::FhirRestClientIo)) {
+                throw "FHIR-DATA-PROVIDER-ERROR", sprintf("connection %y is not a FHIR connection; its client "
+                    "class is %y", options.fhirconnection, client.className());
+            }
+            return client;
         }
         return NOTHING;
+    }
+
+    #! Returns an asynchronous FHIR REST client created with the options and the connection path of a synchronous one
+    /** @param fhir the synchronous FHIR REST client
+
+        @return a @ref FhirRestClient::FhirRestClientIo "FhirRestClientIo" created with the constructor options and
+        the connection path of \a fhir; if \a fhir already has an authentication token, it is used by the new
+        client as well
+    */
+    static FhirRestClient::FhirRestClientIo getAsyncClient(FhirRestClient::FhirRestClient fhir) {
+        hash<auto> opts = fhir.getConstructorOptions();
+        # use the current token, if any, so that the new client does not have to log in again
+        *string token = fhir.getToken();
+        if (token) {
+            opts.token = token;
+        }
+        FhirRestClient::FhirRestClientIo rv(opts);
+        if (*string path = fhir.getConnectionPath()) {
+            rv.setConnectionPath(path);
+        }
+        return rv;
     }
 
     #! Normalizes a REST response for DataProvider action output

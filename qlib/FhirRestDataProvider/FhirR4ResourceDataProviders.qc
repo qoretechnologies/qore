@@ -31,7 +31,7 @@ public class FhirR4ResourceDataProvider inherits FhirRestDataProviderBase {
     }
 
     #! Creates the object with the given FHIR REST client and generated resource type
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type) : FhirRestDataProviderBase(fhir) {
         @assert(getFhirR4GeneratedResourceDataType(resource_type));
         self.resource_type = resource_type;
     }
@@ -91,7 +91,7 @@ public class FhirR4ResourceActionDataProviderBase inherits FhirRestDataProviderB
     }
 
     #! Creates the object with the given FHIR REST client and generated resource type
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type) : FhirRestDataProviderBase(fhir) {
         @assert(getFhirR4GeneratedResourceDataType(resource_type));
         self.resource_type = resource_type;
     }
@@ -109,7 +109,7 @@ public class FhirR4ResourceActionDataProviderBase inherits FhirRestDataProviderB
 
 #! Generated FHIR R4 resource read data provider
 public class FhirR4ReadResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -138,7 +138,7 @@ public class FhirR4ReadResourceDataProvider inherits FhirR4ResourceActionDataPro
 
 #! Generated FHIR R4 resource search data provider
 public class FhirR4SearchResourcesDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -168,7 +168,7 @@ public class FhirR4SearchResourcesDataProvider inherits FhirR4ResourceActionData
 
 #! Generated FHIR R4 resource search-all data provider
 public class FhirR4SearchAllResourcesDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -199,7 +199,7 @@ public class FhirR4SearchAllResourcesDataProvider inherits FhirR4ResourceActionD
 
 #! Generated FHIR R4 resource create data provider
 public class FhirR4CreateResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -231,7 +231,7 @@ public class FhirR4CreateResourceDataProvider inherits FhirR4ResourceActionDataP
 
 #! Generated FHIR R4 resource update data provider
 public class FhirR4UpdateResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -263,7 +263,7 @@ public class FhirR4UpdateResourceDataProvider inherits FhirR4ResourceActionDataP
 
 #! Generated FHIR R4 resource conditional update data provider
 public class FhirR4ConditionalUpdateResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -295,7 +295,7 @@ public class FhirR4ConditionalUpdateResourceDataProvider inherits FhirR4Resource
 
 #! Generated FHIR R4 resource patch data provider
 public class FhirR4PatchResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -326,7 +326,7 @@ public class FhirR4PatchResourceDataProvider inherits FhirR4ResourceActionDataPr
 
 #! Generated FHIR R4 resource delete data provider
 public class FhirR4DeleteResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 
@@ -356,7 +356,7 @@ public class FhirR4DeleteResourceDataProvider inherits FhirR4ResourceActionDataP
 
 #! Generated FHIR R4 resource validate data provider
 public class FhirR4ValidateResourceDataProvider inherits FhirR4ResourceActionDataProviderBase {
-    constructor(FhirRestClient::FhirRestClient fhir, string resource_type)
+    constructor(FhirRestClient::FhirRestClientIo fhir, string resource_type)
             : FhirR4ResourceActionDataProviderBase(fhir, resource_type) {
     }
 

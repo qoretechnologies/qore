@@ -36,6 +36,7 @@
 
 %requires(reexport) Mime >= 1.3
 %requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
 %requires(reexport) ConnectionProvider >= 1.4
 
 module WooCommerceRestClient {
@@ -65,6 +66,9 @@ module WooCommerceRestClient {
     - @ref WooCommerceRestClient::WooCommerceRestClient "WooCommerceRestClient":
       this class provides the REST client API for communication with the WooCommerce API;
       it handles authentication via HTTP Basic Auth using consumer key and secret
+    - @ref WooCommerceRestClient::WooCommerceRestClientIo "WooCommerceRestClientIo":
+      the asynchronous REST client for the WooCommerce API, based on
+      <a href="../../RestClientIo/html/index.html">RestClientIo</a>, with the same options and authentication
     - @ref WooCommerceRestClient::WooCommerceRestConnection "WooCommerceRestConnection":
       provides a connection object to WooCommerce services (based on the
       @ref connectionproviderintro "ConnectionProvider" module)
@@ -440,24 +444,87 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
         return new WooCommerceRestClient(getConnectionOptions(rtopts), !connect);
     }
 
-    #! Returns an async WooCommerce REST client backed by RestClientIo
-    /** @param connect ignored; RestClientIo establishes connections lazily
+    #! Returns an asynchronous WooCommerce REST client
+    /** @param connect ignored; the client establishes connections lazily
         @param rtopts runtime connection options
 
-        @return an async-I/O-capable @ref RestClientIo::RestClientIo object with the WooCommerce URL and HTTP Basic
-            authentication options applied
+        @return a @ref WooCommerceRestClientIo object with the WooCommerce API URL and HTTP Basic authentication
+        options applied
 
         @since WooCommerceRestClient 1.0
     */
-    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
-        load_module("RestClientIo");
-        return create_object("RestClientIo::RestClientIo",
-            WooCommerceRestClient::getOptions(getConnectionOptions(rtopts)));
+    private WooCommerceRestClientIo getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new WooCommerceRestClientIo(getConnectionOptions(rtopts));
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
+    }
+}
+
+#! The asynchronous REST client for the WooCommerce API
+/** This class accepts the same options as
+    @ref WooCommerceRestClient::WooCommerceRestClient::constructor() "WooCommerceRestClient::constructor()" and
+    sends requests to <tt>{store_url}/wp-json/wc/v3/</tt> with HTTP Basic authentication using the consumer key and
+    secret.
+
+    @par Example:
+    @code{.py}
+WooCommerceRestClientIo wc({
+    "store_url": "https://mystore.com",
+    "consumer_key": ENV.WC_CONSUMER_KEY,
+    "consumer_secret": ENV.WC_CONSUMER_SECRET,
+});
+hash<RestResponseInfo> resp = wc.restGet("products?per_page=10");
+    @endcode
+
+    @note like all <a href="../../RestClientIo/html/index.html">RestClientIo</a> clients, this class sends request
+    paths verbatim; query arguments must already be percent-encoded
+*/
+public class WooCommerceRestClientIo inherits RestClientIo::RestClientIo {
+    #! Creates the object with the given options
+    /** @param opts the options of @ref WooCommerceRestClient::WooCommerceRestClient::constructor()
+        "WooCommerceRestClient::constructor()"; the options returned by
+        @ref RestClientIo::RestClientIo::getConstructorOptions() "getConstructorOptions()", which have the API URL
+        and the Basic authentication credentials instead of \c store_url, \c consumer_key and \c consumer_secret,
+        are also accepted, so that @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" works
+        @param shared_mgr an optional shared connection manager
+
+        @throw WOOCOMMERCE-ERROR missing required option
+        @throw RESTCLIENTIO-OPTION-ERROR invalid option
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(WooCommerceRestClientIo::getOptions(opts), shared_mgr) {
+    }
+
+    #! Returns the options for the @ref RestClientIo::RestClientIo "RestClientIo" constructor
+    /** @param opts the options passed to the constructor
+
+        @return the options for the @ref RestClientIo::RestClientIo "RestClientIo" constructor
+
+        @throw WOOCOMMERCE-ERROR missing required option
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv;
+        if (!opts.store_url && opts.url && opts.username && opts.password) {
+            # options already processed, for example by copyWithUrl()
+            rv = opts;
+        } else {
+            rv = WooCommerceRestClient::getOptions(opts);
+        }
+        # the API path in the URL has a trailing "/"; request paths are appended to the connection path with a "/"
+        # separator, so the connection path is set without it
+        *string path = parse_url(rv.url).path;
+        if (path.val()) {
+            path =~ s/\/+$//;
+        }
+        if (path.val()) {
+            rv.default_path = path;
+        } else {
+            remove rv.default_path;
+        }
+        return rv;
     }
 }
 }

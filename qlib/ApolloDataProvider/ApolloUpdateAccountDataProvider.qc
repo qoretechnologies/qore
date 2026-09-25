@@ -91,7 +91,7 @@ public class ApolloUpdateAccountDataProvider inherits ApolloDataProviderBase {
         static *AbstractDataProviderType RequestType = new ApolloUpdateAccountRequestDataType();
     }
 
-    constructor(ApolloRestClient::ApolloRestClient rest) : ApolloDataProviderBase(rest) {
+    constructor(ApolloRestClient::ApolloRestClientIo rest) : ApolloDataProviderBase(rest) {
     }
 
     string getName() {

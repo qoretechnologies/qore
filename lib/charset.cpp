@@ -585,6 +585,11 @@ const QoreEncoding* QoreEncodingManager::findCreate(const char* name) {
     return rv;
 }
 
+const QoreEncoding* QoreEncodingManager::find(const char* name) {
+    AutoLocker al(mutex);
+    return findUnlocked(name);
+}
+
 const QoreEncoding* QoreEncodingManager::findCreate(const QoreString* str) {
    return findCreate(str->getBuffer());
 }

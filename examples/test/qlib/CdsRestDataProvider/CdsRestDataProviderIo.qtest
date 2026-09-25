@@ -1,0 +1,726 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires CdsRestClient
+%requires CdsRestDataProvider
+%requires HttpServerUtil
+%requires HttpServer
+
+%requires json
+
+%try-module xml
+%define NoXml
+%endtry
+
+%requires qore >= 2.0
+
+%modern
+
+%exec-class CdsRestDataProviderIoTest
+
+#! The API path of the emulated Dataverse organisation
+const ApiPath = "api/data/v9.2";
+
+#! The token the test clients send
+const TestToken = "cds-test-token";
+
+#! The $metadata document of the emulated organisation, as Dataverse sends it (edmx)
+const MetadataXml = "<?xml version=\"1.0\" encoding=\"utf-8\"?>
+<edmx:Edmx Version=\"4.0\" xmlns:edmx=\"http://docs.oasis-open.org/odata/ns/edmx\">
+  <edmx:DataServices>
+    <Schema Namespace=\"Microsoft.Dynamics.CRM\" Alias=\"mscrm\" xmlns=\"http://docs.oasis-open.org/odata/ns/edm\">
+      <EntityType Name=\"account\">
+        <Key>
+          <PropertyRef Name=\"accountid\"/>
+        </Key>
+        <Property Name=\"accountid\" Type=\"Edm.Guid\"/>
+        <Property Name=\"name\" Type=\"Edm.String\"/>
+        <Property Name=\"createdon\" Type=\"Edm.DateTimeOffset\"/>
+      </EntityType>
+      <EntityType Name=\"contact\">
+        <Key>
+          <PropertyRef Name=\"contactid\"/>
+        </Key>
+        <Property Name=\"contactid\" Type=\"Edm.Guid\"/>
+        <Property Name=\"fullname\" Type=\"Edm.String\"/>
+      </EntityType>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>";
+
+#! Emulates the Dataverse Web API
+class DataverseHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! The requests received, as hashes with method, path, body and authorization keys
+        list<hash<auto>> requests = ();
+
+        #! Signalled when a request for the blocking entity set arrives
+        Queue blocked_arrived();
+
+        #! Released by the test to let a blocked request complete
+        Queue blocked_release();
+
+        #! The port of the server; set by the test
+        int port;
+
+        #! Existing accounts, keyed by ID
+        hash<string, hash<auto>> accounts = InitialAccounts;
+
+        #! The accounts initially in the organisation, keyed by ID
+        const InitialAccounts = {
+            "11111111-1111-1111-1111-111111111111": {
+                "accountid": "11111111-1111-1111-1111-111111111111",
+                "name": "First Account",
+                "createdon": "2026-01-01T10:00:00Z",
+            },
+            "22222222-2222-2222-2222-222222222222": {
+                "accountid": "22222222-2222-2222-2222-222222222222",
+                "name": "Second Account",
+                "createdon": "2026-01-02T10:00:00Z",
+            },
+        };
+
+        #! Serializes access to the request log and the accounts
+        Mutex lck();
+
+        #! The ID given to the next created account
+        const NewId = "33333333-3333-3333-3333-333333333333";
+
+        #! The skip token of the second page, percent-encoded as Dataverse sends it
+        const SkipToken = "%3Ccookie%20pagenumber=%222%22%20/%3E";
+    }
+
+    #! Restores the initial accounts
+    resetAccounts() {
+        AutoLock al(lck);
+        accounts = InitialAccounts;
+    }
+
+    #! Clears the request log
+    clearRequests() {
+        AutoLock al(lck);
+        requests = ();
+    }
+
+    #! Returns the requests received with the given method
+    list<hash<auto>> getRequests(string method) {
+        AutoLock al(lck);
+        return select requests, $1.method == method;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string path = hdr.path;
+        {
+            AutoLock al(lck);
+            requests += {
+                "method": hdr.method,
+                "path": path,
+                "body": exists body ? parse_json(body.typeCode() == NT_BINARY ? body.toString() : body) : NOTHING,
+                "authorization": hdr.authorization,
+                "prefer": hdr.prefer,
+            };
+        }
+
+        if (hdr.authorization != "Bearer " + TestToken) {
+            return makeError(401, "0x80040220", "invalid token");
+        }
+
+        if (path !~ /^api\/data\/v9\.2\//) {
+            return makeError(404, "0x8006088a", sprintf("unknown path %y", path));
+        }
+        string rel = path.substr(ApiPath.length() + 1);
+
+        if (rel == "$metadata?annotations=true") {
+            return makeResponse(200, MetadataXml, {"Content-Type": "application/xml"});
+        }
+
+        if (rel =~ /^EntityDefinitions\(LogicalName='account'\)/) {
+            return makeJson(200, {"EntitySetName": "accounts", "PrimaryIdAttribute": "accountid"});
+        }
+
+        if (rel == "WhoAmI") {
+            return makeJson(200, {"UserId": "44444444-4444-4444-4444-444444444444"});
+        }
+
+        # an entity set whose requests block until released, to test stopping an event provider
+        if (rel =~ /^blockers/) {
+            blocked_arrived.push(True);
+            blocked_release.get();
+            return makeJson(200, {"value": ()});
+        }
+
+        # a single account
+        *list<*string> m = (rel =~ x/^accounts\(([-0-9a-f]+)\)$/);
+        if (m) {
+            string id = m[0];
+            AutoLock al(lck);
+            switch (hdr.method) {
+                case "GET":
+                    if (!accounts{id}) {
+                        return makeError(404, "0x80040217", sprintf("account With Id = %s Does Not Exist", id));
+                    }
+                    return makeJson(200, accounts{id});
+                case "PATCH":
+                    if (!accounts{id}) {
+                        return makeError(404, "0x80040217", sprintf("account With Id = %s Does Not Exist", id));
+                    }
+                    accounts{id} += parse_json(body.typeCode() == NT_BINARY ? body.toString() : body);
+                    if (hdr.prefer =~ /return=representation/) {
+                        return makeJson(200, accounts{id});
+                    }
+                    return makeResponse(204, NOTHING);
+                case "DELETE":
+                    if (!remove accounts{id}) {
+                        return makeError(404, "0x80040217", sprintf("account With Id = %s Does Not Exist", id));
+                    }
+                    return makeResponse(204, NOTHING);
+            }
+            return makeError(405, "0x80060888", "method not allowed");
+        }
+
+        if (rel =~ /^accounts(\?|$)/) {
+            if (hdr.method == "POST") {
+                hash<auto> rec = parse_json(body.typeCode() == NT_BINARY ? body.toString() : body);
+                if (rec.name == "duplicate") {
+                    return makeError(412, "0x80040237", "A record with matching key values already exists.");
+                }
+                if (rec.name == "invalid") {
+                    return makeError(400, "0x80040203", "invalid account name");
+                }
+                string id = rec.accountid ?? NewId;
+                {
+                    AutoLock al(lck);
+                    accounts{id} = rec + {"accountid": id, "createdon": "2026-02-01T10:00:00Z"};
+                }
+                return makeResponse(204, NOTHING, {
+                    "OData-EntityId": sprintf("http://localhost:%d/%s/accounts(%s)", port, ApiPath, id),
+                });
+            }
+            if (hdr.method == "GET") {
+                # a query for a single account by its ID
+                *list<*string> fm = (rel =~ x/\$filter=accountid%20eq%20([-0-9a-f]+)/);
+                if (fm) {
+                    AutoLock al(lck);
+                    return makeJson(200, {"value": exists accounts{fm[0]} ? (accounts{fm[0]},) : ()});
+                }
+                # the second page, requested through the absolute next link of the first
+                if (rel =~ /\$skiptoken=/) {
+                    if (rel !~ /\$skiptoken=%3Ccookie%20pagenumber=%222%22%20\/%3E$/) {
+                        return makeError(400, "0x80060888", sprintf("invalid skip token in %y", rel));
+                    }
+                    return makeJson(200, {"value": (accounts."22222222-2222-2222-2222-222222222222",)});
+                }
+                return makeJson(200, {
+                    "value": (accounts."11111111-1111-1111-1111-111111111111",),
+                    "@odata.nextLink": sprintf("http://localhost:%d/%s/accounts?$skiptoken=%s", port, ApiPath,
+                        SkipToken),
+                });
+            }
+        }
+
+        return makeError(404, "0x8006088a", sprintf("Resource not found for the segment %y", rel));
+    }
+
+    private hash<HttpResponseInfo> makeJson(int code, auto body) {
+        return makeResponse(code, make_json(body), {"Content-Type": MimeTypeJson + "; odata.metadata=minimal"});
+    }
+
+    private hash<HttpResponseInfo> makeError(int code, string cds_code, string msg) {
+        return makeJson(code, {"error": {"code": cds_code, "message": msg}});
+    }
+}
+
+#! Collects the events raised by an event provider
+class TestObserver inherits Observer {
+    public {
+        #! The events received
+        Queue events();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events.push({"event_id": event_id, "data": data_});
+    }
+}
+
+#! An entity event provider that reports polling errors to a queue
+class TestWatchProvider inherits CdsEntityWatchDataProvider {
+    private {
+        Queue errors;
+    }
+
+    constructor(CdsRestClientIo rest, *hash<auto> options, string event_name, hash<auto> info, Queue errors)
+            : CdsEntityWatchDataProvider(rest, options, event_name, info) {
+        self.errors = errors;
+    }
+
+    private logPollError(hash<ExceptionInfo> ex) {
+        errors.push({"error": ex});
+    }
+}
+
+#! Tests the CdsRestDataProvider module with CdsRestClientIo against an emulated Dataverse organisation
+class CdsRestDataProviderIoTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        DataverseHandler handler();
+        int port;
+    }
+
+    constructor() : Test("CdsRestDataProviderIoTest", "1.0") {
+        addTestCase("request paths", \requestPathTest());
+        addTestCase("metadata", \metadataTest());
+        addTestCase("search with paging", \searchTest());
+        addTestCase("create", \createTest());
+        addTestCase("upsert", \upsertTest());
+        addTestCase("update and delete", \updateDeleteTest());
+        addTestCase("CDS errors", \cdsErrorTest());
+        addTestCase("API profile clients", \apiProfileClientTest());
+        addTestCase("sync client compatibility", \syncClientCompatibilityTest());
+        addTestCase("client option", \clientOptionTest());
+        addTestCase("event delivery", \eventDeliveryTest());
+        addTestCase("event stop aborts a request", \eventStopTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "debug": True,
+        });
+        on_error server.stop();
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        handler.port = port;
+        server.setHandler("x", "", NOTHING, handler);
+        server.setDefaultHandler("x", handler);
+
+        on_exit {
+            # release any request still blocked, so the server can stop
+            handler.blocked_release.push(True);
+            server.stop();
+        }
+
+        set_return_value(main());
+    }
+
+    #! Returns a client for the emulated organisation
+    CdsRestClientIo getClient() {
+        return new CdsRestClientIo(getClientOptions());
+    }
+
+    #! Returns the client options for the emulated organisation
+    hash<auto> getClientOptions() {
+        return {
+            "url": "http://localhost:" + port,
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "token": TestToken,
+            # a request that is not aborted when an event provider is stopped makes the test time out
+            "timeout": 600s,
+        };
+    }
+
+    #! Returns the provider for the account entity
+    ODataEntityDataProvider getAccountProvider(CdsRestClientIo rest) {
+        CdsRestTablesDataProvider tables(rest);
+        return cast<ODataEntityDataProvider>(tables.getChildProviderEx("account"));
+    }
+
+    requestPathTest() {
+        # an absolute next link is turned into its path and query, which are kept percent-encoded
+        assertEq("/api/data/v9.2/accounts?$skiptoken=%3Ccookie%20pagenumber=%222%22%20/%3E",
+            CdsRestDataProviderBase::getRequestPath("https://org.crm.dynamics.com/api/data/v9.2/accounts"
+                "?$skiptoken=%3Ccookie%20pagenumber=%222%22%20/%3E"));
+        assertEq("/v2.0/tenant/production/api/v2.0/companies(1)/customers?$skiptoken=x",
+            CdsRestDataProviderBase::getRequestPath("https://api.businesscentral.dynamics.com:443/v2.0/tenant/"
+                "production/api/v2.0/companies(1)/customers?$skiptoken=x"));
+        # a URL with no path
+        assertEq("/", CdsRestDataProviderBase::getRequestPath("https://org.crm.dynamics.com"));
+        assertEq("/?a=1", CdsRestDataProviderBase::getRequestPath("https://org.crm.dynamics.com?a=1"));
+        # a fragment is not part of a request target
+        assertEq("/accounts", CdsRestDataProviderBase::getRequestPath("https://org.crm.dynamics.com/accounts#top"));
+        # characters invalid in a request target are encoded, but percent-encoded characters are not encoded again
+        assertEq("/accounts?$filter=name%20eq%20'a%20b'",
+            CdsRestDataProviderBase::getRequestPath("http://h/accounts?$filter=name eq 'a%20b'"));
+        # a path is returned as is, apart from the encoding
+        assertEq("accounts?$top=1", CdsRestDataProviderBase::getRequestPath("accounts?$top=1"));
+
+        # request paths are encoded as the synchronous client encodes them
+        assertEq("accounts?$filter=name%20eq%20'x%25y'",
+            CdsRestDataProviderBase::encodeRequestPath("accounts?$filter=name eq 'x%y'"));
+        assertEq("a%3Cb%3E%22%23%7B%7D%7C%5C%5E%7E%5B%5D%60",
+            CdsRestDataProviderBase::encodeRequestPath("a<b>\"#{}|\\^~[]`"));
+        # non-ASCII characters are encoded as UTF-8 bytes, control characters as their code
+        assertEq("name%20eq%20'%C3%A9'%0A", CdsRestDataProviderBase::encodeRequestPath("name eq 'é'\n"));
+        # a path with nothing to encode is unchanged
+        string plain = "EntityDefinitions(LogicalName='account')?$select=EntitySetName,PrimaryIdAttribute&$top=1";
+        assertEq(plain, CdsRestDataProviderBase::encodeRequestPath(plain));
+    }
+
+    metadataTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        CdsRestTablesDataProvider tables(rest);
+        # the $metadata document is XML, which the client decodes as the synchronous client does
+        # the generic API call child is added by the framework
+        assertEq(("account", "contact"), sort(select tables.getChildProviderNames(),
+            $1 != AbstractDataProvider::GenericApiCallChildName));
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+        assertEq(("accountid", "createdon", "name"), sort(keys accounts.getRecordType()));
+        # the entity set name is read from the entity definition
+        assertEq(1, (select handler.getRequests("GET"), $1.path =~ /EntityDefinitions/).size());
+    }
+
+    searchTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+
+        # the first page links to the second with an absolute URL, which is followed
+        list<hash<auto>> recs = map $1, accounts.searchRecords({"name": "A B"});
+        assertEq(("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"),
+            (map $1.accountid, recs));
+        # date/time fields are converted
+        assertEq(2026-01-01T10:00:00Z, recs[0].createdon);
+
+        list<hash<auto>> gets = select handler.getRequests("GET"), $1.path =~ /^api\/data\/v9\.2\/accounts\?/;
+        assertEq(2, gets.size());
+        # the query is percent-encoded
+        assertEq("api/data/v9.2/accounts?$filter=name%20eq%20'A%20B'", gets[0].path);
+        # the next link's path is used as is, including the connection path
+        assertEq("api/data/v9.2/accounts?$skiptoken=" + DataverseHandler::SkipToken, gets[1].path);
+        assertEq("Bearer " + TestToken, gets[1].authorization);
+    }
+
+    createTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+
+        # the ID of the new record is taken from the OData-EntityId header of the 204 response
+        *hash<auto> rec = accounts.createRecord({"name": "New Account"});
+        assertEq(DataverseHandler::NewId, rec.accountid);
+        assertEq("New Account", rec.name);
+        list<hash<auto>> posts = handler.getRequests("POST");
+        assertEq("api/data/v9.2/accounts", posts.last().path);
+        assertEq({"name": "New Account"}, posts.last().body);
+    }
+
+    upsertTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+
+        # a 404 response to the PATCH request falls back to creating the record
+        string id = "55555555-5555-5555-5555-555555555555";
+        assertEq(UpsertResultInserted, accounts.upsertRecord({"accountid": id,
+            "name": "Upserted"}));
+        hash<auto> patch = handler.getRequests("PATCH").last();
+        assertEq("api/data/v9.2/accounts(" + id + ")", patch.path);
+        assertEq("return=representation", patch.prefer);
+        hash<auto> post = handler.getRequests("POST").last();
+        assertEq({"name": "Upserted", "accountid": id}, post.body);
+        assertEq("Upserted", handler.accounts{id}.name);
+
+        # an existing record created before the upsert is updated
+        assertEq(UpsertResultUpdated, accounts.upsertRecord({
+            "accountid": "11111111-1111-1111-1111-111111111111",
+            "name": "Renamed",
+        }));
+        assertEq("Renamed", handler.accounts."11111111-1111-1111-1111-111111111111".name);
+
+        # negative test: a missing key value
+        assertThrows("UPSERT-ERROR", \accounts.upsertRecord(), {"name": "no key"});
+    }
+
+    updateDeleteTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+
+        string id = "22222222-2222-2222-2222-222222222222";
+        assertEq(1, accounts.updateRecords({"name": "Updated"}, {"accountid": id}));
+        assertEq("Updated", handler.accounts{id}.name);
+
+        assertEq(1, accounts.deleteRecords({"accountid": id}));
+        assertFalse(handler.accounts.hasKey(id));
+
+        # a record that does not exist is not found, so nothing is deleted
+        assertEq(0, accounts.deleteRecords({"accountid": id}));
+
+        # negative test: deleting a record that does not exist raises the CDS error with the response
+        try {
+            rest.restDel("accounts(" + id + ")", NOTHING);
+            assertTrue(False, "the delete request should have failed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("0x80040217", ex.err);
+            assertEq(sprintf("account With Id = %s Does Not Exist", id), ex.desc);
+            assertEq(404, ex.arg.status_code);
+            assertEq("0x80040217", ex.arg.decoded_body.error."code");
+        }
+    }
+
+    cdsErrorTest() {
+        handler.clearRequests();
+%ifdef NoXml
+        testSkip("no xml module");
+%endif
+        CdsRestClientIo rest = getClient();
+        ODataEntityDataProvider accounts = getAccountProvider(rest);
+
+        # a CDS error raises the CDS error code with its message, which the data provider framework wraps
+        try {
+            accounts.createRecord({"name": "invalid"});
+            assertTrue(False, "the create request should have failed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("CREATE-RECORD-ERROR", ex.err);
+            assertEq("0x80040203: invalid account name", ex.desc);
+            assertEq("0x80040203", ex.arg.ex.err);
+            assertEq("invalid account name", ex.arg.ex.desc);
+            assertEq(400, ex.arg.status_code);
+            assertEq("0x80040203", ex.arg.decoded_body.error."code");
+        }
+
+        # the client raises the CDS error code directly
+        try {
+            rest.restPost("accounts", {"name": "invalid"});
+            assertTrue(False, "the create request should have failed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("0x80040203", ex.err);
+            assertEq("invalid account name", ex.desc);
+            assertEq(400, ex.arg.status_code);
+        }
+
+        # a CDS duplicate record error for a record with a key raises DUPLICATE-RECORD
+        try {
+            accounts.createRecord({"accountid": "66666666-6666-6666-6666-666666666666", "name": "duplicate"});
+            assertTrue(False, "the create request should have failed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DUPLICATE-RECORD", ex.err);
+            assertEq("0x80040237: A record with matching key values already exists.", ex.desc);
+            assertEq({"accountid": "66666666-6666-6666-6666-666666666666"}, ex.arg.id);
+            assertEq(412, ex.arg.status_code);
+        }
+
+        # the query is added to the exception of a failed search, which includes the response
+        try {
+            ODataRecordIterator i(rest, "nosuchentities", <ODataRecordInfo>{"entity_name": "nosuchentities"},
+                {"name": "x"});
+            assertTrue(False, "the search should have failed");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("0x8006088a", ex.err);
+            assertEq("$filter=name eq 'x'", ex.arg.query);
+            assertEq(404, ex.arg.status_code);
+        }
+    }
+
+    #! Clients with an API profile can be created, synchronous and asynchronous alike
+    apiProfileClientTest() {
+        CdsRestClient dyn(getClientOptions() + {"api_profile": "dynamics"}, True);
+        assertEq("dynamics", dyn.getApiProfile());
+        assertEq("/api/data/v9.2", dyn.getConnectionPath());
+
+        DynamicsRestClientIo dyn_io(getClientOptions());
+        assertEq("dynamics", dyn_io.getApiProfile());
+        assertEq("9.2", dyn_io.getApi());
+        assertEq("/api/data/v9.2", dyn_io.getConnectionPath());
+        assertEq("44444444-4444-4444-4444-444444444444", dyn_io.restGet("WhoAmI").body.UserId);
+
+        CdsRestClient bc(getClientOptions() + {
+            "api_profile": "dynamics-business-central",
+            "instance_type": "production",
+            "tenant": "my-tenant",
+        }, True);
+        assertEq("dynamics-business-central", bc.getApiProfile());
+        assertEq("production", bc.getInstanceType());
+
+        BusinessCentralRestClientIo bc_io(getClientOptions() + {
+            "instance_type": "production",
+            "tenant": "my-tenant",
+        });
+        assertEq("dynamics-business-central", bc_io.getApiProfile());
+        assertEq("production", bc_io.getInstanceType());
+        assertEq("my-tenant", bc_io.getTenant());
+        assertEq("v2.0", bc_io.getApi());
+        # the Business Central URL includes the API path, so there is no separate connection path prefix
+        assertEq("", bc_io.getUriPathPrefix());
+        assertEq(bc.getConnectionPath(), bc_io.getConnectionPath());
+
+        # negative test: the Business Central profile requires an instance type
+        assertThrows("CDSRESTCLIENT-ERROR", "instance_type", sub () {
+            BusinessCentralRestClientIo bad(getClientOptions());
+        });
+    }
+
+    syncClientCompatibilityTest() {
+        handler.clearRequests();
+        # a synchronous client is converted to an asynchronous client with its options and connection path
+        CdsRestClient sync(getClientOptions(), True);
+        CdsRestDataProvider dp(sync);
+        CdsRestClientIo rest = dp.getRestClient();
+        assertEq("CdsRestClientIo", rest.className());
+        assertEq(sync.getConnectionPath(), rest.getConnectionPath());
+        assertEq("/api/data/v9.2", rest.getConnectionPath());
+        # the converted client sends the token of the synchronous one
+        assertEq("44444444-4444-4444-4444-444444444444", rest.restGet("WhoAmI").body.UserId);
+        assertEq("Bearer " + TestToken, handler.getRequests("GET").last().authorization);
+
+        # the connection path of the synchronous client is used, even if it was changed after it was created
+        CdsRestClient sync2(getClientOptions(), True);
+        sync2.setConnectionPath("/api/data/v9.1");
+        assertEq("/api/data/v9.1", CdsRestDataProviderBase::getAsyncClient(sync2).getConnectionPath());
+
+        # the client class matches the API profile of the synchronous client
+        CdsRestClient dyn(getClientOptions() + {"api_profile": "dynamics"}, True);
+        assertEq("DynamicsRestClientIo", CdsRestDataProviderBase::getAsyncClient(dyn).className());
+        CdsRestClient bc(getClientOptions() + {
+            "api_profile": "dynamics-business-central",
+            "instance_type": "sandbox",
+        }, True);
+        CdsRestClientIo bc_io = CdsRestDataProviderBase::getAsyncClient(bc);
+        assertEq("BusinessCentralRestClientIo", bc_io.className());
+        assertEq("sandbox", bc_io.getInstanceType());
+        assertEq(bc.getConnectionPath(), bc_io.getConnectionPath());
+
+        # all public providers taking a synchronous client convert it
+        assertEq("BusinessCentralRestClientIo", (new BcRestDataProvider(bc)).getRestClient().className());
+        assertEq("BusinessCentralRestClientIo", (new BcCompaniesDataProvider(bc)).getRestClient().className());
+        assertEq("CdsRestClientIo", (new CdsRestTablesDataProvider(sync)).getRestClient().className());
+
+        # the child providers use the client of the parent
+        AbstractDataProvider tables = dp.getChildProviderEx("tables");
+        assertEq(rest, cast<CdsRestTablesDataProvider>(tables).getRestClient());
+    }
+
+    clientOptionTest() {
+        handler.clearRequests();
+        CdsRestClientIo io = getClient();
+        string url = "http://localhost:" + port;
+
+        # an asynchronous client is used as is
+        CdsRestDataProvider dp({"url": url, "cdsrestclient": io});
+        assertEq(io, dp.getRestClient());
+
+        # a synchronous client is converted
+        CdsRestClient sync(getClientOptions(), True);
+        dp = new CdsRestDataProvider({"url": url, "cdsrestclient": sync});
+        assertEq("CdsRestClientIo", dp.getRestClient().className());
+        assertEq("/api/data/v9.2", dp.getRestClient().getConnectionPath());
+
+        # the option is used by the other providers taking it too
+        CdsRestTablesDataProvider tables({"url": url, "cdsrestclient": io});
+        assertEq(io, tables.getRestClient());
+        BcRestDataProvider bc({"url": url, "cdsrestclient": io, "instance_type": "sandbox"});
+        assertEq(io, bc.getRestClient());
+        BcCompaniesDataProvider companies({"url": url, "cdsrestclient": io});
+        assertEq(io, companies.getRestClient());
+
+        # without the option, a client is created from the options
+        dp = new CdsRestDataProvider({
+            "url": url,
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "cdsrestclient_options": {"token": TestToken},
+        });
+        assertEq("CdsRestClientIo", dp.getRestClient().className());
+        assertEq("44444444-4444-4444-4444-444444444444", dp.getRestClient().restGet("WhoAmI").body.UserId);
+        bc = new BcRestDataProvider({
+            "url": url,
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "instance_type": "sandbox",
+            "cdsrestclient_options": {"token": TestToken},
+        });
+        assertEq("BusinessCentralRestClientIo", bc.getRestClient().className());
+
+        # negative test: a REST client of another class
+        RestClientIo other({"url": url});
+        assertThrows("CONSTRUCTOR-ERROR", "CdsRestClientIo or a CdsRestClient",
+            sub () { CdsRestDataProvider dp0({"url": url, "cdsrestclient": other}); });
+        assertThrows("CONSTRUCTOR-ERROR", "CdsRestClientIo or a CdsRestClient",
+            sub () { BcRestDataProvider bc0({"url": url, "cdsrestclient": other, "instance_type": "x"}); });
+    }
+
+    eventDeliveryTest() {
+        handler.clearRequests();
+        handler.resetAccounts();
+        CdsRestClientIo rest = getClient();
+        TestObserver observer();
+        # polling errors are delivered to the observer's queue, so that they fail the test instead of blocking it
+        TestWatchProvider provider(rest, {"since": 2025-12-31T00:00:00Z}, "new-or-updated-account",
+            CdsEntityEvents."new-or-updated-account", observer.events);
+        on_exit provider.stopEvents();
+        provider.registerObserver(observer);
+        provider.observersReady();
+
+        # both pages are delivered; the second is read through the absolute next link of the first
+        hash<auto> ev = observer.events.get();
+        if (ev.error) {
+            throw ev.error.err, ev.error.desc, ev.error.arg;
+        }
+        assertEq("new-or-updated-account", ev.event_id);
+        assertEq("11111111-1111-1111-1111-111111111111", ev.data.accountid);
+        ev = observer.events.get();
+        if (ev.error) {
+            throw ev.error.err, ev.error.desc, ev.error.arg;
+        }
+        assertEq("22222222-2222-2222-2222-222222222222", ev.data.accountid);
+
+        list<hash<auto>> gets = select handler.getRequests("GET"), $1.path =~ /^api\/data\/v9\.2\/accounts\?/;
+        # the cursor is sent upstream as a percent-encoded filter, and pages are sized with a Prefer header
+        assertEq("api/data/v9.2/accounts?$filter=createdon%20ge%202025-12-31T00:00:00Z"
+            "&$orderby=createdon%20asc", gets[0].path);
+        assertEq("odata.maxpagesize=" + CdsPollPageSize, gets[0].prefer);
+        assertEq("api/data/v9.2/accounts?$skiptoken=" + DataverseHandler::SkipToken, gets[1].path);
+    }
+
+    eventStopTest() {
+        handler.clearRequests();
+        CdsRestClientIo rest = getClient();
+        CdsRestDataProvider root(rest);
+        CdsEntityWatchDataProvider provider(rest, NOTHING, "watch-blockers", {
+            "entity_set": "blockers",
+            "logical_name": "blocker",
+            "id_field": "blockerid",
+            "desc": "an entity whose requests block",
+        });
+        TestObserver observer();
+        provider.registerObserver(observer);
+        provider.observersReady();
+
+        # wait until the polling request is being handled; the server does not answer it until released
+        handler.blocked_arrived.get();
+        assertTrue(provider.isActive());
+
+        # stopping the provider aborts the in-flight request; the request is only released after it returns,
+        # so if it were not aborted, this would block until the client's 600s timeout
+        provider.stopEvents();
+        assertFalse(provider.isActive());
+        assertEq(0, handler.blocked_release.size());
+        delete provider;
+
+        # the REST client shared with the root provider still works
+        assertEq("44444444-4444-4444-4444-444444444444", root.getRestClient().restGet("WhoAmI").body.UserId);
+
+        # let the blocked request complete
+        handler.blocked_release.push(True);
+        assertEq(0, observer.events.size());
+    }
+}

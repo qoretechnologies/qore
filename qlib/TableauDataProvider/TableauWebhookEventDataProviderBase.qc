@@ -45,7 +45,7 @@ public class TableauWebhookEventDataProviderBase inherits TableauDataProviderBas
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, string event_name,
+    constructor(TableauRestClient::TableauRestClientIo rest, string event_name,
             string tableau_event_type, *hash<auto> options)
             : TableauDataProviderBase(rest) {
         self.event_name = event_name;

@@ -91,7 +91,7 @@ public class ChargebeeUpdateCouponDataProvider inherits ChargebeeDataProviderBas
     }
 
     #! Creates the object with a REST client
-    constructor(ChargebeeRestClient::ChargebeeRestClient rest)
+    constructor(ChargebeeRestClient::ChargebeeRestClientIo rest)
             : ChargebeeDataProviderBase(rest) {
     }
 

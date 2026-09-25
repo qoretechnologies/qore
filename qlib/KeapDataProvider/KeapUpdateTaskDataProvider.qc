@@ -138,7 +138,7 @@ public class KeapUpdateTaskDataProvider inherits KeapDataProviderBase {
         static *AbstractDataProviderType RequestType = new KeapUpdateTaskRequestDataType();
     }
 
-    constructor(KeapRestClient::KeapRestClient rest) : KeapDataProviderBase(rest) {
+    constructor(KeapRestClient::KeapRestClientIo rest) : KeapDataProviderBase(rest) {
     }
 
     string getName() {

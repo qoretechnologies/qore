@@ -39,7 +39,7 @@ public class TableauWatchDatasourceCreatedDataProvider inherits TableauWebhookEv
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauWebhookEventDataProviderBase(rest, EVENT_DATASOURCE_CREATED,
                 TABLEAU_EVENT_DATASOURCE_CREATED, options) {
     }
@@ -74,7 +74,7 @@ public class TableauWatchDatasourceDeletedDataProvider inherits TableauWebhookEv
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauWebhookEventDataProviderBase(rest, EVENT_DATASOURCE_DELETED,
                 TABLEAU_EVENT_DATASOURCE_DELETED, options) {
     }
@@ -109,7 +109,7 @@ public class TableauWatchDatasourceUpdatedDataProvider inherits TableauWebhookEv
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauWebhookEventDataProviderBase(rest, EVENT_DATASOURCE_UPDATED,
                 TABLEAU_EVENT_DATASOURCE_UPDATED, options) {
     }
@@ -144,7 +144,7 @@ public class TableauWatchDatasourceRefreshStartedDataProvider inherits TableauWe
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauWebhookEventDataProviderBase(rest, EVENT_DATASOURCE_REFRESH_STARTED,
                 TABLEAU_EVENT_DATASOURCE_REFRESH_STARTED, options) {
     }
@@ -179,7 +179,7 @@ public class TableauWatchDatasourceRefreshSucceededDataProvider inherits Tableau
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauWebhookEventDataProviderBase(rest, EVENT_DATASOURCE_REFRESH_SUCCEEDED,
                 TABLEAU_EVENT_DATASOURCE_REFRESH_SUCCEEDED, options) {
     }
@@ -214,7 +214,7 @@ public class TableauWatchDatasourceRefreshFailedDataProvider inherits TableauWeb
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest, *hash<auto> options)
+    constructor(TableauRestClient::TableauRestClientIo rest, *hash<auto> options)
             : TableauWebhookEventDataProviderBase(rest, EVENT_DATASOURCE_REFRESH_FAILED,
                 TABLEAU_EVENT_DATASOURCE_REFRESH_FAILED, options) {
     }

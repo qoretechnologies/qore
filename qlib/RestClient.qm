@@ -145,6 +145,21 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - a client given a token uses it when options required to acquire a token with its OAuth2 grant type are
+      missing, instead of raising \c OAUTH2-ERROR when it is created with a connection; the grant type is not used,
+      and the token is not refreshed
+    - polling pings decode response bodies by the rules shared by all HTTP clients instead of as ISO-8859-1
+      without a charset; added @ref RestClient::RestClient::getPollResponseBodyText()
+      "RestClient::getPollResponseBodyText()"
+    - @ref RestClient::RestConnection::getDataProvider() "RestConnection::getDataProvider()" returns data
+      providers with a <a href="../../RestClientIo/html/index.html">RestClientIo</a> client and no longer connects
+      to the server to create them
+    - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
+      returns the options a client was created with, as \c getConstructorOptions() of
+      <a href="../../RestClientIo/html/index.html">RestClientIo</a> does
+    - a response read with a \c max_response_body_size is decoded by the rules shared by all HTTP clients (see
+      @ref Qore::decode_http_body() "decode_http_body()"), and the \c assume_encoding option applies to every HTTP
+      version
     - redact authentication headers and echoed rejected credentials from blocking and polling error diagnostics
     - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
       request information as a blocking request, including \c response-headers-raw, the redirects followed
@@ -539,28 +554,6 @@ public hashdecl RestResponseInfo {
     @since RestClient 2.4
 */
 public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoolableResource {
-    public {
-        #! HTTPClient-era options that HTTP/2 and HTTP/3 cannot honor
-        /** These options exist in @ref RestClient::RestConnection "RestConnection" because
-            @ref RestClient::RestClient "RestClient" (HTTP/1.x via HTTPClient) honors them, but
-            they are structurally incompatible with HTTP/2 and HTTP/3 where percent-encoded URIs
-            and explicit charset handling are mandated by the protocol.
-
-            @ref RestClient::RestConnection::getAsyncImpl() "RestConnection::getAsyncImpl()" strips
-            these before constructing an async client; direct construction of \c RestClientIo with
-            any of these keys raises a @c RESTCLIENTIO-OPTION-ERROR.
-
-            @since %RestClient 2.6
-        */
-        const hash<string, string> Http1OnlyOptions = {
-            "pre_encoded_urls": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol "
-                "level; send pre-encoded paths directly",
-            "assume_encoding": "HTTP/2 and HTTP/3 responses use binary bodies with explicit "
-                "content-type charset parameters",
-            "encode_chars": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol level",
-        };
-    }
-
     #! Sends an HTTP \c GET request and returns the response
     abstract hash<RestResponseInfo> restGet(string path, *hash<auto> hdr);
 
@@ -771,6 +764,12 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
 
         #! True after response headers have configured this stream
         bool configured = False;
+
+        #! The Content-Type of the response, used to decode the body
+        *string content_type;
+
+        #! A character encoding incorrectly supplied as the Content-Encoding of the response
+        *string content_encoding_charset;
     }
 
     #! Creates the response output stream
@@ -783,13 +782,15 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
     /** @return a character encoding incorrectly supplied as \c Content-Encoding, if any
     */
     *string configure(*string content_encoding, *string content_length, bool encoding_passthru,
-            bool check_content_length) {
+            bool check_content_length, *string content_type) {
         # HTTPClient can report headers for an authentication challenge or redirect before the final response.
         # Such responses have no body delivered to this stream, so reset all per-response state here.
         output = new RestClientBoundedOutputStream(max_response_bytes);
         transform = NOTHING;
         binary_body = False;
         configured = True;
+        self.content_type = content_type;
+        remove content_encoding_charset;
 
         string token = content_encoding ?? "";
         token =~ s/^\s+//;
@@ -800,6 +801,7 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
         bool decoded_content = False;
         if (token =~ /^(?:iso|utf-)/) {
             character_encoding = token;
+            content_encoding_charset = token;
         } else if (token.val() && encoding_passthru) {
             # Match HTTPClient's encoding_passthru behavior: any non-character Content-Encoding is returned as
             # binary data, including identity and unknown encodings.
@@ -864,12 +866,25 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
     }
 
     #! Returns the complete response body
-    *data getBody(string encoding) {
+    /** A text body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
+        "decode_http_body()"), and any other body is returned as binary data
+
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+    */
+    *data getBody(string assumed_encoding) {
         if (!output.size()) {
             return NOTHING;
         }
         binary data = output.getData();
-        return binary_body ? data : data.toString(encoding);
+        if (binary_body) {
+            return data;
+        }
+        *string body_ct = content_type;
+        # a character encoding misused as a content encoding is the charset of the body
+        if (content_encoding_charset && (!body_ct || body_ct !~ /;\s*charset\s*=/i)) {
+            body_ct = (body_ct ?? "text/plain") + "; charset=" + content_encoding_charset;
+        }
+        return decode_http_body(body_ct, data, assumed_encoding);
     }
 
     #! Checks a decimal Content-Length value without narrowing it to a bounded integer type
@@ -1102,7 +1117,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
     }
 
     private {
-        #! Constructor options hash, kept for @ref copyWithUrl() / @c getConstructorOptions()
+        #! Constructor options hash, kept for @ref copyWithUrl() / @ref getConstructorOptions()
         /** Captured verbatim in the constructor so that a sibling instance can be built
             with the same config via @ref copyWithUrl(). Immutable post-construction.
         */
@@ -1699,6 +1714,19 @@ hash<auto> h = rest.getDefaultHeaders();
         return headers;
     }
 
+    #! Returns the options the object was created with
+    /** @return the options the object was created with, after they have been processed by the constructor of the
+        subclass, if any
+
+        @note options changed after the object was created, for example with @ref addDefaultHeaders() or
+        @ref Qore::HTTPClient::setConnectionPath() "setConnectionPath()", are not reflected in the return value
+
+        @since %RestClient 2.7
+    */
+    hash<auto> getConstructorOptions() {
+        return saved_opts;
+    }
+
     #! replaces default headers
     /** @param hdr The headers to set; @ref DefaultHeaders will be added to this hash to set the default headers for
         the object
@@ -2216,6 +2244,33 @@ hash<auto> ans = rest.del("/orders/1");
             return value[0].val() ? value[0].toString() : NOTHING;
         }
         return value.val() ? value.toString() : NOTHING;
+    }
+
+    #! Returns the body of the output of a polling HTTP request as text
+    /** A text body is already a string decoded by the rules shared by all HTTP clients (see
+        @ref Qore::decode_http_body() "decode_http_body()"); a binary body is decoded by the same rules, and a
+        body that is not text is returned in the assumed encoding, as its bytes may still be parsed as text.
+
+        @param resp the output of a polling HTTP request (\c "response-body" and \c "info" keys)
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+        @return the body as a string; an empty string if there is no body
+
+        @since RestClient 2.7
+    */
+    static string getPollResponseBodyText(hash<auto> resp, string assumed_encoding = "ISO-8859-1") {
+        auto body = resp."response-body";
+        if (!body.val()) {
+            return "";
+        }
+        if (body.typeCode() == NT_STRING) {
+            return body;
+        }
+        *hash<auto> hdr = resp.info."response-headers";
+        *string content_type = RestClient::getSingleHeaderValue(hdr."_qore_orig_content_type"
+            ?? hdr."content-type");
+        data rv = decode_http_body(content_type, body, assumed_encoding);
+        return rv.typeCode() == NT_STRING ? rv : body.toString(assumed_encoding);
     }
 
     #! returns the current validator object
@@ -3109,7 +3164,10 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
     }
 
     #! Validates and sets any OAuth2 options
-    /** @since %RestClient 2.0
+    /** A token that is given can be used without the options needed to acquire a new one with the grant type; the
+        grant type is then not set, and the token is not refreshed.
+
+        @since %RestClient 2.0
     */
     private checkOAuth2Options(hash<auto> opts, *bool no_exceptions) {
         *string grant_type = opts.oauth2_grant_type;
@@ -3120,6 +3178,16 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         if (!req_opts) {
             throw "OAUTH2-ERROR", sprintf("OAuth2 grant type %y is unknown; known grant types: %y", grant_type,
                 keys OAuth2GrantOptions);
+        }
+        # a token that is given is used without the options to acquire a new one
+        if (opts.token.val() || token.val()) {
+            foreach string req_opt in (req_opts) {
+                if (!opts{req_opt}.val()) {
+                    debug("OAuth2 grant type %y requires option %y, which is not set; the token given is used and "
+                        "cannot be refreshed", grant_type, req_opt);
+                    return;
+                }
+            }
         }
         oauth2_grant_type = grant_type;
         foreach string req_opt in (req_opts) {
@@ -3480,7 +3548,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             *string character_encoding = response_stream.configure(
                 getResponseHeaderValue(response_hdr, "content-encoding"),
                 getResponseHeaderValue(response_hdr, "content-length"), getEncodingPassthru(),
-                response_body_allowed && !followed_redirect && !possible_auth_retry);
+                response_body_allowed && !followed_redirect && !possible_auth_retry,
+                getResponseHeaderValue(response_hdr, "_qore_orig_content_type")
+                    ?? getResponseHeaderValue(response_hdr, "content-type"));
             if (character_encoding) {
                 # Match HTTPClient's compatibility handling for servers that misuse Content-Encoding for a charset.
                 setEncoding(character_encoding);
@@ -3512,7 +3582,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
 
         hash<auto> response = {} + info."response-headers";
-        *data response_body = response_stream.getBody(getEncoding());
+        *data response_body = response_stream.getBody(getAssumedEncoding());
         if (exists response_body) {
             response.body = response_body;
             info."response-body" = response_body;
@@ -4843,8 +4913,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
         if (opts.validator || opts.swagger || opts.openapi3) {
-            # get a REST client object without connecting
-            RestClient rest = get(False);
+            # get an async REST client object without connecting
+            AbstractRestClient rest = getAsync(False);
             # get the validator and return the provider
             return rest.getValidator().getDataProvider(rest);
         }
@@ -4852,7 +4922,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         # to avoid circular dependencies, this object loads the RestClientDataProvider and creates the data provider
         # object dynamically
         load_module("RestClientDataProvider");
-        return create_object("RestClientDataProvider", get());
+        return create_object("RestClientDataProvider", getAsync());
     }
 
     #! returns @ref True, as this connection always returns a data provider with the \c getDataProvider() method
@@ -4887,7 +4957,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     }
 
     #! Returns a file location handler bound to this connection's authenticated client
-    /** @return a \c FileLocationHandler::AbstractFileLocationHandler object driving this connection's client
+    /** @return a \c FileLocationHandler::AbstractFileLocationHandler object driving this connection's asynchronous
+        client returned by \c getAsync()
 
         @note The \c FileLocationHandler module is loaded dynamically; it is a leaf utility that sits below this
         module, so declaring a dependency on it here would invert the dependency graph
@@ -4896,7 +4967,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getFileLocationHandlerImpl() {
         load_module("FileLocationHandler");
-        return call_static_method("FileLocationHandler::FileLocationHandler", "getRestHandlerForClient", get());
+        # the handler drives the asynchronous client
+        return call_static_method("FileLocationHandler::FileLocationHandler", "getRestHandlerForClient", getAsync());
     }
 
     #! Called to start a non-blocking polling ping operation on the remote REST server
@@ -5433,15 +5505,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
-        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the sync
-        # RestClient via HTTPClient) that have no counterpart on the HttpClientIo-based RestClientIo
-        # transport, which sends the request target verbatim: there is no getMsgPath()-style rewrite
-        # between the caller's path and the H1 request line or the H2/H3 ":path" pseudo-header, so a
-        # path the caller has already percent-encoded reaches the wire unchanged.  That is what
-        # "pre_encoded_urls" buys on HTTPClient, and it is why callers that sign the request target
-        # (AWS SigV4, for one) need no opt-out here.  Passing any of these keys to RestClientIo
-        # directly raises RESTCLIENTIO-OPTION-ERROR, so strip them from the option set.
-        hash<auto> opts = getConnectionOptions(rtopts) - keys AbstractRestClient::Http1OnlyOptions;
+        # RestClientIo supports the same options, including the URL encoding options
+        hash<auto> opts = getConnectionOptions(rtopts);
         return create_object("RestClientIo::RestClientIo", opts);
     }
 
@@ -5796,9 +5861,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
             if (state == SPS_CUSTOM_GET_TOKEN) {
                 hash<auto> resp = poller.getOutput();
-                string body = resp."response-body"
-                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                    : "";
+                string body = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
                 if ((resp."code" / 100) == 2) {
                     if (real_opts.custom_token_location == "body-direct") {
                         if (!body) {
@@ -5834,9 +5897,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
             if (state == SPS_OAUTH2_GET_TOKEN || state == SPS_OAUTH2_REFRESH_TOKEN) {
                 hash<auto> resp = poller.getOutput();
-                string body = resp."response-body"
-                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                    : "";
+                string body = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
                 if ((resp."code" / 100) == 2) {
                     auto parsed_body;
                     # remove modifiers from the content type
@@ -5864,9 +5925,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
 
             if (state == SPS_REST_PING) {
                 hash<auto> resp = poller.getOutput();
-                string body = resp."response-body"
-                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                    : "";
+                string body = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
                 bool oauth2_token = rc.getToken() && rc.usingOAuth2();
                 bool check_auth = oauth2_token && real_opts.oauth2_auto_refresh
                     && (real_opts.oauth2_refresh_token || real_opts.custom_token_auth) && !in_refresh;
@@ -6129,9 +6188,7 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
                 # Auth token refresh completed; update headers with new token and retry
                 hash<auto> resp = poller.getOutput();
                 if ((resp."code" / 100) == 2) {
-                    string rbody = resp."response-body"
-                        ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                        : "";
+                    string rbody = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
                     resp.info."response-headers"."content-type" =~ s/;.*//;
                     auto parsed_body;
                     switch (resp.info."response-headers"."content-type") {
@@ -6159,9 +6216,7 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
 
             if (state == SPS_SEND_REQUEST || state == SPS_AUTH_RETRY) {
                 hash<auto> resp = poller.getOutput();
-                string rbody = resp."response-body"
-                    ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                    : "";
+                string rbody = RestClient::getPollResponseBodyText(resp, rc.getAssumedEncoding());
 
                 # check for Negotiate challenge and retry before other auth mechanisms
                 if (!negotiate_retried && resp."code" == 401

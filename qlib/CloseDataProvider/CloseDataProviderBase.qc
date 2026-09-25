@@ -28,20 +28,28 @@ public namespace CloseDataProvider {
 #! Base class for Close data providers
 public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Close data providers
         const BaseConstructorOptions = {
             "closerestclient": <DataProviderOptionInfo>{
                 "display_name": "Close REST Client",
-                "short_desc": "The CloseRestClient object",
+                "short_desc": "The CloseRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("CloseRestClient::CloseRestClient")),
-                "desc": "The CloseRestClient object to use for API calls",
+                    new Type("CloseRestClient::CloseRestClientIo")),
+                "desc": "The `CloseRestClientIo` object to use for API calls",
             },
             "closerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Close REST Client Options",
-                "short_desc": "Options for creating a CloseRestClient",
+                "short_desc": "Options for creating a CloseRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a CloseRestClient object if one is not provided "
+                "desc": "Options for creating a `CloseRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client object for API calls
-        CloseRestClient::CloseRestClient rest;
+        CloseRestClient::CloseRestClientIo rest;
 
         #! The connection object, if applicable
         *CloseRestClient::CloseRestConnection conn;
@@ -60,14 +68,14 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest) {
+    constructor(CloseRestClient::CloseRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(CloseRestClient::CloseRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
             rest = copts.closerestclient;
         } else {
             hash<auto> client_opts = copts.closerestclient_options ?? {};
-            rest = new CloseRestClient::CloseRestClient(client_opts);
+            rest = new CloseRestClient::CloseRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    CloseRestClient::CloseRestClient getRestClient() {
+    CloseRestClient::CloseRestClientIo getRestClient() {
         return rest;
     }
 
@@ -218,24 +226,11 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "CLOSE-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "CLOSE-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 return response.body ?? {};
             } catch (hash<ExceptionInfo> ex) {

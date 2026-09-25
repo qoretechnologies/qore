@@ -2693,7 +2693,7 @@ module ZohoInventoryDataProvider {
 %requires ZohoInventoryRestClient
 
 # Create a REST client with credentials
-ZohoInventoryRestClient rest({
+ZohoInventoryRestClientIo rest({
     "oauth2_client_id": ENV.ZOHOINVENTORY_CLIENT_ID,
     "oauth2_client_secret": ENV.ZOHOINVENTORY_CLIENT_SECRET,
     "oauth2_refresh_token": ENV.ZOHOINVENTORY_REFRESH_TOKEN,

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore BcRestDataProvider class definition
 
-/** BcRestDataProvider.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** BcRestDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -65,6 +65,18 @@ public class BcRestDataProvider inherits CdsRestDataProviderBase {
     }
 
     #! Creates the object from the arguments
+    /** @param rest the REST client for API calls
+
+        @since CdsRestDataProvider 2.2
+    */
+    constructor(CdsRestClient::CdsRestClientIo rest) : CdsRestDataProviderBase(rest) {
+    }
+
+    #! Creates the object from the arguments
+    /** @param rest a synchronous REST client; API calls are made with a
+        @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo" created with its options and connection path by
+        @ref CdsRestDataProviderBase::getAsyncClient()
+    */
     constructor(CdsRestClient::CdsRestClient rest) : CdsRestDataProviderBase(rest) {
     }
 
@@ -80,14 +92,10 @@ public class BcRestDataProvider inherits CdsRestDataProviderBase {
                 exists ENV{$1.value} && !exists options{$1.key};
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        if (copts.bcrestclient) {
-            rest = copts.bcrestclient;
-        }
-
-        if (!rest) {
-            rest = new CdsRestClient::CdsRestClient(getClientOptions(copts) + {
-                "api_profile": CdsRestClient::BusinessCentralProfile.name,
-            });
+        if (copts.cdsrestclient) {
+            rest = CdsRestDataProviderBase::getClientFromOption(copts.cdsrestclient);
+        } else {
+            rest = new BusinessCentralRestClientIo(getClientOptions(copts));
         }
     }
 

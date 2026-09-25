@@ -73,7 +73,7 @@ public class OpenSearchRestConnection inherits RestClient::RestConnection {
         @return a data provider object for this connection; the data provider is @ref OpenSearchDataProvider
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new OpenSearchDataProvider({"restclient": get()});
+        return new OpenSearchDataProvider({"restclient": getAsync()});
     }
 
     #! returns a @ref RestClient::RestClient "RestClient" object

@@ -113,13 +113,6 @@ public class ConfluenceWatchDataProviderBase inherits DataProvider::AbstractTime
         stopEventsIntern();
     }
 
-    #! Cancels an in-flight REST request during shutdown
-    private cancelPollOperation() {
-        if (rest) {
-            rest.close();
-        }
-    }
-
     #! Returns the configuration that defines which scan this provider follows
     /** The space scopes the feed, so watching a different one - or the whole site - is a different scan
         and the previous cursor must not be resumed against it.

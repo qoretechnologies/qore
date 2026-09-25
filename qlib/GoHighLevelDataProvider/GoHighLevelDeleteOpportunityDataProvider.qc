@@ -65,7 +65,7 @@ public class GoHighLevelDeleteOpportunityDataProvider inherits GoHighLevelDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(GoHighLevelRestClient::GoHighLevelRestClient rest) : GoHighLevelDataProviderBase(rest) {
+    constructor(GoHighLevelRestClient::GoHighLevelRestClientIo rest) : GoHighLevelDataProviderBase(rest) {
     }
 
     #! Returns the provider name

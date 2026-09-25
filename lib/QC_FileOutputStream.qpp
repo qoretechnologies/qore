@@ -123,7 +123,7 @@ string encoding = fos.getEncoding();
     @note raw binary data is written to the output stream, so it's up to the caller to ensure that only valid character data for the given encoding is written to the @ref FileOutputStream object
  */
 string FileOutputStream::getEncoding() [flags=CONSTANT] {
-   return new QoreStringNode(os->getEncoding());
+   return new QoreStringNode(os->getEncoding()->getCode());
 }
 
 //! Returns @ref True since FileOutputStream supports non-blocking I/O

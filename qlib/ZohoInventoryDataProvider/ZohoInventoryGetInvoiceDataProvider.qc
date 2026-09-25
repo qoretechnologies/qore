@@ -52,7 +52,7 @@ public class ZohoInventoryGetInvoiceDataProvider inherits ZohoInventoryDataProvi
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -77,8 +77,8 @@ public class ZohoInventoryGetInvoiceDataProvider inherits ZohoInventoryDataProvi
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doGet(sprintf("/invoices/%s", req.invoice_id));
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doGet(sprintf("/invoices/%s", req.invoice_id), NOTHING, org_id);
         return response.invoice;
     }
 

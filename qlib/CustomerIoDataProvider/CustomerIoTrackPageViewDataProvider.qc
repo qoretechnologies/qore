@@ -88,7 +88,7 @@ public class CustomerIoTrackPageViewDataProvider inherits CustomerIoDataProvider
     }
 
     #! Creates the object with a REST client
-    constructor(CustomerIoRestClient::CustomerIoRestClient rest)
+    constructor(CustomerIoRestClient::CustomerIoRestClientIo rest)
             : CustomerIoDataProviderBase(rest) {
     }
 

@@ -37,6 +37,8 @@ public class Main inherits QUnit::Test {
         addTestCase("discord tests", \discordTests());
         addTestCase("action data dependent options", \testActionDataDependentOptions());
         addTestCase("rest command error formatting", \testRestCommandErrorFormatting());
+        addTestCase("rate limit", \testRateLimit());
+        addTestCase("synchronous client", \testSyncClient());
 
         try {
             setupConnection();
@@ -103,7 +105,7 @@ public class Main inherits QUnit::Test {
         "(HTTP response code: null x-ratelimit-remaining: null x-ratelimit-reset: null)" suffix.
     */
     testRestCommandErrorFormatting() {
-        # no response headers set: the error must be rethrown with its original description, unadorned
+        # no response: the error must be rethrown with its original description, unadorned
         {
             DiscordGuildsByNameDataProvider prov(new MockNoInfoRest());
             hash<ExceptionInfo> ex;
@@ -112,8 +114,8 @@ public class Main inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex1) {
                 ex = ex1;
             }
-            assertEq("REST-RESPONSE-ERROR", ex.err);
-            assertEq("HTTP 400 response received", ex.desc);
+            assertEq("OAUTH2-ERROR", ex.err);
+            assertEq("token refresh failed", ex.desc);
             assertFalse(ex.desc =~ /x-ratelimit/, "no rate-limit noise in message");
             assertFalse(ex.desc =~ /null/, "no null placeholders in message");
         }
@@ -130,7 +132,38 @@ public class Main inherits QUnit::Test {
             assertEq("REST-RESPONSE-ERROR", ex.err);
             assertEq("HTTP 400 response received (HTTP response code: 400)", ex.desc);
             assertFalse(ex.desc =~ /x-ratelimit/, "no absent rate-limit fields in message");
+            # the response is in the exception argument
+            assertEq("bad request", ex.arg.body.message);
         }
+    }
+
+    #! A rate-limited request is retried when the rate limit has been reset
+    testRateLimit() {
+        MockRateLimitedRest rest();
+        DiscordGuildsDataProvider prov(rest);
+        # the guilds are the children, besides the generic API call child
+        assertEq(("1",), (select prov.getChildProviderNames(), $1 != AbstractDataProvider::GenericApiCallChildName));
+        assertEq(2, rest.requests);
+    }
+
+    #! A synchronous client is converted to an asynchronous client
+    testSyncClient() {
+        DiscordRestClient sync_rest(TestClientOptions, True);
+        sync_rest.setConnectionPath("/api/v9");
+        DiscordDataProvider prov(sync_rest);
+        *DiscordRestClientIo rest = prov.getRestClient();
+        assertEq("/api/v9", rest.getConnectionPath());
+        assertEq("https://discord.com/api/v10", rest.getUrl());
+
+        prov = new DiscordDataProvider({"restclient": sync_rest});
+        assertEq("/api/v9", prov.getRestClient().getConnectionPath());
+
+        MockStatusOnlyRest io_rest();
+        prov = new DiscordDataProvider({"restclient": io_rest});
+        assertEq(io_rest, prov.getRestClient());
+
+        assertThrows("CONSTRUCTOR-ERROR", "must be a DiscordRestClientIo or a DiscordRestClient",
+            sub () { DiscordDataProvider p({"restclient": new RestClient({"url": "http://localhost:1"}, True)}); });
     }
 
     testActionDataDependentOptions() {
@@ -177,28 +210,63 @@ public class Main inherits QUnit::Test {
     }
 }
 
-#! A non-connecting REST client whose doRequest() fails without populating any response info
+#! Client options for test clients
+const TestClientOptions = {
+    "token": "x",
+    "oauth2_client_id": "x",
+    "oauth2_client_secret": "x",
+};
+
+#! A REST client whose requests fail without a response
 /** Simulates an OAuth2 token refresh failure, where the error is raised before any Discord API response is
-    received, so \c info has no "response-headers".
+    received, so the exception has no response.
 */
-class MockNoInfoRest inherits DiscordRestClient {
-    constructor() : DiscordRestClient({"url": "discord://discord.com/api", "token": "x"}, True) {
+class MockNoInfoRest inherits DiscordRestClientIo {
+    constructor() : DiscordRestClientIo(TestClientOptions) {
     }
 
-    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr) {
-        throw "REST-RESPONSE-ERROR", "HTTP 400 response received";
+    hash<RestResponseInfo> restDoRequest(string m, string path, auto body, *hash<auto> hdr) {
+        throw "OAUTH2-ERROR", "token refresh failed";
     }
 }
 
-#! A non-connecting REST client whose doRequest() fails with only a status code (no rate-limit headers)
-class MockStatusOnlyRest inherits DiscordRestClient {
-    constructor() : DiscordRestClient({"url": "discord://discord.com/api", "token": "x"}, True) {
+#! A REST client whose requests fail with an error response without rate-limit headers
+class MockStatusOnlyRest inherits DiscordRestClientIo {
+    constructor() : DiscordRestClientIo(TestClientOptions) {
     }
 
-    hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr) {
-        info."response-headers" = {"status_code": 400};
-        throw "REST-RESPONSE-ERROR", "HTTP 400 response received";
+    hash<RestResponseInfo> restDoRequest(string m, string path, auto body, *hash<auto> hdr) {
+        throw "REST-RESPONSE-ERROR", "HTTP 400 response received", <RestResponseInfo>{
+            "status_code": 400,
+            "headers": {"content-type": "application/json"},
+            "body": {"message": "bad request"},
+        };
+    }
+}
+
+#! A REST client whose first request is rate-limited, with a reset time that has already passed
+class MockRateLimitedRest inherits DiscordRestClientIo {
+    public {
+        #! the number of requests made
+        int requests;
+    }
+
+    constructor() : DiscordRestClientIo(TestClientOptions) {
+    }
+
+    hash<RestResponseInfo> restDoRequest(string m, string path, auto body, *hash<auto> hdr) {
+        if (!requests++) {
+            throw "REST-RESPONSE-ERROR", "HTTP 429 response received", <RestResponseInfo>{
+                "status_code": 429,
+                "headers": {
+                    "x-ratelimit-remaining": "0",
+                    "x-ratelimit-reset": sprintf("%d", now().getEpochSeconds() - 1),
+                },
+            };
+        }
+        return <RestResponseInfo>{
+            "status_code": 200,
+            "body": ({"id": "1", "name": "guild-1"},),
+        };
     }
 }

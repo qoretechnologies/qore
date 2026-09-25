@@ -90,11 +90,6 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
         stopEventsIntern();
     }
 
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
-    }
-
     #! Returns the data provider name
     string getName() {
         return "watch";

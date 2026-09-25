@@ -37,13 +37,84 @@
 
 %requires WooCommerceRestClient
 %requires WooCommerceDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class WooCommerceDataProviderTest
+
+#! A local WooCommerce API server that records requests
+class FakeWooCommerceHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.authorization != "Basic " + make_base64_string("ck_test:cs_test")) {
+            return <HttpResponseInfo>{
+                "code": 401,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"code": "woocommerce_rest_cannot_view", "message": "Sorry, you cannot list "
+                    "resources."}),
+            };
+        }
+        if (hdr.path =~ /\/products\/999/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"code": "woocommerce_rest_product_invalid_id", "message": "Invalid ID."}),
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 201,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": 10} + parse_json(body.toString())),
+            };
+        }
+        if (hdr.path =~ /\/products\/1$/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": 1, "name": "Mug"}),
+            };
+        }
+        if (hdr.path =~ /\/system_status$/) {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"environment": {"version": "9.0.0"}}),
+            };
+        }
+        if (hdr.method == "DELETE") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"id": 10, "deleted": True}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": MimeTypeJson,
+                "X-WP-Total": "2",
+                "X-WP-TotalPages": "1",
+            },
+            "body": make_json(({"id": 1, "name": "Mug"}, {"id": 2, "name": "Shirt"})),
+        };
+    }
+}
 
 public class WooCommerceDataProviderTest inherits QUnit::Test {
     private {
         #! WooCommerce REST client for integration tests
-        *WooCommerceRestClient::WooCommerceRestClient client;
+        *WooCommerceRestClient::WooCommerceRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -95,6 +166,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
         addTestCase("event fake example data", \eventFakeExampleDataTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require WC_STORE_URL, WC_CONSUMER_KEY, WC_CONSUMER_SECRET)
         addTestCase("integration tests", \integrationTests());
@@ -128,7 +200,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
             "consumer_key": consumer_key,
             "consumer_secret": consumer_secret,
         };
-        client = new WooCommerceRestClient::WooCommerceRestClient(opts);
+        client = new WooCommerceRestClient::WooCommerceRestClientIo(opts);
     }
 
     #! Check if json module is available
@@ -289,6 +361,113 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
                 "consumer_key": "ck_test",
             });
         });
+        # the data provider creates the async client, which validates the same options
+        assertThrows("WOOCOMMERCE-ERROR", sub () {
+            new WooCommerceDataProvider::WooCommerceDataProvider({
+                "store_url": "https://example.com",
+                "consumer_key": "ck_test",
+                "consumer_secret": "",
+            });
+        });
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeWooCommerceHandler handler();
+        server.setHandler("woocommerce", "", NOTHING, handler);
+        server.setDefaultHandler("woocommerce", handler);
+
+        string store_url = "http://localhost:" + port + "/shop";
+
+        # a provider created from options uses the async client
+        WooCommerceDataProvider::WooCommerceDataProvider prov({
+            "store_url": store_url,
+            "consumer_key": "ck_test",
+            "consumer_secret": "cs_test",
+        });
+        assertTrue(prov.getRestClient() instanceof WooCommerceRestClient::WooCommerceRestClientIo);
+
+        # a GET request with query arguments and pagination headers
+        hash<auto> page = prov.doGetPaginated("products", {"search": "a b&c", "per_page": 10});
+        assertEq(({"id": 1, "name": "Mug"}, {"id": 2, "name": "Shirt"}), page.body);
+        assertEq(2, page.total);
+        assertEq(1, page.total_pages);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("shop/wp-json/wc/v3/products?search=a%20b%26c&per_page=10", handler.requests[0].path);
+        assertEq("Basic " + make_base64_string("ck_test:cs_test"), handler.requests[0].authorization);
+
+        # a POST request sends the body and returns the response body
+        handler.requests = ();
+        hash<auto> created = prov.doPost("products/tags", {"name": "new"});
+        assertEq({"id": 10, "name": "new"}, created);
+        assertEq("POST", handler.requests[0].method);
+        assertEq("shop/wp-json/wc/v3/products/tags", handler.requests[0].path);
+        assertEq({"name": "new"}, handler.requests[0].body);
+
+        # a DELETE request with query arguments
+        handler.requests = ();
+        hash<auto> deleted = prov.doDelete("products/tags/10", {"force": "true"});
+        assertEq({"id": 10, "deleted": True}, deleted);
+        assertEq("DELETE", handler.requests[0].method);
+        assertEq("shop/wp-json/wc/v3/products/tags/10?force=true", handler.requests[0].path);
+
+        # a child provider makes its request through the same client
+        handler.requests = ();
+        auto product = prov.getChildProvider("get-product").doRequest({"id": 1});
+        assertEq(1, handler.requests.size());
+        assertEq("shop/wp-json/wc/v3/products/1", handler.requests[0].path);
+        assertEq(1, product.id);
+        assertEq("Mug", product.name);
+
+        # an error response is raised as WOOCOMMERCE-API-ERROR with the response
+        try {
+            prov.doGet("products/999");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("WOOCOMMERCE-API-ERROR", ex.err);
+            assertEq("Invalid ID. (HTTP 404)", ex.desc);
+            assertEq(404, ex.arg.status_code);
+            assertEq("woocommerce_rest_product_invalid_id", ex.arg.body.code);
+        }
+
+        # wrong credentials are rejected by the server
+        WooCommerceDataProvider::WooCommerceDataProvider bad_prov({
+            "store_url": store_url,
+            "consumer_key": "ck_test",
+            "consumer_secret": "wrong",
+        });
+        try {
+            bad_prov.doGet("products");
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("WOOCOMMERCE-API-ERROR", ex.err);
+            assertEq(401, ex.arg.status_code);
+        }
+
+        # a provider created from a connection uses the connection's async client
+        WooCommerceRestClient::WooCommerceRestConnection conn("woo", "", "woocommerce://localhost", {}, {
+            "store_url": store_url,
+            "consumer_key": "ck_test",
+            "consumer_secret": "cs_test",
+        });
+        AbstractDataProvider conn_prov = conn.getDataProvider();
+        assertTrue(cast<WooCommerceDataProvider::WooCommerceDataProvider>(conn_prov).getRestClient()
+            instanceof WooCommerceRestClient::WooCommerceRestClientIo);
+        handler.requests = ();
+        auto status = conn_prov.getChildProvider("get-system-status").doRequest({});
+        assertEq(1, handler.requests.size());
+        assertEq("shop/wp-json/wc/v3/system_status", handler.requests[0].path);
+        assertEq("9.0.0", status.environment.version);
+
+        # a connection error is raised after the retries
+        server.stop();
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \prov.doGet(), ("products",));
     }
 
     #! Connection tests
@@ -347,10 +526,10 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         checkJson();
         # Use a mock-disconnected REST client; the base provider falls back to fake data
         # when the live request fails, so this test runs without credentials.
-        WooCommerceRestClient::WooCommerceRestClient mockClient(
+        WooCommerceRestClient::WooCommerceRestClientIo mockClient(
             {"store_url": "https://invalid.example.invalid",
              "consumer_key": "ck_test",
-             "consumer_secret": "cs_test"}, True);
+             "consumer_secret": "cs_test"});
         WooCommerceDataProvider::WooCommerceDataProvider prov(mockClient);
         AbstractDataProvider events = prov.getChildProvider("events");
         # Every concrete event type defined in WooCommerceDataProviderDefs must produce
@@ -951,7 +1130,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         # Delete test category (WC REST API v3: DELETE /products/categories/<id>?force=true)
         if (testCategoryId) {
             try {
-                client.del("products/categories/" + string(testCategoryId) + "?force=true");
+                client.restDel("products/categories/" + string(testCategoryId) + "?force=true", NOTHING);
                 if (m_options.verbose) {
                     printf("Deleted test category: %d\n", testCategoryId);
                 }
@@ -965,7 +1144,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         # Delete test tag (WC REST API v3: DELETE /products/tags/<id>?force=true)
         if (testTagId) {
             try {
-                client.del("products/tags/" + string(testTagId) + "?force=true");
+                client.restDel("products/tags/" + string(testTagId) + "?force=true", NOTHING);
                 if (m_options.verbose) {
                     printf("Deleted test tag: %d\n", testTagId);
                 }

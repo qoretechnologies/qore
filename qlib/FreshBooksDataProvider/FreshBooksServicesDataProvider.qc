@@ -60,7 +60,7 @@ public class FreshBooksServicesDataProvider inherits FreshBooksDataProviderBase 
     }
 
     #! Creates the object with a REST client
-    constructor(FreshBooksRestClient::FreshBooksRestClient rest) : FreshBooksDataProviderBase(rest) {
+    constructor(FreshBooksRestClient::FreshBooksRestClientIo rest) : FreshBooksDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -81,11 +81,11 @@ public class FreshBooksServicesDataProvider inherits FreshBooksDataProviderBase 
     #! Returns an iterator for records matching the search criteria
     private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        setBusinessIdFromSearchOpts(search_options);
+        *string business_id = search_options.business_id;
 
         # If id provided, get single record (note: singular /service/ for single lookup)
         if (search_options.id) {
-            hash<auto> result = doGet(businessPath(sprintf("/service/%d", search_options.id)));
+            hash<auto> result = doGet(businessPath(sprintf("/service/%d", search_options.id), business_id));
             return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.service,)),
                 where_cond, search_options);
         }
@@ -101,7 +101,7 @@ public class FreshBooksServicesDataProvider inherits FreshBooksDataProviderBase 
         int page = 1;
         while (True) {
             params.page = page;
-            hash<auto> result = doGet(businessPath("/services"), params);
+            hash<auto> result = doGet(businessPath("/services", business_id), params);
             if (result.services) {
                 all_records += result.services;
             }

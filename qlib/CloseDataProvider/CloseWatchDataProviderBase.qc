@@ -48,7 +48,7 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(CloseRestClient::CloseRestClient rest, *hash<auto> options)
+    constructor(CloseRestClient::CloseRestClientIo rest, *hash<auto> options)
             : CloseDataProviderBase(rest),
               AbstractTimestampWatchDataProvider(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval),
                   options.start_date) {
@@ -57,11 +57,6 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
     #! Destructor - stops the polling thread
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! The upstream ordering is not relied on; records are ordered by timestamp before delivery

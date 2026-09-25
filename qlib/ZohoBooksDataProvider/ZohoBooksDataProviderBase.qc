@@ -28,26 +28,34 @@ public namespace ZohoBooksDataProvider {
 #! Base class for Zoho Books data providers
 public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Zoho Books data providers
         const BaseConstructorOptions = {
             "zohobooksrestclient": <DataProviderOptionInfo>{
                 "display_name": "Zoho Books REST Client",
-                "short_desc": "The ZohoBooksRestClient object",
-                "type": AbstractDataProviderType::get(new Type("ZohoBooksRestClient::ZohoBooksRestClient")),
-                "desc": "The ZohoBooksRestClient object to use for API calls",
+                "short_desc": "The ZohoBooksRestClientIo object",
+                "type": AbstractDataProviderType::get(new Type("ZohoBooksRestClient::ZohoBooksRestClientIo")),
+                "desc": "The `ZohoBooksRestClientIo` object to use for API calls",
             },
             "zohobooksrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Zoho Books REST Client Options",
-                "short_desc": "Options for creating a ZohoBooksRestClient",
+                "short_desc": "Options for creating a ZohoBooksRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a ZohoBooksRestClient object if one is not provided directly",
+                "desc": "Options for creating a `ZohoBooksRestClientIo` object if one is not provided directly",
             },
             "subdomain": <DataProviderOptionInfo>{
                 "display_name": "Sub Domain",
                 "short_desc": "Zoho subdomain",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Zoho subdomain for your account (zoho or zohocloud)",
-                "default_value": ZohoBooksRestClient::ZohoBooksRestClient::DefaultSubdomain,
+                "default_value": ZohoBooksRestClient::ZohoBooksRestClientIo::DefaultSubdomain,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "zoho",
@@ -64,7 +72,7 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
                 "short_desc": "Zoho domain",
                 "type": AbstractDataProviderType::get(StringType),
                 "desc": "The Zoho domain for your data center region",
-                "default_value": ZohoBooksRestClient::ZohoBooksRestClient::DefaultDomain,
+                "default_value": ZohoBooksRestClient::ZohoBooksRestClientIo::DefaultDomain,
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": ".com",
@@ -101,7 +109,7 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
 
     private {
         #! The REST client object for API calls
-        ZohoBooksRestClient::ZohoBooksRestClient rest;
+        ZohoBooksRestClient::ZohoBooksRestClientIo rest;
 
         #! The connection object, if applicable
         *ZohoBooksRestClient::ZohoBooksRestConnection conn;
@@ -112,14 +120,14 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoBooksRestClient::ZohoBooksRestClient rest) {
+    constructor(ZohoBooksRestClient::ZohoBooksRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(ZohoBooksRestClient::ZohoBooksRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -135,12 +143,12 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
             if (copts.domain) {
                 client_opts.domain = copts.domain;
             }
-            rest = new ZohoBooksRestClient::ZohoBooksRestClient(client_opts);
+            rest = new ZohoBooksRestClient::ZohoBooksRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ZohoBooksRestClient::ZohoBooksRestClient getRestClient() {
+    ZohoBooksRestClient::ZohoBooksRestClientIo getRestClient() {
         return rest;
     }
 
@@ -213,28 +221,15 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "ZOHOBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "ZOHOBOOKS-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
-                # Check for rate limiting (headers are lowercase in RestClient)
-                if (info."response-headers"."x-rate-limit-remaining" == "0") {
-                    *string reset = info."response-headers"."x-rate-limit-reset";
+                # Check for rate limiting (response header names are lowercase)
+                if (response.headers."x-rate-limit-remaining" == "0") {
+                    *string reset = response.headers."x-rate-limit-reset";
                     if (reset.val()) {
                         int reset_secs = reset.toInt();
                         if (reset_secs > 0 && reset_secs <= 60) {
@@ -380,7 +375,7 @@ public class ZohoBooksDataProviderBase inherits DataProvider::AbstractDataProvid
         list<hash<AllowedValueInfo>> rv = ();
         try {
             # Note: /organizations endpoint doesn't require organization_id
-            hash<auto> response = rest.get("/organizations");
+            hash<auto> response = rest.restGet("/organizations");
             if (response.body.organizations) {
                 foreach hash<auto> org in (response.body.organizations) {
                     string display_name = org.name ?? sprintf("Organization %s", org.organization_id);

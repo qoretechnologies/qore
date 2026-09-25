@@ -29,6 +29,7 @@
 %requires Util
 %requires HttpServerUtil
 %requires Logger
+%requires HttpClientIo
 %requires JsonLd
 %requires(reexport) OneRecordClient
 %try-module uuid

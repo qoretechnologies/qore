@@ -94,7 +94,7 @@ public class LinearIssueEventDataProvider inherits LinearDataProviderBase, DataP
     }
 
     #! Creates the object with a REST client
-    constructor(LinearRestClient::LinearRestClient rest, *hash<auto> options) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, *hash<auto> options) : LinearDataProviderBase(rest) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (copts.teamId) {
             teamId = copts.teamId;

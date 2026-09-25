@@ -1,0 +1,211 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    The character encoding rules for HTTP message bodies shared by all HTTP clients and servers:
+    get_http_body_encoding() and decode_http_body()
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class HttpBodyCharsetTest
+
+public class HttpBodyCharsetTest inherits QUnit::Test {
+    constructor() : Test("HttpBodyCharsetTest", "1.0") {
+        addTestCase("JSON and event streams", \jsonTest());
+        addTestCase("YAML", \yamlTest());
+        addTestCase("XML", \xmlTest());
+        addTestCase("HTML", \htmlTest());
+        addTestCase("CSS", \cssTest());
+        addTestCase("JavaScript and form data", \scriptTest());
+        addTestCase("other text", \textTest());
+        addTestCase("binary types", \binaryTest());
+        addTestCase("no Content-Type", \noContentTypeTest());
+        addTestCase("decoding", \decodeTest());
+        set_return_value(main());
+    }
+
+    # JSON is always UTF-8 (RFC 8259), as are server-sent events (WHATWG HTML)
+    jsonTest() {
+        foreach string ct in ("application/json", "application/ld+json", "application/problem+json", "text/json",
+                "text/event-stream") {
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("{}")), ct);
+            # the charset parameter is ignored
+            assertEq("UTF-8", get_http_body_encoding(ct + "; charset=iso-8859-1", binary("{}")), ct);
+            # the assumed encoding is not used
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("{}"), "ISO-8859-15"), ct);
+            # a UTF-16 byte order mark does not change the encoding
+            assertEq("UTF-8", get_http_body_encoding(ct, <fffe7b00>), ct);
+        }
+    }
+
+    # YAML: a byte order mark (UTF-8, UTF-16, UTF-32), else UTF-8; no charset parameter (RFC 9512)
+    yamlTest() {
+        foreach string ct in ("application/yaml", "application/x-yaml", "text/yaml", "text/x-yaml",
+                "application/vnd.test+yaml") {
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("a: 1")), ct);
+            assertEq("UTF-8", get_http_body_encoding(ct + "; charset=iso-8859-1", binary("a: 1")), ct);
+            assertEq("UTF-16BE", get_http_body_encoding(ct, <feff0061>), ct);
+            assertEq("UTF-16LE", get_http_body_encoding(ct, <fffe6100>), ct);
+            assertEq("UTF-32BE", get_http_body_encoding(ct, <0000feff00000061>), ct);
+            assertEq("UTF-32LE", get_http_body_encoding(ct, <fffe000061000000>), ct);
+        }
+    }
+
+    # XML: a byte order mark, else the charset parameter, else the XML declaration, else UTF-8 (RFC 7303)
+    xmlTest() {
+        foreach string ct in ("application/xml", "text/xml", "application/atom+xml", "image/svg+xml") {
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("<a/>")), ct);
+            assertEq("WINDOWS-1252", get_http_body_encoding(ct, binary(
+                "<?xml version=\"1.0\" encoding=\"windows-1252\"?><a/>")), ct);
+            assertEq("ISO-8859-2", get_http_body_encoding(ct, binary(
+                "<?xml version='1.0' encoding = 'iso-8859-2' standalone='yes'?><a/>")), ct);
+            # "encoding" must be a pseudo-attribute of the declaration
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("<?xml version=\"encoding='x'\"?><a/>")), ct);
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("<?xmlx encoding=\"koi8-r\"?><a/>")), ct);
+            # an unsupported encoding in the declaration is ignored
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("<?xml version=\"1.0\" encoding=\"x-no-such-enc\"?>")),
+                ct);
+            # a declaration without an encoding
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("<?xml version=\"1.0\"?><a/>")), ct);
+            # the charset parameter overrides the declaration
+            assertEq("KOI8-R", get_http_body_encoding(ct + ";charset=koi8-r", binary(
+                "<?xml version=\"1.0\" encoding=\"windows-1252\"?><a/>")), ct);
+            # a byte order mark overrides the charset parameter
+            assertEq("UTF-16LE", get_http_body_encoding(ct + ";charset=koi8-r", <fffe3c00>), ct);
+            # the assumed encoding is not used
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("<a/>"), "ISO-8859-15"), ct);
+        }
+    }
+
+    # HTML: a byte order mark, else the charset parameter, else a meta element, else the assumed encoding
+    htmlTest() {
+        string ct = "text/html";
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<html></html>")));
+        assertEq("ISO-8859-15", get_http_body_encoding(ct, binary("<html></html>"), "ISO-8859-15"));
+        assertEq("KOI8-R", get_http_body_encoding(ct, binary("<html><head><META CharSet=\"koi8-r\"></head>")));
+        assertEq("WINDOWS-1252", get_http_body_encoding(ct, binary("<meta charset=windows-1252>")));
+        assertEq("ISO-8859-2", get_http_body_encoding(ct, binary("<meta http-equiv=\"Content-Type\" "
+            "content=\"text/html; charset=iso-8859-2\">")));
+        # a document that declares UTF-16 in a meta element could not have been read to find it: UTF-8 (WHATWG)
+        assertEq("UTF-8", get_http_body_encoding(ct, binary("<meta charset=\"utf-16\">")));
+        # an unsupported encoding in a meta element is ignored
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<meta charset=\"x-no-such-enc\">")));
+        assertEq("KOI8-R", get_http_body_encoding(ct, binary("<meta charset=\"x-no-such-enc\"><meta charset=koi8-r>")));
+        # the charset parameter overrides a meta element
+        assertEq("UTF-8", get_http_body_encoding(ct + "; charset=utf-8", binary("<meta charset=\"koi8-r\">")));
+        assertEq("UTF-8", get_http_body_encoding(ct, <efbbbf3c68746d6c3e>));
+        assertEq("KOI8-R", get_http_body_encoding(ct, binary("<meta/charset='koi8-r'/>")));
+        # "charset=" in the value of another attribute is not a declaration
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<meta name=\"x charset=koi8-r\">")));
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<meta content=\"text/html; charset=koi8-r\">")));
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<meta http-equiv=refresh "
+            "content=\"text/html; charset=koi8-r\">")));
+        # declarations in comments and other elements are ignored
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<!-- <meta charset=\"koi8-r\"> -->")));
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary("<metadata charset=\"koi8-r\">")));
+        assertEq("KOI8-R", get_http_body_encoding(ct, binary("<!-- x --><title>t</title><meta charset=koi8-r>")));
+        # the first meta element with a declaration wins
+        assertEq("KOI8-R", get_http_body_encoding(ct, binary("<meta name=x><meta charset=koi8-r>"
+            "<meta charset=iso-8859-2>")));
+        # only the first 1024 bytes are examined
+        assertEq("ISO-8859-1", get_http_body_encoding(ct, binary(strmul(" ", 1024) + "<meta charset=\"koi8-r\">")));
+    }
+
+    # CSS: a byte order mark, else the charset parameter, else an @charset rule, else UTF-8 (CSS Syntax)
+    cssTest() {
+        string ct = "text/css";
+        assertEq("UTF-8", get_http_body_encoding(ct, binary("body {}")));
+        assertEq("ISO-8859-15", get_http_body_encoding(ct, binary("@charset \"iso-8859-15\"; body {}")));
+        # the rule must be exactly at the start and in this form
+        assertEq("UTF-8", get_http_body_encoding(ct, binary(" @charset \"iso-8859-15\"; body {}")));
+        assertEq("UTF-8", get_http_body_encoding(ct, binary("@charset 'iso-8859-15'; body {}")));
+        assertEq("UTF-8", get_http_body_encoding(ct, binary("@charset \"utf-16\";")));
+        assertEq("UTF-8", get_http_body_encoding(ct, binary("@charset \"x-no-such-enc\";")));
+        assertEq("KOI8-R", get_http_body_encoding(ct + "; charset=koi8-r", binary("@charset \"iso-8859-15\";")));
+    }
+
+    # JavaScript (RFC 9239) and form data (WHATWG URL): a byte order mark, else the charset parameter, else UTF-8
+    scriptTest() {
+        foreach string ct in ("text/javascript", "application/javascript", "application/ecmascript",
+                "application/x-www-form-urlencoded") {
+            assertEq("UTF-8", get_http_body_encoding(ct, binary("a=1")), ct);
+            assertEq("ISO-8859-1", get_http_body_encoding(ct + "; charset=ISO-8859-1", binary("a=1")), ct);
+            assertEq("UTF-16BE", get_http_body_encoding(ct, <feff0061>), ct);
+        }
+    }
+
+    # other text: a byte order mark, else the charset parameter, else the assumed encoding (RFC 2616)
+    textTest() {
+        foreach string ct in ("text/plain", "text/csv", "TEXT/PLAIN", "application/x-custom; charset=koi8-r") {
+            *string charset = (ct =~ x/charset=(.*)$/)[0];
+            assertEq(charset ? charset.upr() : "ISO-8859-1", get_http_body_encoding(ct, <e4f6fc>), ct);
+            assertEq("UTF-8", get_http_body_encoding(ct, <efbbbfc3a4>), ct);
+        }
+        assertEq("ISO-8859-15", get_http_body_encoding("text/plain", <a4>, "ISO-8859-15"));
+        assertEq("UTF-8", get_http_body_encoding("text/plain; charset=\"utf-8\"", <c3a4>));
+        # an empty charset parameter is not an encoding declaration
+        assertEq("ISO-8859-1", get_http_body_encoding("text/plain; charset=", <e4>));
+    }
+
+    # types that are not text, including types that are binary by definition with a charset parameter
+    binaryTest() {
+        foreach string ct in ("application/octet-stream", "application/octet-stream; charset=utf-8",
+                "image/png; charset=utf-8", "audio/mpeg", "video/mp4; charset=utf-8", "font/woff2",
+                "application/pdf", "multipart/form-data; boundary=x") {
+            assertNothing(get_http_body_encoding(ct, binary("abc")), ct);
+            assertEq(binary("abc"), decode_http_body(ct, binary("abc")), ct);
+        }
+    }
+
+    # without a Content-Type, the data decides (WHATWG MIME Sniffing, RFC 9110 section 8.3)
+    noContentTypeTest() {
+        assertEq("ISO-8859-1", get_http_body_encoding(NOTHING, <e4f6fc0d0a09>));
+        assertEq("ISO-8859-1", get_http_body_encoding("", binary("text")));
+        assertEq("ISO-8859-15", get_http_body_encoding(NOTHING, binary("text"), "ISO-8859-15"));
+        # binary data bytes
+        assertNothing(get_http_body_encoding(NOTHING, <00010203>));
+        assertNothing(get_http_body_encoding(NOTHING, binary("text") + <1a>));
+        # ESC is not a binary data byte, as ISO-2022-JP uses it
+        assertEq("ISO-8859-1", get_http_body_encoding(NOTHING, binary("text") + <1b>));
+        # a byte order mark is text even with bytes that are binary data in other encodings
+        assertEq("UTF-16LE", get_http_body_encoding(NOTHING, <fffe610000>));
+        # only the first 1445 bytes are examined
+        assertEq("ISO-8859-1", get_http_body_encoding(NOTHING, binary(strmul("a", 1445)) + <00>));
+        # no data at all is text
+        assertEq("ISO-8859-1", get_http_body_encoding());
+    }
+
+    decodeTest() {
+        # the octets are returned as a string in the encoding of the body
+        string str = decode_http_body("text/plain", <e4f6fc>);
+        assertEq("äöü", str);
+        assertEq("ISO-8859-1", str.encoding());
+        # a byte order mark is removed
+        str = decode_http_body("text/plain", <efbbbf61>);
+        assertEq("a", str);
+        assertEq("UTF-8", str.encoding());
+        str = decode_http_body("application/json", <efbbbf7b7d>);
+        assertEq("{}", str);
+        str = decode_http_body("text/plain", <fffe61006200>);
+        assertEq("UTF-16LE", str.encoding());
+        assertEq("ab", convert_encoding(str, "UTF-8"));
+        # the declared encoding is used
+        str = decode_http_body("application/xml", binary("<?xml version=\"1.0\" encoding=\"iso-8859-2\"?><a>")
+            + <b1> + binary("</a>"));
+        assertEq("ISO-8859-2", str.encoding());
+        assertEq("<?xml version=\"1.0\" encoding=\"iso-8859-2\"?><a>ą</a>", convert_encoding(str, "UTF-8"));
+        # an assumed encoding
+        str = decode_http_body("text/plain", <a4>, "ISO-8859-15");
+        assertEq("€", str);
+        # an empty body
+        assertEq("", decode_http_body("text/plain", binary()));
+        assertEq(binary(), decode_http_body("application/octet-stream", binary()));
+    }
+}

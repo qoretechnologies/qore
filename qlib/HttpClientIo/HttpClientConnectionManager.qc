@@ -642,6 +642,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
         stream.markReservationHeld();
         stream.setMaxResponseBodySize(opts.max_response_body_size);
+        stream.setAssumedEncoding(opts.assume_encoding);
         if (from_pool) {
             stream.markConnectionReused();
         }
@@ -3230,6 +3231,14 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
                 } else if (op instanceof Http3ClientPollOperation) {
                     cast<Http3ClientPollOperation>(op).setMaxResponseBodySize(opts.max_response_body_size);
                 }
+            }
+
+            # text response bodies are decoded by the rules shared by all HTTP clients; HTTP/3 bodies are decoded
+            # by the stream handle
+            if (op instanceof Http1ClientPollOperation) {
+                cast<Http1ClientPollOperation>(op).setAssumedEncoding(opts.assume_encoding);
+            } else if (op instanceof Http2ClientPollOperation) {
+                cast<Http2ClientPollOperation>(op).setAssumedEncoding(opts.assume_encoding);
             }
         }
 

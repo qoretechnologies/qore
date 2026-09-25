@@ -34,7 +34,7 @@
 %requires(reexport) ServiceNowRestClient
 
 module ServiceNowRestDataProvider {
-    version = "2.0";
+    version = "2.1";
     desc = "user module providing a data provider API for ServiceNow instances through the REST API";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -248,6 +248,19 @@ module ServiceNowRestDataProvider {
     - @ref ServiceNowRestDataProvider::ServiceNowTablesDataProvider "ServiceNowTablesDataProvider"
     - @ref ServiceNowRestDataProvider::ServiceNowTableDataProvider "ServiceNowTableDataProvider"
     - @ref ServiceNowRestDataProvider::ServiceNowRestRecordIterator "ServiceNowRestRecordIterator"
+
+    @subsection servicenowrestdataprovider_v2_1 ServiceNowRestDataProvider v2.1
+    - API calls are made with an asynchronous
+      @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo" from the connection's
+      \c getAsync() or created from the options; a synchronous
+      @ref ServiceNowRestClient::ServiceNowRestClient "ServiceNowRestClient" passed to the data provider, directly
+      or in the \c snrestclient option, is converted with
+      @ref ServiceNowRestDataProvider::ServiceNowRestDataProviderBase::getAsyncClient()
+      "ServiceNowRestDataProviderBase::getAsyncClient()"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - the child data providers take a @ref ServiceNowRestClient::ServiceNowRestClientIo "ServiceNowRestClientIo"
+    - fixed passing a REST client in the \c snrestclient option, which always failed with
+      \c METHOD-DOES-NOT-EXIST
 
     @subsection servicenowrestdataprovider_v2_0 ServiceNowRestDataProvider v2.0
     - added support for the data provider action catalog API

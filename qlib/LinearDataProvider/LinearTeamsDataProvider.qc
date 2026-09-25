@@ -64,7 +64,7 @@ public class LinearTeamsDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(LinearRestClient::LinearRestClient rest) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest) : LinearDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

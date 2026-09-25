@@ -749,6 +749,17 @@ static bool qore_aot_record_module_deps(QoreProgram* pgm,
     if (aot_module_dep_sink) {
         aot_module_dep_sink->insert(aot_module_dep_sink->end(),
             deps.begin(), deps.end());
+        // The artifact is compiled without the modules of failed %try-module directives, so the build depends on
+        // the files that could provide them: replacing a module that was too old, for example, must rebuild the
+        // artifact.  A module that is installed later is detected when the artifact is loaded; see
+        // qoreAOTAppendOptionalModulesTrailer().
+        for (const std::string& spec : pp->unavailable_try_modules) {
+            size_t end = spec.find_first_of(" \t<>=!");
+            std::string name = spec.substr(0, end);
+            if (!name.empty()) {
+                QMM.getModuleCandidateFiles(name.c_str(), pgm, *aot_module_dep_sink);
+            }
+        }
     }
     return true;
 }
@@ -25828,6 +25839,13 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         }
     }
 
+    // The optional modules that were unavailable are recorded before the PC->loc and dependency trailers,
+    // which are read from the end of the file.
+    if (!compile_only && !target_triple
+            && !qoreAOTAppendOptionalModulesTrailer(output_path,
+                qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
+        return false;
+    }
     // Append the lazy PC->loc trailer to the final loaded artifact (output_path is
     // the .qo in compile_only mode, otherwise the just-linked .qmod).
     if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
@@ -26310,6 +26328,13 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             }
         }
 
+        // The optional modules that were unavailable are recorded before the PC->loc and dependency
+        // trailers, which are read from the end of the file.
+        if (!compile_only && !target_triple
+                && !qoreAOTAppendOptionalModulesTrailer(output_path,
+                    qore_program_private::get(**qpgm)->unavailable_try_modules, error)) {
+            return false;
+        }
         // Append the lazy PC->loc trailer to the final loaded artifact.
         if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
             return false;
@@ -30804,8 +30829,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // concatenates them into the linked artifact — so lazy on-throw locations work
         // for aggregate-resident functions automatically.
         if (!target_triple
-                && !qoreAOTAppendModuleDependenciesTrailer(
-                    output_path, mod_info.name, mod_info.dependencies, error)) {
+                && (!qoreAOTAppendOptionalModulesTrailer(output_path,
+                        qore_program_private::get(**qpgm)->unavailable_try_modules, error)
+                    || !qoreAOTAppendModuleDependenciesTrailer(
+                        output_path, mod_info.name, mod_info.dependencies, error))) {
             remove(glue_obj.c_str());
             return false;
         }

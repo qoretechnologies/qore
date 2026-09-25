@@ -1013,28 +1013,44 @@ getHandlerNames
 
     #! Returns a file location handler bound to an already-authenticated HTTP client
     /** The returned handler treats a location as a URI path on the client's target rather than as a URL, and
-        neither configures nor closes the client.  Intended for
+        neither changes nor closes the client.  Intended for
         \c ConnectionProvider::AbstractConnection::getFileLocationHandler() implementations, so that a connection
         supplies a native file location handler without reimplementing the transport.
 
-        @param client the client to bind; must be a @ref Qore::HTTPClient "HTTPClient" or a subclass of it
+        Requests are made with the \c HttpClientIo module; see @ref filelocationhandler_http.
+
+        @param client the client to bind: a @ref Qore::HTTPClient "HTTPClient" (or a subclass), whose configuration
+        (URL and credentials, timeouts, protocol version, proxy, TLS settings, default headers, redirect and error
+        handling) is used for requests made with a new \c HttpClientIo::HttpClientConnectionManager, or an
+        \c HttpClientIo::HttpClientConnectionManager, which is used for requests with \a url
+        @param url the target URL for a connection manager; required for a connection manager and ignored
+        otherwise; any user information is sent with HTTP basic authentication
+        @param opts request options for a connection manager: \c headers (default request headers),
+        \c error_passthru, \c redirect_passthru, \c max_redirects, \c timeout (in milliseconds), and
+        \c encoding_passthru
 
         @return a file location handler bound to \a client
+
+        @throw LOCATION-ERROR \a client is not supported, no URL was given for a connection manager, or an unsupported
+        request option was given
 
         @note The client is shared with everything else using the connection, so the handler sends any request
         headers per request rather than changing the client's own defaults
 
         @since FileLocationHandler 3.0
     */
-    static AbstractFileLocationHandler getHttpHandlerForClient(object client) {
-        return new FileLocationHandlerHttp(client);
+    static AbstractFileLocationHandler getHttpHandlerForClient(object client, *string url, *hash<auto> opts) {
+        return new FileLocationHandlerHttp(client, url, opts);
     }
 
     #! Returns a file location handler bound to an already-authenticated REST client
-    /** As @ref getHttpHandlerForClient(), but driving the client through the \c RestClient::AbstractRestClient
-        API, so that the client's authentication, token refresh, and connection pooling apply to every request.
+    /** As @ref getHttpHandlerForClient(), but driving the client's asynchronous request API, so that the client's
+        authentication, token refresh, and connection pooling apply to every request.
 
-        @param client the client to bind; must implement the \c RestClient::AbstractRestClient API
+        @param client the client to bind: a \c RestClientIo::RestClientIo object (or a subclass), or a synchronous
+        \c RestClient::RestClient object, in which case requests are made with a \c RestClientIo::RestClientIo
+        object created with its constructor options and connection path; the operations of a handler bound to
+        another kind of object raise \c UNIMPLEMENTED
 
         @return a file location handler bound to \a client
 

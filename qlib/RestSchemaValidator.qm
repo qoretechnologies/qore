@@ -78,6 +78,9 @@ module RestSchemaValidator {
     @section restschemavalidator_relnotes RestSchemaValidator Module Release Notes
 
     @subsection restschemavalidator_2_5 RestSchemaValidator v2.5
+    - JSON and YAML response bodies in another encoding than UTF-8 are converted to UTF-8 before they are parsed,
+      instead of relabeling ISO-8859-1 text as UTF-8; HTTP bodies are decoded with their actual encoding (see
+      @ref Qore::decode_http_body() "decode_http_body()"), and YAML with a UTF-16 byte order mark is parsed correctly
     - schema data types describe and enforce the schema's validation constraints (bounds, lengths, patterns,
       enumerations, and item and property counts), so a value violating them is rejected when it is accepted by the
       type rather than only when a request is validated
@@ -2875,12 +2878,13 @@ public namespace RestSchemaValidator {
                         "body type is %y", ct, response_body.type());
                 }
 
-                # for encoding if necessary for JSON and YAML for HTTP servers that do not set the character encoding
-                # (ex: the Discord API server)
+                # the parsers need UTF-8; HTTP bodies are decoded with their actual encoding (see
+                # decode_http_body()), which is UTF-8 for JSON and UTF-8 or a byte-order-mark encoding for YAML, so
+                # text in another encoding is converted
                 if ((ct == MimeTypeJson || ct == MimeTypeYaml)
                     && response_body.typeCode() == NT_STRING
-                    && response_body.encoding() == "ISO-8859-1") {
-                    response_body = force_encoding(response_body, "UTF-8");
+                    && response_body.encoding() != "UTF-8") {
+                    response_body = convert_encoding(response_body, "UTF-8");
                 }
 
                 string ds_code = dh."code";

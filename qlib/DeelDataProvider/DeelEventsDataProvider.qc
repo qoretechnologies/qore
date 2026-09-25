@@ -72,7 +72,7 @@ public class DeelEventsDataProvider inherits DeelDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(DeelRestClient::DeelRestClient rest, *hash<auto> options) : DeelDataProviderBase(rest) {
+    constructor(DeelRestClient::DeelRestClientIo rest, *hash<auto> options) : DeelDataProviderBase(rest) {
         watch_options = options;
     }
 

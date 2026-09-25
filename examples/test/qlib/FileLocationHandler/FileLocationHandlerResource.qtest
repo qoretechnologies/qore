@@ -590,14 +590,28 @@ public class FileLocationHandlerResourceTest inherits QUnit::Test {
             assertEq(1, r.info.http.redirects.size());
         }
 
-        # a REST client without the request methods of RestClient cannot be used, with either API
-        RestClientIo::RestClientIo rest_io({"url": sprintf("http://127.0.0.1:%d", port_a)});
+        # an asynchronous REST client is used directly, with either API
+        RestClientIo::RestClientIo rest_io({"url": sprintf("http://user:pass@127.0.0.1:%d/api", port_a)});
         handler = FileLocationHandler::getRestHandlerForClient(rest_io);
-        foreach hash<ExceptionInfo> ex in (getBothErrorsFromHandler(handler, "rest", "rest/json")) {
-            assertEq("UNIMPLEMENTED", ex.err);
-            assertRegex("RestClientIo.*does not provide the (doRequest|startPollSendRecv)\\(\\) method", ex.desc);
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "rest", "rest/moved", NOTHING,
+                \peer_a.clear())) {
+            assertEq(binary("{\"b\": 2}"), r.data);
+            assertEq(url_a + "/api/rest/moved", r.info.requested_location);
+            assertEq(url_a + "/api/rest/json", r.info.effective_location);
+            assertEq(1, r.info.http.redirects.size());
+            # the credentials are sent to the redirect target on the same origin
+            assertEq(("Basic dXNlcjpwYXNz", "Basic dXNlcjpwYXNz"), (map $1.authorization, peer_a.getRequests()));
         }
-        assertThrows("UNIMPLEMENTED", \handler.getBinaryFile(), ("rest", "rest/json"));
+        assertEq(binary("/api/rest/other"), handler.getBinaryFile("rest", "rest/other"));
+        # the data-only APIs return the deserialized body
+        assertThrows("REST-DATA-ERROR", "returned data of type \"hash", \handler.getBinaryFile(),
+            ("rest", "rest/json"));
+        # an object without a REST request API cannot be used
+        handler = FileLocationHandler::getRestHandlerForClient(new Mutex());
+        assertThrows("UNIMPLEMENTED", "does not provide the asynchronous request API", \handler.getBinaryFile(),
+            ("rest", "rest/json"));
+        assertThrows("UNIMPLEMENTED", "does not provide the asynchronous request API",
+            \handler.getResourcePoller(), ("rest", "rest/json"));
     }
 
     fileTest() {

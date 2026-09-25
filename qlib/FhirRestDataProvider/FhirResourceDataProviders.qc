@@ -35,7 +35,7 @@ public class FhirReadResourceDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -70,7 +70,7 @@ public class FhirSearchResourcesDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -105,7 +105,7 @@ public class FhirSearchAllResourcesDataProvider inherits FhirRestDataProviderBas
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -141,7 +141,7 @@ public class FhirCreateResourceDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -177,7 +177,7 @@ public class FhirSubmitBundleDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -212,7 +212,7 @@ public class FhirUpdateResourceDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -248,7 +248,7 @@ public class FhirConditionalUpdateResourceDataProvider inherits FhirRestDataProv
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -284,7 +284,7 @@ public class FhirPatchResourceDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -320,7 +320,7 @@ public class FhirDeleteResourceDataProvider inherits FhirRestDataProviderBase {
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {
@@ -355,7 +355,7 @@ public class FhirValidateResourceDataProvider inherits FhirRestDataProviderBase 
         };
     }
 
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     string getName() {

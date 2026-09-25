@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractODataRecordIterator class definition
 
-/** AbstractODataRecordIterator.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** AbstractODataRecordIterator.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,7 +30,7 @@ public namespace CdsRestDataProvider {
 public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The REST client object for API calls
-        CdsRestClient::CdsRestClient rest;
+        CdsRestClient::CdsRestClientIo rest;
 
         #! Record info for the entity
         hash<ODataRecordInfo> record_info;
@@ -47,7 +47,7 @@ public class AbstractODataRecordIterator inherits AbstractDataProviderRecordIter
         @param record_info record information describing the entity
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(CdsRestClient::CdsRestClient rest, hash<ODataRecordInfo> record_info, *hash<auto> search_options)
+    constructor(CdsRestClient::CdsRestClientIo rest, hash<ODataRecordInfo> record_info, *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
         self.rest = rest;
         self.record_info = record_info;

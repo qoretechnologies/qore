@@ -210,6 +210,23 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - text is sent in the character encoding that the response declares: a string or a
+      @ref Qore::StringInputStream "StringInputStream" in another encoding is converted to the charset of the
+      \c Content-Type, or to the response encoding; a string was sent in its own encoding and labeled with the
+      response encoding, and a stream was converted to the socket encoding
+    - fixed a response with a @ref Qore::StringInputStream "StringInputStream" body closing the connection without
+      a response
+    - a response body without a \c Content-Type is labeled by its data: a string as \c text/html in the response
+      encoding as before, binary data (including a binary stream) as \c application/octet-stream without a charset,
+      and a body produced by a \c send_callback without a \c Content-Type (RFC 9110 section 8.3); binary data was
+      labeled as HTML text in the response encoding, and a stream body had no type; error responses are labeled
+      the same way in the synchronous and asynchronous I/O modes, and no charset is added to the type of a binary
+      error message
+    - request bodies are decoded by the rules shared by all HTTP clients and servers (see
+      @ref Qore::decode_http_body() "decode_http_body()") whether they are read from the socket, buffered, or
+      received over HTTP/2 or HTTP/3; the default text encoding (@ref HttpServer::HttpServer::setDefaultTextEncoding()
+      "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
+      replaces the encoding of a JSON body or one declared in the body
     - every request handler receives the effective maximum request body size of the listener
       (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
       \c cx."header-info".max_request_body_size (\c 0 = no limit), including handlers on an automatically created
@@ -1234,12 +1251,38 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
         return HttpServer::HttpServerVersion;
     }
 
+    #! Sets the default text encoding: the encoding assumed for request text without an encoding declaration
+    /** Request bodies are decoded by the rules shared by all HTTP clients and servers (see
+        @ref Qore::decode_http_body() "decode_http_body()"); the default text encoding does not apply to a body whose
+        encoding is declared in its \c Content-Type or in the body, or defined by its type, such as JSON.
+
+        @param enc the default text encoding
+    */
     setDefaultTextEncoding(string enc) {
         override_encoding = enc;
     }
 
+    #! Returns the default text encoding: the encoding assumed for request text without an encoding declaration
+    /** @return the encoding set with @ref setDefaultTextEncoding(), or \c "iso-8859-1" by default
+    */
     string getDefaultTextEncoding() {
         return override_encoding ? override_encoding : "iso-8859-1";
+    }
+
+    #! Returns a request body received as binary data as a string
+    /** Text is decoded by the rules shared by all HTTP clients and servers (see @ref Qore::decode_http_body()
+        "decode_http_body()"), with the default text encoding (@ref getDefaultTextEncoding()) as the assumed
+        encoding; a body of another type that is not delivered as binary data is returned in the default text
+        encoding.
+
+        @param hdr the request headers
+        @param body the request body
+    */
+    private string decodeRequestText(hash<auto> hdr, binary body) {
+        string assumed = getDefaultTextEncoding();
+        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed);
+        return rv.typeCode() == NT_STRING ? rv : body.toString(assumed);
     }
 
     #! To call a listener's stop callback
@@ -2403,6 +2446,40 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         logger.logArgs(LoggerLevel::ERROR, "HttpServer: " + fmt, argv);
     }
 
+    #! Returns the character encoding of the text of a response: the charset parameter of its Content-Type, else the given encoding
+    /** @param content_type the \c Content-Type of the response, if any
+        @param default_encoding the response encoding, used when the \c Content-Type has no charset parameter
+    */
+    private static string getResponseTextEncoding(*string content_type, string default_encoding) {
+        *string charset = (content_type =~ x/;\s*charset\s*=\s*"?([^";\s]+)/i)[0];
+        return charset ?? default_encoding;
+    }
+
+    #! Returns True if the given names denote the same character encoding
+    private static bool sameEncoding(string enc1, string enc2) {
+        # the canonical names of the encodings are compared
+        return force_encoding("", enc1).encoding() == force_encoding("", enc2).encoding();
+    }
+
+    #! Returns the Content-Type for a response body without one, or @ref nothing if none is to be sent
+    /** A string body is HTML in the response encoding, as documented for handlers; binary data is
+        \c application/octet-stream, as it has no character encoding; a body produced by a \c send_callback has no
+        known type, so no \c Content-Type is sent (RFC 9110 section 8.3), and the client examines the data.
+
+        @param rv the response
+        @param encoding the character encoding of a string body
+    */
+    private static *string getDefaultContentType(hash<auto> rv, string encoding) {
+        auto body = rv.body ?? rv.chunked_body;
+        if (body instanceof StringInputStream || body.typeCode() == NT_STRING) {
+            return body.val() || body instanceof InputStream ? MimeTypeHtml + ";charset=" + encoding : NOTHING;
+        }
+        if (body instanceof InputStream || body.typeCode() == NT_BINARY) {
+            return body.val() || body instanceof InputStream ? MimeTypeOctetStream : NOTHING;
+        }
+        return NOTHING;
+    }
+
     #! sends an HTTP error message on the socket
     sendHttpError(HttpListener listener, hash<auto> cx, Socket s, int status_code, *data msg, *InputStream chunked_msg,
             *hash<auto> extra_hdrs, *string encoding, bool head) {
@@ -2472,9 +2549,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         hash<auto> hdr += getResponseHeaders(cx."listener-id");
 
+        # an error message is text unless it is binary data; binary data has no character encoding
+        bool binary_msg = response_msg.typeCode() == NT_BINARY
+            || (chunked_msg && !(chunked_msg instanceof StringInputStream));
         if (!extra_hdrs."Content-Type") {
-            hdr."Content-Type" = MimeTypeHtml + ";charset=" + encoding;
-        } else if (extra_hdrs."Content-Type" !~ /charset=/) {
+            hdr."Content-Type" = binary_msg ? MimeTypeOctetStream : MimeTypeHtml + ";charset=" + encoding;
+        } else if (!binary_msg && extra_hdrs."Content-Type" !~ /charset=/i) {
             extra_hdrs."Content-Type" += ";charset=" + encoding;
         }
 
@@ -3742,7 +3822,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             || hdr."content-type" =~ /^multipart\//i) {
                         body = body_data;
                     } else {
-                        body = body_data.toString();
+                        body = decodeRequestText(hdr, body_data);
                     }
                 }
             } else if (cx."header-info".body) {
@@ -3767,8 +3847,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         || hdr."content-type" =~ /^multipart\//i) {
                     body = cx."header-info".body;
                 } else {
-                    # The buffered bytes have the same charset as a direct socket read.
-                    body = cx."header-info".body.toString(cx.char_encoding);
+                    # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
+                    body = decodeRequestText(hdr, cx."header-info".body);
                 }
             } else if (hdr."content-length" && !is_multiplexed) {
                 # HTTP/1.x only: the request body is read from the raw socket here.
@@ -3798,7 +3878,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             || hdr."content-type" =~ /^multipart\//i) {
                         body = s.recvBinary(hdr."content-length", HttpServer::ReadTimeout);
                     } else {
-                        body = s.recv(hdr."content-length", HttpServer::ReadTimeout);
+                        # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
+                        # body was buffered
+                        body = decodeRequestText(hdr, s.recvBinary(hdr."content-length", HttpServer::ReadTimeout));
                     }
                     #printf("HTTP DEBUG: %s\n", body);
                 } catch (hash<ExceptionInfo> ex) {
@@ -3812,11 +3894,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         hdr.method == "HEAD");
                     return;
                 }
-            }
-
-            # override assumed "iso-8859-1" character encoding if necessary
-            if (body.typeCode() == NT_STRING && override_encoding && hdr."_qore_orig_content_type" !~ /charset=/) {
-                body = force_encoding(body, override_encoding);
             }
 
             listener.doLogRecvBody(body, cx, hdr, info);
@@ -4231,14 +4308,23 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # handle redirect msgs (RFC 2616 section 10.3 http://tools.ietf.org/html/rfc2616#section-10.3)
             doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
         } else if (rv."code" >= 400) {
-            if (!head && !rv.body && !rv.hasKeyValue("chunked_body")) {
+            # a send_callback provides the message body
+            if (!head && !rv.body && !rv.hasKeyValue("chunked_body") && !rv.send_callback) {
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
             }
             if (async_response_out) {
                 # Capture the error response for the async I/O controller to send
                 # through h2op (HTTP/2) or sendHTTPResponse (HTTP/1.x), rather than
                 # sending directly on the socket which would bypass the poll operation
-                # state machine and corrupt the connection lifecycle
+                # state machine and corrupt the connection lifecycle; the body has the same default
+                # Content-Type as with sendHttpError() and a successful response
+                if (!rv.hdr."Content-Type") {
+                    *string default_content_type = getDefaultContentType(rv, cx."response-encoding"
+                        ?? s.getEncoding().lwr());
+                    if (default_content_type) {
+                        rv.hdr."Content-Type" = default_content_type;
+                    }
+                }
                 doResponse(listener, s, cx, rv, chunked_allowed, after_send, \async_response_out);
             } else {
                 sendHttpError(listener, cx, s, rv."code", rv.body,
@@ -4253,6 +4339,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         } else {
             #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %Y\n", rv."code", rv.hdr."Content-Type",
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
+
+            # the Content-Type of a body without one depends on the data, which compression below turns into
+            # binary data
+            *string default_content_type = getDefaultContentType(rv, cx."response-encoding"
+                ?? s.getEncoding().lwr());
 
             # compress body if eligible for compression; skip InputStream bodies (streaming),
             # send_callback responses, and handlers that manage their own content encoding
@@ -4283,10 +4374,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
 
-            if ((rv.body instanceof InputStream || rv.send_callback || rv.body.val()
-                || rv.chunked_body.val()) && !rv.hdr."Content-Type") {
-                rv.hdr."Content-Type" = MimeTypeHtml + ";charset=" + (cx."response-encoding"
-                    ?? s.getEncoding().lwr());
+            if (default_content_type && !rv.hdr."Content-Type") {
+                rv.hdr."Content-Type" = default_content_type;
             }
 
             # For HTTP/2 and HTTP/3 extended CONNECT streaming, don't send response here -
@@ -4739,13 +4828,21 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             || (rv.body instanceof InputStream && !rv.hdr."Content-Length")));
         auto body = rv.body;
 
+        # text is sent in the character encoding that the response declares
+        string text_encoding = getResponseTextEncoding(rv.hdr."Content-Type", cx."response-encoding"
+            ?? s.getEncoding());
+        if (body.typeCode() == NT_STRING && !HttpServer::sameEncoding(body.encoding(), text_encoding)) {
+            body = convert_encoding(body, text_encoding);
+        }
+
         if (chunked) {
-            body = rv.chunked_body ?? rv.body;
+            body = rv.chunked_body ?? body;
             if (body instanceof StringInputStream) {
                 StringInputStream input_stream = cast<StringInputStream>(body);
-                if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
+                string stream_encoding = input_stream.getEncoding();
+                if (!HttpServer::sameEncoding(stream_encoding, text_encoding)) {
                     body = new EncodingConversionInputStream(input_stream: input_stream,
-                        source_encoding: stream_encoding, target_encoding: s.getEncoding());
+                        source_encoding: stream_encoding, target_encoding: text_encoding);
                 }
             } else if ((body instanceof string) || (body instanceof binary)) {
                 body = new BinaryInputStream(body);

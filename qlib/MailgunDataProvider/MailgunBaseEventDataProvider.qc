@@ -56,7 +56,7 @@ public class MailgunBaseEventDataProvider inherits MailgunDataProviderBase, Data
     }
 
     #! Creates the object with a REST client
-    constructor(MailgunRestClient::MailgunRestClient rest, *string api_domain, *hash<auto> options)
+    constructor(MailgunRestClient::MailgunRestClientIo rest, *string api_domain, *hash<auto> options)
             : MailgunDataProviderBase(rest, api_domain) {
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", LocalOptions, options);
         if (copts.domain) {

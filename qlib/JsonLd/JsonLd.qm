@@ -28,6 +28,7 @@
 %requires Mime
 %requires Util
 %requires Logger
+%requires HttpClientIo
 
 %modern
 

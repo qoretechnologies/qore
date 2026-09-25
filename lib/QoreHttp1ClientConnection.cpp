@@ -1010,6 +1010,14 @@ void Http1ClientConnection::setMaxResponseBodySizeHook(int64_t max_size) {
     poll_op_priv->setMaxResponseBodySize(max_size);
 }
 
+void Http1ClientConnection::setAssumedEncodingHook(const QoreEncoding* enc) {
+    MethodGuard g(this);
+    if (!g.acquired() || !poll_op_priv) {
+        return;
+    }
+    poll_op_priv->setAssumedEncoding(enc);
+}
+
 void Http1ClientConnection::setIdleTimeoutHook(int64_t timeout_us) {
     MethodGuard g(this);
     if (!g.acquired() || !poll_op_priv) {

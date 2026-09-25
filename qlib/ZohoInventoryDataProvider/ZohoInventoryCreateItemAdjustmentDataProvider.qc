@@ -42,7 +42,7 @@ public class ZohoInventoryCreateItemAdjustmentDataProvider inherits ZohoInventor
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Returns the provider name
@@ -67,8 +67,8 @@ public class ZohoInventoryCreateItemAdjustmentDataProvider inherits ZohoInventor
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
-        hash<auto> response = doPost("/inventoryadjustments", req);
+        *string org_id = getOrganizationIdFromReq(\req);
+        hash<auto> response = doPost("/inventoryadjustments", req, org_id);
         return response.inventory_adjustment;
     }
 

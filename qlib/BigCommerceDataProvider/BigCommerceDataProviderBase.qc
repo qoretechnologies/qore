@@ -28,20 +28,28 @@ public namespace BigCommerceDataProvider {
 #! Base class for BigCommerce data providers
 public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for BigCommerce data providers
         const BaseConstructorOptions = {
             "bigcommercerestclient": <DataProviderOptionInfo>{
                 "display_name": "BigCommerce REST Client",
-                "short_desc": "The BigCommerceRestClient object",
+                "short_desc": "The BigCommerceRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("BigCommerceRestClient::BigCommerceRestClient")),
-                "desc": "The BigCommerceRestClient object to use for API calls",
+                    new Type("BigCommerceRestClient::BigCommerceRestClientIo")),
+                "desc": "The `BigCommerceRestClientIo` object to use for API calls",
             },
             "bigcommercerestclient_options": <DataProviderOptionInfo>{
                 "display_name": "BigCommerce REST Client Options",
-                "short_desc": "Options for creating a BigCommerceRestClient",
+                "short_desc": "Options for creating a BigCommerceRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a BigCommerceRestClient object if one is not "
+                "desc": "Options for creating a `BigCommerceRestClientIo` object if one is not "
                     "provided directly",
             },
         };
@@ -49,7 +57,7 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
 
     private {
         #! The REST client object for API calls
-        BigCommerceRestClient::BigCommerceRestClient rest;
+        BigCommerceRestClient::BigCommerceRestClientIo rest;
 
         #! The connection object, if applicable
         *BigCommerceRestClient::BigCommerceRestConnection conn;
@@ -60,14 +68,14 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
     }
 
     #! Creates the object with a REST client
-    constructor(BigCommerceRestClient::BigCommerceRestClient rest) {
+    constructor(BigCommerceRestClient::BigCommerceRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(BigCommerceRestClient::BigCommerceRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
             rest = copts.bigcommercerestclient;
         } else {
             hash<auto> client_opts = copts.bigcommercerestclient_options ?? {};
-            rest = new BigCommerceRestClient::BigCommerceRestClient(client_opts);
+            rest = new BigCommerceRestClient::BigCommerceRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    BigCommerceRestClient::BigCommerceRestClient getRestClient() {
+    BigCommerceRestClient::BigCommerceRestClientIo getRestClient() {
         return rest;
     }
 
@@ -308,25 +316,11 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "BIGCOMMERCE-ERROR",
-                            sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "BIGCOMMERCE-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

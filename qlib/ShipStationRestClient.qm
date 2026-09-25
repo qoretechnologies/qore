@@ -129,13 +129,24 @@ public class ShipStationRestClientBase {
     }
 
     #! returns options for @ref ShipStationRestClient::ShipStationRestClient::constructor()
+    /** The returned options keep the ShipStation-specific input options (\c api_key, \c api_secret), which the
+        REST client ignores, and derive the REST client options from them; this makes the method idempotent, so a
+        client can be recreated from its own processed options, as with
+        @ref RestClient::RestClient::copyWithUrl() "copyWithUrl()"
+
+        If the \c url option is given, it takes precedence over @ref DefaultApiUrl
+
+        @throw SHIPSTATION-ERROR missing \c api_key or \c api_secret option
+    */
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Set URL
-        rv.url = DefaultApiUrl;
+        # an explicit URL takes precedence over the default URL
+        if (!rv.url) {
+            rv.url = DefaultApiUrl;
+        }
 
         # Validate api_key is provided
         if (!opts.api_key) {
@@ -147,13 +158,10 @@ public class ShipStationRestClientBase {
             throw "SHIPSTATION-ERROR", "missing required option 'api_secret' (ShipStation API secret)";
         }
 
-        # Set HTTP Basic Auth: username=API_KEY, password=API_SECRET
+        # Set HTTP Basic Auth: username=API_KEY, password=API_SECRET; the api_key and api_secret options are kept
+        # so that the options can be processed again
         rv.username = opts.api_key;
         rv.password = opts.api_secret;
-
-        # Remove custom options so RestClient doesn't try to use them
-        remove rv.api_key;
-        remove rv.api_secret;
 
         return rv;
     }
@@ -193,6 +201,9 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
         - \c api_key: the ShipStation API key (required)
         - \c api_secret: the ShipStation API secret (required)
 
+        If the \c url option is given, it takes precedence over @ref ShipStationRestClientBase::DefaultApiUrl; this
+        can be used to send requests through a proxy or to a test server
+
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
@@ -223,39 +234,53 @@ ShipStationRestClient shipstation({"api_key": "your-api-key", "api_secret": "you
         date current_delay = InitialRetryDelay;
 
         while (True) {
-            hash<auto> response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
-
-            # Check if we got a 429 error
-            if (info.response_code == 429) {
-                date elapsed = now_us() - start_time;
-                if (elapsed >= MaxRetryTime) {
-                    # Max retry time exceeded, return the 429 error
-                    return response;
+            # a 429 response is raised as an error, or returned if errors are passed through
+            *hash<auto> response;
+            *hash<ExceptionInfo> error;
+            # the status code and headers of the response
+            *int status;
+            *hash<auto> response_headers;
+            try {
+                response = RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+                status = info."response-code";
+                response_headers = info."response-headers";
+            } catch (hash<ExceptionInfo> ex) {
+                # the synchronous client raises an error status as HTTP-CLIENT-RECEIVE-ERROR, with the status code
+                # and the response headers in the exception argument
+                status = info."response-code" ?? ex.arg.status_code;
+                if ((ex.err != "REST-RESPONSE-ERROR" && ex.err != "HTTP-CLIENT-RECEIVE-ERROR") || status != 429) {
+                    rethrow;
                 }
-
-                # Calculate retry delay
-                date retry_delay = getRetryDelay(info, current_delay);
-
-                # Check if waiting would exceed max retry time
-                if (elapsed + retry_delay > MaxRetryTime) {
-                    retry_delay = MaxRetryTime - elapsed;
-                    if (retry_delay <= 0s) {
-                        return response;
-                    }
-                }
-
-                # Wait before retrying
-                sleep(retry_delay);
-
-                # Increase delay for next retry (exponential backoff)
-                current_delay = current_delay * 2;
-                if (current_delay > MaxRetryDelay) {
-                    current_delay = MaxRetryDelay;
-                }
-                continue;
+                response_headers = info."response-headers" ?? ex.arg;
+                error = ex;
+            }
+            if (status != 429) {
+                return response;
             }
 
-            return response;
+            date elapsed = now_us() - start_time;
+            # Calculate retry delay
+            date retry_delay = getRetryDelay({"headers": response_headers}, current_delay);
+            # Check if waiting would exceed max retry time
+            if (elapsed + retry_delay > MaxRetryTime) {
+                retry_delay = MaxRetryTime - elapsed;
+            }
+            if (retry_delay <= 0s) {
+                # Max retry time exceeded, return or raise the 429 error
+                if (error) {
+                    throw error.err, error.desc, error.arg;
+                }
+                return response;
+            }
+
+            # Wait before retrying
+            sleep(retry_delay);
+
+            # Increase delay for next retry (exponential backoff)
+            current_delay = current_delay * 2;
+            if (current_delay > MaxRetryDelay) {
+                current_delay = MaxRetryDelay;
+            }
         }
     }
 
@@ -519,13 +544,97 @@ public class ShipStationRestConnection inherits RestClient::RestConnection {
 }
 
 #! ShipStation REST client for non-blocking I/O
+/** Rate-limited requests are retried as with @ref ShipStationRestClient::ShipStationRestClient "ShipStationRestClient";
+    see @ref restDoRequest()
+*/
 public class ShipStationRestClientIo inherits RestClientIo::RestClientIo, ShipStationRestClientBase {
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts valid options are all the options for the @ref RestClientIo::RestClientIo "RestClientIo"
+        class plus:
+        - \c api_key: the ShipStation API key (required)
+        - \c api_secret: the ShipStation API secret (required)
         @param shared_mgr optional shared connection manager
+
+        @throw RESTCLIENTIO-ERROR invalid option passed to the constructor
+        @throw SHIPSTATION-ERROR missing required option 'api_key' or 'api_secret'
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(ShipStationRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Sends a REST request, retrying requests rejected with HTTP 429 (Too Many Requests)
+    /** When ShipStation returns HTTP 429, the request is retried with exponential backoff (1s, 2s, 4s, ... up to
+        30s per retry) for up to 75 seconds in total; the delay given by a \c Retry-After or
+        \c X-Rate-Limit-Reset response header is used when present.
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the request body to send (if any)
+        @param hdr any headers to send with the request
+
+        @return the response from the server
+
+        @throw REST-RESPONSE-ERROR the server returned an error response; a 429 response is raised when the
+        maximum retry time has been reached
+    */
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        date start_time = now_us();
+        date current_delay = InitialRetryDelay;
+        while (True) {
+            try {
+                return RestClientIo::restDoRequest(method, path, body, hdr);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "REST-RESPONSE-ERROR" || ex.arg.status_code != 429) {
+                    rethrow;
+                }
+                date elapsed = now_us() - start_time;
+                if (elapsed >= MaxRetryTime) {
+                    rethrow;
+                }
+                date retry_delay = getRetryDelay(ex.arg.headers, current_delay);
+                if (elapsed + retry_delay > MaxRetryTime) {
+                    retry_delay = MaxRetryTime - elapsed;
+                    if (retry_delay <= 0s) {
+                        rethrow;
+                    }
+                }
+
+                # Wait before retrying
+                sleep(retry_delay);
+
+                # Increase delay for next retry (exponential backoff)
+                current_delay = current_delay * 2;
+                if (current_delay > MaxRetryDelay) {
+                    current_delay = MaxRetryDelay;
+                }
+            }
+        }
+    }
+
+    #! Returns the retry delay based on response headers or exponential backoff
+    /** @param headers the response headers
+        @param default_delay the default delay to use if no header is present
+
+        @return the delay to use before retrying
+    */
+    private date getRetryDelay(*hash<auto> headers, date default_delay) {
+        # Check for Retry-After header (standard HTTP header)
+        if (headers."retry-after") {
+            int secs = headers."retry-after".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        # Check for X-Rate-Limit-Reset header (ShipStation specific)
+        if (headers."x-rate-limit-reset") {
+            int secs = headers."x-rate-limit-reset".toInt();
+            if (secs > 0) {
+                return seconds(secs);
+            }
+        }
+
+        return default_delay;
     }
 }
 }

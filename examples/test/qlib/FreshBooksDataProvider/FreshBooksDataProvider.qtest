@@ -36,13 +36,71 @@
 
 %requires FreshBooksRestClient
 %requires FreshBooksDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class FreshBooksDataProviderTest
+
+#! A local FreshBooks API server that records requests
+class FakeFreshBooksHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+        #! the number of requests still to be answered with 429 Too Many Requests
+        int rate_limited;
+        #! if the next successful response reports that the rate limit has been exhausted
+        bool rate_limit_exhausted;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (rate_limited > 0) {
+            --rate_limited;
+            return <HttpResponseInfo>{
+                "code": 429,
+                "hdr": {"Content-Type": MimeTypeJson, "Retry-After": "1"},
+                "body": make_json({"response": {"errors": ({"message": "rate limited"},)}}),
+            };
+        }
+        if (hdr.path =~ /clients\/404$/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"response": {"errors": ({"errno": 1012, "message": "client not found"},)}}),
+            };
+        }
+        hash<auto> resp_hdr = {"Content-Type": MimeTypeJson};
+        if (rate_limit_exhausted) {
+            rate_limit_exhausted = False;
+            resp_hdr += {"X-RateLimit-Remaining": "0", "Retry-After": "1"};
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": resp_hdr,
+                "body": make_json({"response": {"result": {"client": {"id": 5} + parse_json(body.toString()).client}}}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": resp_hdr,
+            "body": make_json({"response": {"result": {
+                "clients": ({"id": 4, "email": "jane@example.com"},),
+                "pages": 1,
+            }}}),
+        };
+    }
+}
 
 public class FreshBooksDataProviderTest inherits QUnit::Test {
     private {
         #! FreshBooks REST client for integration tests
-        *FreshBooksRestClient::FreshBooksRestClient client;
+        *FreshBooksRestClient::FreshBooksRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -97,6 +155,8 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         addTestCase("trigger example data tests", \triggerExampleDataTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
+        addTestCase("local server tests", \localServerTests());
+        addTestCase("client option tests", \clientOptionTests());
 
         # Integration tests (require FreshBooks credentials)
         addTestCase("integration tests", \integrationTests());
@@ -121,7 +181,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             if (m_options.verbose) {
                 printf("Using connection: %s\n", conn_name);
             }
-            client = get_connection(conn_name).get();
+            client = get_connection(conn_name).getAsync();
             return;
         }
 
@@ -158,7 +218,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
                 "account_id": account_id,
                 "business_id": business_id,
             };
-            client = new FreshBooksRestClient::FreshBooksRestClient(opts);
+            client = new FreshBooksRestClient::FreshBooksRestClientIo(opts);
             accountId = client.getAccountId();
             businessId = client.getBusinessId();
             return;
@@ -182,7 +242,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             opts.token = token;
         }
 
-        client = new FreshBooksRestClient::FreshBooksRestClient(opts);
+        client = new FreshBooksRestClient::FreshBooksRestClientIo(opts);
 
         # Store account_id and business_id for integration tests
         if (client) {
@@ -617,6 +677,235 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         });
     }
 
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeFreshBooksHandler handler();
+        server.setHandler("freshbooks", "", NOTHING, handler);
+        server.setDefaultHandler("freshbooks", handler);
+
+        FreshBooksDataProvider::FreshBooksDataProvider provider({
+            "freshbooksrestclient_options": {
+                "url": "http://localhost:" + port,
+                "token": "test-token",
+                "account_id": "acct1",
+                "business_id": "123",
+            },
+        });
+        FreshBooksRestClient::FreshBooksRestClientIo rest = provider.getRestClient();
+        assertEq("acct1", rest.getAccountId());
+        assertEq("123", rest.getBusinessId());
+        AbstractDataProvider clients = provider.getChildProviderPath("clients");
+
+        # a search is sent with the async client and the token as a bearer token
+        list<hash<auto>> records = map $1, clients.searchRecords(NOTHING, {
+            "account_id": "acct2",
+            "email": "jane@example.com",
+        });
+        assertEq(1, records.size());
+        assertEq(4, records[0].id);
+        # the account ID of the request is used for this request only; the shared client is not changed
+        assertEq("acct1", rest.getAccountId());
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("accounting/account/acct2/users/clients?search[email]=jane%40example.com&page=1",
+            handler.requests[0].path);
+        assertEq("Bearer test-token", handler.requests[0].authorization);
+
+        # a POST request sends the request body; a response reporting an exhausted rate limit is still returned
+        handler.requests = ();
+        handler.rate_limit_exhausted = True;
+        auto result = provider.getChildProviderPath("create-client").doRequest({
+            "account_id": "acct1",
+            "email": "joe@example.com",
+            "organization": "Acme",
+        });
+        assertEq(5, result.id);
+        assertEq("Acme", result.organization);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("accounting/account/acct1/users/clients", handler.requests[0].path);
+        assertEq({"client": {"email": "joe@example.com", "organization": "Acme"}}, handler.requests[0].body);
+
+        # the business ID of a search is used for this search only
+        handler.requests = ();
+        list<hash<auto>> services = map $1, provider.getChildProviderPath("services").searchRecords(NOTHING,
+            {"business_id": "456"});
+        assertEq((), services);
+        assertRegex("^timetracking/business/456/services", handler.requests[0].path);
+        assertEq("123", rest.getBusinessId());
+
+        # the IDs configured in the client are used if none are given
+        assertEq("/accounting/account/acct1/users/clients", provider.accountPath("/users/clients"));
+        assertEq("/timetracking/business/123/services", provider.businessPath("/services"));
+        assertEq("/events/account/acct1/events/callbacks", provider.eventsPath("/events/callbacks"));
+
+        # reference data is retrieved with the account ID of the action options without changing the client
+        handler.requests = ();
+        *list<hash<AllowedValueInfo>> ref = provider.getReferenceData("clients", {"account_id": "acct9"});
+        assertEq(("4",), (map $1.value.toString(), ref));
+        assertEq("accounting/account/acct9/users/clients", handler.requests[0].path);
+        assertEq("acct1", rest.getAccountId());
+
+        # a watch provider uses its own account ID without changing the shared client
+        handler.requests = ();
+        FreshBooksDataProvider::FreshBooksNewClientWatchDataProvider watch(rest, {"account_id": "acctW"});
+        assertEq(4, watch.getExampleEventData("client-created").id);
+        assertRegex("^accounting/account/acctW/users/clients\\?", handler.requests[0].path);
+        assertEq("acct1", rest.getAccountId());
+        # a watch provider without an account ID uses the account ID of the client
+        handler.requests = ();
+        FreshBooksDataProvider::FreshBooksNewClientWatchDataProvider watch_default(rest);
+        assertEq(4, watch_default.getExampleEventData("client-created").id);
+        assertRegex("^accounting/account/acct1/users/clients\\?", handler.requests[0].path);
+
+        # concurrent requests for different accounts on the shared client each use their own account ID
+        handler.requests = ();
+        {
+            AbstractDataProvider create_client = provider.getChildProviderPath("create-client");
+            Counter cnt();
+            list<string> errors = ();
+            Mutex err_lck();
+            for (int i = 0; i < 10; ++i) {
+                cnt.inc();
+                background sub () {
+                    on_exit cnt.dec();
+                    try {
+                        string acct = i % 2 ? "acctA" : "acctB";
+                        create_client.doRequest({"account_id": acct, "email": sprintf("%s-%d@example.com", acct, i)});
+                    } catch (hash<ExceptionInfo> ex) {
+                        err_lck.lock();
+                        on_exit err_lck.unlock();
+                        errors += get_exception_string(ex);
+                    }
+                }();
+            }
+            cnt.waitForZero();
+            assertEq((), errors);
+        }
+        assertEq(10, handler.requests.size());
+        foreach hash<auto> req in (handler.requests) {
+            *string path_acct = (req.path =~ x/^accounting\/account\/([^\/]+)\/users\/clients$/)[0];
+            *string body_acct = (req.body.client.email =~ x/^([^-]+)-/)[0];
+            assertEq(body_acct, path_acct, req.path);
+            assertNeq(NOTHING, path_acct, req.path);
+        }
+        assertEq("acct1", rest.getAccountId());
+
+        # a rate-limited request is retried after the time given by the server
+        handler.requests = ();
+        handler.rate_limited = 1;
+        records = map $1, clients.searchRecords(NOTHING, {"account_id": "acct1", "email": "jane@example.com"});
+        assertEq(4, records[0].id);
+        assertEq(2, handler.requests.size());
+
+        # an error response is raised with the response
+        try {
+            clients.searchRecords(NOTHING, {"account_id": "acct1", "id": 404});
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("client not found", ex.arg.body.response.errors[0].message);
+        }
+    }
+
+    #! Tests for client URL and option handling
+    clientOptionTests() {
+        # the options are processed idempotently, and the account and business IDs are kept
+        hash<auto> popts = FreshBooksRestClient::FreshBooksRestClientBase::getOptions({
+            "token": "t",
+            "account_id": "a1",
+            "business_id": "b1",
+        });
+        assertEq("https://api.freshbooks.com", popts.url);
+        assertEq("a1", popts.account_id);
+        assertEq("b1", popts.business_id);
+        assertEq("Bearer t", popts.headers.Authorization);
+        assertEq(popts, FreshBooksRestClient::FreshBooksRestClientBase::getOptions(popts));
+
+        # the default connection URL is unchanged
+        FreshBooksRestClient::FreshBooksRestConnection conn("test", "test",
+            FreshBooksRestClient::FreshBooksRestConnection::DefaultConnectionUrl, {"monitor": False}, {
+                "token": "t",
+                "oauth2_client_id": "id",
+                "oauth2_client_secret": "secret",
+            });
+        assertEq("https://api.freshbooks.com", conn.get(False).getURL());
+        assertEq("https://api.freshbooks.com", conn.getAsync(False).getUrl());
+
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeFreshBooksHandler handler();
+        server.setHandler("freshbooks", "", NOTHING, handler);
+        server.setDefaultHandler("freshbooks", handler);
+        string url = "http://localhost:" + port;
+
+        # the explicit URL is used by the synchronous client
+        FreshBooksRestClient::FreshBooksRestClient sync({
+            "url": url,
+            "token": "test-token",
+            "account_id": "a1",
+            "business_id": "b1",
+        }, True);
+        assertEq(url, sync.getURL());
+        sync.get("/users/me");
+        assertEq("users/me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and IDs, and uses the new URL
+        FreshBooksRestClient::FreshBooksRestClient sync_copy =
+            cast<FreshBooksRestClient::FreshBooksRestClient>(sync.copyWithUrl(url + "/other"));
+        assertEq(url + "/other", sync_copy.getURL());
+        assertEq("a1", sync_copy.getAccountId());
+        assertEq("b1", sync_copy.getBusinessId());
+        sync_copy.get("users/me");
+        assertEq("other/users/me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # the explicit URL is used by the async client
+        FreshBooksRestClient::FreshBooksRestClientIo io({
+            "url": url + "/proxy",
+            "token": "test-token",
+            "account_id": "a2",
+            "business_id": "b2",
+        });
+        assertEq(url + "/proxy", io.getUrl());
+        io.restGet("users/me");
+        assertEq("proxy/users/me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a copy made with copyWithUrl() keeps the credentials and IDs, and uses the new URL
+        FreshBooksRestClient::FreshBooksRestClientIo io_copy =
+            cast<FreshBooksRestClient::FreshBooksRestClientIo>(io.copyWithUrl(url + "/other"));
+        assertEq(url + "/other", io_copy.getUrl());
+        assertEq("a2", io_copy.getAccountId());
+        assertEq("b2", io_copy.getBusinessId());
+        io_copy.restGet("users/me");
+        assertEq("other/users/me", handler.requests.last().path);
+        assertEq("Bearer test-token", handler.requests.last().authorization);
+
+        # a request without an account ID fails if no account ID is configured in the client
+        FreshBooksDataProvider::FreshBooksDataProvider provider({
+            "freshbooksrestclient_options": {
+                "url": url,
+                "token": "test-token",
+            },
+        });
+        assertThrows("FRESHBOOKS-ERROR", "no account_id", \provider.accountPath(), "/users/clients");
+        assertThrows("FRESHBOOKS-ERROR", "no business_id", \provider.businessPath(), "/services");
+        assertEq("/accounting/account/a3/users/clients", provider.accountPath("/users/clients", "a3"));
+        assertEq("/timetracking/business/b3/services", provider.businessPath("/services", "b3"));
+        assertEq("/events/account/a3/events/callbacks", provider.eventsPath("/events/callbacks", "a3"));
+    }
+
     #! Connection tests - verify connection scheme registration
     connectionTests() {
         checkJson();
@@ -700,7 +989,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         }
 
         # Test that we can connect to the API via the identity endpoint
-        hash<auto> response = client.get("/auth/api/v1/users/me");
+        hash<auto> response = client.restGet("/auth/api/v1/users/me");
         assertTrue(response.body.response.id.val() || response.body.response.first_name.val());
         if (m_options.verbose) {
             printf("Connected to FreshBooks - User: %s %s\n",
@@ -805,7 +1094,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         FreshBooksDataProvider::FreshBooksDataProvider prov(client);
 
         # Step 0: Get a valid expense category ID
-        hash<auto> catResponse = client.get(
+        hash<auto> catResponse = client.restGet(
             sprintf("/accounting/account/%s/expenses/categories", accountId));
         int categoryId = catResponse.body.response.result.categories[0].id;
         if (m_options.verbose) {

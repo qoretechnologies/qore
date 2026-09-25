@@ -65,11 +65,11 @@ public class ZohoInventoryGetSalesOrderDataProvider inherits ZohoInventoryDataPr
     }
 
     #! Creates the object with a REST client
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest) : ZohoInventoryDataProviderBase(rest) {
     }
 
     #! Creates the object with options
-    constructor(ZohoInventoryRestClient::ZohoInventoryRestClient rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
+    constructor(ZohoInventoryRestClient::ZohoInventoryRestClientIo rest, *hash<auto> options) : ZohoInventoryDataProviderBase(rest) {
         if (options.salesorder_id) {
             salesorder_id = options.salesorder_id;
         }
@@ -97,12 +97,12 @@ public class ZohoInventoryGetSalesOrderDataProvider inherits ZohoInventoryDataPr
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        req = setOrganizationIdFromReq(req);
+        *string org_id = getOrganizationIdFromReq(\req);
         string id = req.salesorder_id ?? request_options.salesorder_id ?? salesorder_id;
         if (!id) {
             throw "ZOHOINVENTORY-ERROR", "salesorder_id is required for get operation";
         }
-        hash<auto> response = doGet(sprintf("/salesorders/%s", id));
+        hash<auto> response = doGet(sprintf("/salesorders/%s", id), NOTHING, org_id);
         return response.salesorder;
     }
 

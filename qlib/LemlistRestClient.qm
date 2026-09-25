@@ -119,28 +119,39 @@ public class LemlistRestClientBase {
         };
     }
 
+    #! Returns the request path with \c version=v2 appended if not already present
+    static string addVersion(string path) {
+        if (path =~ /version=v2/) {
+            return path;
+        }
+        return path + (path =~ /\?/ ? "&" : "?") + "version=v2";
+    }
+
     #! returns options for @ref LemlistRestClient::LemlistRestClient::constructor()
     static hash<auto> getOptions(hash<auto> opts) {
         # the options have values of different types, so the hash must not take the narrow type of the
         # defaults, which would prevent adding values of other types
         hash<auto!> rv = DefaultOptions + opts;
 
-        # Set URL
-        rv.url = DefaultApiUrl;
+        # Set URL; an explicit URL is kept, so that resolved options (as returned by
+        # LemlistRestConnection::getConnectionOptions() or saved by a client for copyWithUrl()) can be
+        # processed again
+        rv.url = opts.url ?? DefaultApiUrl;
 
-        # Validate apikey is provided
-        if (!opts.apikey) {
+        if (opts.apikey) {
+            # Set HTTP Basic Auth: empty username, API key as password
+            # Use Authorization header directly since RestClient ignores empty-string usernames
+            # (username.val() == False)
+            rv.headers = (rv.headers ?? {}) + {
+                "Authorization": "Basic " + (":" + opts.apikey).toBase64(),
+            };
+
+            # Remove custom option so RestClient doesn't try to use it
+            remove rv.apikey;
+        } else if (!opts.headers.Authorization) {
+            # options that have already been resolved carry the Authorization header instead of the key
             throw "LEMLIST-ERROR", "missing required option 'apikey' (Lemlist API key)";
         }
-
-        # Set HTTP Basic Auth: empty username, API key as password
-        # Use Authorization header directly since RestClient ignores empty-string usernames (username.val() == False)
-        rv.headers = (rv.headers ?? {}) + {
-            "Authorization": "Basic " + (":" + opts.apikey).toBase64(),
-        };
-
-        # Remove custom option so RestClient doesn't try to use it
-        remove rv.apikey;
 
         return rv;
     }
@@ -194,15 +205,7 @@ LemlistRestClient lemlist({"apikey": "your-api-key"});
     */
     hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info, softbool decode_errors = True,
             *hash<auto> hdr) {
-        # Append version=v2 if not already present
-        if (path !~ /version=v2/) {
-            if (path =~ /\?/) {
-                path += "&version=v2";
-            } else {
-                path += "?version=v2";
-            }
-        }
-        return RestClient::doRequest(m, path, body, \info, decode_errors, hdr);
+        return RestClient::doRequest(m, LemlistRestClientBase::addVersion(path), body, \info, decode_errors, hdr);
     }
 }
 
@@ -384,6 +387,20 @@ public class LemlistRestClientIo inherits RestClientIo::RestClientIo, LemlistRes
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
             : RestClientIo(LemlistRestClientBase::getOptions(opts), shared_mgr) {
+    }
+
+    #! Prepares a request, appending \c version=v2 to the path if not already present
+    private hash<auto> prepareRequest(string method, reference<string> path, auto body,
+            reference<*hash<auto>> hdr) {
+        path = LemlistRestClientBase::addVersion(path);
+        return RestClientIo::prepareRequest(method, \path, body, \hdr);
+    }
+
+    #! Prepares a request with a pre-serialized body, appending \c version=v2 to the path if not already present
+    private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+            reference<*hash<auto>> hdr) {
+        path = LemlistRestClientBase::addVersion(path);
+        return RestClientIo::prepareRawRequest(method, \path, body, \hdr);
     }
 }
 } # namespace LemlistRestClient

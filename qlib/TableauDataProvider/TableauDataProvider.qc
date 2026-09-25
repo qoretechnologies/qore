@@ -62,7 +62,7 @@ public class TableauDataProvider inherits TableauDataProviderBase {
     }
 
     #! Creates the object with a REST client
-    constructor(TableauRestClient::TableauRestClient rest) : TableauDataProviderBase(rest) {
+    constructor(TableauRestClient::TableauRestClientIo rest) : TableauDataProviderBase(rest) {
     }
 
     #! Creates the object with a connection

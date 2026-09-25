@@ -66,7 +66,7 @@ public class ShipStationStoresDataProvider inherits ShipStationDataProviderBase 
     }
 
     #! Creates the object with a REST client
-    constructor(ShipStationRestClient::ShipStationRestClient rest)
+    constructor(ShipStationRestClient::ShipStationRestClientIo rest)
             : ShipStationDataProviderBase(rest) {
     }
 

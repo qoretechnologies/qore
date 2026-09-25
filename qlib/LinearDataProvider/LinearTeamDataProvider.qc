@@ -45,7 +45,7 @@ public class LinearTeamDataProvider inherits LinearDataProviderBase {
     }
 
     #! Creates the object
-    constructor(LinearRestClient::LinearRestClient rest, string teamId) : LinearDataProviderBase(rest) {
+    constructor(LinearRestClient::LinearRestClientIo rest, string teamId) : LinearDataProviderBase(rest) {
         @assert(teamId.val(), "team ID cannot be empty");
         self.teamId = teamId;
     }

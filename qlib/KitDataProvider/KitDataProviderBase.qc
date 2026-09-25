@@ -28,20 +28,28 @@ public namespace KitDataProvider {
 #! Base class for Kit data providers
 public class KitDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Kit data providers
         const BaseConstructorOptions = {
             "kitrestclient": <DataProviderOptionInfo>{
                 "display_name": "Kit REST Client",
-                "short_desc": "The KitRestClient object",
+                "short_desc": "The KitRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("KitRestClient::KitRestClient")),
-                "desc": "The KitRestClient object to use for API calls",
+                    new Type("KitRestClient::KitRestClientIo")),
+                "desc": "The `KitRestClientIo` object to use for API calls",
             },
             "kitrestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Kit REST Client Options",
-                "short_desc": "Options for creating a KitRestClient",
+                "short_desc": "Options for creating a KitRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating a KitRestClient object if one is not provided "
+                "desc": "Options for creating a `KitRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +57,7 @@ public class KitDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     private {
         #! The REST client object for API calls
-        KitRestClient::KitRestClient rest;
+        KitRestClient::KitRestClientIo rest;
 
         #! The connection object, if applicable
         *KitRestClient::KitRestConnection conn;
@@ -60,14 +68,14 @@ public class KitDataProviderBase inherits DataProvider::AbstractDataProvider {
     }
 
     #! Creates the object with a REST client
-    constructor(KitRestClient::KitRestClient rest) {
+    constructor(KitRestClient::KitRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(KitRestClient::KitRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +85,12 @@ public class KitDataProviderBase inherits DataProvider::AbstractDataProvider {
             rest = copts.kitrestclient;
         } else {
             hash<auto> client_opts = copts.kitrestclient_options ?? {};
-            rest = new KitRestClient::KitRestClient(client_opts);
+            rest = new KitRestClient::KitRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    KitRestClient::KitRestClient getRestClient() {
+    KitRestClient::KitRestClientIo getRestClient() {
         return rest;
     }
 
@@ -168,24 +176,11 @@ public class KitDataProviderBase inherits DataProvider::AbstractDataProvider {
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "KIT-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "KIT-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

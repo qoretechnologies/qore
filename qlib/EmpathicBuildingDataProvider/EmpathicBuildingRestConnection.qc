@@ -197,6 +197,304 @@ public class EmpathicBuildingRestClient inherits RestClient::RestClient {
     }
 }
 
+#! The asynchronous REST client for the Haltian Empathic Building API
+/** This class accepts the options of <a href="../../RestClientIo/html/index.html">RestClientIo</a> and authenticates
+    like @ref EmpathicBuildingRestClient "EmpathicBuildingRestClient":
+    - \c token: a bearer token to send in requests
+    - \c username and \c password: credentials for the Haltian login API (\c v1/login); they are not sent with
+      HTTP Basic authentication
+    - \c refresh_token: a Haltian refresh token (\c v1/token)
+
+    If no token is set, the client logs in when it is created (unless the \c skip_login option is set) or before its
+    first request.  When a request is rejected with HTTP status code 401, the client acquires a new token and sends
+    the request again once.  Because the tokens returned by the Haltian token refresh API are not accepted by the
+    server, a new token is acquired with the login API whenever a username and password are set, otherwise with the
+    refresh token.
+
+    Token acquisition is serialized; a thread that waits while another thread acquires a new token uses that token
+    instead of logging in again.
+
+    @since EmpathicBuildingDataProvider 1.2
+*/
+public class EmpathicBuildingRestClientIo inherits RestClientIo::RestClientIo {
+    private {
+        #! The username for the login API
+        *string login_username;
+
+        #! The password for the login API
+        *string login_password;
+
+        #! Is refresh broken?
+        /** see @ref EmpathicBuildingRestClient "EmpathicBuildingRestClient"; only the \c "token" response to the login API is accepted by the
+            server
+        */
+        bool broken_refresh = True;
+
+        #! Serializes token acquisition
+        Mutex login_lock();
+    }
+
+    #! Creates the object with the given options
+    /** @param opts the options of <a href="../../RestClientIo/html/index.html">RestClientIo</a> plus
+        \c refresh_token; see the class description for the authentication options
+        @param shared_mgr an optional shared connection manager
+
+        @throw RESTCLIENTIO-ERROR the \c url option is missing
+        @throw REST-RESPONSE-ERROR the login request returned an error response; the exception argument is the
+        response
+        @throw EMPATHICBUILDING-LOGIN-ERROR the login response has no token
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(EmpathicBuildingRestClientIo::getOptions(opts), shared_mgr) {
+        hash<auto> creds = EmpathicBuildingRestClientIo::getCredentials(opts);
+        # the caller's options with the credentials, also any given in the URL, so that copyWithUrl() creates a
+        # client with the same credentials
+        saved_opts = {};
+        saved_opts += opts;
+        foreach hash<auto> i in (creds.pairIterator()) {
+            if (i.value.val()) {
+                saved_opts{i.key} = i.value;
+            }
+        }
+        login_username = creds.username;
+        login_password = creds.password;
+        if (creds.refresh_token) {
+            AutoWriteLock al(config_lock);
+            refresh_token = creds.refresh_token;
+        }
+        if (!opts.skip_login) {
+            checkLogin();
+        }
+    }
+
+    #! Returns the options for the @ref RestClientIo::RestClientIo "RestClientIo" constructor
+    /** The credentials are removed, including any in the URL, so that they are not sent with HTTP Basic
+        authentication, and the login is deferred to the constructor of this class
+
+        @param opts the options passed to the constructor
+
+        @return the options for the @ref RestClientIo::RestClientIo "RestClientIo" constructor
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        # the defaults have string values, so the hash must not take their narrow type
+        hash<auto> rv = {};
+        rv += EmpathicBuildingRestClient::DefaultOptions;
+        rv += opts;
+        remove rv{"username", "password", "refresh_token", "oauth2_refresh_token"};
+        if (rv.url.typeCode() == NT_STRING) {
+            rv.url =~ s/^([a-z][a-z0-9+.-]*:\/\/)[^@\/]*@/$1/i;
+        }
+        rv.skip_login = True;
+        return rv;
+    }
+
+    #! Returns the credentials from the options
+    /** @param opts the options passed to the constructor
+
+        @return a hash with \c username, \c password, and \c refresh_token keys; the username and password are
+        taken from the URL, percent-decoded, if they are not set as options
+    */
+    static hash<auto> getCredentials(hash<auto> opts) {
+        hash<auto> rv = {};
+        rv.username = opts.username;
+        rv.password = opts.password;
+        rv.refresh_token = opts.refresh_token ?? opts.oauth2_refresh_token;
+        if ((!rv.username.val() || !rv.password.val()) && opts.url.typeCode() == NT_STRING) {
+            hash<UrlInfo> url_info = parse_url(opts.url);
+            if (url_info.username.val() && url_info.password.val()) {
+                # the user information in a URL is percent-encoded
+                rv.username = decode_url(url_info.username);
+                rv.password = decode_url(url_info.password);
+            }
+        }
+        return rv;
+    }
+
+    #! Logs in if there is no token and credentials are set
+    private checkLogin() {
+        if (getToken() || !canLogin()) {
+            return;
+        }
+        AutoLock al(login_lock);
+        # another thread may have logged in while this one waited
+        if (getToken()) {
+            return;
+        }
+        acquireTokenLocked();
+    }
+
+    #! Returns @ref True if a new token can be acquired after an HTTP 401 response
+    private bool canRetryAuth() {
+        return canLogin();
+    }
+
+    #! Acquires a new token
+    /** @return the login or token refresh response
+    */
+    private hash<auto> getNewTokenIntern() {
+        *string old_token = getToken();
+        AutoLock al(login_lock);
+        # use a token acquired by another thread while this one waited
+        *string token = getToken();
+        if (token.val() && token != old_token) {
+            return {
+                "token_type": getTokenType(),
+                "access_token": token,
+            };
+        }
+        return acquireTokenLocked();
+    }
+
+    #! Logs in with the Haltian login API
+    /** @return the login response
+    */
+    private hash<auto> loginIntern() {
+        return gotOAuth2LoginInfo(doTokenRequest(EmpathicBuildingRestClient::LoginUriPath, {
+            "email": login_username,
+            "password": login_password,
+        }));
+    }
+
+    #! Processes a login or token refresh response
+    /** The \c "token" value of the response is preferred to \c "access_token", and the token type defaults to
+        \c "Bearer"
+
+        @param h the response
+
+        @return the processed response
+    */
+    private hash<auto> gotOAuth2LoginInfo(hash<auto> h) {
+        if (h.token.typeCode() == NT_STRING && h.token != h.access_token) {
+            h.access_token = h.token;
+        }
+        if (h.access_token.typeCode() != NT_STRING || !h.access_token.val()) {
+            throw "EMPATHICBUILDING-LOGIN-ERROR", sprintf("the login response has no token: %y", h - "password");
+        }
+        if (h.token_type.typeCode() != NT_STRING || !h.token_type.val()) {
+            h.token_type = "Bearer";
+        }
+        return RestClientIo::gotOAuth2LoginInfo(h);
+    }
+
+    #! Returns the connection options to update after a login
+    /** @param h the login response
+
+        @return the \c token_type, \c token, and \c refresh_token connection options that have changed
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
+        *string token_type;
+        *string token;
+        *string cur_refresh_token;
+        {
+            AutoReadLock al(config_lock);
+            token_type = token_type_val;
+            token = token_val;
+            cur_refresh_token = refresh_token;
+        }
+        hash<auto> new_opts;
+        if (h.token_type && h.token_type != token_type) {
+            new_opts.token_type = h.token_type;
+        }
+        if (h.access_token && h.access_token != token) {
+            new_opts.token = h.access_token;
+        }
+        if (h.refresh_token && h.refresh_token != cur_refresh_token) {
+            new_opts.refresh_token = h.refresh_token;
+        }
+        return new_opts;
+    }
+
+    #! Returns @ref True if a token can be acquired
+    private bool canLogin() {
+        if (login_username.val() && login_password.val()) {
+            return True;
+        }
+        AutoReadLock al(config_lock);
+        return refresh_token.val();
+    }
+
+    #! Acquires a new token; must be called with @ref login_lock held
+    /** @return the login or token refresh response
+    */
+    private hash<auto> acquireTokenLocked() {
+        *string current_refresh_token;
+        {
+            AutoReadLock al(config_lock);
+            current_refresh_token = refresh_token;
+        }
+        bool have_login = login_username.val() && login_password.val();
+        if ((broken_refresh || !current_refresh_token) && have_login) {
+            return loginIntern();
+        }
+        if (!current_refresh_token) {
+            throw "EMPATHICBUILDING-LOGIN-ERROR", "cannot acquire a token; no username and password or refresh "
+                "token is set";
+        }
+        try {
+            return gotOAuth2LoginInfo(doTokenRequest(EmpathicBuildingRestClient::TokenRefreshUriPath, {
+                "refresh_token": current_refresh_token,
+            }));
+        } catch (hash<ExceptionInfo> ex) {
+            # log in if the refresh token is not accepted
+            if (have_login && ex.err == "REST-RESPONSE-ERROR" && ex.arg.status_code == 401) {
+                return loginIntern();
+            }
+            rethrow;
+        }
+    }
+
+    #! Sends a login or token refresh request and returns the deserialized response body
+    /** The request is sent with the connection manager directly, without the token, so that it cannot recurse into
+        token acquisition
+
+        @param uri_path the request path relative to the connection path
+        @param args the form arguments to send
+
+        @return the deserialized response body
+
+        @throw REST-RESPONSE-ERROR the server returned an error response; the exception argument is the response
+        @throw EMPATHICBUILDING-LOGIN-ERROR the response is not a JSON object
+    */
+    private hash<auto> doTokenRequest(string uri_path, hash<auto> args) {
+        *string conn_path = getConnectionPath();
+        string path = conn_path ?? "";
+        path =~ s/\/+$//;
+        path += "/" + uri_path;
+        hash<auto> hdr = {
+            "content-type": MimeTypeFormUrlEncoded,
+            "accept": MimeTypeJson,
+        };
+        log(LoggerLevel::DEBUG, "Haltian: POST %s%s", url, path);
+        hash<auto> raw = mgr.request(url, "POST", path, hdr, mime_get_form_urlencoded_string(args));
+        auto body = raw.body;
+        if (body.typeCode() == NT_BINARY) {
+            body = body.toString();
+        }
+        if (body.typeCode() == NT_STRING && body.val()) {
+            try {
+                body = parse_json(body);
+            } catch (hash<ExceptionInfo> ex) {
+                # keep the raw body
+            }
+        }
+        if (raw.status_code < 200 || raw.status_code >= 300) {
+            throw "REST-RESPONSE-ERROR", sprintf("HTTP %d response received to POST %s", raw.status_code, path),
+                <RestClient::RestResponseInfo>{
+                    "status_code": raw.status_code,
+                    "headers": raw.headers,
+                    "body": body,
+                    "request_method": "POST",
+                    "request_path": path,
+                };
+        }
+        if (body.typeCode() != NT_HASH) {
+            throw "EMPATHICBUILDING-LOGIN-ERROR", sprintf("POST %s returned a response that is not a JSON object "
+                "(type %y)", path, body.type());
+        }
+        return body;
+    }
+}
+
 #! EmpathicBuilding REST connection
 public class EmpathicBuildingRestConnection inherits RestClient::RestConnection {
     public {
@@ -263,7 +561,7 @@ public class EmpathicBuildingRestConnection inherits RestClient::RestConnection 
         @return a data provider object for this connection; the data provider is @ref EmpathicBuildingDataProvider
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new EmpathicBuildingDataProvider({"restclient": get()});
+        return new EmpathicBuildingDataProvider({"restclient": getAsync()});
     }
 
     #! Sets features during REST client initialization
@@ -279,6 +577,19 @@ public class EmpathicBuildingRestConnection inherits RestClient::RestConnection 
     */
     private RestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new EmpathicBuildingRestClient(getConnectionOptions(), !connect);
+    }
+
+    #! Returns an asynchronous REST client
+    /** @param connect if @ref False, the client does not log in until its first request
+        @param rtopts runtime options
+
+        @return an @ref EmpathicBuildingRestClientIo object
+
+        @since EmpathicBuildingDataProvider 1.2
+    */
+    private EmpathicBuildingRestClientIo getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new EmpathicBuildingRestClientIo(getConnectionOptions(rtopts) + (connect ? NOTHING
+            : {"skip_login": True}));
     }
 
     #! Returns the connection scheme for this class

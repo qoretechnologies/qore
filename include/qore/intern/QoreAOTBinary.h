@@ -2238,6 +2238,45 @@ bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::
 int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& module_name,
         std::vector<std::string>& dependencies, std::string& error);
 
+//! AOT module optional-module trailer: the %try-module requests that failed when the module was compiled
+/** The fixed footer has the same 16-byte shape as the PC->loc footer:
+    uint64 payload_len; uint32 magic('QAOM'); uint32 version.  The payload is:
+    uint32 count; repeat: uint32 spec_len; char[spec_len] spec, where each spec is the module request as written
+    in the %try-module directive (a module name with an optional version constraint, such as
+    <tt>process >= 2.1</tt>).
+
+    The code compiled for such a module takes the branch for the module being unavailable (for example
+    <tt>%ifdef NoProcess</tt>), so the artifact is stale once the module becomes available.  The loader reads this
+    trailer before dlopen() and loads the source module instead when one of the modules can be loaded; see
+    design/aot-object-files-and-module-artifacts.md.
+
+    The trailer is written before the PC->loc and dependency trailers, which are read from the end of the file,
+    so runtimes that predate it read the artifact as before.  It is only written when a %try-module failed.
+*/
+static constexpr uint32_t QORE_AOT_OPTIONAL_MODULES_MAGIC = 0x4d4f4151u;  //!< 'QAOM' little-endian
+static constexpr uint32_t QORE_AOT_OPTIONAL_MODULES_VERSION = 1u;
+
+//! Append the list of optional modules that were unavailable at compile time to an AOT qmod
+/** Must be called before the PC->loc and dependency trailers are appended; a no-op for an empty list.
+
+    @param path AOT qmod path
+    @param specs the failed %try-module requests
+    @param error receives a validation or I/O diagnostic
+    @return true on success, false on error
+*/
+bool qoreAOTAppendOptionalModulesTrailer(const std::string& path, const std::vector<std::string>& specs,
+        std::string& error);
+
+//! Read the optional modules that were unavailable when an AOT qmod was compiled, without loading it
+/** @param path AOT qmod path
+    @param specs receives the failed %try-module requests
+    @param error receives a corruption or I/O diagnostic
+    @return 1 when a valid trailer was read, 0 when there is none or the file cannot be opened, -1 for an invalid
+    trailer
+*/
+int qoreAOTReadOptionalModulesTrailer(const std::string& path, std::vector<std::string>& specs,
+        std::string& error);
+
 //! ELF section name carrying the PC->loc map. Unlike the EOF trailer (which is
 //! dropped whenever a .qo is RE-LINKED into another artifact — e.g. qorus links its
 //! per-file .qo's into the qorus-core executable via the system linker), a real ELF

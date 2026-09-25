@@ -51,9 +51,9 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
                 "display_name": "REST Client",
                 "short_desc": "The REST client to use",
                 "type": AbstractDataProviderType::get(new Type("AbstractRestClient")),
-                "desc": "The REST client to use to communicate with the EmpathicBuilding server; must be an "
-                    "`AbstractRestClient` subclass — typically a `RestClientIo` (async, multiplexed "
-                    "HTTP/1.1/2/3) or a `RestClient` (sync HTTP/1.x)",
+                "desc": "The REST client to use to communicate with the EmpathicBuilding server; typically an "
+                    "`EmpathicBuildingRestClientIo` or a `RestClientIo`; a synchronous `RestClient` is converted to "
+                    "an asynchronous client",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "EmpathicBuilding URL",
@@ -98,14 +98,21 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
             : EmpathicBuildingDataProviderBase(rest, logger) {
     }
 
-    static RestClient::AbstractRestClient getRestConnection(*hash<auto> options) {
-        RestClient::AbstractRestClient rest;
+    #! Returns the REST client for the given constructor options
+    /** @param options the constructor options
+
+        @return the asynchronous REST client for API calls; a synchronous \c restclient option is converted with
+        @ref EmpathicBuildingDataProviderBase::getAsyncClient()
+
+        @throw CONSTRUCTOR-ERROR missing option
+    */
+    static RestClientIo::RestClientIo getRestConnection(*hash<auto> options) {
+        RestClientIo::RestClientIo rest;
         if (options.restclient) {
-            rest = options.restclient;
+            rest = EmpathicBuildingDataProviderBase::getAsyncClient(options.restclient);
             if (options.url) {
                 # Non-mutating URL override: build a sibling client via copyWithUrl()
-                # — works for both sync RestClient and async RestClientIo
-                rest = rest.copyWithUrl(options.url);
+                rest = cast<RestClientIo::RestClientIo>(rest.copyWithUrl(options.url));
             }
         } else {
             if (!options.url && !options.restclient_options) {
@@ -127,7 +134,7 @@ public class EmpathicBuildingDataProvider inherits EmpathicBuildingDataProviderB
         }
         # add the gateway token
         if (options.token) {
-            rest.addDefaultHeaders({"Authorization": "Bearer " + options.token});
+            rest.addDefaultHeaders({"authorization": "Bearer " + options.token});
         }
         return rest;
     }

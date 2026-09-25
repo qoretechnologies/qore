@@ -37,13 +37,56 @@
 
 %requires LemlistRestClient
 %requires LemlistDataProvider
+%requires HttpServerUtil
+%requires HttpServer
 
 %exec-class LemlistDataProviderTest
+
+#! A local Lemlist API server that records requests
+class FakeLemlistHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! the requests received
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += {
+            "method": hdr.method,
+            "path": hdr.path,
+            "authorization": hdr.authorization,
+            "body": body ? parse_json(body.toString()) : NOTHING,
+        };
+        if (hdr.path =~ /^api\/campaigns\/missing/) {
+            return <HttpResponseInfo>{
+                "code": 404,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"message": "campaign not found"}),
+            };
+        }
+        if (hdr.method == "DELETE") {
+            return <HttpResponseInfo>{
+                "code": 204,
+            };
+        }
+        if (hdr.method == "POST") {
+            return <HttpResponseInfo>{
+                "code": 200,
+                "hdr": {"Content-Type": MimeTypeJson},
+                "body": make_json({"_id": "cam_new", "name": parse_json(body.toString()).name}),
+            };
+        }
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {"Content-Type": MimeTypeJson},
+            "body": make_json(({"_id": "cam_1", "name": "Campaign 1", "status": "running"},)),
+        };
+    }
+}
 
 public class LemlistDataProviderTest inherits QUnit::Test {
     private {
         #! Lemlist REST client for integration tests
-        *LemlistRestClient::LemlistRestClient client;
+        *LemlistRestClient::LemlistRestClientIo client;
 
         #! Logger for verbose output
         Logger logger;
@@ -73,6 +116,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
         addTestCase("corner case tests", \cornerCaseTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("local server tests", \localServerTests());
 
         # Integration tests (require LEMLIST_API_KEY)
         addTestCase("integration tests", \integrationTests());
@@ -101,7 +145,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
             }
             return;
         }
-        client = new LemlistRestClient::LemlistRestClient({"apikey": apikey});
+        client = new LemlistRestClient::LemlistRestClientIo({"apikey": apikey});
     }
 
     #! Check if json module is available
@@ -384,6 +428,9 @@ public class LemlistDataProviderTest inherits QUnit::Test {
         assertThrows("LEMLIST-ERROR", sub() {
             new LemlistRestClient::LemlistRestClient({});
         });
+        assertThrows("LEMLIST-ERROR", sub() {
+            new LemlistRestClient::LemlistRestClientIo({});
+        });
 
         # Test REST client URL
         try {
@@ -414,6 +461,85 @@ public class LemlistDataProviderTest inherits QUnit::Test {
         assertTrue(conn.hasDataProvider());
         assertEq("Lemlist", conn.getAppName());
         assertEq("lemlist", conn.getType());
+    }
+
+    #! Requests against a local server
+    localServerTests() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": new Logger("server", LoggerLevel::getLevelError()),
+        });
+        on_exit server.stop();
+        int port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        FakeLemlistHandler handler();
+        server.setHandler("lemlist", "", NOTHING, handler);
+        server.setDefaultHandler("lemlist", handler);
+
+        string url = "http://localhost:" + port + "/api";
+        string auth = "Basic " + ":test-key".toBase64();
+        LemlistDataProvider::LemlistDataProvider provider({
+            "lemlistrestclient_options": {
+                "url": url,
+            },
+            "apikey": "test-key",
+        });
+        assertTrue(provider.getRestClient() instanceof LemlistRestClient::LemlistRestClientIo);
+        assertEq(url, provider.getRestClient().getUrl());
+
+        # a GET request is sent with the async client, with the API version and Basic Auth
+        list<hash<auto>> campaigns = map $1, provider.getChildProvider("campaigns").searchRecords();
+        assertEq(1, campaigns.size());
+        assertEq("cam_1", campaigns[0]._id);
+        assertEq("Campaign 1", campaigns[0].name);
+        assertEq(1, handler.requests.size());
+        assertEq("GET", handler.requests[0].method);
+        assertEq("api/campaigns?limit=100&version=v2", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
+
+        # a POST request sends the serialized body
+        handler.requests = ();
+        auto result = provider.getChildProvider("create-campaign").doRequest({"name": "Spring"});
+        assertEq("cam_new", result._id);
+        assertEq("Spring", result.name);
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("api/campaigns?version=v2", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
+        assertEq({"name": "Spring"}, handler.requests[0].body);
+
+        # a DELETE request with an empty response
+        handler.requests = ();
+        result = provider.getChildProvider("delete-task").doRequest({"taskId": "tsk_1"});
+        assertEq({"deleted": True}, result);
+        assertEq("DELETE", handler.requests[0].method);
+        assertEq("api/tasks/tsk_1?version=v2", handler.requests[0].path);
+
+        # an error response is raised with the response
+        handler.requests = ();
+        try {
+            provider.getChildProvider("campaigns").searchRecords({}, {"campaignId": "missing"}).next();
+            assertTrue(False, "no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+            assertEq("campaign not found", ex.arg.body.message);
+        }
+        assertEq("api/campaigns/missing?version=v2", handler.requests[0].path);
+
+        # the client created from a connection (whose URL is always the Lemlist API URL) is asynchronous and
+        # authenticates with the connection's API key; a copy of it keeps the authentication and API version
+        LemlistRestClient::LemlistRestConnection conn("test", "test connection",
+            "lemlist://api.lemlist.com/api", {}, {"apikey": "test-key"});
+        LemlistDataProvider::LemlistDataProvider conn_provider(conn);
+        assertTrue(conn_provider.getRestClient() instanceof LemlistRestClient::LemlistRestClientIo);
+        assertEq(LemlistRestClient::LemlistRestClientBase::DefaultApiUrl, conn_provider.getRestClient().getUrl());
+        LemlistRestClient::LemlistRestClientIo copy = cast<LemlistRestClient::LemlistRestClientIo>(
+            conn_provider.getRestClient().copyWithUrl(url));
+        handler.requests = ();
+        hash<auto> resp = copy.restGet("campaigns");
+        assertEq(200, resp.status_code);
+        assertEq("cam_1", resp.body[0]._id);
+        assertEq("api/campaigns?version=v2", handler.requests[0].path);
+        assertEq(auth, handler.requests[0].authorization);
     }
 
     #! Action catalog tests - verify all actions are registered
@@ -538,7 +664,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
     #! Test basic API connectivity
     private testApiConnectivity() {
         # GET /team (singular) should return team info
-        hash<auto> resp = client.get("team");
+        hash<auto> resp = client.restGet("team");
         assertTrue(exists resp.body, "team response should have a body");
         if (m_options.verbose) {
             printf("API connectivity OK\n");

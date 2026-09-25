@@ -63,7 +63,7 @@ public class WooCommerceGetTaxRateDataProvider inherits WooCommerceDataProviderB
         static WooCommerceTaxRateDataType ResponseType();
     }
 
-    constructor(WooCommerceRestClient::WooCommerceRestClient rest)
+    constructor(WooCommerceRestClient::WooCommerceRestClientIo rest)
             : WooCommerceDataProviderBase(rest) {
     }
 

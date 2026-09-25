@@ -28,20 +28,29 @@ public namespace ApolloDataProvider {
 #! Base class for Apollo data providers
 public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider {
     public {
+        #! Supported request methods, mapped to @ref True if the request body is sent
+        const RequestMethods = {
+            "GET": False,
+            "POST": True,
+            "PUT": True,
+            "PATCH": True,
+            "DELETE": False,
+        };
+
         #! Base constructor options for Apollo data providers
         const BaseConstructorOptions = {
             "apollorestclient": <DataProviderOptionInfo>{
                 "display_name": "Apollo REST Client",
-                "short_desc": "The ApolloRestClient object",
+                "short_desc": "The ApolloRestClientIo object",
                 "type": AbstractDataProviderType::get(
-                    new Type("ApolloRestClient::ApolloRestClient")),
-                "desc": "The ApolloRestClient object to use for API calls",
+                    new Type("ApolloRestClient::ApolloRestClientIo")),
+                "desc": "The `ApolloRestClientIo` object to use for API calls",
             },
             "apollorestclient_options": <DataProviderOptionInfo>{
                 "display_name": "Apollo REST Client Options",
-                "short_desc": "Options for creating an ApolloRestClient",
+                "short_desc": "Options for creating an ApolloRestClientIo",
                 "type": AbstractDataProviderType::get(AutoHashType),
-                "desc": "Options for creating an ApolloRestClient object if one is not provided "
+                "desc": "Options for creating an `ApolloRestClientIo` object if one is not provided "
                     "directly",
             },
         };
@@ -49,7 +58,7 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     private {
         #! The REST client object for API calls
-        ApolloRestClient::ApolloRestClient rest;
+        ApolloRestClient::ApolloRestClientIo rest;
 
         #! The connection object, if applicable
         *ApolloRestClient::ApolloRestConnection conn;
@@ -60,14 +69,14 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object with a REST client
-    constructor(ApolloRestClient::ApolloRestClient rest) {
+    constructor(ApolloRestClient::ApolloRestClientIo rest) {
         self.rest = rest;
     }
 
     #! Creates the object with a connection
     constructor(ApolloRestClient::ApolloRestConnection conn) {
         self.conn = conn;
-        rest = conn.get(True);
+        rest = conn.getAsync();
     }
 
     #! Creates the object with options
@@ -77,12 +86,12 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
             rest = copts.apollorestclient;
         } else {
             hash<auto> client_opts = copts.apollorestclient_options ?? {};
-            rest = new ApolloRestClient::ApolloRestClient(client_opts);
+            rest = new ApolloRestClient::ApolloRestClientIo(client_opts);
         }
     }
 
     #! Returns the REST client
-    ApolloRestClient::ApolloRestClient getRestClient() {
+    ApolloRestClient::ApolloRestClientIo getRestClient() {
         return rest;
     }
 
@@ -261,27 +270,11 @@ public class ApolloDataProviderBase inherits DataProvider::AbstractDataProvider 
         int retries = 0;
         while (True) {
             try {
-                hash<auto> info;
-                hash<auto> response;
-                switch (method) {
-                    case "GET":
-                        response = rest.get(path, NOTHING, \info);
-                        break;
-                    case "POST":
-                        response = rest.post(path, body, \info);
-                        break;
-                    case "PUT":
-                        response = rest.put(path, body, \info);
-                        break;
-                    case "PATCH":
-                        response = rest.patch(path, body, \info);
-                        break;
-                    case "DELETE":
-                        response = rest.del(path, NOTHING, \info);
-                        break;
-                    default:
-                        throw "APOLLO-ERROR", sprintf("unsupported HTTP method: %s", method);
+                *bool send_body = RequestMethods{method};
+                if (!exists send_body) {
+                    throw "APOLLO-ERROR", sprintf("unsupported HTTP method: %s", method);
                 }
+                hash<auto> response = rest.restDoRequest(method, path, send_body ? body : NOTHING);
 
                 checkResponse(response);
                 return response.body ?? {};

@@ -81,8 +81,78 @@ class TestFhirHandler inherits AbstractHttpRequestHandler {
             return fhirResponse(200, {
                 "resourceType": "Patient",
                 "id": "pat-1",
+                "requestAccept": hdr.accept,
                 "name": ({"family": "Smith", "given": ("Jane",)},),
             }, {"ETag": "W/\"1\""});
+        }
+
+        if (hdr.method == "GET" && path == "Patient/secure") {
+            if (hdr.authorization != "Bearer secret-token") {
+                return fhirResponse(401, {
+                    "resourceType": "OperationOutcome",
+                    "issue": ({
+                        "severity": "error",
+                        "code": "login",
+                        "diagnostics": "Authentication required",
+                    },),
+                });
+            }
+            return fhirResponse(200, {
+                "resourceType": "Patient",
+                "id": "secure",
+            });
+        }
+
+        if (hdr.method == "GET" && path == "Patient/plain-error") {
+            return makeResponse(500, "internal error", {"Content-Type": "text/plain"});
+        }
+
+        # the first page links to the next one with an absolute URL whose query has characters that are not valid
+        # in a request target
+        if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "abs1") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "link": ({
+                    "relation": "next",
+                    "url": sprintf("http://%s/fhir/Patient?page=abs2&identifier=http://example.org/mrn|a b",
+                        hdr.host),
+                },),
+                "entry": ({"resource": {"resourceType": "Patient", "id": "abs-1"}},),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "abs2") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "link": ({"relation": "self", "url": "Patient?page=abs2"},),
+                "entry": ({"resource": {
+                    "resourceType": "Patient",
+                    "id": "abs-2",
+                    "requestPath": hdr.path,
+                    "requestIdentifier": parsed.params.identifier,
+                }},),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "foreign") {
+            return fhirResponse(200, {
+                "resourceType": "Bundle",
+                "type": "searchset",
+                "link": ({"relation": "next", "url": "http://other.example/fhir/Patient?page=2"},),
+                "entry": ({"resource": {"resourceType": "Patient", "id": "foreign-1"}},),
+            });
+        }
+
+        if (hdr.method == "GET" && path == "CodeSystem/my code/$validate-code") {
+            return fhirResponse(200, {
+                "resourceType": "Parameters",
+                "parameter": ({
+                    "name": "result",
+                    "valueBoolean": True,
+                },),
+            });
         }
 
         if (hdr.method == "GET" && path == "Patient" && parsed.params.page == "2") {
@@ -344,6 +414,11 @@ class FhirRestClientTest inherits QUnit::Test {
         addTestCase("connection scheme test", \connectionSchemeTest());
         addTestCase("validation test", \validationTest());
         addTestCase("terminology operation test", \terminologyOperationTest());
+        addTestCase("absolute pagination link test", \absolutePaginationLinkTest());
+        addTestCase("authentication header test", \authenticationHeaderTest());
+        addTestCase("error response test", \errorResponseTest());
+        addTestCase("async connection test", \asyncConnectionTest());
+        addTestCase("request path encoding test", \requestPathEncodingTest());
 
         set_return_value(main());
     }
@@ -369,8 +444,22 @@ class FhirRestClientTest inherits QUnit::Test {
         delete http;
     }
 
+    #! Returns a synchronous and an asynchronous client for the local server
+    list<FhirRestClient::FhirRestClientBase> getClients(*hash<auto> opts) {
+        hash<auto> client_opts = {"url": base_url} + opts;
+        return (
+            new FhirRestClient::FhirRestClient(client_opts, True),
+            new FhirRestClient::FhirRestClientIo(client_opts),
+        );
+    }
+
     discoveryTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            discoveryIntern(client);
+        }
+    }
+
+    discoveryIntern(FhirRestClient::FhirRestClientBase client) {
 
         hash<auto> capability = client.getCapabilityStatement();
         assertEq("CapabilityStatement", capability.resourceType);
@@ -410,7 +499,12 @@ class FhirRestClientTest inherits QUnit::Test {
     }
 
     smartBackendServicesTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            smartBackendServicesIntern(client);
+        }
+    }
+
+    smartBackendServicesIntern(FhirRestClient::FhirRestClientBase client) {
 
         string token = FhirRestClient::FhirRestClient::makeSmartBackendClientAssertion({
             "client_id": "system-client",
@@ -517,12 +611,18 @@ class FhirRestClientTest inherits QUnit::Test {
     }
 
     resourceOperationsTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            resourceOperationsIntern(client);
+        }
+    }
+
+    resourceOperationsIntern(FhirRestClient::FhirRestClientBase client) {
 
         hash<auto> patient = client.readResource("Patient", "pat-1");
         assertEq("Patient", patient.resourceType);
         assertEq("pat-1", patient.id);
         assertEq("Smith", patient.name[0].family);
+        assertEq(TestFhirMimeTypeJson, patient.requestAccept);
 
         hash<auto> bundle = client.searchResources("Patient", {
             "name": "Smith",
@@ -573,7 +673,7 @@ class FhirRestClientTest inherits QUnit::Test {
             "id": "conditional",
         });
         assertEq(200, conditional.status_code);
-        assertEq("http%3A%2F%2Fexample.org%2Fmrn%7C123", conditional.body.queryIdentifier);
+        assertEq("http://example.org/mrn|123", conditional.body.queryIdentifier);
         assertEq("Patient", conditional.body.requestBodyType);
         assertEq("W/\"4\"", conditional.headers.etag);
 
@@ -595,7 +695,12 @@ class FhirRestClientTest inherits QUnit::Test {
     }
 
     bundleOperationTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            bundleOperationIntern(client);
+        }
+    }
+
+    bundleOperationIntern(FhirRestClient::FhirRestClientBase client) {
 
         hash<auto> create_entry = FhirRestClient::FhirRestClientBase::makeConditionalCreateBundleEntry("Patient", {
             "resourceType": "Patient",
@@ -742,7 +847,12 @@ class FhirRestClientTest inherits QUnit::Test {
     }
 
     operationOutcomeTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            operationOutcomeIntern(client);
+        }
+    }
+
+    operationOutcomeIntern(FhirRestClient::FhirRestClientBase client) {
 
         assertThrows("FHIR-OPERATION-OUTCOME", sub () {
             client.readResource("Patient", "missing");
@@ -791,7 +901,12 @@ class FhirRestClientTest inherits QUnit::Test {
     }
 
     validationTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            validationIntern(client);
+        }
+    }
+
+    validationIntern(FhirRestClient::FhirRestClientBase client) {
 
         hash<auto> outcome = client.validateResource({
             "resourceType": "Patient",
@@ -815,7 +930,12 @@ class FhirRestClientTest inherits QUnit::Test {
     }
 
     terminologyOperationTest() {
-        FhirRestClient::FhirRestClient client({"url": base_url}, True);
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            terminologyOperationIntern(client);
+        }
+    }
+
+    terminologyOperationIntern(FhirRestClient::FhirRestClientBase client) {
 
         hash<auto> result = client.validateCode("CodeSystem/example", {
             "code": "abc",
@@ -846,5 +966,109 @@ class FhirRestClientTest inherits QUnit::Test {
         assertEq("ValueSet", expansion.resourceType);
         assertEq("smi", expansion.expansion.parameter[0].valueString);
         assertEq("smith", expansion.expansion.contains[0].code);
+    }
+
+    absolutePaginationLinkTest() {
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            string cname = client.className();
+            hash<auto> all = client.searchAllResources("Patient", {"page": "abs1"});
+            assertEq(("abs-1", "abs-2"), (map $1.resource.id, all.entry), cname);
+            # the link is followed by its path, with the characters that are not valid in a request target
+            # percent-encoded
+            assertEq("fhir/Patient?page=abs2&identifier=http://example.org/mrn%7Ca%20b",
+                all.entry[1].resource.requestPath, cname);
+            assertEq("http://example.org/mrn|a b", all.entry[1].resource.requestIdentifier, cname);
+            # the links of the last page are returned
+            assertEq("self", all.link[0].relation, cname);
+
+            # links to another endpoint are not followed
+            assertThrows("FHIR-PAGINATION-ERROR", "different endpoint", sub () {
+                client.searchAllResources("Patient", {"page": "foreign"});
+            });
+        }
+    }
+
+    authenticationHeaderTest() {
+        foreach FhirRestClient::FhirRestClientBase client in (getClients({"token": "secret-token"})) {
+            hash<auto> patient = client.readResource("Patient", "secure");
+            assertEq("secure", patient.id, client.className());
+        }
+
+        foreach FhirRestClient::FhirRestClientBase client in (getClients({"token": "wrong-token"})) {
+            try {
+                client.readResource("Patient", "secure");
+                assertTrue(False, "expected FHIR-OPERATION-OUTCOME");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("FHIR-OPERATION-OUTCOME", ex.err, client.className());
+                assertEq(401, ex.arg.status_code, client.className());
+                assertEq("login", ex.arg.outcome.issue[0].code, client.className());
+                assertEq("error/login: Authentication required", ex.desc, client.className());
+            }
+        }
+    }
+
+    errorResponseTest() {
+        # error responses are returned by the REST clients by default and translated by the FHIR helpers
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            string cname = client.className();
+            try {
+                client.readResource("Patient", "plain-error");
+                assertTrue(False, "expected FHIR-REST-ERROR");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("FHIR-REST-ERROR", ex.err, cname);
+                assertEq(500, ex.arg.status_code, cname);
+                assertEq("FHIR REST request failed with HTTP status 500", ex.desc, cname);
+            }
+        }
+
+        # with error_passthru disabled, the REST clients raise the error, which is translated as well
+        foreach FhirRestClient::FhirRestClientBase client in (getClients({"error_passthru": False})) {
+            string cname = client.className();
+            try {
+                client.readResource("Patient", "missing");
+                assertTrue(False, "expected FHIR-OPERATION-OUTCOME");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("FHIR-OPERATION-OUTCOME", ex.err, cname);
+                assertEq(404, ex.arg.status_code, cname);
+                assertEq("OperationOutcome", ex.arg.outcome.resourceType, cname);
+                assertEq("not-found", ex.arg.outcome.issue[0].code, cname);
+                assertRegex("^application/fhir\\+json", ex.arg.headers."content-type", cname);
+                # the headers do not include the response body
+                assertFalse(ex.arg.headers.hasKey("body"), cname);
+                assertFalse(ex.arg.headers.hasKey("deserialized_body"), cname);
+            }
+        }
+    }
+
+    asyncConnectionTest() {
+        string fhir_url = regex_subst(base_url, "^http:", "fhir:");
+        FhirRestConnection conn("test-fhir", "Test FHIR connection", fhir_url, {"monitor": False},
+            {"token": "secret-token"});
+
+        object obj = conn.getAsync();
+        assertTrue(obj instanceof FhirRestClient::FhirRestClientIo);
+        FhirRestClient::FhirRestClientIo client = obj;
+        assertEq(base_url, client.getUrl());
+        assertEq("4.0.1", client.getFhirVersion());
+        assertEq("secure", client.readResource("Patient", "secure").id);
+        assertEq(TestFhirMimeTypeJson, client.readResource("Patient", "pat-1").requestAccept);
+    }
+
+    requestPathEncodingTest() {
+        assertEq("Patient?identifier=http://example.org/mrn%7Ca%20b",
+            FhirRestClient::FhirRestClientBase::encodeRequestPath("Patient?identifier=http://example.org/mrn|a b"));
+        # percent-encoded characters are not encoded again
+        assertEq("Patient?name=%C3%A9", FhirRestClient::FhirRestClientBase::encodeRequestPath("Patient?name=%C3%A9"));
+        assertEq("Patient?name=%C3%A9", FhirRestClient::FhirRestClientBase::encodeRequestPath("Patient?name=é"));
+        assertEq("a%22%23%3C%3E%5B%5C%5D%5E%60%7B%7C%7D%09",
+            FhirRestClient::FhirRestClientBase::encodeRequestPath("a\"#<>[\\]^`{|}\t"));
+        assertEq("CodeSystem/$lookup?x=1&y=~", FhirRestClient::FhirRestClientBase::encodeRequestPath(
+            "CodeSystem/$lookup?x=1&y=~"));
+
+        foreach FhirRestClient::FhirRestClientBase client in (getClients()) {
+            hash<auto> result = client.validateCode("CodeSystem/my code", {"code": "abc"});
+            assertEq("Parameters", result.resourceType, client.className());
+            assertTrue(result.parameter[0].valueBoolean, client.className());
+        }
     }
 }

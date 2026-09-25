@@ -24,7 +24,8 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
         *hash<auto> last_hdr;
         hash<auto> response_body;
         hash<auto> last_stream_request;
-        list<hash<SseMessageInfo>> stream_events;
+        # stream events; NOTHING is a wait that timed out
+        list<auto> stream_events;
         # raw (pre-serialized) requests: multipart uploads
         *data last_raw_body;
         #! when set, restDoRawRequest() throws this exception instead of answering
@@ -108,24 +109,31 @@ class TestConversationStore inherits OpenAiConversationContextStore {
     }
 }
 
+#! Returns the given events; NOTHING in the list is a wait that timed out, as with OpenAiResponseSseStreamIo
 class FakeOpenAiSseStream {
     public {
-        list<hash<SseMessageInfo>> events;
+        list<auto> events;
         int idx;
+        bool closed;
     }
 
-    constructor(*list<hash<SseMessageInfo>> events) {
+    constructor(*list<auto> events) {
         self.events = events ?? ();
     }
 
     *hash<SseMessageInfo> readEvent(*timeout to) {
-        if (idx >= events.lsize()) {
+        if (closed || idx >= events.lsize()) {
             return;
         }
         return events[idx++];
     }
 
+    bool isDone() {
+        return closed || idx >= events.lsize();
+    }
+
     close() {
+        closed = True;
     }
 }
 
@@ -183,6 +191,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         addTestCase("response conversation callback store", \responseConversationCallbackStoreTest());
         addTestCase("response stream events", \responseStreamEventsTest());
         addTestCase("response stream error", \responseStreamErrorTest());
+        addTestCase("response stream timeouts", \responseStreamTimeoutTest());
         addTestCase("response action create", \responseActionCreateTest());
         addTestCase("response action media parts", \responseActionMediaPartsTest());
         addTestCase("response action stream", \responseActionStreamTest());
@@ -843,6 +852,52 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertEq("done", observer.events[2].type);
         assertEq(True, rest.last_stream_request.stream);
         assertEq("resp_stream", store.last_saved.previous_response_id);
+    }
+
+    responseStreamTimeoutTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+        OpenAiResponseStreamDataProvider prov(rest);
+        # event waits time out before, between, and after events; the stream ends without [DONE]
+        rest.stream_events = (
+            NOTHING,
+            NOTHING,
+            <SseMessageInfo>{
+                "data": "{\"type\":\"response.output_text.delta\",\"delta\":\"a\"}",
+            },
+            NOTHING,
+            <SseMessageInfo>{
+                "data": "{\"type\":\"response.output_text.delta\",\"delta\":\"b\"}",
+            },
+            NOTHING,
+        );
+
+        StreamObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+        prov.doRequest({
+            "model": "gpt-4.1-mini",
+            "input": (
+                {
+                    "input_item": {
+                        "role": "user",
+                        "content": (
+                            {
+                                "type": "input_text",
+                                "text": "hello",
+                            },
+                        ),
+                    },
+                },
+            ),
+        });
+
+        # a wait that times out does not end the stream
+        observer.wait(2);
+        # waits for the event thread, which ends at the end of the stream
+        prov.stopEvents();
+        assertEq(("a", "b"), (map $1.delta, observer.events));
+        assertEq(("response.output_text.delta", "response.output_text.delta"), (map $1.type, observer.events));
     }
 
     responseStreamErrorTest() {

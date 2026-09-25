@@ -381,6 +381,32 @@ module CdsRestDataProvider {
         created or again on every subsequent change
       - the custom-entity event resolves the entity set and primary key from the organisation's own
         entity definition rather than deriving them from the logical name's spelling
+    - API calls are made with an asynchronous @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo" from the
+      connection's \c getAsync() or created from the options
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+      - a synchronous @ref CdsRestClient::CdsRestClient "CdsRestClient" passed to a data provider, directly or in
+        the \c cdsrestclient option, is converted with
+        @ref CdsRestDataProvider::CdsRestDataProviderBase::getAsyncClient() "CdsRestDataProviderBase::getAsyncClient()",
+        which creates a client of the class matching its API profile with its options, token and connection path
+      - added @ref CdsRestDataProvider::CdsRestDataProviderBase::getRestClient() "CdsRestDataProviderBase::getRestClient()"
+      - the child data providers, record iterators, and event providers take a
+        @ref CdsRestClient::CdsRestClientIo "CdsRestClientIo"
+      - the exception argument of an error response includes the response (\c status_code, \c headers, and
+        \c body) instead of the \c response-code and \c response-body keys
+    - OData \c \@odata.nextLink values, which are absolute URLs, are followed with their path and query using
+      @ref CdsRestDataProvider::CdsRestDataProviderBase::getRequestPath() "CdsRestDataProviderBase::getRequestPath()";
+      request paths are percent-encoded with
+      @ref CdsRestDataProvider::CdsRestDataProviderBase::encodeRequestPath() "CdsRestDataProviderBase::encodeRequestPath()"
+    - fixed passing a REST client in the \c cdsrestclient option, which always failed with
+      \c METHOD-DOES-NOT-EXIST, and the option is now also used by
+      @ref CdsRestDataProvider::BcRestDataProvider "BcRestDataProvider",
+      @ref CdsRestDataProvider::BcCompaniesDataProvider "BcCompaniesDataProvider", and
+      @ref CdsRestDataProvider::CdsRestTablesDataProvider "CdsRestTablesDataProvider", which ignored it; a client of
+      another class raises \c CONSTRUCTOR-ERROR
+    - fixed the entity set name heuristic for a \c 403 response to the entity definition request, which was never
+      applied
+    - stopping a Dynamics event provider aborts an in-flight polling request without closing the REST client, which
+      may be shared with other data providers
 
     @subsection cdsrestdataprovider_v2_1 CdsRestDataProvider v2.1
     - added support for Microsoft Dynamics 365 Business Central

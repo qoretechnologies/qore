@@ -74,7 +74,7 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase,
     }
 
     #! Creates the object with a REST client
-    constructor(Cin7CoreRestClient::Cin7CoreRestClient rest, *hash<auto> options)
+    constructor(Cin7CoreRestClient::Cin7CoreRestClientIo rest, *hash<auto> options)
             : Cin7CoreDataProviderBase(rest),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval, MinPollInterval)) {
         configured_since = options.since;
@@ -100,11 +100,6 @@ public class Cin7CoreWatchDataProviderBase inherits Cin7CoreDataProviderBase,
     #! Destructor
     destructor() {
         stopEventsIntern();
-    }
-
-    #! Cancels any in-flight REST request during shutdown
-    private cancelPollOperation() {
-        rest.close();
     }
 
     #! Performs a single polling operation
