@@ -564,8 +564,8 @@ public class ProviderIndex inherits ProviderIndexUtil {
         batch indexes the catalogue, so that a worker that loads the TypeScriptActionInterface module for another
         reason does not load the whole catalogue.
 
-        @ref runIndexWorker() calls this method itself; a worker command that loads modules of its own before
-        calling @ref runIndexWorker() must call it first.
+        @ref runIndexWorker() calls this method itself, before running its setup code; a worker command that
+        loads modules of its own before calling @ref runIndexWorker() must call this method first.
 
         @param batch_path the path to the batch file, given to the worker command as its last argument
 
@@ -577,9 +577,9 @@ public class ProviderIndex inherits ProviderIndexUtil {
 #!/usr/bin/env qore
 %requires ProviderIndex
 
-ProviderIndex::prepareIndexWorker(ARGV[0]);
-load_module("MyAppProviderSupport");
-exit(ProviderIndex::runIndexWorker(ARGV[0]));
+exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
+    load_module("MyAppProviderSupport");
+}));
         @endcode
 
         @since %ProviderIndex 1.2
@@ -595,6 +595,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         report to the build's staging directory; it never writes the index itself.
 
         @param batch_path the path to the batch file, given to the worker command as its last argument
+        @param setup optional code run after the worker process is prepared (see @ref prepareIndexWorker()) and
+        before the batch is indexed, such as loading modules that the embedding application requires; an exception
+        it raises is reported by the build as the worker's error
 
         @return the exit code for the worker process: 0 if the batch was indexed, 1 if its discovery failed, in which
         case the build reports the failures, or 2 if the worker failed
@@ -612,7 +615,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
 
         @since %ProviderIndex 1.2
     */
-    static int runIndexWorker(string batch_path) {
+    static int runIndexWorker(string batch_path, *code<nothing()> setup) {
         hash<auto> batch;
         try {
             batch = getWorkerBatch(batch_path);
@@ -624,10 +627,15 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         hash<auto!> result = {"id": batch.id};
         int rc;
         try {
+            if (setup) {
+                setup();
+            }
             result += indexWorkerBatch(batch);
             rc = result.report.complete ? 0 : 1;
         } catch (hash<ExceptionInfo> ex) {
-            result.error = get_exception_string(ex);
+            # the error is reported by the build; the details are written to the worker's standard error
+            result.error = sprintf("%s: %s", ex.err, ex.desc);
+            result.error_detail = get_exception_string(ex);
             rc = 2;
         }
         try {
@@ -638,7 +646,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             return 2;
         }
         if (result.error) {
-            stderr.printf("ProviderIndex worker: %s\n", result.error);
+            stderr.printf("ProviderIndex worker: %s\n", result.error_detail);
         }
         return rc;
     }
@@ -860,6 +868,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
         Mutex lock();
         hash<string, hash<auto>> runs = {};
         Counter running();
+        # a worker that fails outright (as opposed to reporting discovery failures) fails the build, so no further
+        # workers are started; such failures usually have a common cause, such as a missing required module
+        bool abort;
         int threads = opts.workers < count ? opts.workers : count;
         for (int i = 0; i < threads; ++i) {
             running.inc();
@@ -870,7 +881,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     {
                         lock.lock();
                         on_exit lock.unlock();
-                        if (next == count) {
+                        if (next == count || abort) {
                             return;
                         }
                         batch = batches[next++];
@@ -883,6 +894,9 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                     lock.lock();
                     on_exit lock.unlock();
                     runs{batch.id} = run;
+                    if (getWorkerRunError(run, opts.worker_timeout_ms)) {
+                        abort = True;
+                    }
                 }
             }();
         }
@@ -930,8 +944,13 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             };
         };
 
+        list<string> not_run = ();
         foreach hash<auto> batch in (batches) {
-            hash<auto> run = runs{batch.id};
+            *hash<auto> run = runs{batch.id};
+            if (!run) {
+                not_run += batch.id;
+                continue;
+            }
             *hash<auto> result = run.result;
             list<string> items = map $1.name, batch.items;
             worker_summary += {
@@ -942,18 +961,7 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
                 "apps": result.apps.size(),
             };
 
-            *string error = run.error ?? result.error;
-            if (!error) {
-                if (run.timed_out) {
-                    error = sprintf("the worker did not finish within %d ms and was terminated",
-                        opts.worker_timeout_ms);
-                } else if (!result.report) {
-                    error = sprintf("the worker exited with code %y without a result", run.exit_code);
-                } else if (run.exit_code != (result.report.complete ? 0 : 1)) {
-                    error = sprintf("the worker exited with code %y", run.exit_code);
-                }
-            }
-            if (error) {
+            if (*string error = getWorkerRunError(run, opts.worker_timeout_ms)) {
                 failures += <DataProviderDiscoveryFailureInfo>{
                     "generation": 0,
                     "kind": "source",
@@ -1044,6 +1052,20 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             }
         }
         map index.factorymap{$1.key} = $1.value.module, worker_factories.pairIterator();
+        if (not_run) {
+            failures += <DataProviderDiscoveryFailureInfo>{
+                "generation": 0,
+                "kind": "source",
+                "phase": "worker",
+                "identity": "index-build",
+                "error": "PROVIDER-INDEX-WORKER-ERROR",
+                "description": sprintf("%d index worker batch(es) were not run because an index worker failed",
+                    not_run.size()),
+                "argument": {
+                    "batches": not_run,
+                },
+            };
+        }
 
         # the expected inventory of the build and of every worker must be present in the merged index
         hash<string, bool> expected_keys = {};
@@ -1116,6 +1138,29 @@ exit(ProviderIndex::runIndexWorker(ARGV[0]));
             "workers": worker_summary,
         });
 %endif
+    }
+
+    #! Returns the error of a worker that failed outright, if any
+    /** @param run the result of running the worker
+        @param timeout_ms the worker timeout
+
+        @return a description of the error, or @ref nothing if the worker reported a result, which can itself report
+        discovery failures
+    */
+    private static *string getWorkerRunError(hash<auto> run, int timeout_ms) {
+        *hash<auto> result = run.result;
+        if (*string error = run.error ?? result.error) {
+            return error;
+        }
+        if (run.timed_out) {
+            return sprintf("the worker did not finish within %d ms and was terminated", timeout_ms);
+        }
+        if (!result.report) {
+            return sprintf("the worker exited with code %y without a result", run.exit_code);
+        }
+        if (run.exit_code != (result.report.complete ? 0 : 1)) {
+            return sprintf("the worker exited with code %y", run.exit_code);
+        }
     }
 
     #! Returns the worker batches for a build

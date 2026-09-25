@@ -38,6 +38,7 @@ public class ProviderIndexWorkersTest inherits QUnit::Test {
         addTestCase("a worker build writes the same index as a single-process build", \equivalenceTest());
         addTestCase("a failed worker publishes nothing", \workerFailureTest());
         addTestCase("workers that describe an action differently fail the build", \conflictTest());
+        addTestCase("a worker setup error is reported and no further workers are started", \setupErrorTest());
 
         set_return_value(main());
     }
@@ -237,5 +238,41 @@ public hash<string, string> sub get_data_provider_map() {
             assertEq("QoreTestConflictApp/record", conflicts[0].identity);
         }
         assertFalse(is_file(index_dir + "/qore-data-index.yaml"), "no index is published");
+    }
+
+    setupErrorTest() {
+        checkModules(True);
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        on_exit restoreEnv();
+
+        # a worker command whose setup fails, as when an application's required module cannot be loaded
+        string script = dir + "/worker.q";
+        File f();
+        f.open2(script, O_CREAT | O_TRUNC | O_WRONLY);
+        f.write("%modern
+%requires ProviderIndex
+exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
+    throw \"QORE-TEST-SETUP-ERROR\", \"the test setup failed\";
+}));
+");
+        f.close();
+
+        # two environment modules, so two batches; with one worker, the second batch is never started
+        setEnv("QORE_DATA_PROVIDERS", registration_module + PathSep + registration_module + PathSep);
+        setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", provider_module);
+        hash<ProviderIndexCreateOptions> opts = getOptions(1);
+        opts.worker_command = (ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore", script);
+        try {
+            ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", opts);
+            fail("a build whose worker setup fails must not be published");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATA-PROVIDER-DISCOVERY-ERROR", ex.err);
+            list<hash<auto>> failures = ex.arg.failures;
+            assertEq(2, failures.size(), "the worker's error and the batches not run");
+            assertRegex("QORE-TEST-SETUP-ERROR: the test setup failed", failures[0].description);
+            assertEq(("w2",), failures[1].argument.batches);
+        }
     }
 }
