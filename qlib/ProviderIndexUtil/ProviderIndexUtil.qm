@@ -71,6 +71,9 @@ module ProviderIndexUtil {
       is written; added
       @ref ProviderIndexUtil::ProviderIndexUtil::writeDataProviderIndexByApp() "ProviderIndexUtil::writeDataProviderIndexByApp()"
     - index files are written deterministically, with apps, actions, and map entries in sorted order
+    - listing or searching the cached apps no longer loads the actions of every app, which took many times the
+      memory of the app info and stayed in memory for the life of the process; each app's actions are loaded when
+      they are first needed
     - added @ref ProviderIndexUtil::ProviderIndexUtil::readSerializedDataProviderIndex() "ProviderIndexUtil::readSerializedDataProviderIndex()"
       and @ref ProviderIndexUtil::ProviderIndexUtil::getSerializedDataProviderIndexSource() "ProviderIndexUtil::getSerializedDataProviderIndexSource()",
       which read and verify a published index from its compact routing index and metadata cache instead of the much

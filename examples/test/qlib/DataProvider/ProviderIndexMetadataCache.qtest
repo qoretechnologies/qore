@@ -25,6 +25,7 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
     constructor() : Test("ProviderIndex metadata cache test", "1.0") {
         addTestCase("corrupt cache falls back to canonical index", \corruptCacheFallsBackToCanonicalIndex());
         addTestCase("a published index is read without the canonical index file", \serializedIndexTest());
+        addTestCase("listing apps leaves their actions to be loaded when needed", \appsOnlyTest());
 
         set_return_value(main());
     }
@@ -158,5 +159,41 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
             f.write(data);
         }
         assertEq(info, ProviderIndexUtil::readSerializedDataProviderIndex(dir), "restored files are read again");
+    }
+
+    appsOnlyTest() {
+        checkModules();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit if (had_env) {
+            ProviderIndexUtil::setEnvironmentVariable(old_env);
+        }
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+
+        hash<auto> actions = {
+            "QoreTestOrders": {"create-order": {"app": "QoreTestOrders", "action": "create-order"}},
+            "QoreTestInvoices": {"send-invoice": {"app": "QoreTestInvoices", "action": "send-invoice"}},
+        };
+        ProviderIndexUtil::writeDataProviderIndexByApp({
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": map {$1: {"name": $1}}, keys actions,
+        }, keys actions, *hash<auto> sub (string app) { return actions{app}; }, 0s, {});
+
+        # discard any index state read by other test cases, so this index is read from its files
+        ProviderIndexUtil::setBuildMode(True);
+        ProviderIndexUtil::setBuildMode(False);
+
+        assertEq(("QoreTestInvoices", "QoreTestOrders"), sort(map $1.name, ProviderIndexUtil::getCachedApps()));
+        # an app's actions are loaded from its own metadata when needed
+        assertEq(("create-order",), map $1.action, ProviderIndexUtil::tryGetActionMetadataForApp("QoreTestOrders"));
+        # a removed app's actions are not brought back when all actions are loaded
+        assertTrue(ProviderIndexUtil::removeCachedApp("QoreTestInvoices"));
+        assertEq(("create-order",), map $1.action, ProviderIndexUtil::getAllCachedActions());
+        assertEq(("QoreTestOrders",), map $1.name, ProviderIndexUtil::getCachedApps());
     }
 }

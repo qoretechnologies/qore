@@ -213,6 +213,8 @@ public class ProviderIndexUtil {
         static bool raw_metadata_loading;
         static *int raw_metadata_loading_tid;
         static hash<string, bool> raw_metadata_app_loaded;
+        #! Set when the info of every app has been loaded from the metadata cache; their actions are still deferred
+        static bool raw_metadata_apps_loaded;
 
         #! Validated manifest digest set only by serialized index initialization and immutable after initialization
         static *string metadata_cache_sha256;
@@ -309,6 +311,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         action_metadata_initialized = {};
         raw_metadata_deferred = False;
         raw_metadata_app_loaded = {};
+        raw_metadata_apps_loaded = False;
         remove metadata_cache_sha256;
         remove metadata_cache_manifest;
         metadata_cache_manifest_checked = False;
@@ -732,10 +735,14 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
     #! Loads serialized metadata after routing-only initialization
     /** @param app an optional app name; when present, only that app's cache chunk is loaded
+        @param actions if @ref False and no app is given, only the info of every app is loaded; the actions of each
+        app remain deferred until they are needed, since the actions of all apps take many times the memory of
+        their app info
     */
-    static private checkRawMetadataIndex(*string app = NOTHING) {
+    static private checkRawMetadataIndex(*string app = NOTHING, bool actions = True) {
         checkDataIndex();
-        if (!initialized || !raw_metadata_deferred || (app && raw_metadata_app_loaded{app})) {
+        if (!initialized || !raw_metadata_deferred || (app && raw_metadata_app_loaded{app})
+                || (!app && !actions && raw_metadata_apps_loaded)) {
             return;
         }
 
@@ -745,7 +752,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
             while (raw_metadata_loading && raw_metadata_loading_tid != gettid()) {
                 metadata_init_cond.wait(m);
             }
-            if (!raw_metadata_deferred || (app && raw_metadata_app_loaded{app})) {
+            if (!raw_metadata_deferred || (app && raw_metadata_app_loaded{app})
+                    || (!app && !actions && raw_metadata_apps_loaded)) {
                 return;
             }
             if (raw_metadata_loading) {
@@ -757,7 +765,7 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
         hash<RawMetadataIndexResult> result;
         try {
-            result = readDeferredRawDataProviderIndex(app);
+            result = readDeferredRawDataProviderIndex(app, actions);
         } catch (hash<ExceptionInfo> ex) {
             m.lock();
             on_exit m.unlock();
@@ -771,18 +779,21 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         on_exit m.unlock();
         if (result.index) {
             # an app that was already loaded on its own may since have been restored, updated, or removed, so a
-            # later complete load must not bring back its serialized entries
+            # later load must not bring back its serialized entries; neither is serialized metadata kept for an app
+            # or actions that have already been restored
             raw_appinfomap += map {$1.key: $1.value}, result.index.appinfomap.pairIterator(),
-                !raw_metadata_app_loaded{$1.key};
+                !raw_metadata_app_loaded{$1.key} && !app_metadata_initialized{$1.key};
             # top_actioninfomap is rebuilt from the typed action metadata when it is restored; serialized
             # entries from the file are never published
             raw_actioninfomap += map {$1.key: $1.value}, result.index.actioninfomap.pairIterator(),
-                !raw_metadata_app_loaded{$1.key};
+                !raw_metadata_app_loaded{$1.key} && !action_metadata_initialized{$1.key};
         }
         if (result.complete) {
             raw_metadata_deferred = False;
         } else if (app) {
             raw_metadata_app_loaded{app} = True;
+        } else {
+            raw_metadata_apps_loaded = True;
         }
         raw_metadata_loading = False;
         remove raw_metadata_loading_tid;
@@ -926,7 +937,8 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
 
     #! Ensures that all app metadata has been deserialized
     static private checkAllAppMetadata() {
-        checkRawMetadataIndex();
+        # the actions of each app are loaded only when needed
+        checkRawMetadataIndex(NOTHING, False);
         if (!initialized || !checkMetadataContext()) {
             return;
         }
@@ -1605,12 +1617,15 @@ if (info) {
     }
 
     #! Reads deferred metadata and falls back to the complete canonical index on any cache error
-    static private hash<RawMetadataIndexResult> readDeferredRawDataProviderIndex(*string app) {
-        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex(app);
+    /** @param app an optional app name; when present, only that app's metadata is read
+        @param actions if @ref False and no app is given, only the info of every app is read from the cache
+    */
+    static private hash<RawMetadataIndexResult> readDeferredRawDataProviderIndex(*string app, bool actions = True) {
+        *hash<DataProviderIndexInfo> cache = readMetadataDataProviderIndex(app, actions || exists app);
         if (cache) {
             return <RawMetadataIndexResult>{
                 "index": cache,
-                "complete": !app,
+                "complete": !app && actions,
             };
         }
 
@@ -1628,7 +1643,11 @@ if (info) {
     }
 
     #! Reads and validates app-specific chunks from the MessagePack metadata cache
-    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app = NOTHING) {
+    /** @param app an optional app name; when present, only that app's chunk is read
+        @param actions if @ref False, the actions in each chunk are dropped as soon as it is read
+    */
+    static private *hash<DataProviderIndexInfo> readMetadataDataProviderIndex(*string app = NOTHING,
+            bool actions = True) {
 %ifdef NoMsgPack
         return;
 %else
@@ -1648,7 +1667,9 @@ if (info) {
                 return;
             }
             rv.appinfomap += chunk.appinfomap ?? {};
-            rv.actioninfomap += chunk.actioninfomap ?? {};
+            if (actions) {
+                rv.actioninfomap += chunk.actioninfomap ?? {};
+            }
         }
         return rv;
 %endif
