@@ -133,6 +133,25 @@ public class ProviderIndexMetadataCacheTest inherits QUnit::Test {
         assertEq(digest("sha256", ReadOnlyFile::readBinaryFile(dir + "/qore-routing-index.yaml")).toHex(),
             info.sha256);
 
+        # apps can be read one at a time
+        hash<auto> streamed = {"appinfomap": {}, "actioninfomap": {}};
+        *hash<SerializedDataProviderIndexInfo> per_app_info = ProviderIndexUtil::readSerializedDataProviderIndex(dir,
+            sub (string app, *hash<auto> app_info, *hash<auto> app_actions) {
+                streamed.appinfomap{app} = app_info;
+                if (app_actions) {
+                    streamed.actioninfomap{app} = app_actions;
+                }
+            });
+        assertEq(info.sha256, per_app_info.sha256);
+        assertEq(maps - "appinfomap", per_app_info.index, "only the maps are returned");
+        assertEq(info.index{"appinfomap", "actioninfomap"}, streamed);
+
+        # an exception raised by the caller's code is passed on
+        assertThrows("QORE-TEST-PER-APP-ERROR", \ProviderIndexUtil::readSerializedDataProviderIndex(), (dir,
+            sub (string app, *hash<auto> app_info, *hash<auto> app_actions) {
+                throw "QORE-TEST-PER-APP-ERROR";
+            }));
+
         # the source has the same digest and size without the index
         *hash<SerializedDataProviderIndexInfo> source = ProviderIndexUtil::getSerializedDataProviderIndexSource(dir);
         assertEq(info.sha256, source.sha256);

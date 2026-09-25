@@ -1404,13 +1404,20 @@ if (info) {
 }
         @endcode
 
+        @param per_app optional code called with each app's name, info, and actions, in app name order, as each
+        app's metadata is read; the index then holds only its \c factorymap, \c appmap, and \c schememap
+        members, so the metadata of only one app is in memory at a time
+
         @note The canonical index file is not read, so its content is not verified against the digest recorded in
         the routing index
+        @note With @a per_app, apps are passed on as they are verified, so if @ref nothing is returned, the apps
+        already passed must be discarded; an exception raised by @a per_app is passed on to the caller
 
         @since ProviderIndexUtil 1.2
     */
-    static *hash<SerializedDataProviderIndexInfo> readSerializedDataProviderIndex(string dir) {
-        return readSerializedIndexIntern(dir, True);
+    static *hash<SerializedDataProviderIndexInfo> readSerializedDataProviderIndex(string dir,
+            *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
+        return readSerializedIndexIntern(dir, True, per_app);
     }
 
     #! Returns the digest and size of a published index from its routing index and metadata cache
@@ -1432,7 +1439,8 @@ if (info) {
     /** @param dir the index directory
         @param unpack @ref True to unpack the metadata, @ref False to only verify it
     */
-    static private *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack) {
+    static private *hash<SerializedDataProviderIndexInfo> readSerializedIndexIntern(string dir, bool unpack,
+            *code<nothing(string, *hash<auto>, *hash<auto>)> per_app) {
 %ifdef NoYaml
         return;
 %else
@@ -1443,6 +1451,8 @@ if (info) {
         if (!is_file(routing_path)) {
             return;
         }
+        # an exception raised by the caller's code is not an error reading the index
+        bool per_app_error;
         try {
             binary routing_data = ReadOnlyFile::readBinaryFile(routing_path);
             *hash<DataProviderRoutingIndexInfo> routing =
@@ -1476,6 +1486,12 @@ if (info) {
                 size += data.size();
                 if (unpack) {
                     hash<DataProviderIndexInfo> chunk = unpackMetadataCacheChunk(data);
+                    if (per_app) {
+                        per_app_error = True;
+                        per_app(app, chunk.appinfomap{app}, chunk.actioninfomap{app});
+                        per_app_error = False;
+                        continue;
+                    }
                     if (exists chunk.appinfomap{app}) {
                         appinfomap{app} = chunk.appinfomap{app};
                     }
@@ -1494,12 +1510,19 @@ if (info) {
                     "factorymap": routing.factorymap ?? {},
                     "appmap": routing.appmap ?? {},
                     "schememap": routing.schememap ?? {},
-                    "appinfomap": appinfomap,
-                    "actioninfomap": actioninfomap,
                 };
+                if (!per_app) {
+                    rv.index += {
+                        "appinfomap": appinfomap,
+                        "actioninfomap": actioninfomap,
+                    };
+                }
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
+            if (per_app_error) {
+                rethrow;
+            }
             # a missing or unreadable file, as while an index is being published: the canonical index can be read
             log(LoggerLevel::LevelDebug, "Cannot read the data provider metadata cache in %y: %s: %s", dir, ex.err,
                 ex.desc);
