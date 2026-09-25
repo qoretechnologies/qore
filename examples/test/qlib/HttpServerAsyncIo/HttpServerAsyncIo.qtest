@@ -225,6 +225,32 @@ class DelayedStreamingTarget inherits TestTarget {
     }
 }
 
+#! Holds the controller through an or-nothing member, as HttpServer does
+class NamedArgListenerHolder {
+    private {
+        *HttpAsyncSocketIoController ctrl;
+    }
+
+    constructor(HttpAsyncSocketIoController ctrl) {
+        self.ctrl = ctrl;
+    }
+
+    #! skips the or-nothing certificate and key parameters
+    addPlain(Socket listener, HttpAsyncTarget target) {
+        ctrl.addListener(listener, target, max_request_body_size: 4096);
+    }
+
+    #! passes certificate and key values whose types are only known at runtime
+    addSsl(Socket listener, HttpAsyncTarget target, *string cert, auto key) {
+        ctrl.addListener(listener, target, True, cert, key, HttpVersionMode::Auto, max_request_body_size: 4096);
+    }
+
+    #! passes the certificate and key by name
+    addSslByName(Socket listener, HttpAsyncTarget target, auto cert, auto key) {
+        ctrl.addListener(key: key, cert: cert, ssl: True, target: target, listener: listener);
+    }
+}
+
 public class HttpServerAsyncIoTest inherits QUnit::Test {
     public {
         # Test SSL certificate (self-signed for testing)
@@ -295,6 +321,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("persistent queue replacement survives delayed cleanup",
             \persistentQueueReplacementTest());
         addTestCase("HttpAcceptPollOperation HTTP/2 mode test", \acceptPollHttp2ModeTest());
+        addTestCase("addListener with named arguments", \addListenerNamedArgsTest());
         # Binary search: comment out tests to find the hanging one
         addTestCase("concurrent addListener/removeListener", \concurrentListenerTest());
         addTestCase("stop during active accepts", \stopDuringAcceptsTest());
@@ -1171,6 +1198,59 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         client.close();
         accepted.close();
         server.close();
+    }
+
+    #! Tests addListener() with named arguments that skip or pass the certificate and key
+    addListenerNamedArgsTest() {
+        # the listening sockets are closed after the controller has been stopped
+        list<Socket> servers;
+        on_exit {
+            map $1.close(), servers;
+        }
+        AsyncSocketIoController io_ctrl(False);
+        HttpAsyncSocketIoController ctrl(io_ctrl);
+        on_exit {
+            ctrl.stop();
+            io_ctrl.stop();
+        }
+        ctrl.start();
+        NamedArgListenerHolder holder(ctrl);
+        TestTarget target();
+
+        holder.addPlain(listenSocket(\servers), target);
+        assertEq(1, ctrl.getStats().listeners, "plain listener with skipped cert and key");
+
+        holder.addSsl(listenSocket(\servers), target, CertPem, KeyPem);
+        assertEq(2, ctrl.getStats().listeners, "SSL listener with PEM strings");
+
+        holder.addSslByName(listenSocket(\servers), target, new SSLCertificate(CertPem),
+            new SSLPrivateKey(KeyPem));
+        assertEq(3, ctrl.getStats().listeners, "SSL listener with objects passed by name");
+
+        # a certificate of the wrong type fails at runtime as with positional arguments
+        auto bad_cert = {"pem": CertPem};
+        string positional_err;
+        try {
+            ctrl.addListener(listenSocket(\servers), target, True, bad_cert, KeyPem);
+        } catch (hash<ExceptionInfo> ex) {
+            positional_err = ex.err;
+        }
+        assertEq("RUNTIME-OVERLOAD-ERROR", positional_err, "positional call with an invalid certificate");
+        assertThrows(positional_err, sub () {
+            holder.addSsl(listenSocket(\servers), target, NOTHING, bad_cert);
+        });
+        assertThrows(positional_err, sub () {
+            holder.addSslByName(listenSocket(\servers), target, bad_cert, KeyPem);
+        });
+        assertEq(3, ctrl.getStats().listeners, "rejected listeners are not added");
+    }
+
+    private static Socket listenSocket(reference<list<Socket>> servers) {
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        servers += server;
+        return server;
     }
 
     #! Tests that stop() during SSL handshake doesn't leak operations

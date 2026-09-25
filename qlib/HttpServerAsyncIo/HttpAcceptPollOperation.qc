@@ -44,10 +44,10 @@ public namespace HttpServerAsyncIo {
 public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
     private {
         #! SSL certificate for the listener (if SSL) - can be SSLCertificate or data
-        auto cert;
+        *union<SSLCertificate, string, binary> cert;
 
         #! SSL private key for the listener (if SSL) - can be SSLPrivateKey or data
-        auto key;
+        *union<SSLPrivateKey, string, binary> key;
 
         #! Controller for completion callback
         /** Assigned with the opaque reference operator \c "@=" - see
@@ -73,8 +73,8 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
     #! Creates the poll operation
     /** @param listener the server socket to accept connections from (Socket or any subclass like HttpListener)
         @param ssl if True, perform SSL handshake after accept
-        @param cert SSL certificate (SSLCertificate object or PEM data, required if ssl is True)
-        @param key SSL private key (SSLPrivateKey object or PEM data, required if ssl is True)
+        @param cert SSL certificate (SSLCertificate object or PEM/DER data, required if ssl is True)
+        @param key SSL private key (SSLPrivateKey object or PEM/DER data, required if ssl is True)
         @param ssl_verify_flags SSL verification flags for client certificate verification (e.g. SSL_VERIFY_PEER)
         @param ssl_accept_all_certs if True, accept all client certificates including self-signed ones
         @param http_version HTTP version mode: "auto" (default), "1.0", "1.1", "2.0", or "h2c"
@@ -84,9 +84,9 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
                proceeding with HTTP communication. This allows the EventLoop to handle the SSL handshake
                with proper socket monitoring.
     */
-    constructor(Qore::Socket listener, bool ssl = False, auto cert = NOTHING, auto key = NOTHING,
-            int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
-            string http_version = "auto", bool do_ssl_handshake = True)
+    constructor(Qore::Socket listener, bool ssl = False, *union<SSLCertificate, string, binary> cert = NOTHING,
+            *union<SSLPrivateKey, string, binary> key = NOTHING, int ssl_verify_flags = SSL_VERIFY_NONE,
+            bool ssl_accept_all_certs = True, string http_version = "auto", bool do_ssl_handshake = True)
             : HttpAcceptPollOperationBase(listener,
                 HttpAcceptPollOperation::startAcceptWithAlpn(listener, ssl, http_version),
                 ssl, HttpAcceptPollOperation::ensureCert(cert), HttpAcceptPollOperation::ensureKey(key),
@@ -128,20 +128,15 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
         @param cert the certificate value (SSLCertificate, string, binary, or NOTHING)
         @return SSLCertificate object or NOTHING
     */
-    private static *SSLCertificate ensureCert(auto cert) {
+    private static *SSLCertificate ensureCert(*union<SSLCertificate, string, binary> cert) {
         if (!cert) {
             return NOTHING;
         }
         if (cert instanceof SSLCertificate) {
             return cert;
         }
-        if (cert.typeCode() == NT_STRING) {
-            return new SSLCertificate(cert);
-        }
-        if (cert.typeCode() == NT_BINARY) {
-            return new SSLCertificate(cert);
-        }
-        throw "HTTPACCEPTPOLLOPERATION-ERROR", sprintf("invalid certificate type: %y", cert.type());
+        # PEM string or DER binary data
+        return new SSLCertificate(cert);
     }
 
     #! Ensures the key is an SSLPrivateKey object
@@ -149,20 +144,15 @@ public class HttpAcceptPollOperation inherits HttpAcceptPollOperationBase {
         @param key the key value (SSLPrivateKey, string, binary, or NOTHING)
         @return SSLPrivateKey object or NOTHING
     */
-    private static *SSLPrivateKey ensureKey(auto key) {
+    private static *SSLPrivateKey ensureKey(*union<SSLPrivateKey, string, binary> key) {
         if (!key) {
             return NOTHING;
         }
         if (key instanceof SSLPrivateKey) {
             return key;
         }
-        if (key.typeCode() == NT_STRING) {
-            return new SSLPrivateKey(key);
-        }
-        if (key.typeCode() == NT_BINARY) {
-            return new SSLPrivateKey(key);
-        }
-        throw "HTTPACCEPTPOLLOPERATION-ERROR", sprintf("invalid private key type: %y", key.type());
+        # PEM string or DER binary data
+        return new SSLPrivateKey(key);
     }
 
     #! Sets the completion context so that onComplete() can dispatch the result

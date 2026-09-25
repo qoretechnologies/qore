@@ -834,8 +834,9 @@ public class HttpAsyncSocketIoController {
         @param http_listener optional HttpListenerInterface for handler dispatch and logging;
         when provided, this is passed to callbacks instead of the raw socket
     */
-    addListener(Socket listener, HttpAsyncTarget target, bool ssl = False, auto cert = NOTHING,
-            auto key = NOTHING, string http_version = HttpVersionMode::Auto,
+    addListener(Socket listener, HttpAsyncTarget target, bool ssl = False,
+            *union<SSLCertificate, string, binary> cert = NOTHING,
+            *union<SSLPrivateKey, string, binary> key = NOTHING, string http_version = HttpVersionMode::Auto,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
             bool get_remote_certs = False, int max_request_body_size = 0,
             *HttpServer::HttpListenerInterface http_listener) {
@@ -892,7 +893,8 @@ public class HttpAsyncSocketIoController {
         @note QUIC uses UDP and handles TLS 1.3 as part of the QUIC handshake.
         The socket must already be bound to a UDP port before calling this method.
     */
-    addQuicListener(Socket listener, HttpAsyncTarget target, auto cert, auto key,
+    addQuicListener(Socket listener, HttpAsyncTarget target, *union<SSLCertificate, string, binary> cert,
+            *union<SSLPrivateKey, string, binary> key,
             HttpServer::HttpListenerInterface http_listener,
             int ssl_verify_flags = SSL_VERIFY_NONE, bool ssl_accept_all_certs = True,
             bool get_remote_certs = False, int max_request_body_size = 0) {
@@ -1060,7 +1062,7 @@ public class HttpAsyncSocketIoController {
         @since Qore 3.0.0
     */
     bool reloadListenerCertificateByHttpListener(HttpServer::HttpListenerInterface http_listener,
-            auto cert, auto key) {
+            *union<SSLCertificate, string, binary> cert, *union<SSLPrivateKey, string, binary> key) {
         @assert(http_listener, "http_listener cannot be null");
         @assert(cert && key, "cert and key cannot be null");
         string target_lhash;
@@ -1116,7 +1118,8 @@ public class HttpAsyncSocketIoController {
 
         @since Qore 3.0.0
     */
-    reloadListenerCertificate(Socket listener, auto cert, auto key) {
+    reloadListenerCertificate(Socket listener, *union<SSLCertificate, string, binary> cert,
+            *union<SSLPrivateKey, string, binary> key) {
         @assert(listener, "listener socket cannot be null");
         @assert(cert && key, "cert and key cannot be null");
         string lhash = listener.uniqueHash();
@@ -1271,7 +1274,8 @@ public class HttpAsyncSocketIoController {
 
     #! Submits an accept operation to the controller
     private submitAcceptOp(Socket listener, HttpAsyncTarget target, bool ssl,
-            auto cert, auto key, string http_version, string owner) {
+            *union<SSLCertificate, string, binary> cert, *union<SSLPrivateKey, string, binary> key,
+            string http_version, string owner) {
         int seq;
         int ssl_verify_flags = SSL_VERIFY_NONE;
         bool ssl_accept_all_certs = True;
@@ -1351,7 +1355,8 @@ public class HttpAsyncSocketIoController {
         @note This method runs on an async callback dispatcher worker and must not block.
     */
     handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
-            HttpAsyncTarget target, bool ssl, auto cert, auto key,
+            HttpAsyncTarget target, bool ssl, *union<SSLCertificate, string, binary> cert,
+            *union<SSLPrivateKey, string, binary> key,
             string http_version, string owner) {
         # Decrement accept count
         int cnt_before;
@@ -4981,10 +4986,10 @@ hashdecl HttpListenerInfo {
     bool ssl = False;
 
     #! SSL certificate (SSLCertificate object or PEM/DER data)
-    auto cert;
+    *union<SSLCertificate, string, binary> cert;
 
     #! SSL private key (SSLPrivateKey object or PEM/DER data)
-    auto key;
+    *union<SSLPrivateKey, string, binary> key;
 
     #! HTTP version mode
     string http_version = HttpVersionMode::Auto;
