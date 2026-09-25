@@ -57,7 +57,10 @@ public hashdecl ProviderIndexCreateOptions {
     int workers = 0;
 
     #! The command that starts a worker process, followed by its arguments
-    /** The path of the worker's batch file is appended as the last argument; the command must pass it to
+    /** The first element is the executable, which must be given as an absolute path or be found in the \c PATH; a
+        relative path is only searched for in the \c PATH and is not resolved against the working directory.
+
+        The path of the worker's batch file is appended as the last argument; the command must pass it to
         @ref ProviderIndex::ProviderIndex::runIndexWorker() "ProviderIndex::runIndexWorker()" and exit with its
         return value.  A command that loads modules that the embedding application requires to be present while
         providers are indexed must first call

@@ -263,7 +263,13 @@ exit(ProviderIndex::runIndexWorker(ARGV[0], sub () {
         setEnv("QORE_DATA_PROVIDERS", registration_module + PathSep + registration_module + PathSep);
         setEnv("QORE_PROVIDER_INDEX_FIXTURE_MODULE", provider_module);
         hash<ProviderIndexCreateOptions> opts = getOptions(1);
-        opts.worker_command = (ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore", script);
+        # a worker command must be found in the PATH or given as an absolute path; the interpreter may have been
+        # started with a path relative to the working directory, as run_tests.sh runs "build/qore"
+        string qore = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        if (qore.find(DirSep) >= 0) {
+            qore = normalize_dir(qore);
+        }
+        opts.worker_command = (qore, script);
         try {
             ProviderIndex::createDataProviderIndex(NOTHING, dir + "/index", opts);
             fail("a build whose worker setup fails must not be published");
