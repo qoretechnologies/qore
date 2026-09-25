@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore HttpClientDataProvider module definition
 
-/*  HttpClientDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  HttpClientDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,9 +32,10 @@
 
 %requires(reexport) DataProvider
 %requires FileLocationHandler
+%requires(reexport) HttpClientIo
 
 module HttpClientDataProvider {
-    version = "1.1";
+    version = "1.2";
     desc = "user module providing a data provider API for HTTP servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -62,6 +63,7 @@ module HttpClientDataProvider {
     - @ref HttpClientDataProvider::HttpClientCallWithoutBodyRequestDataType "HttpClientCallWithoutBodyRequestDataType"
     - @ref HttpClientDataProvider::HttpClientDataProviderFactory "HttpClientDataProviderFactory"
     - @ref HttpClientDataProvider::HttpClientDataProvider "HttpClientDataProvider"
+    - @ref HttpClientDataProvider::HttpClientDataProviderBase "HttpClientDataProviderBase"
     - @ref HttpClientDataProvider::HttpClientDeleteDataProvider "HttpClientDeleteDataProvider"
     - @ref HttpClientDataProvider::HttpClientGetDataProvider "HttpClientGetDataProvider"
     - @ref HttpClientDataProvider::HttpClientHeadDataProvider "HttpClientHeadDataProvider"
@@ -70,7 +72,62 @@ module HttpClientDataProvider {
     - @ref HttpClientDataProvider::HttpClientPostDataProvider "HttpClientPostDataProvider"
     - @ref HttpClientDataProvider::HttpClientPutDataProvider "HttpClientPutDataProvider"
 
+    @section httpclientdataprovider_client HTTP Requests
+
+    Requests are made with a
+    <a href="../../HttpClientIo/html/index.html">HttpClientIo::HttpClientConnectionManager</a>, which supports
+    HTTP/1.1, HTTP/2, and HTTP/3; each data provider is created in one of the following ways:
+    - from constructor options: a new connection manager is created from the transport options (timeouts,
+      \c http_version, redirects, proxy, TLS verification, and the client certificate and key)
+    - from a connection manager and a URL: the connection manager can be shared with other objects, and it is never
+      closed by the data provider; see
+      @ref HttpClientDataProvider::HttpClientDataProviderBase "HttpClientDataProviderBase"
+    - from a synchronous @ref Qore::HTTPClient "HTTPClient": a new connection manager is created from the client's
+      configuration, and the client itself is not used for requests
+
+    The following settings of a synchronous @ref Qore::HTTPClient "HTTPClient" are carried over:
+    |!Setting|!Carried over as
+    |URL, including user information and the username and password options|the target URL; the credentials are sent with HTTP basic authentication
+    |timeout and connect timeout|the request and connect timeouts of the connection manager
+    |HTTP version|the protocol of the connection manager (\c "1.0" and \c "1.1" select HTTP/1.1)
+    |maximum redirects and redirect passthrough|the redirect handling of the connection manager
+    |proxy URL|the proxy of the connection manager
+    |server certificate verification, client certificate and private key|the TLS settings of the connection manager
+    |maximum response body size|the response body limit of the connection manager
+    |default headers set in the constructor or with \c addDefaultHeaders()|default request headers
+    |error passthrough and pre-encoded URLs|request options of the data provider
+    |assumed encoding|the \c assume_encoding option
+
+    Other settings, such as persistent connections, the connection path, and event queues,
+    are not carried over.  The child data providers created by a data provider share its connection manager.
+
+    Text responses without a \c charset are decoded as ISO-8859-1, the default character set of text media types in
+    HTTP/1.1 (RFC 2616), as with @ref Qore::HTTPClient "HTTPClient", unless the \c assume_encoding option is set.
+    A request body is sent with \c "Content-Type: application/octet-stream" (binary data) or \c "text/plain" with
+    the string's character encoding, unless a \c Content-Type header is given.
+
+    Responses keep the format of @ref HttpClientDataProvider::HttpClientCallResponseDataType
+    "HttpClientCallResponseDataType", and errors are raised with the codes of the synchronous client: an error status
+    raises \c HTTP-CLIENT-RECEIVE-ERROR (unless the \c error_passthru option is set), a timeout raises
+    \c SOCKET-TIMEOUT, and redirect errors raise \c HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED or
+    \c HTTP-CLIENT-REDIRECT-ERROR.  Request paths are percent-encoded like the synchronous client encodes them,
+    unless the \c pre_encoded_urls option is set.
+
     @section httpclientdataprovider_relnotes Release Notes
+
+    @subsection httpclientdataprovider_v1_2 HttpClientDataProvider v1.2
+    - requests are made with a
+      <a href="../../HttpClientIo/html/index.html">HttpClientIo::HttpClientConnectionManager</a> instead of a
+      synchronous @ref Qore::HTTPClient "HTTPClient"; a synchronous client passed to a data provider is
+      converted, see @ref httpclientdataprovider_client
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+    - added the @ref HttpClientDataProvider::HttpClientDataProviderBase "HttpClientDataProviderBase" class and
+      constructors taking a connection manager and a URL
+    - the public \c http member of the data providers is only set if the data provider was created from an
+      @ref Qore::HTTPClient "HTTPClient"
+    - fixed the \c ssl_cert_location and \c ssl_key_location options with a location URL, which were used as file
+      paths
+    - option default values are applied
 
     @subsection httpclientdataprovider_v1_1 HttpClientDataProvider v1.1
     - added the \c headers option to allow auth headers to be set in the data provider

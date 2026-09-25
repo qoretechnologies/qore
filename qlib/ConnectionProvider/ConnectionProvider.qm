@@ -167,6 +167,11 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     - the HTTP connection \c negotiate_keytab option is no longer marked
       \c sensitive; it is a keytab file location (not secret material, which lives
       in the keytab file itself), consistent with the other file-location options
+    - fixed @ref ConnectionProvider::HttpConnection::getDataProvider() "HttpConnection::getDataProvider()", which
+      loaded a nonexistent \c HttpDataProvider module and always failed; it returns an \c HttpClientDataProvider
+      object that makes its requests with the connection's asynchronous
+      @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
+      (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     @subsection connectionprovider_3_0 ConnectionProvider 3.0
     - added @ref ConnectionProvider::AbstractConnection::supportsAsyncRequestApi()

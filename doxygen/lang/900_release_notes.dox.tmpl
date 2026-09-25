@@ -1754,6 +1754,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         client (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref connectionproviderintro "ConnectionProvider" module
+      - fixed @ref ConnectionProvider::HttpConnection::getDataProvider() "HttpConnection::getDataProvider()", which
+        loaded a nonexistent \c HttpDataProvider module and always failed; it returns an
+        @ref httpclientdataproviderintro "HttpClientDataProvider" using the connection's asynchronous connection
+        manager (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - added the \c max_response_body_size option to @ref ConnectionProvider::HttpConnection "HttpConnection"
         and the connections based on it, limiting the size of a response body received into memory, as received
         and after its content encoding is decoded, for both the synchronous and the asynchronous clients
@@ -1868,6 +1872,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref filelocationhandlerintro "FileLocationHandler" module
+      - \c http(s):// locations use @ref httpclientiointro "HttpClientIo" and \c rest(s):// locations use
+        @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3); non-blocking readers do no blocking
+        I/O, stream reads read the body as it is consumed and raise error responses when the stream is opened, and
+        stream writes report error responses from \c waitForIo(); text without a \c charset is decoded as
+        ISO-8859-1, as before (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()"
         and @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation()
         "getResourcePollerForLocation()", returning a resource's data with its effective location, media type,
@@ -1943,6 +1952,14 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         subclass of @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" with the xAI default URL applied
       - new \c chat-model connection option, so the model used when the connection is
         selected for chat can be configured on the connection; defaults to \c "grok-3"
+
+    - @ref httpclientdataproviderintro "HttpClientDataProvider" module
+      - the data providers make requests with an @ref httpclientiointro "HttpClientIo" connection manager
+        (HTTP/1.1, HTTP/2, and HTTP/3); new constructors take a connection manager and a URL, and a synchronous
+        @ref Qore::HTTPClient "HTTPClient" passed to them is converted; text without a \c charset is decoded as
+        ISO-8859-1, as with @ref Qore::HTTPClient "HTTPClient"; fixed the \c ssl_cert_location and
+        \c ssl_key_location options with location URLs, and option default values not being applied
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
       - added optional AsyncAPI 3.0 validation for deserialized

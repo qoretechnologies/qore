@@ -16,12 +16,343 @@
 
 %exec-class HttpClientDataProviderTest
 
+#! A request received by the test server
+hashdecl ReceivedRequest {
+    string method;
+    string path;
+    *string authorization;
+    *string test_header;
+    *string content_type;
+    *data body;
+}
+
+#! Test server handler: records requests and serves fixed routes
+class HttpClientTestHandler inherits AbstractHttpRequestHandler {
+    public {
+        #! Requests to "/block" wait until this counter is zero
+        Counter block();
+        #! Signaled when a request to "/block" arrives
+        Queue blocked();
+    }
+
+    private {
+        list<hash<ReceivedRequest>> requests;
+        Mutex m();
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<ReceivedRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock al(m);
+            requests += <ReceivedRequest>{
+                "method": hdr.method,
+                "path": cx.raw_path,
+                "authorization": hdr.authorization,
+                "test_header": hdr.test,
+                "content_type": hdr."content-type",
+                "body": body,
+            };
+        }
+        switch (cx.raw_path) {
+            case "/redir":
+                return makeResponse({"Location": "/echo/redirected"}, 302, binary());
+            case "/loop":
+                return makeResponse({"Location": "/loop"}, 302, binary());
+            case "/noloc":
+                return makeResponse({}, 302, binary());
+            case "/missing":
+                return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 404, binary("not here"));
+            case "/latin1":
+                return makeResponse({"Content-Type": "text/plain"}, 200, <e4f6fc>);
+            case "/block":
+                blocked.push(cx.raw_path);
+                block.waitForZero();
+                return makeResponse({"Content-Type": "text/plain;charset=utf-8"}, 200, binary("released"));
+        }
+        string rv = hdr.method + " " + cx.raw_path;
+        if (exists body) {
+            rv += ":" + (body.typeCode() == NT_BINARY ? body.toString() : body);
+        }
+        return makeResponse({"Content-Type": "text/plain;charset=utf-8", "X-Mixed-Case": "1"}, 200, binary(rv));
+    }
+}
+
 public class HttpClientDataProviderTest inherits QUnit::Test {
+    private {
+        HttpServer server;
+        HttpClientTestHandler handler();
+        int port;
+        string url;
+    }
+
     constructor() : Test("HttpClientDataProvider Test", "1.0") {
         addTestCase("test", \httpClientDataProviderTest());
+        addTestCase("requests", \requestTest());
+        addTestCase("redirects", \redirectTest());
+        addTestCase("errors", \errorTest());
+        addTestCase("paths", \pathTest());
+        addTestCase("sync client conversion", \syncClientTest());
+        addTestCase("connection manager", \connectionManagerTest());
+        addTestCase("timeouts", \timeoutTest());
+
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            if (handler.block.getCount()) {
+                handler.block.dec();
+            }
+            server.stop();
+        }
+        server.setHandler("test", "", NOTHING, handler);
+        server.setDefaultHandler("test", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url = sprintf("http://127.0.0.1:%d", port);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    requestTest() {
+        HttpClientDataProvider parent({"url": url, "headers": {"Test": "x"}});
+        assertEq(url, parent.getUrl());
+        assertNothing(parent.http);
+
+        # each method provider sends its method
+        hash<string, string> methods = {
+            "get": "GET",
+            "delete": "DELETE",
+            "put": "PUT",
+            "post": "POST",
+            "patch": "PATCH",
+            "options": "OPTIONS",
+        };
+        foreach hash<auto> i in (methods.pairIterator()) {
+            AbstractDataProvider prov = parent.getChildProviderEx(i.key);
+            hash<auto> req = {"path": "/echo/" + i.key};
+            if (i.key =~ /^(put|post|patch|delete)$/) {
+                req.body = "data-" + i.key;
+            }
+            handler.clear();
+            hash<auto> resp = prov.doRequest(req);
+            string expected = i.value + " /echo/" + i.key + (req.body ? ":" + req.body : "");
+            assertEq(expected, resp."response-body", i.key);
+            assertEq(200, resp."status-code", i.key);
+            assertEq("OK", resp."status-message", i.key);
+            assertEq(sprintf("%s /echo/%s HTTP/1.1", i.value, i.key), resp."request-uri", i.key);
+            assertEq("HTTP/1.1 200 OK", resp."response-uri", i.key);
+            assertEq("1", resp."response-headers"."x-mixed-case", i.key);
+            assertEq("text/plain;charset=utf-8", resp."response-headers"."content-type", i.key);
+            assertEq("1", resp."response-headers-raw"."X-Mixed-Case", i.key);
+            assertEq("x", resp."request-headers".Test, i.key);
+            hash<ReceivedRequest> received = handler.getRequests()[0];
+            assertEq(i.value, received.method, i.key);
+            assertEq("x", received.test_header, i.key);
+            if (req.body) {
+                assertEq("text/plain", received.content_type, i.key);
+            }
+        }
+
+        # HEAD responses have no body
+        hash<auto> resp = parent.getChildProviderEx("head").doRequest({"path": "/echo/head"});
+        assertEq(200, resp."status-code");
+        assertNothing(resp."response-body");
+
+        # the call provider takes the method, and binary bodies are sent as they are
+        handler.clear();
+        resp = parent.getChildProviderEx("call").doRequest({"method": "put", "path": "/echo/call",
+            "body": binary("bin"), "hdr": {"test": "override"}});
+        assertEq("PUT /echo/call:bin", resp."response-body");
+        assertEq("override", handler.getRequests()[0].test_header, "request headers override default headers");
+        assertEq("application/octet-stream", handler.getRequests()[0].content_type);
+
+        # a request without a path uses the path of the URL
+        HttpClientDataProvider path_prov({"url": url + "/echo/url-path"});
+        assertEq("GET /echo/url-path", path_prov.getChildProviderEx("get").doRequest({"path": ""})."response-body");
+
+        # basic authentication from the URL
+        handler.clear();
+        HttpClientDataProvider auth_prov({"url": sprintf("http://user:pass@127.0.0.1:%d", port)});
+        auth_prov.getChildProviderEx("get").doRequest({"path": "/echo/auth"});
+        assertEq("Basic dXNlcjpwYXNz", handler.getRequests()[0].authorization);
+        assertEq(url, auth_prov.getUrl(), "credentials are not in the URL");
+
+        # text without a charset is ISO-8859-1 by default, as with HTTPClient
+        HttpClientDataProvider enc_prov({"url": url});
+        resp = enc_prov.getChildProviderEx("get").doRequest({"path": "/latin1"});
+        assertEq("äöü", resp."response-body");
+        assertEq("ISO-8859-1", resp."response-body".encoding());
+        # an explicitly assumed encoding
+        enc_prov = new HttpClientDataProvider({"url": url, "assume_encoding": "ISO-8859-15"});
+        resp = enc_prov.getChildProviderEx("get").doRequest({"path": "/latin1"});
+        assertEq("äöü", resp."response-body");
+        assertEq("ISO-8859-15", resp."response-body".encoding());
+        # the assumed encoding of an HTTPClient is carried over
+        HTTPClient http({"url": url});
+        http.setAssumedEncoding("UTF-8");
+        assertEq("UTF-8", HttpClientDataProviderBase::getOptionsFromClient(http).assume_encoding);
+    }
+
+    redirectTest() {
+        HttpClientDataProvider prov({"url": url});
+        hash<auto> resp = prov.getChildProviderEx("get").doRequest({"path": "/redir"});
+        assertEq("GET /echo/redirected", resp."response-body");
+        assertEq(200, resp."status-code");
+
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); },
+            {"path": "/loop"});
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); }, {"path": "/noloc"});
+
+        # redirect passthrough returns the redirect as an error unless errors are passed through
+        HttpClientDataProvider passthru({"url": url, "redirect_passthru": True});
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", sub (hash<auto> req) { passthru.getChildProviderEx("get").doRequest(req); }, {"path": "/redir"});
+        passthru = new HttpClientDataProvider({"url": url, "redirect_passthru": True, "error_passthru": True});
+        resp = passthru.getChildProviderEx("get").doRequest({"path": "/redir"});
+        assertEq(302, resp."status-code");
+        assertEq("/echo/redirected", resp."response-headers".location);
+
+        # max_redirects
+        HttpClientDataProvider no_redirects({"url": url, "max_redirects": 0});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", sub (hash<auto> req) { no_redirects.getChildProviderEx("get").doRequest(req); },
+            {"path": "/redir"});
+    }
+
+    errorTest() {
+        HttpClientDataProvider prov({"url": url});
+        try {
+            prov.getChildProviderEx("get").doRequest({"path": "/missing"});
+            fail("expected HTTP-CLIENT-RECEIVE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq("HTTP status code 404 received: message: Not Found", ex.desc);
+            assertEq(404, ex.arg.status_code);
+            assertEq("Not Found", ex.arg.status_message);
+            assertEq("not here", ex.arg.body);
+            assertEq("text/plain;charset=utf-8", ex.arg."content-type");
+        }
+        prov = new HttpClientDataProvider({"url": url, "error_passthru": True});
+        hash<auto> resp = prov.getChildProviderEx("get").doRequest({"path": "/missing"});
+        assertEq(404, resp."status-code");
+        assertEq("not here", resp."response-body");
+
+        # a refused connection
+        Socket s();
+        s.bind("127.0.0.1:0");
+        int closed_port = s.getSocketInfo().port;
+        s.close();
+        prov = new HttpClientDataProvider({"url": sprintf("http://127.0.0.1:%d", closed_port)});
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); }, {"path": "/x"});
+
+        # invalid options
+        assertThrows("CONSTRUCTOR-ERROR", sub () { new HttpClientDataProvider(); });
+        assertThrows("CONSTRUCTOR-ERROR", "invalid http_version",
+            \HttpClientDataProviderBase::getHttpConnectionManager(), {"http_version": "9"});
+    }
+
+    pathTest() {
+        HttpClientDataProvider prov({"url": url});
+        handler.clear();
+        # like HTTPClient, invalid characters are percent-encoded, as is "%"
+        prov.getChildProviderEx("get").doRequest({"path": "/echo/a b\"c%d"});
+        assertEq("/echo/a%20b%22c%25d", handler.getRequests()[0].path);
+        # relative paths are made absolute
+        handler.clear();
+        prov.getChildProviderEx("get").doRequest({"path": "echo/rel?x=1"});
+        assertEq("/echo/rel?x=1", handler.getRequests()[0].path);
+
+        prov = new HttpClientDataProvider({"url": url, "pre_encoded_urls": True});
+        handler.clear();
+        prov.getChildProviderEx("get").doRequest({"path": "/echo/a%20b"});
+        assertEq("/echo/a%20b", handler.getRequests()[0].path);
+        assertThrows("URL-ENCODING-ERROR", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); }, {"path": "/echo/a b"});
+        assertThrows("URL-ENCODING-ERROR", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); }, {"path": "/echo/a|b"});
+
+        assertEq("/%C3%A4%7E", HttpClientDataProviderBase::encodePath("/ä~"));
+        assertEq("/a%20b", HttpClientDataProviderBase::encodePath("/a%20b", True));
+    }
+
+    syncClientTest() {
+        HTTPClient hc({
+            "url": sprintf("http://user:pass@127.0.0.1:%d/echo/sync", port),
+            "headers": {"Test": "from-client"},
+            "error_passthru": True,
+            "timeout": 12345,
+        });
+        HttpClientDataProvider prov(hc);
+        assertEq(hc, prov.http);
+        assertEq(12345, prov.getHttpRequestOptions().timeout);
+        assertTrue(prov.getHttpRequestOptions().error_passthru);
+
+        HttpClientDataProviderBase child = cast<HttpClientDataProviderBase>(prov.getChildProviderEx("get"));
+        assertEq(hc, child.http, "the child keeps the client");
+        handler.clear();
+        hash<auto> resp = child.doRequest({"path": ""});
+        assertEq("GET /echo/sync", resp."response-body");
+        hash<ReceivedRequest> received = handler.getRequests()[0];
+        assertEq("Basic dXNlcjpwYXNz", received.authorization);
+        assertEq("from-client", received.test_header);
+        # error passthrough is carried over
+        assertEq(404, child.doRequest({"path": "/missing"})."status-code");
+
+        # the child data providers can also be created directly from a client
+        HttpClientPostDataProvider post(hc);
+        assertEq("POST /echo/post:x", post.doRequest({"path": "/echo/post", "body": "x"})."response-body");
+
+        # the client is not changed
+        assertEq(sprintf("http://user:pass@127.0.0.1:%d/echo/sync", port), hc.getURL());
+    }
+
+    connectionManagerTest() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        HttpClientDataProvider prov(mgr, url, {"headers": {"Test": "mgr"}, "username": "u", "password": "p"});
+        assertEq(mgr, prov.getConnectionManager());
+        handler.clear();
+        HttpClientDataProviderBase child = cast<HttpClientDataProviderBase>(prov.getChildProviderEx("delete"));
+        assertEq(mgr, child.getConnectionManager(), "the children share the connection manager");
+        hash<auto> resp = child.doRequest({"path": "/echo/mgr", "body": "b"});
+        assertEq("DELETE /echo/mgr:b", resp."response-body");
+        hash<ReceivedRequest> received = handler.getRequests()[0];
+        assertEq("mgr", received.test_header);
+        assertEq("Basic dTpw", received.authorization);
+
+        # the shared manager is not closed by the data providers
+        delete child;
+        delete prov;
+        assertEq(200, mgr.request(url, "GET", "/echo/after").status_code);
+
+        HttpClientGetDataProvider get(mgr, url + "/echo/direct");
+        assertEq("GET /echo/direct", get.doRequest({"path": ""})."response-body");
+
+        assertThrows("CONSTRUCTOR-ERROR", "unsupported request option", sub () {
+            new HttpClientDataProvider(mgr, url, {"proxy": "http://x"});
+        });
+        assertThrows("CONSTRUCTOR-ERROR", "no host", sub () {
+            new HttpClientDataProvider(mgr, "http://user:secret@/x");
+        });
+    }
+
+    timeoutTest() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"protocol": "h1"});
+        on_exit mgr.closeAll();
+        HttpClientDataProvider prov(mgr, url, {"timeout": 250});
+        handler.block.inc();
+        on_exit {
+            if (handler.block.getCount()) {
+                handler.block.dec();
+            }
+        }
+        # the documented error of the synchronous client is raised
+        assertThrows("SOCKET-TIMEOUT", sub (hash<auto> req) { prov.getChildProviderEx("get").doRequest(req); }, {"path": "/block"});
+        assertEq("/block", handler.blocked.get());
+        handler.block.dec();
     }
 
     httpClientDataProviderTest() {

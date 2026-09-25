@@ -395,6 +395,16 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         #! HttpConnection object connection options
         const hash<string, bool> Options = map {$1: True}, keys ConnectionScheme.options;
 
+        #! Connection options passed as request options to the data provider returned by getDataProvider()
+        /** @since ConnectionProvider 3.1
+        */
+        const list<string> DataProviderRequestOptions = (
+            "assume_encoding",
+            "error_passthru",
+            "headers",
+            "pre_encoded_urls",
+        );
+
         #! Maps HTTPClient HTTP version options to HttpClientIo protocol modes
         /** HttpClientIo implements HTTP/1.1 for both legacy HTTP/1.x selections.
 
@@ -451,18 +461,41 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         return "http";
     }
 
-    #! Returns an HttpDataProvider object for this connection
-    /** @param constructor_options any additional constructor options for the data provider
+    #! Returns an HttpClientDataProvider object for this connection
+    /** The data provider makes its requests with the connection manager returned by \c getAsync() and this
+        connection's URL; the \c headers, \c error_passthru, \c pre_encoded_urls, and \c assume_encoding options and
+        the \c username and \c password options are used as its request options.
 
-        @return an HttpDataProvider object for this connection
+        @param constructor_options request options for the data provider, overriding the connection's options;
+        the headers given are merged with the connection's headers; see the
+        <a href="../../HttpClientDataProvider/html/index.html">HttpClientDataProvider</a> module for the supported
+        options
+
+        @return an \c HttpClientDataProvider::HttpClientDataProvider object for this connection
+
+        @throw CONSTRUCTOR-ERROR an unsupported option was given in \a constructor_options
+        @throw HTTP-NEGOTIATE-AUTH-ERROR the \c negotiate_auth option is set; the data provider does not support
+        Kerberos/SPNEGO authentication
+
+        @note Before %ConnectionProvider 3.1, this method loaded a nonexistent \c HttpDataProvider module and always
+        failed
 
         @see hasDataProvider()
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        # to avoid circular dependencies, this object loads the HttpDataProvider and creates the data provider
-        # object dynamically
-        load_module("HttpDataProvider");
-        return create_object("HttpDataProvider", get());
+        # to avoid circular dependencies, this object loads the HttpClientDataProvider module and creates the data
+        # provider object dynamically
+        load_module("HttpClientDataProvider");
+        hash<auto> req_opts = (map {$1: opts{$1}}, DataProviderRequestOptions, exists opts{$1}) ?? {};
+        if (opts.username.val() && opts.password.val() && (!urlh.username.val() || !urlh.password.val())) {
+            req_opts.username = opts.username;
+            req_opts.password = opts.password;
+        }
+        if (constructor_options.headers) {
+            req_opts.headers = (req_opts.headers ?? {}) + constructor_options.headers;
+        }
+        req_opts += constructor_options - "headers";
+        return create_object("HttpClientDataProvider::HttpClientDataProvider", getAsync(), url, req_opts);
     }
 
     #! Returns @ref True, as the connection returns a data provider with the \c getDataProvider() method

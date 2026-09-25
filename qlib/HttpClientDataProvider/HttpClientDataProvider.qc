@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore HttpClientDataProvider class definition
 
-/** HttpClientDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** HttpClientDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,7 +25,11 @@
 #! contains all public definitions in the HttpClientDataProvider module
 public namespace HttpClientDataProvider {
 #! The HTTP data provider class, provides API classes as children
-public class HttpClientDataProvider inherits AbstractDataProvider {
+/** Requests are made with a
+    <a href="../../HttpClientIo/html/index.html">HttpClientIo::HttpClientConnectionManager</a>; see
+    @ref httpclientdataprovider_client
+*/
+public class HttpClientDataProvider inherits HttpClientDataProviderBase {
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -43,7 +47,8 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
                 "display_name": "Assume Character Encoding",
                 "short_desc": "Sets the character encoding to assume if 'charset' is missing",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Assumes the given encoding if the server does not send a `charset` value",
+                "desc": "Assumes the given encoding if the server does not send a `charset` value; the default is "
+                    "`ISO-8859-1`, the default character set of text media types in HTTP/1.1",
             },
             "connect_timeout": <DataProviderOptionInfo>{
                 "display_name": "Connect Timeout",
@@ -184,8 +189,6 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
                 "required": True,
             },
         };
-
-        HTTPClient http;
     }
 
     private {
@@ -202,14 +205,33 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
     }
 
     #! Creates the object from constructor options
-    constructor(*hash<auto> options) {
-        checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        http = getHttpConnection(options);
+    /** @param options the constructor options; see @ref ConstructorOptions
+
+        @throw CONSTRUCTOR-ERROR invalid or missing constructor option
+    */
+    constructor(*hash<auto> options) : HttpClientDataProviderBase(options) {
     }
 
     #! Creates the object from an HTTP connection
-    constructor(HTTPClient http) {
-        self.http = http;
+    /** Requests are made with a connection manager created from the configuration of \a http; see
+        @ref httpclientdataprovider_client
+
+        @param http the synchronous HTTP client whose configuration is used; it is not used for requests
+    */
+    constructor(HTTPClient http) : HttpClientDataProviderBase(http) {
+    }
+
+    #! Creates the object from an HttpClientIo connection manager
+    /** @param mgr the connection manager for requests; it is never closed by the data provider
+        @param url the target URL
+        @param options request options; see the corresponding constructor of @ref HttpClientDataProviderBase
+
+        @throw CONSTRUCTOR-ERROR the URL has no host, or an unsupported option was given
+
+        @since HttpClientDataProvider 1.2
+    */
+    constructor(HttpClientIo::HttpClientConnectionManager mgr, string url, *hash<auto> options)
+            : HttpClientDataProviderBase(mgr, url, options) {
     }
 
     #! Returns the data provider name
@@ -227,10 +249,17 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
         return map $1.getConstant("ProviderSummaryInfo").getValue(), ChildMap.iterator();
     }
 
-    #! Returns an HTTP connection
+    #! Returns a synchronous HTTP client created from data provider constructor options
+    /** @param options data provider constructor options
+
+        @return a synchronous HTTP client created from the options
+
+        @deprecated the data providers make requests with a connection manager; use
+        @ref HttpClientDataProviderBase::getHttpConnectionManager()
+    */
     static HTTPClient getHttpConnection(hash<auto> options) {
         if (*string loc = remove options.ssl_cert_location) {
-            if (options.ssl_cert_location =~ /^[a-z]+:\/\//) {
+            if (loc =~ /^[a-z]+:\/\//) {
                 options.ssl_cert_data = options.ssl_cert_der
                     ? FileLocationHandler::getBinaryFileFromLocation(loc)
                     : FileLocationHandler::getTextFileFromLocation(loc);
@@ -239,7 +268,7 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
             }
         }
         if (*string loc = remove options.ssl_key_location) {
-            if (options.ssl_key_location =~ /^[a-z]+:\/\//) {
+            if (loc =~ /^[a-z]+:\/\//) {
                 options.ssl_key_data = options.ssl_key_der
                     ? FileLocationHandler::getBinaryFileFromLocation(loc)
                     : FileLocationHandler::getTextFileFromLocation(loc);
@@ -250,7 +279,18 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
         return new HTTPClient(options);
     }
 
-    #! Makes an HTTP request and returns the response
+    #! Makes an HTTP request with a synchronous HTTP client and returns the response
+    /** @param http the synchronous HTTP client
+        @param meth the HTTP method
+        @param body the message body, if any
+        @param path the request path
+        @param hdr request headers
+
+        @return the response hash; see @ref HttpClientCallResponseDataType
+
+        @deprecated the data providers make requests with
+        @ref HttpClientDataProviderBase::doHttpRequest()
+    */
     static hash<auto> makeRequest(HTTPClient http, string meth, *data body, string path, *hash<auto> hdr) {
         hash<auto> info;
         hash<auto> resp = http.send(body, meth, path, hdr, NOTHING, \info);
@@ -283,7 +323,10 @@ public class HttpClientDataProvider inherits AbstractDataProvider {
         if (!cls) {
             return;
         }
-        return cls.newObject(http);
+        # the child shares the connection manager and the request options
+        HttpClientDataProviderBase child = cls.newObject(mgr, url, getHttpRequestOptions());
+        child.http = http;
+        return child;
     }
 
     #! Returns data provider static info

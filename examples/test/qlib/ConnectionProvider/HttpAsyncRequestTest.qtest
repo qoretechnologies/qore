@@ -36,6 +36,23 @@ class EchoRequestHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that echoes the request headers used by the data provider test
+class HeaderEchoRequestHandler inherits AbstractHttpRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        if (cx.raw_path == "/hdr/missing") {
+            return makeResponse(404, "missing", {"Content-Type": "text/plain"});
+        }
+        return makeResponse(200, make_json({
+            "method": hdr.method,
+            "path": cx.raw_path,
+            "authorization": hdr.authorization,
+            "conn": hdr."x-conn",
+            "extra": hdr."x-extra",
+            "body": body.typeCode() == NT_BINARY ? body.toString() : body,
+        }), {"Content-Type": MimeTypeJson});
+    }
+}
+
 public class HttpAsyncRequestTest inherits QUnit::Test {
     private {
         HttpServer m_server;
@@ -51,6 +68,7 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         addTestCase("HttpBasedConnection async request", \httpBasedConnectionTest());
         addTestCase("HttpRequestPollOperation error handling", \asyncErrorTest());
         addTestCase("HttpConnection getAsync", \asyncConnectionTest());
+        addTestCase("HttpConnection getDataProvider", \dataProviderTest());
 
         set_return_value(main());
     }
@@ -178,5 +196,64 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         hash<auto> body = parse_json(result.body);
         assertEq("GET", body.method);
         assertEq("api/async", body.path);
+    }
+
+    dataProviderTest() {
+        m_server.setHandler("hdr", "/hdr", NOTHING, new HeaderEchoRequestHandler());
+        string url = "http://127.0.0.1:" + port;
+        HttpConnection conn("test-http-dp", "test HTTP data provider connection", url, {}, {
+            "headers": {"X-Conn": "conn"},
+            "username": "user",
+            "password": "pass",
+        });
+        # the data provider API is consistent: one data provider, no subtypes
+        assertTrue(conn.hasDataProvider());
+        assertNothing(conn.getDataProviderSubtypes());
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        assertEq("HttpClientDataProvider", prov.className());
+        AbstractDataProvider post = prov.getChildProviderEx("post");
+        hash<auto> resp = post.doRequest({"path": "/hdr/post", "body": "hi"});
+        assertEq(200, resp."status-code");
+        hash<auto> echo = parse_json(resp."response-body");
+        assertEq("POST", echo.method);
+        assertEq("/hdr/post", echo.path);
+        assertEq("hi", echo.body);
+        assertEq("conn", echo.conn, "the connection's headers are sent");
+        assertEq("Basic dXNlcjpwYXNz", echo.authorization, "the connection's credentials are sent");
+
+        # the requests are made with the connection's async connection manager
+        object mgr = call_object_method(prov, "getConnectionManager");
+        assertTrue(mgr instanceof HttpClientIo::HttpClientConnectionManager);
+
+        # the subtype API returns the same data provider
+        assertEq("HttpClientDataProvider", conn.getDataProvider("http").className());
+
+        # constructor options override the connection's options, and headers are merged
+        prov = conn.getDataProvider({"error_passthru": True, "headers": {"X-Extra": "extra"}});
+        AbstractDataProvider get = prov.getChildProviderEx("get");
+        resp = get.doRequest({"path": "/hdr/get"});
+        echo = parse_json(resp."response-body");
+        assertEq("conn", echo.conn);
+        assertEq("extra", echo.extra);
+        resp = get.doRequest({"path": "/hdr/missing"});
+        assertEq(404, resp."status-code");
+
+        # errors are raised by default
+        get = conn.getDataProvider().getChildProviderEx("get");
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \get.doRequest(), {"path": "/hdr/missing"});
+
+        assertThrows("CONSTRUCTOR-ERROR", "unsupported request option", \conn.getDataProvider(), {"bogus": True});
+
+        # a connection without options
+        HttpConnection plain("test-http-plain", "test", url);
+        resp = plain.getDataProvider().getChildProviderEx("get").doRequest({"path": "/hdr/plain"});
+        echo = parse_json(resp."response-body");
+        assertEq("/hdr/plain", echo.path);
+        assertNothing(echo.authorization);
+
+        # Kerberos/SPNEGO authentication is not supported by the data provider
+        HttpConnection neg("test-http-neg", "test", url, {}, {"negotiate_auth": True});
+        assertThrows("HTTP-NEGOTIATE-AUTH-ERROR", \neg.getDataProvider());
     }
 }

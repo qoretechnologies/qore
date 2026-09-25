@@ -42,7 +42,7 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 | 4 | Discord and ServiceNow providers (sync clients passed in are converted); `ServiceNowRestClientIo` and `CdsRestClientIo` brought to parity with the sync clients (API path, API key, auto OAuth2 URLs, error translation); CDS providers (absolute `@odata.nextLink`, request path encoding) | done |
 | 5 | 27 provider families typed to a sync `FooRestClient` (WooCommerce in phase 7); missing Io behavior added to the clients (GoHighLevel location, Zoho organization, FreshBooks account/business, Tableau sign-in, Unleashed signing, BigCommerce auth header, 429 retries) | done |
 | 6a | Discord gateway discovery, `get_file_from_http()` (HttpClientIo loaded at run time: Util cannot require it), JSON-LD loader, A2A and ONE Record push notifications | done |
-| 6b | `HttpClientDataProvider`, `FileLocationHandler`; `HttpConnection::getDataProvider()` loads a nonexistent `HttpDataProvider` module | in progress |
+| 6b | `HttpClientDataProvider`, `FileLocationHandler` (HttpClientIo / RestClientIo loaded at run time: static dependencies would be cycles); `HttpConnection::getDataProvider()` loaded a nonexistent `HttpDataProvider` module | done |
 | 7 | New async clients: FHIR, EmpathicBuilding, WooCommerce; `ServerSentEventClientDataProvider` with `ServerSentEventClientIo` | done |
 
 ## Watch providers
@@ -51,6 +51,13 @@ them; the synchronous `Qore::HTTPClient` and `RestClient::RestClient` APIs remai
 an in-flight `RestClientIo` request at once; observer notifications and checkpoint persistence run under
 `defer_thread_cancel()`.  A watch provider must not close its REST client: the client is shared with the other
 providers of the connection, and `RestClientIo::close()` shuts down the connection manager for good.
+
+## Text without a charset
+
+`HttpClientIo` decodes text responses without a `charset` as UTF-8.  `Qore::HTTPClient` decodes them as ISO-8859-1,
+the default character set of text media types in HTTP/1.1 (RFC 2616), so the modules that replaced `HTTPClient`
+(`HttpClientDataProvider`, `FileLocationHandler` HTTP locations, `Util::get_file_from_http()`) reinterpret such text
+as ISO-8859-1 to keep their behavior.
 
 ## Known limitations
 

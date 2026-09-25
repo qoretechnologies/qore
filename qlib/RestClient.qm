@@ -4906,7 +4906,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     }
 
     #! Returns a file location handler bound to this connection's authenticated client
-    /** @return a \c FileLocationHandler::AbstractFileLocationHandler object driving this connection's client
+    /** @return a \c FileLocationHandler::AbstractFileLocationHandler object driving this connection's asynchronous
+        client returned by \c getAsync()
 
         @note The \c FileLocationHandler module is loaded dynamically; it is a leaf utility that sits below this
         module, so declaring a dependency on it here would invert the dependency graph
@@ -4915,7 +4916,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getFileLocationHandlerImpl() {
         load_module("FileLocationHandler");
-        return call_static_method("FileLocationHandler::FileLocationHandler", "getRestHandlerForClient", get());
+        # the handler drives the asynchronous client
+        return call_static_method("FileLocationHandler::FileLocationHandler", "getRestHandlerForClient", getAsync());
     }
 
     #! Called to start a non-blocking polling ping operation on the remote REST server
