@@ -39,6 +39,7 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #if defined(__linux__) && defined(HAVE_IO_URING)
 #include "qore/intern/QoreIoUring.h"
 #endif
@@ -1398,6 +1399,82 @@ string resolve_url(string base, string reference, int options = 0) [flags=PURE,N
 *hash<UrlInfo> parseURL(string url, bool keep_brackets = False) [flags=CONSTANT,NAMED_ARGS] {
     QoreURL qurl(url, keep_brackets);
     return qurl.isValid() ? qurl.getHash() : QoreValue();
+}
+
+//! Returns the character encoding of an HTTP message body, or @ref nothing if the body is not text
+/** The body is text if its media type is a text type (\c text/<!--%%-->*, JSON, YAML, XML, JavaScript, or form
+    data) or if the \c Content-Type has a \c charset parameter and the type is not binary by definition
+    (\c application/octet-stream, \c image/<!--%%-->*, \c audio/<!--%%-->*, \c video/<!--%%-->*,
+    \c font/<!--%%-->*).  A message without a \c Content-Type is text if its data is text according to the WHATWG
+    MIME Sniffing rules for distinguishing text from binary data (a byte order mark, or no binary control bytes in the
+    first 1445 bytes), as RFC 9110 section 8.3 allows; otherwise it is binary.
+
+    The encoding of text is determined by the following rules, which are the same for all HTTP clients and servers
+    in %Qore:
+    |!Media type|!Encoding
+    |JSON (\c application/json, \c +json)|UTF-8 (RFC 8259); the \c charset parameter is ignored
+    |server-sent events (\c text/event-stream)|UTF-8 (WHATWG HTML); the \c charset parameter is ignored
+    |YAML (\c application/yaml, \c +yaml)|a byte order mark (UTF-8, UTF-16, or UTF-32), else UTF-8 (RFC 9512); the \c charset parameter is ignored
+    |XML (\c application/xml, \c text/xml, \c +xml)|a byte order mark, else the \c charset parameter, else the encoding of the XML declaration, else UTF-8 (RFC 7303)
+    |HTML (\c text/html)|a byte order mark, else the \c charset parameter, else a \c meta element declaring the encoding in the first 1024 bytes, else the assumed encoding (WHATWG HTML)
+    |CSS (\c text/css)|a byte order mark, else the \c charset parameter, else an \c \@charset rule, else UTF-8 (CSS Syntax)
+    |JavaScript, form data (\c application/x-www-form-urlencoded)|a byte order mark, else the \c charset parameter, else UTF-8 (RFC 9239, WHATWG URL)
+    |any other text|a byte order mark, else the \c charset parameter, else the assumed encoding
+
+    An encoding declared in the body (an XML declaration, a \c meta element, or an \c \@charset rule) is ignored if
+    it is not a supported encoding, and a UTF-16 declaration in HTML or CSS means UTF-8, as the text could not have
+    been read to find it otherwise (WHATWG Encoding).  The \c charset parameter is used as given.
+
+    The assumed encoding is ISO-8859-1 by default, the default character set of text media types in HTTP/1.1
+    (RFC 2616 section 3.7.1); every octet is a valid ISO-8859-1 character, so text in an unknown encoding is never
+    corrupted, and US-ASCII text is decoded in the same way as with any other ASCII-compatible encoding.
+
+    @param content_type the \c Content-Type header value, if any
+    @param body the start of the body, if any; at most the first 1445 bytes are examined
+    @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+    @return the character encoding of the body, or @ref nothing if the body is not text
+
+    @par Example:
+    @code{.py}
+*string enc = get_http_body_encoding("text/plain", body);
+    @endcode
+
+    @see decode_http_body()
+
+    @since %Qore 3.0
+*/
+*string get_http_body_encoding(*string content_type, *binary body, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    QoreHttpBodyCharset charset = qore_get_http_body_charset(content_type ? content_type->c_str() : nullptr,
+        body ? body->getPtr() : nullptr, body ? body->size() : 0, QEM.findCreate(assumed_encoding));
+    if (!charset.enc) {
+        return QoreValue();
+    }
+    return new QoreStringNode(charset.enc->getCode());
+}
+
+//! Decodes an HTTP message body: returns a string for text and the binary body otherwise
+/** The character encoding of text is determined as documented for get_http_body_encoding(); the octets of the body
+    are returned as a string in that encoding, without any byte order mark.
+
+    @param content_type the \c Content-Type header value, if any
+    @param body the body; a content coding such as \c gzip must already have been decoded
+    @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+
+    @return a string in the encoding of the body if the body is text, otherwise \a body
+
+    @par Example:
+    @code{.py}
+data body = decode_http_body(resp.headers."content-type", resp.body);
+    @endcode
+
+    @see get_http_body_encoding()
+
+    @since %Qore 3.0
+*/
+data decode_http_body(*string content_type, binary body, string assumed_encoding = "ISO-8859-1") [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return qore_decode_http_body(content_type ? content_type->c_str() : nullptr, body,
+        QEM.findCreate(assumed_encoding));
 }
 
 //! Returns the URL string passed without any password information

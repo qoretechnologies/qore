@@ -86,6 +86,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
                 "error_passthru": hc.getErrorPassthru(),
                 "redirect_passthru": hc.getRedirectPassthru(),
                 "encoding_passthru": hc.getEncodingPassthru(),
+                "assume_encoding": hc.getAssumedEncoding(),
                 "max_redirects": hc.getMaxRedirects(),
                 "timeout": hc.getTimeout(),
             }, config.username, config.password);
@@ -229,7 +230,7 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
     */
     private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
         hash<auto> resp = request(scheme, location, opts, "GET");
-        return HttpIoSupport::getStringBody(resp, opts.encoding);
+        return HttpIoSupport::getStringBody(resp, opts.encoding ?? HttpIoSupport::DefaultAssumedEncoding);
     }
 
     #! Retrieves a binary file from the given location
@@ -610,6 +611,10 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
             info.path = HttpIoSupport::encodeRequestTarget(info.path);
         }
         info.method = opts.method ? opts.method.upr() : default_method;
+        # the encoding option is assumed for text response bodies whose encoding is not determined otherwise
+        if (opts.encoding) {
+            info.assume_encoding = opts.encoding;
+        }
         if (exists body) {
             info.body = body;
             if (!HttpIoSupport::hasHeader(info.headers, "content-type")) {
@@ -642,6 +647,8 @@ hashdecl HttpIoRequestInfo {
     bool redirect_passthru = False;
     #! If content encodings are not decoded
     bool encoding_passthru = False;
+    #! The encoding assumed for text response bodies whose encoding is not determined otherwise
+    string assume_encoding = "ISO-8859-1";
     #! The maximum number of redirects to follow
     int max_redirects = 5;
     #! The I/O timeout in milliseconds
@@ -964,24 +971,22 @@ class HttpIoSupport {
     }
 
     #! Returns the body of a response as a string
-    /** @param resp the response
-        @param encoding the encoding of text without a \c charset; the default is ISO-8859-1, the default character
-        set of text media types in HTTP/1.1 (RFC 2616), as assumed by @ref Qore::HTTPClient "HTTPClient"
+    /** A text body has already been decoded by the rules shared by all HTTP clients (see
+        @ref Qore::decode_http_body() "decode_http_body()"); a body of a type that is not text is returned as a
+        string in the assumed encoding
+
+        @param resp the response
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
 
         @return the body of the response as a string
     */
-    static string getStringBody(hash<auto> resp, *string encoding) {
+    static string getStringBody(hash<auto> resp, string assumed_encoding) {
         auto body = resp.body;
         switch (body.typeCode()) {
             case NT_NOTHING:
                 return "";
             case NT_BINARY:
-                return body.toString(encoding ?? "UTF-8");
-        }
-        if (resp.headers."content-type".typeCode() != NT_STRING
-                || resp.headers."content-type" !~ /charset=/i) {
-            # the text was assumed to be UTF-8; reinterpret its octets
-            return body.toBinary().toString(encoding ?? DefaultAssumedEncoding);
+                return body.toString(assumed_encoding);
         }
         return body;
     }
@@ -1448,7 +1453,8 @@ class HttpIoRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
                 rv.body = body;
             } else {
                 hash<auto> decoded = call_static_method("HttpClientIo::HttpClientStreamHandle",
-                    "normalizeResponseBody", {"headers": response.headers ?? {}, "body": body});
+                    "normalizeResponseBody", {"headers": response.headers ?? {}, "body": body}, 0,
+                    info.assume_encoding);
                 rv.body = decoded.body;
             }
         }

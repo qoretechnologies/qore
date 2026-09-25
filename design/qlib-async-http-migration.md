@@ -53,12 +53,12 @@ an in-flight `RestClientIo` request at once; observer notifications and checkpoi
 `defer_thread_cancel()`.  A watch provider must not close its REST client: the client is shared with the other
 providers of the connection, and `RestClientIo::close()` shuts down the connection manager for good.
 
-## Text without a charset
+## Response body character encoding
 
-`HttpClientIo` decodes text responses without a `charset` as UTF-8.  `Qore::HTTPClient` decodes them as ISO-8859-1,
-the default character set of text media types in HTTP/1.1 (RFC 2616), so the modules that replaced `HTTPClient`
-(`HttpClientDataProvider`, `FileLocationHandler` HTTP locations, `Util::get_file_from_http()`) reinterpret such text
-as ISO-8859-1 to keep their behavior.
+`HttpClientIo` and `Qore::HTTPClient` decode response bodies with the same rules (see `design/http-body-charset.md`):
+text without a `charset` is ISO-8859-1 unless the media type defines its encoding (JSON, YAML and XML are UTF-8 by
+default), and each client can change the assumed encoding (`assume_encoding`).  The modules that replaced `HTTPClient`
+therefore return the same strings without re-labelling them.
 
 ## Known limitations
 

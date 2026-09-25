@@ -164,7 +164,8 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
         @param url the target URL; user information in the URL is sent with HTTP basic authentication, and the path
         is used for requests without a path
         @param options request options, as follows:
-        - \c assume_encoding: the encoding to assume for text responses without a \c charset
+        - \c assume_encoding: not used for decoding responses, which are decoded by the connection manager with its
+          own \c assume_encoding option; kept in the request options of the data provider
         - \c error_passthru: if @ref True, error responses are returned instead of raising
           \c HTTP-CLIENT-RECEIVE-ERROR
         - \c headers: default headers for each request
@@ -262,13 +263,9 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
 
         string version = resp.http_version ?? (resp.protocol == "h2" ? "2" : (resp.protocol == "h3" ? "3" : "1.1"));
         *string msg = resp.status_message;
+        # the connection manager decodes the body by the rules shared by all HTTP clients, with the assumed encoding
+        # of the data provider (see getHttpConnectionManager())
         auto resp_body = resp.body;
-        if (resp_body.typeCode() == NT_STRING
-            && (resp.headers."content-type".typeCode() != NT_STRING
-                || resp.headers."content-type" !~ /charset=/i)) {
-            # the connection manager converts text without a charset from UTF-8; reinterpret the octets
-            resp_body = binary(resp_body).toString(assume_encoding);
-        }
 
         if (!error_passthru && (resp.status_code < 100 || resp.status_code >= 300)) {
             hash<auto> arg = resp.headers + {
@@ -325,6 +322,7 @@ public class HttpClientDataProviderBase inherits AbstractDataProvider {
         if (exists options.max_response_body_size) {
             mgr_opts.max_response_body_size = options.max_response_body_size;
         }
+        mgr_opts.assume_encoding = options.assume_encoding.val() ? options.assume_encoding : DefaultAssumedEncoding;
         if (options.proxy.val()) {
             mgr_opts.proxy_url = options.proxy;
         }

@@ -249,6 +249,29 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par HTTP Message Bodies Are Decoded by the Same Rules Everywhere
+    @parblock
+    @ref Qore::HTTPClient "HTTPClient" (on every path: whole, chunked and streamed bodies, the receive callback,
+    the poll API, and HTTP/2 and HTTP/3), @ref httpclientiointro "HttpClientIo", @ref restclientintro "RestClient",
+    @ref restclientiointro "RestClientIo", and @ref httpserverintro "HttpServer" request bodies decide whether a
+    message body is text, and its character encoding, by the same rules, which follow the specification of each
+    media type (see @ref Qore::get_http_body_encoding() "get_http_body_encoding()").  Text without an encoding
+    declaration is ISO-8859-1 by default, as before.  Compared with earlier versions of
+    @ref Qore::HTTPClient "HTTPClient":
+    - JSON and \c text/event-stream bodies are always UTF-8, even with another \c charset parameter (RFC 8259),
+      and YAML bodies are UTF-8 unless they start with a byte order mark (RFC 9512)
+    - XML without a \c charset parameter uses the encoding of its XML declaration, else UTF-8 (RFC 7303); HTML uses
+      the encoding of a \c meta element; CSS uses an \c \@charset rule, else UTF-8; JavaScript and
+      \c application/x-www-form-urlencoded bodies are UTF-8 without a \c charset parameter; all were ISO-8859-1
+    - a byte order mark decides the encoding of any text body, and is removed from the string
+    - \c application/octet-stream, \c image/, \c audio/, \c video/ and \c font/ bodies are binary data even
+      with a \c charset parameter, which @ref httpserverintro "HttpServer" adds to string responses; they were
+      returned as strings
+    - a body without a \c Content-Type is returned as binary data if it contains binary data bytes (WHATWG MIME
+      Sniffing), and as text in the assumed encoding otherwise; it was always text
+    - text is tagged with its encoding and never converted, so the octets received are those returned
+    @endparblock
+
     @par Stream Sockets Bound on All Interfaces Serve IPv4 and IPv6
     @parblock
     A stream socket bound on all interfaces with @ref Qore::Socket::bind() "Socket::bind()" with a port, or
@@ -704,6 +727,10 @@ val = "string";      # OK
     @anchor qore_3_0_0_http_socket_behavior
     @par HTTP and Socket Behavior
     @parblock
+    - new @ref Qore::get_http_body_encoding() "get_http_body_encoding()" and
+      @ref Qore::decode_http_body() "decode_http_body()" functions, which apply the rules that all HTTP clients and
+      servers use to decide whether a message body is text and its character encoding (see
+      @ref qore_3_0_0_compatibility) (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
     - HTTP/1 protocol version and request-target fields retain their header encoding after a UTF-16
       body; persistent connections can receive the next request without inheriting the prior body charset
     - HTTP requests and responses read the \c charset parameter of \c Content-Type per RFC 9110: a quoted value
@@ -1881,8 +1908,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - \c http(s):// locations use @ref httpclientiointro "HttpClientIo" and \c rest(s):// locations use
         @ref restclientiointro "RestClientIo" (HTTP/1.1, HTTP/2, and HTTP/3); non-blocking readers do no blocking
         I/O, stream reads read the body as it is consumed and raise error responses when the stream is opened, and
-        stream writes report error responses from \c waitForIo(); text without a \c charset is decoded as
-        ISO-8859-1, as before (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
+        stream writes report error responses from \c waitForIo(); response bodies are decoded by the rules
+        shared by all HTTP clients (see @ref Qore::decode_http_body() "decode_http_body()"), with the \c encoding
+        option as the assumed encoding (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()"
         and @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation()
         "getResourcePollerForLocation()", returning a resource's data with its effective location, media type,
@@ -1962,8 +1990,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
     - @ref httpclientdataproviderintro "HttpClientDataProvider" module
       - the data providers make requests with an @ref httpclientiointro "HttpClientIo" connection manager
         (HTTP/1.1, HTTP/2, and HTTP/3); new constructors take a connection manager and a URL, and a synchronous
-        @ref Qore::HTTPClient "HTTPClient" passed to them is converted; text without a \c charset is decoded as
-        ISO-8859-1, as with @ref Qore::HTTPClient "HTTPClient"; fixed the \c ssl_cert_location and
+        @ref Qore::HTTPClient "HTTPClient" passed to them is converted; response bodies are decoded by the rules
+        shared by all HTTP clients (see @ref Qore::decode_http_body() "decode_http_body()"); fixed the
+        \c ssl_cert_location and
         \c ssl_key_location options with location URLs, and option default values not being applied
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
@@ -1973,6 +2002,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         \c validator, and \c asyncapi_channel options
 
     - @ref httpserverintro "HttpServer" module
+      - request bodies are decoded by the rules shared by all HTTP clients and servers (see
+        @ref Qore::decode_http_body() "decode_http_body()") whether they are read from the socket, buffered, or
+        received over HTTP/2 or HTTP/3; the default text encoding of the server is the assumed encoding for text
+        without an encoding declaration, and no longer replaces the encoding of a JSON body or one declared in the
+        body (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - implemented async I/O mode for high-concurrency connection handling, enabled by default: a single
         I/O thread handles accept/SSL/header reading while requests dispatch to a ThreadPool — many more
         concurrent connections with sub-millisecond latency for simple requests
@@ -2159,6 +2193,9 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         no longer connects to the server to create them
         (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()"
+      - a response read with a \c max_response_body_size is decoded by the rules shared by all HTTP clients (see
+        @ref Qore::decode_http_body() "decode_http_body()"), and the \c assume_encoding option applies to every HTTP
+        version (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
       - OAuth consent URLs encode optional authorization arguments and state, preserving scope lists and
         reserved characters without introducing extra query parameters
         (<a href="https://github.com/qoretechnologies/qore/issues/5443">issue 5443</a>)

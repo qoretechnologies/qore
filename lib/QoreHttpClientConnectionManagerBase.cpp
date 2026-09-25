@@ -935,6 +935,9 @@ void HttpClientConnectionManagerBase::applyConnectionOptions(HttpClientConnectio
     if (opts_.max_response_body_size > 0) {
         conn->setMaxResponseBodySizeHook(opts_.max_response_body_size);
     }
+    if (opts_.assumed_encoding) {
+        conn->setAssumedEncodingHook(opts_.assumed_encoding);
+    }
 }
 
 void HttpClientConnectionManagerBase::releaseConnection(HttpClientConnectionBase* conn) {

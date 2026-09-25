@@ -2618,12 +2618,7 @@ public data sub get_file_from_http(string url, *string path, *hash<UrlRetrievalO
     if (options.as_binary) {
         return exists body ? binary(body) : binary();
     }
-    # the connection manager decodes text without a charset as UTF-8; like HTTPClient, it is decoded as ISO-8859-1,
-    # the default character set of text media types in HTTP/1.1 (RFC 2616)
-    if (body.typeCode() == NT_STRING && (resp.headers."content-type".typeCode() != NT_STRING
-            || resp.headers."content-type" !~ /charset=/i)) {
-        return body.toBinary().toString("ISO-8859-1");
-    }
+    # the connection manager decodes the body by the rules shared by all HTTP clients; see get_http_body_encoding()
     return body ?? "";
 }
 

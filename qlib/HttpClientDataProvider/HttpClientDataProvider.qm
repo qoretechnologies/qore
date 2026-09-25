@@ -101,8 +101,10 @@ module HttpClientDataProvider {
     Other settings, such as persistent connections, the connection path, and event queues,
     are not carried over.  The child data providers created by a data provider share its connection manager.
 
-    Text responses without a \c charset are decoded as ISO-8859-1, the default character set of text media types in
-    HTTP/1.1 (RFC 2616), as with @ref Qore::HTTPClient "HTTPClient", unless the \c assume_encoding option is set.
+    Response bodies are decoded by the rules shared by all HTTP clients, as with @ref Qore::HTTPClient "HTTPClient"
+    (see @ref Qore::decode_http_body() "decode_http_body()"): text without an encoding declaration is ISO-8859-1,
+    the default character set of text media types in HTTP/1.1 (RFC 2616), unless the \c assume_encoding option is
+    set.
     A request body is sent with \c "Content-Type: application/octet-stream" (binary data) or \c "text/plain" with
     the string's character encoding, unless a \c Content-Type header is given.
 

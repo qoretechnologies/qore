@@ -54,6 +54,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/ql_crypto.h"
@@ -424,23 +425,22 @@ static void convert_response_body_limit_error(int64 max_size, ExceptionSink* xsi
 /** The connection decides how a body is delivered from its media type: a text type arrives as a string, and
     any other type as binary, whose octets are not text.  A body that carries a content encoding always arrives
     as binary, because the compressed octets are not the body; decoding it restores the type the media type
-    calls for.
+    calls for, and text is decoded by the rules shared by all HTTP clients (see qore_get_http_body_charset()),
+    which also examine the decoded data.
 
     @param bin the body as received
-    @param body_enc the character encoding for a text body
+    @param content_type the \c Content-Type of the response, if any
+    @param assumed the encoding assumed for text whose encoding is not determined otherwise
     @param content_encoding the content encoding to decode, or nullptr if the body is not encoded
-    @param dec the decoder for @p content_encoding, if one was already selected
     @param encoding_passthru true if an encoded body is returned encoded
-    @param is_text true if the media type of the body carries text
     @param max_size the maximum size in bytes of the decoded body; 0 = no limit
     @param xsink exception sink; a decoded body that exceeds @p max_size raises
     \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE
 
     @return the body, or no value if there is nothing to change
 */
-static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* body_enc,
-        const char* content_encoding, qore_uncompress_to_string_max_t dec, bool encoding_passthru, bool is_text,
-        int64 max_size, ExceptionSink* xsink) {
+static QoreValue process_binary_body(const BinaryNode* bin, const char* content_type, const QoreEncoding* assumed,
+        const char* content_encoding, bool encoding_passthru, int64 max_size, ExceptionSink* xsink) {
     if (!bin || !bin->size()) {
         return QoreValue();
     }
@@ -449,43 +449,33 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
         if (encoding_passthru) {
             return bin->refSelf();
         }
-        if (!is_text) {
-            // the decoded octets are not text, so they are decoded to binary
-            qore_uncompress_to_binary_max_t bin_dec = get_binary_decoder_for_content_encoding(content_encoding, xsink);
-            if (*xsink) {
-                return QoreValue();
-            }
-            if (!bin_dec) {
-                // an encoding that is not a compression, such as "identity", leaves the body as it is
-                return QoreValue();
-            }
-            QoreValue rv = bin_dec(bin, max_size, xsink);
+        // the first coding of the header is decoded, as with a body that is decoded as it is received
+        const char* start = content_encoding;
+        while (*start == ' ' || *start == '\t') {
+            ++start;
+        }
+        const char* end = start;
+        while (*end && *end != ',' && *end != ';' && *end != ' ') {
+            ++end;
+        }
+        std::string token(start, end - start);
+        qore_uncompress_to_binary_max_t bin_dec = token.empty()
+            ? nullptr : get_binary_decoder_for_content_encoding(token.c_str(), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        // an encoding that is not a compression, such as "identity", leaves the body as it is
+        if (bin_dec) {
+            SimpleRefHolder<BinaryNode> decoded(bin_dec(bin, max_size, xsink));
             convert_response_body_limit_error(max_size, xsink);
-            return rv;
-        }
-        if (!dec) {
-            bool ignore_encoding = false;
-            dec = get_decoder_for_content_encoding(content_encoding, ignore_encoding);
-            if (ignore_encoding) {
-                return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
-            }
-            if (!dec) {
-                xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "don't know how to handle content-encoding '%s'",
-                    content_encoding);
+            if (*xsink || !decoded) {
                 return QoreValue();
             }
+            return qore_decode_http_body(content_type, *decoded, assumed);
         }
-        QoreStringNode* decoded = dec(bin, body_enc, max_size, xsink);
-        convert_response_body_limit_error(max_size, xsink);
-        return decoded;
     }
 
-    if (!is_text) {
-        // the body is already the value to return: its octets are not text
-        return QoreValue();
-    }
-
-    return new QoreStringNode((const char*)bin->getPtr(), bin->size(), body_enc);
+    return qore_decode_http_body(content_type, bin, assumed);
 }
 
 // ============================================================================
@@ -1138,6 +1128,9 @@ struct qore_httpclient_priv {
     */
     QoreChannel* streaming_recv_channel = nullptr;
 
+    //! The Content-Type used to decode the body received from streaming_recv_channel
+    std::string streaming_content_type;
+
     //! Active conn_mgr-backed HTTP/2 extended CONNECT stream state.
     HttpClientConnectionBase* h2_connect_conn = nullptr;
     QoreChannel* h2_connect_channel = nullptr;
@@ -1342,6 +1335,7 @@ struct qore_httpclient_priv {
                         || opts.connect_timeout_ms != connect_timeout_ms
                         || opts.request_timeout_ms != timeout
                         || opts.max_response_body_size != max_response_body_size
+                        || opts.assumed_encoding != getAssumedHttpEncoding()
                         || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
                         || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                         || opts.client_cert != msock->cert
@@ -1363,6 +1357,7 @@ struct qore_httpclient_priv {
                 opts.request_timeout_ms = timeout;
                 opts.idle_timeout_ms = 60000;
                 opts.max_response_body_size = max_response_body_size;
+                opts.assumed_encoding = getAssumedHttpEncoding();
                 // SSL settings from the HTTPClient
                 opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
                 opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
@@ -1799,7 +1794,6 @@ struct qore_httpclient_priv {
             // events reported for the client's requests identify the socket the client now owns
             event_sink->setId(active->getObjectIDForEvents());
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
-            std::swap(active->utf8_content_type_set, old->utf8_content_type_set);
             active->enc = old->enc;
 
             proxy_connected = false;
@@ -1868,6 +1862,7 @@ struct qore_httpclient_priv {
             streaming_recv_channel->deref(&xsink);
             streaming_recv_channel = nullptr;
         }
+        streaming_content_type.clear();
         sse_recv_buffer.clear();
         sse_decoder.reset();
         sse_framer.reset();
@@ -2861,6 +2856,52 @@ struct qore_httpclient_priv {
         }
 
         return content_encoding;
+    }
+
+    //! Returns the encoding assumed for text response bodies whose encoding is not determined otherwise
+    DLLLOCAL const QoreEncoding* getAssumedHttpEncoding() const {
+        return QEM.findCreate(msock->socket->priv->getAssumedEncoding());
+    }
+
+    //! Returns the Content-Type used to decode a response body
+    /** A character encoding sent in the \c Content-Encoding header instead of in a \c charset parameter (see
+        normalizeContentEncoding()) is added as the \c charset parameter if the \c Content-Type has none.
+
+        @param ans the response headers
+        @param ct the \c Content-Type value with any charset parameter, if any
+    */
+    DLLLOCAL std::string getBodyContentType(const QoreHashNode& ans, QoreValue ct) const {
+        std::string rv;
+        if (ct.getType() == NT_STRING) {
+            rv = ct.get<const QoreStringNode>()->c_str();
+        }
+        QoreValue ce = ans.getKeyValue("content-encoding");
+        if (ce.getType() != NT_STRING) {
+            return rv;
+        }
+        const char* start = ce.get<const QoreStringNode>()->c_str();
+        while (*start == ' ' || *start == '\t') {
+            ++start;
+        }
+        const char* end = start;
+        while (*end && *end != ',' && *end != ';' && *end != ' ') {
+            ++end;
+        }
+        std::string token(start, end - start);
+        if (token.empty() || (strncasecmp(token.c_str(), "iso", 3) && strncasecmp(token.c_str(), "utf-", 4))) {
+            return rv;
+        }
+        qore_http_media_type_param charset;
+        if (!rv.empty() && qore_find_http_media_type_param(rv.c_str(), "charset", charset)) {
+            return rv;
+        }
+        // a message with no type but a character encoding is text
+        if (rv.empty()) {
+            rv = "text/plain";
+        }
+        rv += "; charset=";
+        rv += token;
+        return rv;
     }
 
     /** @param request_target the target of a request that selects its own URL, or nullptr for a request sent to
@@ -5556,6 +5597,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             clearStreamingChannel();
                             channel->ref();
                             streaming_recv_channel = *channel;
+                            {
+                                QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
+                                if (ct.getType() != NT_STRING) {
+                                    ct = ans->getKeyValue("content-type");
+                                }
+                                streaming_content_type = getBodyContentType(**ans, ct);
+                            }
                             keep_channel_open = true;
                             // the caller owns the rest of this stream now
                             ss_guard.disarm();
@@ -5751,6 +5799,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             // (matches legacy: read full body, decompress, single callback)
             bool is_chunked_response = false;
             std::string resp_content_encoding;
+            // the Content-Type used to decode the body, and the charset of a body delivered in chunks, which is
+            // determined from the first chunk
+            std::string resp_content_type;
+            bool chunk_charset_set = false;
+            QoreHttpBodyCharset chunk_charset;
             SimpleRefHolder<BinaryNode> accumulated_body;
             while (true) {
                 bool timed_out = false;
@@ -5846,6 +5899,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
                         if (*xsink) {
                             xsink->clear();
+                        }
+                        {
+                            QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
+                            if (ct.getType() != NT_STRING) {
+                                ct = ans->getKeyValue("content-type");
+                            }
+                            resp_content_type = getBodyContentType(**ans, ct);
                         }
                         // For non-chunked, non-event-stream responses with a
                         // recv_callback, accumulate the full body and deliver it
@@ -5969,16 +6029,26 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 return nullptr;
                             }
                         } else {
-                            // Per-chunk callback.  Convert binary→string
-                            // when no content-encoding (matches legacy
-                            // readHttpChunkedBody behavior).
+                            // Per-chunk callback: without a content-encoding, a text body is delivered as
+                            // strings decoded by the rules shared by all HTTP clients; the charset is
+                            // determined from the first chunk, which is the only one that can start with a BOM
                             QoreValue cb_data;
                             if (resp_content_encoding.empty()
                                     && body_val.getType() == NT_BINARY) {
                                 const BinaryNode* bin = body_val.get<const BinaryNode>();
-                                cb_data = new QoreStringNode(
-                                    (const char*)bin->getPtr(), bin->size(),
-                                    QCS_UTF8);
+                                if (!chunk_charset_set) {
+                                    chunk_charset = qore_get_http_body_charset(
+                                        resp_content_type.empty() ? nullptr : resp_content_type.c_str(),
+                                        bin->getPtr(), bin->size(), getAssumedHttpEncoding());
+                                    chunk_charset_set = true;
+                                } else {
+                                    chunk_charset.bom_len = 0;
+                                }
+                                if (chunk_charset.enc && chunk_charset.bom_len <= bin->size()) {
+                                    cb_data = qore_http_body_string(chunk_charset, bin->getPtr(), bin->size());
+                                } else {
+                                    cb_data = body_val.refSelf();
+                                }
                             } else {
                                 cb_data = body_val.refSelf();
                             }
@@ -6037,19 +6107,22 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             get_decoder_for_content_encoding(
                                 resp_content_encoding.c_str(), ignore_encoding);
                         QoreValue cb_data;
+                        const char* body_ct = resp_content_type.empty() ? nullptr : resp_content_type.c_str();
                         if (dec && !ignore_encoding) {
-                            QoreStringNode* decoded = dec(*accumulated_body,
-                                QCS_UTF8, max_response_body_size, xsink);
+                            // decompressed, then decoded by the rules shared by all HTTP clients
+                            qore_uncompress_to_binary_max_t bin_dec =
+                                get_binary_decoder_for_content_encoding(resp_content_encoding.c_str(), xsink);
+                            SimpleRefHolder<BinaryNode> decoded(bin_dec && !*xsink
+                                ? bin_dec(*accumulated_body, max_response_body_size, xsink) : nullptr);
                             if (*xsink) {
                                 convert_response_body_limit_error(max_response_body_size, xsink);
                                 channel->close();
                                 return nullptr;
                             }
-                            cb_data = decoded;
+                            cb_data = qore_decode_http_body(body_ct, decoded ? *decoded : *accumulated_body,
+                                getAssumedHttpEncoding());
                         } else if (resp_content_encoding.empty()) {
-                            cb_data = new QoreStringNode(
-                                (const char*)accumulated_body->getPtr(),
-                                accumulated_body->size(), QCS_UTF8);
+                            cb_data = qore_decode_http_body(body_ct, *accumulated_body, getAssumedHttpEncoding());
                         } else {
                             // Unknown encoding — pass raw binary
                             cb_data = accumulated_body.release();
@@ -6210,6 +6283,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         clearStreamingChannel();
                         channel->ref();
                         streaming_recv_channel = *channel;
+                        if (ans) {
+                            QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
+                            if (ct.getType() != NT_STRING) {
+                                ct = ans->getKeyValue("content-type");
+                            }
+                            streaming_content_type = getBodyContentType(**ans, ct);
+                        }
                     }
                     break;
                 }
@@ -6507,28 +6587,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 return nullptr;
             }
 
-            // The media type decides whether the body is text; a response that declares no type keeps the
-            // string delivery this client has always given it.  processContentType() saved the value it read
-            // before it stripped any charset parameter.
-            bool is_text = true;
-            {
-                QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
-                if (ct.getType() != NT_STRING) {
-                    ct = ans->getKeyValue("content-type");
-                }
-                if (ct.getType() == NT_STRING) {
-                    QoreStringValueHelper ct_str(ct);
-                    std::string media_type = qore_http_media_type(ct_str->c_str());
-                    if (!media_type.empty()) {
-                        is_text = qore_http_media_type_is_text(media_type);
-                    }
-                }
+            // the body is decoded by the rules shared by all HTTP clients; processContentType() saved the value it
+            // read before it stripped any charset parameter
+            QoreValue ct = ans->getKeyValue("_qore_orig_content_type");
+            if (ct.getType() != NT_STRING) {
+                ct = ans->getKeyValue("content-type");
             }
-
-            // Use default encoding from the HTTPClient
-            const QoreEncoding* body_enc = enc ? enc : QCS_UTF8;
-            QoreValue processed = process_binary_body(bin, body_enc, content_encoding, dec,
-                encoding_passthru, is_text, max_response_body_size, xsink);
+            std::string content_type = getBodyContentType(**ans, ct);
+            QoreValue processed = process_binary_body(bin, content_type.empty() ? nullptr : content_type.c_str(),
+                getAssumedHttpEncoding(), content_encoding, encoding_passthru, max_response_body_size, xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -7019,8 +7086,8 @@ public:
         //! The maximum size in bytes of the decoded response body; 0 = no limit
         int64 max_response_body_size = 0;
 
-        //! The character encoding given to a decoded text body, as in the blocking API
-        const QoreEncoding* body_enc = QCS_UTF8;
+        //! The encoding assumed for a text body whose encoding is not determined otherwise, as in the blocking API
+        const QoreEncoding* body_enc = QCS_ISO_8859_1;
 
         //! The response body with its content encoding decoded, if it had one; see decodeResponseBody()
         /** A string when the media type of the body carries text, binary otherwise, as in the blocking API
@@ -7374,7 +7441,7 @@ public:
         request->streaming_response = streaming_response;
         request->encoding_passthru = encoding_passthru;
         request->max_response_body_size = max_response_body_size;
-        request->body_enc = body_enc ? body_enc : QCS_UTF8;
+        request->body_enc = body_enc ? body_enc : QCS_ISO_8859_1;
         if (request->follow) {
             request->chain.init(*headers, xsink);
             // a redirect that repeats the request sends the body again
@@ -7992,8 +8059,8 @@ public:
             return 0;
         }
         const BinaryNode* bin = body.get<const BinaryNode>();
-        SimpleRefHolder<QoreStringNode> ce(get_string_header_node_ref(xsink, *hv.get<const QoreHashNode>(),
-            "content-encoding"));
+        const QoreHashNode* resp_hdr = hv.get<const QoreHashNode>();
+        SimpleRefHolder<QoreStringNode> ce(get_string_header_node_ref(xsink, *resp_hdr, "content-encoding"));
         if (*xsink) {
             request->decode_state = -1;
             return -1;
@@ -8010,49 +8077,48 @@ public:
             }
             token.assign(start, end - start);
         }
-        bool ignore_encoding = false;
-        // a character encoding misused as a content encoding and unknown content encodings are ignored
-        if (token.empty() || !strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4)
-            || !get_decoder_for_content_encoding(token.c_str(), ignore_encoding) || ignore_encoding) {
-            request->decode_state = 1;
-            return 0;
-        }
-        // the decoded octets take the form the media type calls for: a text type is a string, and any other
-        // type stays binary; a body that declares no type keeps the string delivery of the blocking API
-        bool is_text = true;
-        {
-            SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink,
-                *hv.get<const QoreHashNode>(), "content-type"));
-            if (*xsink) {
-                request->decode_state = -1;
-                return -1;
-            }
-            if (ct) {
-                std::string media_type = qore_http_media_type(ct->c_str());
-                if (!media_type.empty()) {
-                    is_text = qore_http_media_type_is_text(media_type);
-                }
-            }
-        }
-
-        SimpleRefHolder<SimpleValueQoreNode> decoded;
-        if (is_text) {
-            qore_uncompress_to_string_max_t dec = get_decoder_for_content_encoding(token.c_str(), ignore_encoding);
-            assert(dec);
-            decoded = dec ? dec(bin, request->body_enc ? request->body_enc : QCS_UTF8,
-                request->max_response_body_size, xsink) : nullptr;
-        } else {
-            qore_uncompress_to_binary_max_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
-            assert(dec);
-            decoded = dec ? dec(bin, request->max_response_body_size, xsink) : nullptr;
-        }
-        convert_response_body_limit_error(request->max_response_body_size, xsink);
+        SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink, *resp_hdr, "content-type"));
         if (*xsink) {
-            xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",
-                token.c_str(), (long long)bin->size());
             request->decode_state = -1;
             return -1;
         }
+        std::string content_type = ct ? ct->c_str() : "";
+        // a character encoding misused as a content encoding is the charset of the body
+        bool charset_token = !token.empty()
+            && (!strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4));
+        if (charset_token) {
+            qore_http_media_type_param charset;
+            if (content_type.empty() || !qore_find_http_media_type_param(content_type.c_str(), "charset", charset)) {
+                if (content_type.empty()) {
+                    content_type = "text/plain";
+                }
+                content_type += "; charset=";
+                content_type += token;
+            }
+        }
+        // unknown content encodings are ignored
+        bool ignore_encoding = false;
+        bool compressed = !token.empty() && !charset_token
+            && get_decoder_for_content_encoding(token.c_str(), ignore_encoding) && !ignore_encoding;
+
+        SimpleRefHolder<BinaryNode> decompressed;
+        if (compressed) {
+            qore_uncompress_to_binary_max_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
+            assert(dec);
+            decompressed = dec ? dec(bin, request->max_response_body_size, xsink) : nullptr;
+            convert_response_body_limit_error(request->max_response_body_size, xsink);
+            if (*xsink) {
+                xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",
+                    token.c_str(), (long long)bin->size());
+                request->decode_state = -1;
+                return -1;
+            }
+        }
+        // the decoded octets take the form the media type calls for, decoded by the rules shared by all HTTP
+        // clients; see qore_get_http_body_charset()
+        SimpleRefHolder<SimpleValueQoreNode> decoded(qore_decode_http_body(
+            content_type.empty() ? nullptr : content_type.c_str(), decompressed ? *decompressed : bin,
+            request->body_enc));
         request->decoded_body = decoded.release();
         request->decode_state = 1;
         return 0;
@@ -8889,7 +8955,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // request sends the body again
     poller->initRequest(mgr_holder, this_connection, msgpath, method, http11 ? "1.1" : "1.0",
         request_headers.release(), redirect_passthru ? nullptr : body_node_ref(), !redirect_passthru, max_redirects,
-        streaming_response, encoding_passthru, max_response_body_size, enc ? enc : QCS_UTF8, getProgram(), xsink);
+        streaming_response, encoding_passthru, max_response_body_size, getAssumedHttpEncoding(), getProgram(), xsink);
     if (*xsink) {
         release_local_conn_ref();
         return nullptr;
@@ -9361,10 +9427,15 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         }
     }
 
-    // Drain all chunks into a string
+    // Drain all chunks, then decode them as a string by the rules shared by all HTTP clients
     // the body is received into memory, so it is limited like a body that is returned whole
     int64 max_size = getMaxResponseBodySize();
-    SimpleRefHolder<QoreStringNode> body(new QoreStringNode());
+    std::string content_type;
+    {
+        SafeLocker sl(priv->m);
+        content_type = http_priv->streaming_content_type;
+    }
+    SimpleRefHolder<BinaryNode> body(new BinaryNode);
     while (true) {
         ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
         if (*xsink) {
@@ -9379,10 +9450,10 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         }
         if (body_val.getType() == NT_BINARY) {
             const BinaryNode* bin = body_val.get<const BinaryNode>();
-            body->concat(reinterpret_cast<const char*>(bin->getPtr()), bin->size());
+            body->append(bin->getPtr(), bin->size());
         } else if (body_val.getType() == NT_STRING) {
             QoreStringValueHelper str(body_val);
-            body->concat(str->c_str(), str->size());
+            body->append(str->c_str(), str->size());
         }
         if (max_size > 0 && static_cast<int64>(body->size()) > max_size) {
             xsink->raiseException("HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE", "the response body of at least %lld bytes "
@@ -9394,8 +9465,17 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
         }
     }
 
+    // the body is returned as a string even if its media type is not text; such a body is given the assumed
+    // encoding
+    const QoreEncoding* assumed = http_priv->getAssumedHttpEncoding();
+    QoreHttpBodyCharset charset = qore_get_http_body_charset(content_type.empty() ? nullptr : content_type.c_str(),
+        body->getPtr(), body->size(), assumed);
+    if (!charset.enc) {
+        charset.enc = assumed;
+        charset.bom_len = 0;
+    }
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
-    result->setKeyValue("body", body.release(), xsink);
+    result->setKeyValue("body", qore_http_body_string(charset, body->getPtr(), body->size()), xsink);
     return result.release();
 }
 

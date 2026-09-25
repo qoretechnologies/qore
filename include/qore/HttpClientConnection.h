@@ -124,6 +124,17 @@ public:
         (void)max_size;
     }
 
+    //! Sets the encoding assumed for text response bodies whose encoding is not determined otherwise
+    /** Default no-op.  The H1 and H2 connections override it; H3 response bodies are decoded by the caller.
+
+        @param enc the assumed encoding; nullptr means ISO-8859-1
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT virtual void setAssumedEncodingHook(const QoreEncoding* enc) {
+        (void)enc;
+    }
+
     //! Returns the maximum concurrent streams this connection can host.
     /** Default 1 (HTTP/1.1 semantics).  H2 connections override to return
         their negotiated MAX_CONCURRENT_STREAMS setting (or the cap from

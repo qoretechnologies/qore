@@ -151,6 +151,9 @@ printf("%Y\n", ans.body);
     - added @ref RestClient::RestClient::getConstructorOptions() "RestClient::getConstructorOptions()", which
       returns the options a client was created with, as \c getConstructorOptions() of
       <a href="../../RestClientIo/html/index.html">RestClientIo</a> does
+    - a response read with a \c max_response_body_size is decoded by the rules shared by all HTTP clients (see
+      @ref Qore::decode_http_body() "decode_http_body()"), and the \c assume_encoding option applies to every HTTP
+      version
     - redact authentication headers and echoed rejected credentials from blocking and polling error diagnostics
     - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
       request information as a blocking request, including \c response-headers-raw, the redirects followed
@@ -561,8 +564,6 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
         const hash<string, string> Http1OnlyOptions = {
             "pre_encoded_urls": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol "
                 "level; send pre-encoded paths directly",
-            "assume_encoding": "HTTP/2 and HTTP/3 responses use binary bodies with explicit "
-                "content-type charset parameters",
             "encode_chars": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol level",
         };
     }
@@ -777,6 +778,12 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
 
         #! True after response headers have configured this stream
         bool configured = False;
+
+        #! The Content-Type of the response, used to decode the body
+        *string content_type;
+
+        #! A character encoding incorrectly supplied as the Content-Encoding of the response
+        *string content_encoding_charset;
     }
 
     #! Creates the response output stream
@@ -789,13 +796,15 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
     /** @return a character encoding incorrectly supplied as \c Content-Encoding, if any
     */
     *string configure(*string content_encoding, *string content_length, bool encoding_passthru,
-            bool check_content_length) {
+            bool check_content_length, *string content_type) {
         # HTTPClient can report headers for an authentication challenge or redirect before the final response.
         # Such responses have no body delivered to this stream, so reset all per-response state here.
         output = new RestClientBoundedOutputStream(max_response_bytes);
         transform = NOTHING;
         binary_body = False;
         configured = True;
+        self.content_type = content_type;
+        remove content_encoding_charset;
 
         string token = content_encoding ?? "";
         token =~ s/^\s+//;
@@ -806,6 +815,7 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
         bool decoded_content = False;
         if (token =~ /^(?:iso|utf-)/) {
             character_encoding = token;
+            content_encoding_charset = token;
         } else if (token.val() && encoding_passthru) {
             # Match HTTPClient's encoding_passthru behavior: any non-character Content-Encoding is returned as
             # binary data, including identity and unknown encodings.
@@ -870,12 +880,25 @@ class RestClientResponseOutputStream inherits Qore::OutputStream {
     }
 
     #! Returns the complete response body
-    *data getBody(string encoding) {
+    /** A text body is decoded by the rules shared by all HTTP clients (see @ref Qore::decode_http_body()
+        "decode_http_body()"), and any other body is returned as binary data
+
+        @param assumed_encoding the encoding assumed for text whose encoding is not determined otherwise
+    */
+    *data getBody(string assumed_encoding) {
         if (!output.size()) {
             return NOTHING;
         }
         binary data = output.getData();
-        return binary_body ? data : data.toString(encoding);
+        if (binary_body) {
+            return data;
+        }
+        *string body_ct = content_type;
+        # a character encoding misused as a content encoding is the charset of the body
+        if (content_encoding_charset && (!body_ct || body_ct !~ /;\s*charset\s*=/i)) {
+            body_ct = (body_ct ?? "text/plain") + "; charset=" + content_encoding_charset;
+        }
+        return decode_http_body(body_ct, data, assumed_encoding);
     }
 
     #! Checks a decimal Content-Length value without narrowing it to a bounded integer type
@@ -3499,7 +3522,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             *string character_encoding = response_stream.configure(
                 getResponseHeaderValue(response_hdr, "content-encoding"),
                 getResponseHeaderValue(response_hdr, "content-length"), getEncodingPassthru(),
-                response_body_allowed && !followed_redirect && !possible_auth_retry);
+                response_body_allowed && !followed_redirect && !possible_auth_retry,
+                getResponseHeaderValue(response_hdr, "_qore_orig_content_type")
+                    ?? getResponseHeaderValue(response_hdr, "content-type"));
             if (character_encoding) {
                 # Match HTTPClient's compatibility handling for servers that misuse Content-Encoding for a charset.
                 setEncoding(character_encoding);
@@ -3531,7 +3556,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         }
 
         hash<auto> response = {} + info."response-headers";
-        *data response_body = response_stream.getBody(getEncoding());
+        *data response_body = response_stream.getBody(getAssumedEncoding());
         if (exists response_body) {
             response.body = response_body;
             info."response-body" = response_body;

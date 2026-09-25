@@ -39,6 +39,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/HttpClientEventSink.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 #include "qore/intern/QoreHttpHeaderPairs.h"
 
 // Forward declarations for QPP type references
@@ -2396,13 +2397,8 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
         return QoreValue();
     }
 
-    // Check Content-Type for text-based types
-    if (!response_headers) {
-        return response_body->refSelf();
-    }
-
     // Don't charset-convert compressed bodies - caller handles decompression first
-    QoreValue ce_val = response_headers->getKeyValue("content-encoding");
+    QoreValue ce_val = response_headers ? response_headers->getKeyValue("content-encoding") : QoreValue();
     if (ce_val.getType() == NT_STRING) {
         QoreStringValueHelper ce_str(ce_val);
         const char* ce = ce_str->c_str();
@@ -2411,52 +2407,12 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
         }
     }
 
-    QoreValue ct_val = response_headers->getKeyValue("content-type");
-    if (ct_val.getType() != NT_STRING) {
-        return response_body->refSelf();
-    }
-
-    QoreStringValueHelper ct_str(ct_val);
-    const char* ct = ct_str->c_str();
-    if (!isTextContentType(ct)) {
-        return response_body->refSelf();
-    }
-
-    // Determine charset
-    const QoreEncoding* enc = QCS_UTF8;
-
-    // JSON and YAML are always UTF-8 per RFC 8259 / YAML spec
-    bool force_utf8 = strcasestr(ct, "/json") || strcasestr(ct, "/x-yaml")
-        || strcasestr(ct, "/yaml") || strcasestr(ct, "+json");
-
-    if (!force_utf8) {
-        qore_http_media_type_param charset;
-        if (qore_find_http_media_type_param(ct, "charset", charset) && !charset.value.empty()) {
-            enc = QEM.findCreate(charset.value.c_str());
-        }
-    }
-
-    // Convert binary to string with the detected encoding
-    QoreStringNode* str = new QoreStringNode(
-        (const char*)response_body->getPtr(), response_body->size(), enc);
-    return str;
-}
-
-bool Http1ClientPollOperationPriv::isTextContentType(const char* ct) {
-    if (!ct) {
-        return false;
-    }
-    // Check common text-based content types
-    return !strncasecmp(ct, "text/", 5)
-        || strcasestr(ct, "/json")
-        || strcasestr(ct, "/xml")
-        || strcasestr(ct, "/yaml")
-        || strcasestr(ct, "/html")
-        || strcasestr(ct, "/javascript")
-        || strcasestr(ct, "+json")
-        || strcasestr(ct, "+xml")
-        || strcasestr(ct, "charset=")
-        || strcasestr(ct, "x-www-form-urlencoded");
+    // the body is decoded by the rules shared by all HTTP clients, which also apply to a response without a
+    // Content-Type; see qore_get_http_body_charset()
+    QoreValue ct_val = response_headers ? response_headers->getKeyValue("content-type") : QoreValue();
+    QoreStringValueHelper ct_str(ct_val.getType() == NT_STRING ? ct_val : QoreValue());
+    return qore_decode_http_body(ct_val.getType() == NT_STRING ? ct_str->c_str() : nullptr, response_body,
+        assumed_encoding.load(std::memory_order_relaxed));
 }
 
 // --- Error handling ---
@@ -3036,6 +2992,19 @@ nothing Http1ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags
 */
 nothing Http1ClientPollOperationBase::setMaxResponseBodySize(int max_size) [flags=NAMED_ARGS] {
     priv->setMaxResponseBodySize(max_size > 0 ? max_size : 0);
+}
+
+//! Sets the encoding assumed for text response bodies whose character encoding is not determined otherwise
+/** Response bodies are decoded by the rules documented for @ref Qore::get_http_body_encoding()
+    "get_http_body_encoding()"; the assumed encoding is used for text types without a default of their own and
+    without an encoding declaration.
+
+    @param encoding the assumed encoding; the default is ISO-8859-1
+
+    @since %Qore 3.0
+*/
+nothing Http1ClientPollOperationBase::setAssumedEncoding(string encoding) [flags=NAMED_ARGS] {
+    priv->setAssumedEncoding(QEM.findCreate(encoding));
 }
 
 //! Sets the connect-phase timeout for this connection.

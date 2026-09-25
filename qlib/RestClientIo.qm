@@ -321,6 +321,9 @@ hash<RestResponseInfo> resp = f.get(30s);
           \c HTTP-CLIENT-RESPONSE-BODY-TOO-LARGE; see
           @ref HttpClientIo::HttpClientConnectionManagerOptions::max_response_body_size
           "HttpClientConnectionManagerOptions::max_response_body_size"
+        - \c assume_encoding: the character encoding assumed for text response bodies whose encoding is not
+          determined otherwise (default: ISO-8859-1); see @ref Qore::get_http_body_encoding()
+          "get_http_body_encoding()"
         - \c ssl_verify_mode: SSL verification mode
         - \c accept_all_certs: if \c True, accept all certificates including self-signed
         - \c no_charset: if \c True, do not add charset to Content-Type header
@@ -483,6 +486,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             *string oauth2_auth_url;
             #! OAuth2 redirect URL
             *string oauth2_redirect_url;
+            #! The encoding assumed for text response bodies whose encoding is not determined otherwise
+            string assume_encoding = "ISO-8859-1";
             #! OAuth2 token URL
             *string oauth2_token_url;
             #! Alternate OAuth2 token URL; if set, token requests are routed here and oauth2_token_url is sent as a body arg
@@ -735,6 +740,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "max_streams_per_connection": True,
                 "max_redirects": True,
                 "max_response_body_size": True,
+                "assume_encoding": True,
                 "redirect_passthru": True,
                 "enable_cookies": True,
                 "cookie": True,
@@ -952,6 +958,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 }
             }
 
+            if (opts.assume_encoding) {
+                assume_encoding = opts.assume_encoding;
+            }
             if (opts.cookie) {
                 headers.cookie = opts.cookie;
             }
@@ -1453,6 +1462,15 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
         setConnectionPath(*string path) {
             AutoWriteLock al(config_lock);
             connection_path = path;
+        }
+
+        #! Returns the encoding assumed for text response bodies whose encoding is not determined otherwise
+        /** @return the \c assume_encoding option; ISO-8859-1 by default
+
+            @see @ref Qore::get_http_body_encoding() "get_http_body_encoding()"
+        */
+        string getAssumedEncoding() {
+            return assume_encoding;
         }
 
         #! Returns the current connection path
@@ -2965,11 +2983,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             # single value is what this needs, and assigning the list would raise a type error instead of
             # returning the response
             *string content_type = RestClient::getSingleHeaderValue(raw.headers."content-type");
-            if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
-                if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
-                        || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {
-                    resp_body = resp_body.toString();
-                }
+            # a binary text body is decoded by the rules shared by all HTTP clients
+            if (resp_body && resp_body.typeCode() == NT_BINARY) {
+                resp_body = decode_http_body(content_type, resp_body, assume_encoding);
             }
             *data response_body_raw = raw.body;
             if (exists resp_body && content_type) {
@@ -4190,6 +4206,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             }
             if (exists opts.max_response_body_size) {
                 mgr_opts.max_response_body_size = opts.max_response_body_size;
+            }
+            if (opts.assume_encoding) {
+                mgr_opts.assume_encoding = opts.assume_encoding;
             }
             if (opts.redirect_passthru) {
                 mgr_opts.redirect_passthru = opts.redirect_passthru.toBool();
@@ -5800,13 +5819,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
                     # Run schema validation if configured (mirrors buildResponse() logic)
                     if (schema_validator) {
                         auto resp_body = resp.body;
-                        *string content_type = resp.headers."content-type";
-                        # Convert binary body to string for text-based content types
-                        if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
-                            if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
-                                    || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {
-                                resp_body = resp_body.toString();
-                            }
+                        *string content_type = RestClient::getSingleHeaderValue(resp.headers."content-type");
+                        # a binary text body is decoded by the rules shared by all HTTP clients
+                        if (resp_body && resp_body.typeCode() == NT_BINARY) {
+                            resp_body = decode_http_body(content_type, resp_body, rcio.getAssumedEncoding());
                         }
                         on_error {
                             conn.authFailure();

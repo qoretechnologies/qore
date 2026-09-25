@@ -210,6 +210,11 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - request bodies are decoded by the rules shared by all HTTP clients and servers (see
+      @ref Qore::decode_http_body() "decode_http_body()") whether they are read from the socket, buffered, or
+      received over HTTP/2 or HTTP/3; the default text encoding (@ref HttpServer::HttpServer::setDefaultTextEncoding()
+      "setDefaultTextEncoding()") is the assumed encoding for text without an encoding declaration, and no longer
+      replaces the encoding of a JSON body or one declared in the body
     - every request handler receives the effective maximum request body size of the listener
       (@ref HttpServer::HttpListener::getMaxRequestBodySize() "HttpListener::getMaxRequestBodySize()") in
       \c cx."header-info".max_request_body_size (\c 0 = no limit), including handlers on an automatically created
@@ -1234,12 +1239,38 @@ if (!server.acceptsHttpMethod("PROPFIND")) {
         return HttpServer::HttpServerVersion;
     }
 
+    #! Sets the default text encoding: the encoding assumed for request text without an encoding declaration
+    /** Request bodies are decoded by the rules shared by all HTTP clients and servers (see
+        @ref Qore::decode_http_body() "decode_http_body()"); the default text encoding does not apply to a body whose
+        encoding is declared in its \c Content-Type or in the body, or defined by its type, such as JSON.
+
+        @param enc the default text encoding
+    */
     setDefaultTextEncoding(string enc) {
         override_encoding = enc;
     }
 
+    #! Returns the default text encoding: the encoding assumed for request text without an encoding declaration
+    /** @return the encoding set with @ref setDefaultTextEncoding(), or \c "iso-8859-1" by default
+    */
     string getDefaultTextEncoding() {
         return override_encoding ? override_encoding : "iso-8859-1";
+    }
+
+    #! Returns a request body received as binary data as a string
+    /** Text is decoded by the rules shared by all HTTP clients and servers (see @ref Qore::decode_http_body()
+        "decode_http_body()"), with the default text encoding (@ref getDefaultTextEncoding()) as the assumed
+        encoding; a body of another type that is not delivered as binary data is returned in the default text
+        encoding.
+
+        @param hdr the request headers
+        @param body the request body
+    */
+    private string decodeRequestText(hash<auto> hdr, binary body) {
+        string assumed = getDefaultTextEncoding();
+        auto ct = hdr."_qore_orig_content_type" ?? hdr."content-type";
+        data rv = decode_http_body(ct.typeCode() == NT_STRING ? ct : NOTHING, body, assumed);
+        return rv.typeCode() == NT_STRING ? rv : body.toString(assumed);
     }
 
     #! To call a listener's stop callback
@@ -3742,7 +3773,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             || hdr."content-type" =~ /^multipart\//i) {
                         body = body_data;
                     } else {
-                        body = body_data.toString();
+                        body = decodeRequestText(hdr, body_data);
                     }
                 }
             } else if (cx."header-info".body) {
@@ -3767,8 +3798,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         || hdr."content-type" =~ /^multipart\//i) {
                     body = cx."header-info".body;
                 } else {
-                    # The buffered bytes have the same charset as a direct socket read.
-                    body = cx."header-info".body.toString(cx.char_encoding);
+                    # the buffered bytes are decoded by the rules shared by all HTTP clients and servers
+                    body = decodeRequestText(hdr, cx."header-info".body);
                 }
             } else if (hdr."content-length" && !is_multiplexed) {
                 # HTTP/1.x only: the request body is read from the raw socket here.
@@ -3798,7 +3829,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             || hdr."content-type" =~ /^multipart\//i) {
                         body = s.recvBinary(hdr."content-length", HttpServer::ReadTimeout);
                     } else {
-                        body = s.recv(hdr."content-length", HttpServer::ReadTimeout);
+                        # text is decoded by the rules shared by all HTTP clients and servers, as it is when the
+                        # body was buffered
+                        body = decodeRequestText(hdr, s.recvBinary(hdr."content-length", HttpServer::ReadTimeout));
                     }
                     #printf("HTTP DEBUG: %s\n", body);
                 } catch (hash<ExceptionInfo> ex) {
@@ -3812,11 +3845,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         hdr.method == "HEAD");
                     return;
                 }
-            }
-
-            # override assumed "iso-8859-1" character encoding if necessary
-            if (body.typeCode() == NT_STRING && override_encoding && hdr."_qore_orig_content_type" !~ /charset=/) {
-                body = force_encoding(body, override_encoding);
             }
 
             listener.doLogRecvBody(body, cx, hdr, info);

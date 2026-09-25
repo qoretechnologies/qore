@@ -53,6 +53,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QoreDatagramDispatcher.h"
 #include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/QoreHttpBodyCharset.h"
 
 #include <cctype>
 #include <cerrno>
@@ -1030,20 +1031,6 @@ struct qore_socket_private : public QoreReferenceCounter {
     // socket buffer for buffered reads
     char rbuf[DEFAULT_SOCKET_BUFSIZE];
 
-    // content types that imply UTF-8 character encoding
-    typedef std::set<std::string> strset_t;
-    strset_t utf8_content_type_set = {
-        "application/ecmascript",
-        "application/json",
-        "application/x-javascript",
-        "application/javascript",
-        "text/javascript", // <- this is the correct MIME type for JavaScript
-        "application/ld+json",
-        "application/yaml", // <- this is the correct MIME type for YAML
-        "application/x-yaml",
-        "text/yaml",
-    };
-
     // current buffer size
     size_t buflen = 0,
         bufoffset = 0;
@@ -1217,6 +1204,12 @@ struct qore_socket_private : public QoreReferenceCounter {
         streaming consumer is not limited.
     */
     std::atomic<int64> max_response_body_size{0};
+
+    //! The encoding assumed for text HTTP/2 client response bodies whose encoding is not determined otherwise
+    /** nullptr means ISO-8859-1; set by the HTTP client connection that owns the socket and read by the session when
+        a response is complete; encodings are never freed.  See qore_get_http_body_charset().
+    */
+    std::atomic<const QoreEncoding*> http_assumed_encoding{nullptr};
 
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
@@ -3249,9 +3242,13 @@ struct qore_socket_private : public QoreReferenceCounter {
                             close = false;
                     }
                 } else if (!strcmp(buf, "content-type")) {
+                    // the encoding of the body follows the rules shared by all HTTP clients and servers, as far as
+                    // they can be applied before the body is read; see qore_get_http_header_charset()
+                    const QoreEncoding* assumed = QEM.findCreate(assume_http_encoding.c_str());
+                    const QoreEncoding* hdr_enc = qore_get_http_header_charset(t, assumed);
                     qore_http_media_type_param charset;
                     if (qore_find_http_media_type_param(t, "charset", charset) && !charset.value.empty()) {
-                        enc = QEM.findCreate(charset.value.c_str());
+                        enc = hdr_enc ? hdr_enc : QEM.findCreate(charset.value.c_str());
                         senc = enc->getCode();
                         //printd(5, "got encoding '%s' from request\n", senc);
 
@@ -3269,16 +3266,9 @@ struct qore_socket_private : public QoreReferenceCounter {
                             }
                         }
                     } else {
-                        // check for content types that imply UTF-8 encoding
-                        std::string ct = t;
-                        ct = ct.substr(0, ct.find(';'));
-                        if (utf8_content_type_set.find(ct) != utf8_content_type_set.end()) {
-                            senc = "UTF-8";
-                            enc = QCS_UTF8;
-                        } else {
-                            senc = assume_http_encoding.c_str();
-                            enc = QEM.findCreate(assume_http_encoding.c_str());
-                        }
+                        // a type that is not text is read in the assumed encoding, as before
+                        enc = hdr_enc ? hdr_enc : assumed;
+                        senc = enc->getCode();
                         if (info) {
                             info->setKeyValue("charset", new QoreStringNode(senc), nullptr);
                             info->setKeyValue("body-content-type", val->refSelf(), nullptr);
