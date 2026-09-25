@@ -290,6 +290,26 @@ on_exit ProviderIndexUtil::setBuildMode(build_mode);
         return rv;
     }
 
+    #! Returns @ref True if MessagePack support is available
+    /** The compact index files (the routing index and the metadata cache) and the results of index workers are
+        written with MessagePack; without it, only the canonical index file is written, and an index is built in the
+        calling process.
+
+        MessagePack support is available if the \c msgpack module was available when this module was parsed or, for
+        a compiled module, compiled.
+
+        @return @ref True if MessagePack support is available
+
+        @since ProviderIndexUtil 1.2
+    */
+    static bool hasMessagePack() {
+%ifdef NoMsgPack
+        return False;
+%else
+        return True;
+%endif
+    }
+
     #! Returns @ref True if the process is in index build mode
     /** @return @ref True if the process is in index build mode, in which case the published index is never read
 
