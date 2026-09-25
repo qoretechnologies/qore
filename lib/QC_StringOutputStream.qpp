@@ -165,5 +165,5 @@ string encoding = sos.getEncoding();
     invalid character data will be returned by getData()
  */
 string StringOutputStream::getEncoding() [flags=CONSTANT] {
-    return new QoreStringNode(os->getEncoding());
+    return new QoreStringNode(os->getEncoding()->getCode());
 }

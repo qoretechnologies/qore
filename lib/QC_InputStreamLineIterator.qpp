@@ -218,5 +218,5 @@ string encoding = i.getEncoding();
     @return the @ref character_encoding "character encoding" for the @ref InputStreamLineIterator
  */
 string InputStreamLineIterator::getEncoding() [flags=CONSTANT] {
-    return new QoreStringNode(isli->getEncoding());
+    return new QoreStringNode(isli->getEncoding()->getCode());
 }

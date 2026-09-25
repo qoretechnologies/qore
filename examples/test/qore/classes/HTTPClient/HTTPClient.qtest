@@ -207,8 +207,19 @@ class BodyTypePeer inherits AbstractHttpRequestHandler {
                 return rv;
             }
         }
-        # no Content-Type at all
-        return makeResponse({}, 200, binary("no declared type"));
+        # no Content-Type at all: HttpServer labels binary data as application/octet-stream, but sends a body
+        # produced by a send_callback without a Content-Type
+        bool sent;
+        return <HttpResponseInfo>{
+            "code": 200,
+            "send_callback": *data sub () {
+                if (sent) {
+                    return;
+                }
+                sent = True;
+                return binary("no declared type");
+            },
+        };
     }
 }
 
@@ -1408,7 +1419,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
             # a compressed body is decoded to the form its media type calls for
             "/gzip-octet": BodyTypeBin,
             "/gzip-text": "compressed text",
-            # a response that declares no media type keeps its historical string delivery
+            # a response that declares no media type is examined: text data is delivered as a string
             "/none": "no declared type",
         };
 

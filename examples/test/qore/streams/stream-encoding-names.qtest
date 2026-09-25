@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class StreamEncodingNamesTest
+
+# The getEncoding() methods of the stream classes return the name of the character encoding
+class StreamEncodingNamesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("StreamEncodingNamesTest", "1.0") {
+        addTestCase("StringInputStream", \stringInputStreamTest());
+        addTestCase("StringOutputStream", \stringOutputStreamTest());
+        addTestCase("FileOutputStream", \fileOutputStreamTest());
+        addTestCase("InputStreamLineIterator", \inputStreamLineIteratorTest());
+        set_return_value(main());
+    }
+
+    stringInputStreamTest() {
+        assertEq("UTF-8", new StringInputStream("ä").getEncoding());
+        assertEq("ISO-8859-1", new StringInputStream(convert_encoding("ä", "ISO-8859-1")).getEncoding());
+        assertEq("UTF-16LE", new StringInputStream(convert_encoding("ä", "UTF-16LE")).getEncoding());
+        # the name can be used to convert the stream's data
+        StringInputStream is(convert_encoding("äöü", "ISO-8859-1"));
+        EncodingConversionInputStream cis(is, is.getEncoding(), "UTF-8");
+        assertEq("äöü", cis.read(100).toString("UTF-8"));
+    }
+
+    stringOutputStreamTest() {
+        assertEq("UTF-8", new StringOutputStream().getEncoding());
+        assertEq("ISO-8859-2", new StringOutputStream("ISO-8859-2").getEncoding());
+    }
+
+    fileOutputStreamTest() {
+        TmpFile tmp("stream-encoding-names-");
+        assertEq("UTF-8", new FileOutputStream(tmp.path).getEncoding());
+        assertEq("KOI8-R", new FileOutputStream(tmp.path, False, 0644, "KOI8-R").getEncoding());
+    }
+
+    inputStreamLineIteratorTest() {
+        InputStreamLineIterator i(new BinaryInputStream(binary("a\nb\n")), "ISO-8859-1");
+        assertEq("ISO-8859-1", i.getEncoding());
+        assertEq("UTF-8", new InputStreamLineIterator(new BinaryInputStream(binary("a\n"))).getEncoding());
+    }
+}

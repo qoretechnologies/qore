@@ -249,6 +249,16 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par HttpServer Labels Responses Without a Content-Type by Their Data
+    @parblock
+    A response body without a \c Content-Type is sent by @ref httpserverintro "HttpServer" as \c text/html in the
+    response encoding if it is a string, as before, as \c application/octet-stream without a charset if it is
+    binary data or a binary stream, and without a \c Content-Type if it is produced by a \c send_callback, whose
+    type is not known (RFC 9110 section 8.3).  Binary data was sent as HTML text in the response encoding, which
+    clients decoded as text, and a stream had no type.  A charset is no longer added to the \c Content-Type of a
+    binary error message.
+    @endparblock
+
     @par HTTP Message Bodies Are Decoded by the Same Rules Everywhere
     @parblock
     @ref Qore::HTTPClient "HTTPClient" (on every path: whole, chunked and streamed bodies, the receive callback,
@@ -2060,6 +2070,10 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
         acknowledged by the peer), or with \c sent = @ref False "False" if it could not be sent, so that a handler
         can order work after its response, such as a WS-Addressing reply sent to a non-anonymous reply address
         after the \c 202 response
+      - text is sent in the character encoding that the response declares: a string or a
+        @ref Qore::StringInputStream "StringInputStream" in another encoding is converted to it; a response with a
+        @ref Qore::StringInputStream "StringInputStream" body no longer closes the connection without a response
+        (<a href="https://github.com/qoretechnologies/qore/issues/5469">issue 5469</a>)
 
     - @ref httpserverutilintro "HttpServerUtil" module
       - cookie-setting support and a refactored, more extensible authentication design
@@ -3554,6 +3568,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::StringInputStream::getEncoding() "StringInputStream::getEncoding()",
+      @ref Qore::StringOutputStream::getEncoding() "StringOutputStream::getEncoding()",
+      @ref Qore::FileOutputStream::getEncoding() "FileOutputStream::getEncoding()", and
+      @ref Qore::InputStreamLineIterator::getEncoding() "InputStreamLineIterator::getEncoding()" returning an empty
+      string instead of the name of the character encoding; converting the data of such a stream with the name
+      failed, which made @ref httpserverintro "HttpServer" close the connection instead of sending a response with
+      a @ref Qore::StringInputStream "StringInputStream" body
     - Fixed @ref Qore::TransformOutputStream "TransformOutputStream" and
       @ref Qore::TransformInputStream "TransformInputStream" holding back decompressed data: a decompressor that
       expands its input to more than one output buffer, as Brotli and Zstd do, kept the rest of the output until
