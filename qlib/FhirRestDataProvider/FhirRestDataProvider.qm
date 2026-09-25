@@ -63,6 +63,12 @@ module FhirRestDataProvider {
     - terminology delegation through \c $validate-code, \c $lookup, \c $translate, and \c $expand actions
     - action metadata and typed request/response descriptions suitable for UI integration
 
+    API calls are made with the non-blocking @ref FhirRestClient::FhirRestClientIo "FhirRestClientIo" client:
+    a client created for the \c url option, the client returned by the \c getAsync() method of the
+    connection given with the \c fhirconnection option, or the client given with the \c fhir option; a
+    synchronous @ref FhirRestClient::FhirRestClient "FhirRestClient" given with the \c fhir option or to a
+    constructor is converted to a \c FhirRestClientIo with its options.
+
     The generated artifacts provide the shared R4 resource catalog and structured
     @ref DataProvider::HashDataType "HashDataType" metadata for commonly used
     resources such as \c Patient, \c Observation, and \c Bundle.
@@ -212,6 +218,8 @@ try {
     - generated FHIR R4 \c HashDataType metadata for \c Patient, \c Observation, and \c Bundle
     - generated FHIR R4 resource-specific action metadata for typed resource actions
     - \c fhirrest data provider factory and \c FHIR app registration
+    - API calls with the non-blocking \c FhirRestClientIo client; synchronous \c FhirRestClient objects are
+      converted
 */
 
 #! contains all public definitions in the FhirRestDataProvider module

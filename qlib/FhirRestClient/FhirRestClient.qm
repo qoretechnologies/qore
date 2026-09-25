@@ -67,8 +67,14 @@ module FhirRestClient {
       CRUD, transaction/batch Bundle writes, conditional update, patch,
       paginated search, terminology operations, common FHIR resource builders, validation,
       and OperationOutcome error mapping
+    - @ref FhirRestClient::FhirRestClientIo "FhirRestClientIo": the same FHIR
+      helpers with a non-blocking <a href="../../RestClientIo/html/index.html">RestClientIo</a> client
+      supporting HTTP/1.1, HTTP/2, and HTTP/3
+    - @ref FhirRestClient::FhirRestClientBase "FhirRestClientBase": the FHIR
+      helper methods, constants, and path and Bundle builders shared by both clients
     - @ref FhirRestClient::FhirRestConnection "FhirRestConnection": connection
-      object for \c fhir:// and \c fhirs:// URLs
+      object for \c fhir:// and \c fhirs:// URLs; \c get() returns a
+      \c FhirRestClient and \c getAsync() a \c FhirRestClientIo
 
     @section fhirrestclientexamples FhirRestClient Examples
 
@@ -235,6 +241,10 @@ FhirRestClient::FhirRestConnection conn("ehr-r4", "EHR R4 endpoint",
 
 FhirRestClient::FhirRestClient connected_client = conn.get();
 printf("FHIR version: %s\n", connected_client.getFhirVersion());
+
+# non-blocking client with the same FHIR helpers
+FhirRestClient::FhirRestClientIo async_client = conn.getAsync();
+hash<auto> bundle = async_client.searchAllResources("Patient", {"family": "Smith"});
     @endcode
 
     @subsection fhirrestclientexampleerrors OperationOutcome Errors
@@ -271,6 +281,9 @@ try {
     - FHIR JSON builders for Coding, CodeableConcept, Reference, UCUM Quantity,
       Observation, AuditEvent, and Provenance
     - OperationOutcome summary and exception mapping for helper methods
+    - \c FhirRestClientIo: the FHIR helper methods with a non-blocking \c RestClientIo client, returned by
+      \c FhirRestConnection::getAsync(); request paths are percent-encoded, and absolute Bundle pagination links
+      are followed by their path
 */
 
 #! the %FhirRestClient namespace holds all public definitions in the %FhirRestClient module

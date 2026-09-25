@@ -44,6 +44,16 @@ public class FhirRestDataProvider inherits FhirRestDataProviderBase {
     }
 
     #! Creates the object with the given FHIR REST client
+    /** @param fhir the FHIR REST client for API calls
+    */
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
+    }
+
+    #! Creates the object with the given synchronous FHIR REST client
+    /** @param fhir a synchronous FHIR REST client; API calls are made with a
+        @ref FhirRestClient::FhirRestClientIo "FhirRestClientIo" created from it with
+        @ref FhirRestDataProviderBase::getAsyncClient()
+    */
     constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
     }
 
@@ -58,7 +68,7 @@ public class FhirRestDataProvider inherits FhirRestDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("FHIR REST data provider for %s", fhir.getURL());
+        return sprintf("FHIR REST data provider for %s", fhir.getUrl());
     }
 
     #! Returns a list of child data provider names
@@ -95,7 +105,7 @@ public class FhirMetadataDataProvider inherits FhirRestDataProviderBase {
     }
 
     #! Creates the object with the given FHIR REST client
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     #! Returns the data provider name
@@ -139,7 +149,7 @@ public class FhirResourcesDataProvider inherits FhirRestDataProviderBase {
     }
 
     #! Creates the object with the given FHIR REST client
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     #! Returns the data provider name
@@ -205,7 +215,7 @@ public class FhirTerminologyDataProvider inherits FhirRestDataProviderBase {
     }
 
     #! Creates the object with the given FHIR REST client
-    constructor(FhirRestClient::FhirRestClient fhir) : FhirRestDataProviderBase(fhir) {
+    constructor(FhirRestClient::FhirRestClientIo fhir) : FhirRestDataProviderBase(fhir) {
     }
 
     #! Returns the data provider name
